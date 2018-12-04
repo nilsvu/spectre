@@ -7,6 +7,7 @@ set(LIBRARY_SOURCES
     AlfvenWave.cpp
     BondiMichel.cpp
     KomissarovShock.cpp
+    SlabJet.cpp
     SmoothFlow.cpp
     )
 
