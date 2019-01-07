@@ -20,6 +20,7 @@
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/Minmod.hpp"
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/Tags.hpp"
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/Weno.hpp"
+#include "Evolution/DiscontinuousGalerkin/SlopeLimiters/Krivodonova.hpp"
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/WenoType.hpp"
 #include "Evolution/EventsAndTriggers/Actions/RunEventsAndTriggers.hpp"  // IWYU pragma: keep
 #include "Evolution/EventsAndTriggers/Event.hpp"
@@ -40,12 +41,15 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"  // IWYU pragma: keep
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/Hll.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/LocalLaxFriedrichs.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/GotoAction.hpp"
 #include "Parallel/InitializationFunctions.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/GrMhd/KomissarovShock.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/GrMhd/SlabJet.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GrMhd/SmoothFlow.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/RelativisticEuler/FishboneMoncriefDisk.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
@@ -81,8 +85,7 @@ struct EvolutionMetavars {
   // To switch which analytic solution is evolved you only need to change the
   // line `using analytic_solution = ...;` and include the header file for the
   // solution.
-  //  using analytic_solution = grmhd::Solutions::SmoothFlow;
-  using analytic_solution = RelativisticEuler::Solutions::FishboneMoncriefDisk;
+  using analytic_solution = grmhd::Solutions::KomissarovShock;
 
   using system = grmhd::ValenciaDivClean::System<
       typename analytic_solution::equation_of_state_type>;
@@ -95,11 +98,14 @@ struct EvolutionMetavars {
       typename system::primitive_variables_tag::tags_list;
   using equation_of_state_tag = hydro::Tags::EquationOfState<
       typename analytic_solution_tag::type::equation_of_state_type>;
+//   using normal_dot_numerical_flux = OptionTags::NumericalFluxParams<
+//       dg::NumericalFluxes::LocalLaxFriedrichs<system>>;
   using normal_dot_numerical_flux = OptionTags::NumericalFluxParams<
-      dg::NumericalFluxes::LocalLaxFriedrichs<system>>;
+      dg::NumericalFluxes::Hll<system>>;
   // Do not limit the divergence-cleaning field Phi
-  // using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Minmod<
+//   using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Minmod<
   using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Weno<
+//   using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Krivodonova<
       3, tmpl::list<grmhd::ValenciaDivClean::Tags::TildeD,
                     grmhd::ValenciaDivClean::Tags::TildeTau,
                     grmhd::ValenciaDivClean::Tags::TildeS<Frame::Inertial>,

@@ -1,0 +1,65 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: EvolveValenciaDivClean
+# Check: execute
+
+InitialTime: 0.0
+InitialTimeStep: 0.005
+FinalTime: 2.5
+
+DomainCreator:
+  Brick:
+    LowerBound: [-0.2, 0.0, 0.0]
+    UpperBound: [1.08, 1.0, 1.0]
+    IsPeriodicIn: [false, true, true]
+    InitialRefinement: [5, 0, 0]
+    InitialGridPoints: [2, 2, 2]
+
+AnalyticSolution:
+  AdiabaticIndex: 1.3333333333333333
+  LeftDensity: 1.
+  RightDensity: 25.48
+  LeftPressure: 1. # Should this be 1 or 10?
+  RightPressure: 367.5
+  # u^i = [25., 0., 0.]
+  LeftVelocity: [0.9992009587217894, 0., 0.]
+  # u^i = [1.091, 0.3923, 0.]
+  RightVelocity: [0.7125728080722092, 0.2562257677421885, 0.]
+  LeftMagneticField: [20., 25.02, 0.]
+  RightMagneticField: [20., 49., 0.]
+  ShockSpeed: 0.2
+
+TimeStepper: RungeKutta3
+
+VolumeFileName: "KomissarovFastShockVolume_dt0.005"
+ReductionFileName: "KomissarovFastShockReductions_dt0.005"
+
+NumericalFluxParams:
+
+DampingParameter: 0.0
+
+SlopeLimiterParams:
+  Type: Hweno
+#   Type: Muscl
+#   TvbmConstant: 0.0
+
+FixConservatives:
+  CutoffD: 1.0e-12
+  MinimumValueOfD: 1.0e-12
+  SafetyFactorForB: 1.0e-12
+  SafetyFactorForS: 1.0e-12
+
+FixToAtmosphere:
+  DensityOfAtmosphere: 1.0e-12
+  DensityCutoff: 1.0e-12
+
+EventsAndTriggers:
+  ? EveryNSlabs:
+      N: 60
+  : - Observe:
+        VariablesToObserve: [ "RestMassDensity" ]
+  ? SpecifiedSlabs:
+      Slabs: [499]
+  : - Observe:
+        VariablesToObserve: [ "RestMassDensity" ]
