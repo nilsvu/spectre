@@ -19,6 +19,7 @@
 #include "ErrorHandling/Assert.hpp"
 #include "ErrorHandling/Error.hpp"
 #include "ErrorHandling/StaticAssert.hpp"
+#include "Parallel/ConstGlobalCache.hpp"
 #include "Utilities/BoostHelpers.hpp"  // for pup variant
 #include "Utilities/ForceInline.hpp"
 #include "Utilities/Gsl.hpp"
@@ -1791,6 +1792,25 @@ inline constexpr auto mutate_apply(
   return DataBox_detail::mutate_apply(std::forward<F>(f), box, MutateTags{},
                                       ArgumentTags{},
                                       std::forward<Args>(args)...);
+}
+
+template <typename F, typename BoxTags, typename Metavariables,
+          typename... CacheTags, typename... Args>
+inline constexpr auto mutate_apply_cache_impl(
+    const gsl::not_null<db::DataBox<BoxTags>*> box,
+    const Parallel::ConstGlobalCache<Metavariables>& cache,
+    tmpl::list<CacheTags...> /*meta*/, Args&&... args) {
+  return mutate_apply<typename F::mutate_tags, typename F::argument_tags>(
+      F{}, box, get<CacheTags>(cache)..., args...);
+}
+
+template <typename F, typename BoxTags, typename Metavariables,
+          typename... Args>
+inline constexpr auto mutate_apply_cache(
+    const gsl::not_null<db::DataBox<BoxTags>*> box,
+    const Parallel::ConstGlobalCache<Metavariables>& cache, Args&&... args) {
+  return mutate_apply_cache_impl<F>(
+      box, cache, typename F::const_global_cache_tags{}, args...);
 }
 
 /*!
