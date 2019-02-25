@@ -1,0 +1,41 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveXctsProblem3D
+# Check: execute
+# ExpectedOutput:
+#   Xcts3DReductions.h5
+#   Xcts3DVolume0.h5
+
+AnalyticSolution:
+  Density: 0.01
+  Radius: 1.
+
+DomainCreator:
+  Sphere:
+    InnerRadius: 1.5
+    OuterRadius: 3.
+    InitialRefinement: 1
+    InitialGridPoints: [4, 4]
+    UseEquiangularMap: False
+
+NumericalFlux:
+    PenaltyParameter: 30 # p^2 / h
+CorrectionNumFlux:
+    PenaltyParameter: 30 # p^2 / h
+
+NonlinearVerbosity: Verbose
+Verbosity: Verbose
+
+VolumeFileName: "./Xcts3DVolume"
+ReductionFileName: "./Xcts3DReductions"
+
+NonlinearConvCrit:
+  MaxIterations: 10
+  RelativeResidual: 1e-8
+  AbsoluteResidual: 1e-15
+
+ConvergenceCriteria:
+  MaxIterations: 500
+  RelativeResidual: 1e-8
+  AbsoluteResidual: 1e-15
