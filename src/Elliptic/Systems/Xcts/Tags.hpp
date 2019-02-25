@@ -18,7 +18,7 @@ namespace Tags {
 
 /*!
  * \brief The conformal factor \f$\psi(x)\f$ that rescales the spatial metric
- * \f$\gamma_{ij}=\psi^4\overline{\gamma}_{ij}\f$.
+ * \f$\gamma_{ij}=\psi^4\overline{\gamma}_{ij}\f$
  */
 template <typename DataType>
 struct ConformalFactor : db::SimpleTag {
