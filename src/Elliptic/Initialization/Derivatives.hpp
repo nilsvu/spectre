@@ -40,17 +40,17 @@ namespace Initialization {
  * - Adds:
  *   - `Tags::DerivCompute<variables_tag, inv_jac_tag, gradient_tags>>`
  */
-template <typename SystemType>
+template <typename SystemType, typename = cpp17::void_t<>>
 struct Derivatives {
   static constexpr size_t Dim = SystemType::volume_dim;
   using inv_jac_tag =
-      Tags::InverseJacobian<Tags::ElementMap<Dim>,
-                            Tags::Coordinates<Dim, Frame::Logical>>;
+      ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
+                              ::Tags::Coordinates<Dim, Frame::Logical>>;
 
   using simple_tags = db::AddSimpleTags<>;
   using compute_tags = db::AddComputeTags<
-      Tags::DerivCompute<typename SystemType::variables_tag, inv_jac_tag,
-                         typename SystemType::gradient_tags>>;
+      ::Tags::DerivCompute<typename SystemType::variables_tag, inv_jac_tag,
+                           typename SystemType::gradient_tags>>;
 
   template <typename TagsList>
   static auto initialize(db::DataBox<TagsList>&& box) noexcept {
@@ -58,5 +58,29 @@ struct Derivatives {
         std::move(box));
   }
 };
+
+template <typename SystemType>
+struct Derivatives<SystemType,
+                   cpp17::void_t<typename SystemType::nonlinear_fields_tag>> {
+  static constexpr size_t Dim = SystemType::volume_dim;
+  using inv_jac_tag =
+      ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
+                              ::Tags::Coordinates<Dim, Frame::Logical>>;
+
+  using simple_tags = db::AddSimpleTags<>;
+  using compute_tags = db::AddComputeTags<
+      ::Tags::DerivCompute<typename SystemType::variables_tag, inv_jac_tag,
+                           typename SystemType::gradient_tags>,
+      ::Tags::DerivCompute<typename SystemType::nonlinear_fields_tag,
+                           inv_jac_tag,
+                           typename SystemType::nonlinear_gradient_tags>>;
+
+  template <typename TagsList>
+  static auto initialize(db::DataBox<TagsList>&& box) noexcept {
+    return db::create_from<db::RemoveTags<>, simple_tags, compute_tags>(
+        std::move(box));
+  }
+};
+
 }  // namespace Initialization
 }  // namespace Elliptic

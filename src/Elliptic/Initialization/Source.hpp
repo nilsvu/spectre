@@ -48,12 +48,12 @@ namespace Initialization {
  * - Adds:
  *   - `sources_tag`
  */
-template <typename Metavariables>
+template <typename Metavariables, typename = cpp17::void_t<>>
 struct Source {
   using system = typename Metavariables::system;
 
   using sources_tag =
-      db::add_tag_prefix<Tags::Source, typename system::fields_tag>;
+      db::add_tag_prefix<::Tags::Source, typename system::fields_tag>;
 
   using simple_tags = db::AddSimpleTags<sources_tag>;
   using compute_tags = db::AddComputeTags<>;
@@ -63,9 +63,9 @@ struct Source {
       db::DataBox<TagsList>&& box,
       const Parallel::ConstGlobalCache<Metavariables>& cache) noexcept {
     const auto& inertial_coords =
-        get<Tags::Coordinates<system::volume_dim, Frame::Inertial>>(box);
+        get<::Tags::Coordinates<system::volume_dim, Frame::Inertial>>(box);
     const auto num_grid_points =
-        get<Tags::Mesh<system::volume_dim>>(box).number_of_grid_points();
+        get<::Tags::Mesh<system::volume_dim>>(box).number_of_grid_points();
 
     db::item_type<sources_tag> sources(num_grid_points, 0.);
     // This actually sets the complete set of tags in the Variables, but there
@@ -77,6 +77,52 @@ struct Source {
 
     return db::create_from<db::RemoveTags<>, simple_tags, compute_tags>(
         std::move(box), std::move(sources));
+  }
+};
+
+template <typename Metavariables>
+struct Source<Metavariables,
+              cpp17::void_t<typename Metavariables::nonlinear_solver>> {
+  using system = typename Metavariables::system;
+
+  using nonlinear_sources_tag =
+      db::add_tag_prefix<::Tags::Source, typename system::nonlinear_fields_tag>;
+
+  using background_tags = typename system::background_tags;
+  using background_vars_tag = ::Tags::Variables<background_tags>;
+
+  using simple_tags =
+      db::AddSimpleTags<nonlinear_sources_tag, background_vars_tag>;
+//   using simple_tags =
+//       db::AddSimpleTags<nonlinear_sources_tag>;
+  using compute_tags = db::AddComputeTags<>;
+
+  template <typename TagsList>
+  static auto initialize(
+      db::DataBox<TagsList>&& box,
+      const Parallel::ConstGlobalCache<Metavariables>& cache) noexcept {
+    const auto& inertial_coords =
+        get<::Tags::Coordinates<system::volume_dim, Frame::Inertial>>(box);
+    const auto num_grid_points =
+        get<::Tags::Mesh<system::volume_dim>>(box).number_of_grid_points();
+
+    db::item_type<nonlinear_sources_tag> nonlinear_sources(num_grid_points, 0.);
+    // This actually sets the complete set of tags in the Variables, but there
+    // is no Variables constructor from a TaggedTuple (yet)
+    nonlinear_sources.assign_subset(
+        Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
+            .variables(inertial_coords,
+                       db::get_variables_tags_list<nonlinear_sources_tag>{}));
+    db::item_type<background_vars_tag> background_vars(num_grid_points, 0.);
+    background_vars.assign_subset(
+        Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
+            .variables(inertial_coords, background_tags{}));
+
+    return db::create_from<db::RemoveTags<>, simple_tags, compute_tags>(
+        std::move(box), std::move(nonlinear_sources),
+        std::move(background_vars));
+    // return db::create_from<db::RemoveTags<>, simple_tags, compute_tags>(
+    //     std::move(box), std::move(nonlinear_sources));
   }
 };
 }  // namespace Initialization
