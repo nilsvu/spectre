@@ -1,0 +1,23 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+LinearOperator: [[4, 1], [1, 3]]
+Source: [1, 2]
+InitialGuess: [2, 1]
+ExpectedResult: [0.0909090909090909, 0.6363636363636364]
+
+Verbosity: Verbose
+NonlinearVerbosity: Verbose
+
+VolumeFileName: "Test_NewtonRaphsonNonlinearSolverAlgorithm_Volume"
+ReductionFileName: "Test_NewtonRaphsonNonlinearSolverAlgorithm_Reductions"
+
+NonlinearConvCrit:
+  MaxIterations: 20
+  AbsoluteResidual: 1e-14
+  RelativeResidual: 0
+
+ConvergenceCriteria:
+  MaxIterations: 1
+  AbsoluteResidual: 0
+  RelativeResidual: 0
