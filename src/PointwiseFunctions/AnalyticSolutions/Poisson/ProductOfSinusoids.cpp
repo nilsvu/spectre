@@ -54,6 +54,21 @@ tuples::TaggedTuple<AuxiliaryField<Dim>> ProductOfSinusoids<Dim>::variables(
 }
 
 template <size_t Dim>
+tuples::TaggedTuple<::Tags::Initial<Field>> ProductOfSinusoids<Dim>::variables(
+    const tnsr::I<DataVector, Dim>& x,
+    tmpl::list<::Tags::Initial<Field>> /*meta*/) const noexcept {
+  return {make_with_value<Scalar<DataVector>>(x, 0.)};
+}
+
+template <size_t Dim>
+tuples::TaggedTuple<::Tags::Initial<AuxiliaryField<Dim>>>
+ProductOfSinusoids<Dim>::variables(
+    const tnsr::I<DataVector, Dim>& x,
+    tmpl::list<::Tags::Initial<AuxiliaryField<Dim>>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::I<DataVector, Dim, Frame::Inertial>>(x, 0.)};
+}
+
+template <size_t Dim>
 tuples::TaggedTuple<::Tags::Source<Field>> ProductOfSinusoids<Dim>::variables(
     const tnsr::I<DataVector, Dim>& x,
     tmpl::list<::Tags::Source<Field>> /*meta*/) const noexcept {
