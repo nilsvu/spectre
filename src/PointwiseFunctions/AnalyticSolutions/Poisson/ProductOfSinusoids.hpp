@@ -63,6 +63,15 @@ class ProductOfSinusoids {
       -> tuples::TaggedTuple<AuxiliaryField<Dim>>;
 
   auto variables(const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
+                 tmpl::list<::Tags::Initial<Field>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<::Tags::Initial<Field>>;
+
+  auto variables(
+      const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
+      tmpl::list<::Tags::Initial<AuxiliaryField<Dim>>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<::Tags::Initial<AuxiliaryField<Dim>>>;
+
+  auto variables(const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
                  tmpl::list<::Tags::FixedSource<Field>> /*meta*/) const noexcept
       -> tuples::TaggedTuple<::Tags::FixedSource<Field>>;
 
@@ -97,13 +106,13 @@ class ProductOfSinusoids {
 
 template <size_t Dim>
 bool operator==(const ProductOfSinusoids<Dim>& lhs,
-                          const ProductOfSinusoids<Dim>& rhs) noexcept {
+                const ProductOfSinusoids<Dim>& rhs) noexcept {
   return lhs.wave_numbers() == rhs.wave_numbers();
 }
 
 template <size_t Dim>
 bool operator!=(const ProductOfSinusoids<Dim>& lhs,
-                          const ProductOfSinusoids<Dim>& rhs) noexcept {
+                const ProductOfSinusoids<Dim>& rhs) noexcept {
   return not(lhs == rhs);
 }
 
