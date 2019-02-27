@@ -68,6 +68,18 @@ class ProductOfSinusoids {
   auto variables(const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
                  tmpl::list<::Tags::FixedSource<Tags::Field>> /*meta*/) const
       noexcept -> tuples::TaggedTuple<::Tags::FixedSource<Tags::Field>>;
+
+  auto variables(const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
+                 tmpl::list<::Tags::Initial<Tags::Field>> /*meta*/) const
+      noexcept -> tuples::TaggedTuple<::Tags::Initial<Tags::Field>>;
+
+  auto variables(
+      const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
+      tmpl::list<::Tags::Initial<::Tags::deriv<
+          Tags::Field, tmpl::size_t<Dim>, Frame::Inertial>>> /*meta*/) const
+      noexcept -> tuples::TaggedTuple<::Tags::Initial<
+          ::Tags::deriv<Tags::Field, tmpl::size_t<Dim>, Frame::Inertial>>>;
+
   // @}
 
   /// Retrieve a collection of variables at coordinates `x`
@@ -95,13 +107,13 @@ class ProductOfSinusoids {
 
 template <size_t Dim>
 bool operator==(const ProductOfSinusoids<Dim>& lhs,
-                          const ProductOfSinusoids<Dim>& rhs) noexcept {
+                const ProductOfSinusoids<Dim>& rhs) noexcept {
   return lhs.wave_numbers() == rhs.wave_numbers();
 }
 
 template <size_t Dim>
 bool operator!=(const ProductOfSinusoids<Dim>& lhs,
-                          const ProductOfSinusoids<Dim>& rhs) noexcept {
+                const ProductOfSinusoids<Dim>& rhs) noexcept {
   return not(lhs == rhs);
 }
 
