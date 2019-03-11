@@ -27,6 +27,8 @@ class Mesh;
 namespace Tags {
 template <typename>
 struct Normalized;
+template <typename>
+struct NormalDotFlux;
 }  // namespace Tags
 namespace LinearSolver {
 namespace Tags {
@@ -88,6 +90,10 @@ struct ComputeFirstOrderNormalDotFluxes {
       tmpl::list<LinearSolver::Tags::Operand<Field>,
                  LinearSolver::Tags::Operand<AuxiliaryField<Dim>>,
                  Tags::Normalized<Tags::UnnormalizedFaceNormal<Dim>>>;
+  using return_tags = db::wrap_tags_in<
+      ::Tags::NormalDotFlux,
+      tmpl::list<LinearSolver::Tags::Operand<Field>,
+                 LinearSolver::Tags::Operand<AuxiliaryField<Dim>>>>;
   static void apply(
       gsl::not_null<Scalar<DataVector>*> normal_dot_flux_for_field,
       gsl::not_null<tnsr::I<DataVector, Dim, Frame::Inertial>*>

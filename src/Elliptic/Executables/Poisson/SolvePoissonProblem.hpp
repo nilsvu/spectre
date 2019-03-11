@@ -17,9 +17,10 @@
 #include "IO/Observer/Actions.hpp"
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ComputeNonconservativeBoundaryFluxes.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes2.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ComputeFluxes.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication2.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/FluxLifting/StrongFirstOrder.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/LinearSolver/Actions/TerminateIfConverged.hpp"
 #include "NumericalAlgorithms/LinearSolver/Gmres/Gmres.hpp"
@@ -59,12 +60,16 @@ struct Metavariables {
   // Parse numerical flux parameters from the input file to store in the cache.
   using normal_dot_numerical_flux = OptionTags::NumericalFluxParams<
       Poisson::FirstOrderInternalPenaltyFlux<Dim>>;
+  using flux_lifting_scheme = dg::FluxLifting::StrongFirstOrder<
+      Dim, typename system::variables_tag, typename system::normal_dot_fluxes,
+      normal_dot_numerical_flux, LinearSolver::Tags::IterationId>;
 
   // Set up the domain creator from the input file.
   using domain_creator_tag = OptionTags::DomainCreator<Dim, Frame::Inertial>;
 
   // Collect all items to store in the cache.
-  using const_global_cache_tag_list = tmpl::list<analytic_solution_tag>;
+  using const_global_cache_tag_list =
+      tmpl::list<normal_dot_numerical_flux, analytic_solution_tag>;
 
   struct ObservationType {};
   using element_observation_type = ObservationType;
@@ -72,23 +77,27 @@ struct Metavariables {
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
       tmpl::list<Poisson::Actions::Observe, linear_solver>>;
 
+  using compute_linear_operator_action = tmpl::list<
+      dg::Actions::ComputeFluxes<Tags::InternalDirections<Dim>,
+                                 typename system::normal_dot_fluxes>,
+      dg::Actions::SendDataForFluxes<flux_lifting_scheme>,
+      Elliptic::Actions::ComputeOperatorAction,
+      dg::Actions::ComputeFluxes<Tags::BoundaryDirectionsInterior<Dim>,
+                                 typename system::normal_dot_fluxes>,
+      Elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
+          flux_lifting_scheme,
+          typename system::impose_boundary_conditions_on_fields>,
+      dg::Actions::ReceiveDataForFluxes<flux_lifting_scheme>,
+      dg::Actions::ApplyFluxes<flux_lifting_scheme>>;
+
   // Specify all parallel components that will execute actions at some point.
   using component_list = tmpl::append<
       tmpl::list<Elliptic::DgElementArray<
           Metavariables,
-          tmpl::list<
-              Poisson::Actions::Observe,
-              LinearSolver::Actions::TerminateIfConverged,
-              dg::Actions::ComputeNonconservativeBoundaryFluxes<
-                  Tags::InternalDirections<Dim>>,
-              dg::Actions::SendDataForFluxes<Metavariables>,
-              Elliptic::Actions::ComputeOperatorAction,
-              dg::Actions::ComputeNonconservativeBoundaryFluxes<
-                  Tags::BoundaryDirectionsInterior<Dim>>,
-              Elliptic::dg::Actions::
-                  ImposeHomogeneousDirichletBoundaryConditions<Metavariables>,
-              dg::Actions::ReceiveDataForFluxes<Metavariables>,
-              dg::Actions::ApplyFluxes, typename linear_solver::perform_step>>>,
+          tmpl::flatten<tmpl::list<Poisson::Actions::Observe,
+                                   LinearSolver::Actions::TerminateIfConverged,
+                                   compute_linear_operator_action,
+                                   typename linear_solver::perform_step>>>>,
       typename linear_solver::component_list,
       tmpl::list<observers::Observer<Metavariables>,
                  observers::ObserverWriter<Metavariables>>>;
