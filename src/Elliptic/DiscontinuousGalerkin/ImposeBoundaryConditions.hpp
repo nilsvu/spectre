@@ -79,37 +79,50 @@ namespace Actions {
  *   - `exterior<variables_tag>`
  *   - `Tags::VariablesBoundaryData`
  */
-template <typename Metavariables>
+template <typename FluxLiftingScheme, typename DirichletFieldsTagsList>
 struct ImposeHomogeneousDirichletBoundaryConditions {
-  using const_global_cache_tags =
-      tmpl::list<typename Metavariables::normal_dot_numerical_flux>;
+ private:
+  static constexpr size_t volume_dim = FluxLiftingScheme::volume_dim;
 
-  template <typename DbTags, typename... InboxTags, typename ArrayIndex,
-            typename ActionList, typename ParallelComponent>
+  template <typename F, typename DirectionsTag, typename DataBoxType,
+            typename... ArgsTags, typename... ExtraArgs>
+  static auto compute_packaged_face_data(
+      const DataBoxType& box, const Direction<volume_dim>& direction,
+      tmpl::list<ArgsTags...> /*meta*/,
+      const ExtraArgs&... extra_args) noexcept {
+    return F::apply(
+        get<::Tags::Interface<DirectionsTag, ArgsTags>>(box).at(direction)...,
+        extra_args...);
+  }
+
+ public:
+  template <typename DbTags, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
   static auto apply(db::DataBox<DbTags>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
                     const Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using system = typename Metavariables::system;
-    using dirichlet_tags =
-        typename system::impose_boundary_conditions_on_fields;
-    constexpr size_t volume_dim = system::volume_dim;
+    using dirichlet_tags = DirichletFieldsTagsList;
 
     // Set the data on exterior (ghost) faces to impose the boundary conditions
     db::mutate<::Tags::Interface<::Tags::BoundaryDirectionsExterior<volume_dim>,
-                                 typename system::variables_tag>>(
+                                 typename FluxLiftingScheme::variables_tag>>(
         make_not_null(&box),
-        // Need to use system::volume_dim below instead of just
+        // Need to use FluxLiftingScheme::volume_dim below instead of just
         // volume_dim to avoid an ICE on gcc 7.
-        [](const gsl::not_null<db::item_type<::Tags::Interface<
-               ::Tags::BoundaryDirectionsExterior<system::volume_dim>,
-               typename system::variables_tag>>*>
+        [](const gsl::not_null<db::item_type<
+               ::Tags::Interface<::Tags::BoundaryDirectionsExterior<
+                                     FluxLiftingScheme::volume_dim>,
+                                 typename FluxLiftingScheme::variables_tag>>*>
                exterior_boundary_vars,
-           const db::item_type<::Tags::Interface<
-               ::Tags::BoundaryDirectionsInterior<system::volume_dim>,
-               typename system::variables_tag>>& interior_vars) noexcept {
+           const db::item_type<
+               ::Tags::Interface<::Tags::BoundaryDirectionsInterior<
+                                     FluxLiftingScheme::volume_dim>,
+                                 typename FluxLiftingScheme::variables_tag>>&
+               interior_vars) noexcept {
           for (auto& exterior_direction_and_vars : *exterior_boundary_vars) {
             auto& direction = exterior_direction_and_vars.first;
             auto& exterior_vars = exterior_direction_and_vars.second;
@@ -121,55 +134,66 @@ struct ImposeHomogeneousDirichletBoundaryConditions {
             // For those variables where we have boundary conditions, impose
             // zero Dirichlet b.c. here. The non-zero boundary conditions are
             // handled as contributions to the source in InitializeElement.
-            // Imposing them here would not work because we are working with the
-            // linear solver operand.
+            // Imposing them here would not work because when are working with
+            // the linear solver operand.
             tmpl::for_each<dirichlet_tags>([
               &interior_vars, &exterior_vars, &direction
             ](auto dirichlet_tag_val) noexcept {
               using dirichlet_tag =
                   tmpl::type_from<decltype(dirichlet_tag_val)>;
-              using dirichlet_operand_tag =
-                  LinearSolver::Tags::Operand<dirichlet_tag>;
               // Use mirror principle. This only works for scalars right now.
-              get(get<dirichlet_operand_tag>(exterior_vars)) =
-                  -1. *
-                  get<dirichlet_operand_tag>(interior_vars.at(direction)).get();
+              get(get<dirichlet_tag>(exterior_vars)) =
+                  -1. * get<dirichlet_tag>(interior_vars.at(direction)).get();
             });
           }
         },
         get<::Tags::Interface<::Tags::BoundaryDirectionsInterior<volume_dim>,
-                              typename system::variables_tag>>(box));
-
-    const auto& element = db::get<::Tags::Element<volume_dim>>(box);
-    const auto& temporal_id = db::get<typename Metavariables::temporal_id>(box);
-
-    const auto& normal_dot_numerical_flux_computer =
-        get<typename Metavariables::normal_dot_numerical_flux>(cache);
+                              typename FluxLiftingScheme::variables_tag>>(box));
 
     // Store local and packaged data on the mortars
-    for (const auto& direction : element.external_boundaries()) {
+    for (const auto& direction :
+         db::get<::Tags::Element<volume_dim>>(box).external_boundaries()) {
       const auto mortar_id = std::make_pair(
           direction, ElementId<volume_dim>::external_boundary_id());
 
-      auto interior_data = DgActions_detail::compute_local_mortar_data(
-          box, direction, normal_dot_numerical_flux_computer,
-          ::Tags::BoundaryDirectionsInterior<volume_dim>{}, Metavariables{});
+      // HACK until we can retrieve cache tags from the DataBox in compute items
+      // No need for projections since the ghost mortar always covers the full
+      // face
+      auto remote_data_interior = compute_packaged_face_data<
+          typename FluxLiftingScheme::package_remote_data,
+          ::Tags::BoundaryDirectionsInterior<volume_dim>>(
+          box, direction,
+          typename FluxLiftingScheme::package_remote_data::argument_tags{},
+          get<typename FluxLiftingScheme::numerical_flux_computer_tag>(cache));
+      auto local_data_interior = compute_packaged_face_data<
+          typename FluxLiftingScheme::package_local_data,
+          ::Tags::BoundaryDirectionsInterior<volume_dim>>(
+          box, direction,
+          typename FluxLiftingScheme::package_local_data::argument_tags{},
+          std::move(remote_data_interior));
+      auto remote_data_exterior = compute_packaged_face_data<
+          typename FluxLiftingScheme::package_remote_data,
+          ::Tags::BoundaryDirectionsExterior<volume_dim>>(
+          box, direction,
+          typename FluxLiftingScheme::package_remote_data::argument_tags{},
+          get<typename FluxLiftingScheme::numerical_flux_computer_tag>(cache));
 
-      auto exterior_data = DgActions_detail::compute_packaged_data(
-          box, direction, normal_dot_numerical_flux_computer,
-          ::Tags::BoundaryDirectionsExterior<volume_dim>{}, Metavariables{});
-
-      db::mutate<::Tags::VariablesBoundaryData>(
+      using all_mortar_data_tag =
+          ::Tags::Mortars<typename FluxLiftingScheme::mortar_data_tag,
+                          volume_dim>;
+      db::mutate<all_mortar_data_tag>(
           make_not_null(&box),
-          [&mortar_id, &temporal_id, &interior_data, &exterior_data ](
-              const gsl::not_null<
-                  db::item_type<::Tags::VariablesBoundaryData, DbTags>*>
-                  mortar_data) noexcept {
-            mortar_data->at(mortar_id).local_insert(temporal_id,
-                                                    std::move(interior_data));
-            mortar_data->at(mortar_id).remote_insert(temporal_id,
-                                                     std::move(exterior_data));
-          });
+          [&mortar_id, &local_data_interior, &remote_data_exterior ](
+              const gsl::not_null<db::item_type<all_mortar_data_tag>*>
+                  all_mortar_data,
+              const db::item_type<typename FluxLiftingScheme::temporal_id_tag>&
+                  temporal_id) noexcept {
+            all_mortar_data->at(mortar_id).local_insert(
+                temporal_id, std::move(local_data_interior));
+            all_mortar_data->at(mortar_id).remote_insert(
+                temporal_id, std::move(remote_data_exterior));
+          },
+          db::get<typename FluxLiftingScheme::temporal_id_tag>(box));
     }
     return std::forward_as_tuple(std::move(box));
   }
