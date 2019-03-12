@@ -24,6 +24,7 @@ class TaggedTuple;
 }  // namespace tuples
 namespace LinearSolver {
 namespace cg_detail {
+template <bool IsReinitializing>
 struct InitializeHasConverged;
 struct UpdateFieldValues;
 struct UpdateOperand;
@@ -34,7 +35,7 @@ struct UpdateOperand;
 namespace LinearSolver {
 namespace cg_detail {
 
-template <typename BroadcastTarget>
+template <typename BroadcastTarget, bool IsReinitializing>
 struct InitializeResidual {
   template <typename... DbTags, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
@@ -57,11 +58,14 @@ struct InitializeResidual {
     using initial_residual_magnitude_tag =
         db::add_tag_prefix<LinearSolver::Tags::Initial, residual_magnitude_tag>;
 
-    db::mutate<residual_square_tag>(
-        make_not_null(&box), [residual_square](
-                                 const gsl::not_null<double*>
-                                     local_residual_square) noexcept {
+    db::mutate<residual_square_tag, LinearSolver::Tags::IterationId>(
+        make_not_null(&box),
+        [residual_square](
+            const gsl::not_null<double*> local_residual_square,
+            const gsl::not_null<db::item_type<LinearSolver::Tags::IterationId>*>
+                iteration_id) noexcept {
           *local_residual_square = residual_square;
+          *iteration_id = 0;
         });
     // Perform a separate `db::mutate` so that we can retrieve the
     // `residual_magnitude_tag` from the compute item
@@ -79,6 +83,11 @@ struct InitializeResidual {
     // compute item.
     const auto& has_converged = db::get<LinearSolver::Tags::HasConverged>(box);
 
+    if (UNLIKELY(static_cast<int>(get<::Tags::Verbosity>(box)) >=
+                 static_cast<int>(::Verbosity::Verbose))) {
+      Parallel::printf("Linear solver initialized with residual %e.\n",
+                       get<residual_magnitude_tag>(box));
+    }
     if (UNLIKELY(has_converged and
                  static_cast<int>(get<::Tags::Verbosity>(box)) >=
                      static_cast<int>(::Verbosity::Quiet))) {
@@ -87,7 +96,7 @@ struct InitializeResidual {
           has_converged);
     }
 
-    Parallel::simple_action<InitializeHasConverged>(
+    Parallel::simple_action<InitializeHasConverged<IsReinitializing>>(
         Parallel::get_parallel_component<BroadcastTarget>(cache),
         has_converged);
   }

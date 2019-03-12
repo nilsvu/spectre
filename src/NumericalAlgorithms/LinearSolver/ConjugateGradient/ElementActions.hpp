@@ -34,6 +34,7 @@ struct ResidualMonitor;
 namespace LinearSolver {
 namespace cg_detail {
 
+template <bool IsReinitializing>
 struct InitializeHasConverged {
   template <typename... DbTags, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
@@ -41,9 +42,8 @@ struct InitializeHasConverged {
             Requires<sizeof...(DbTags) != 0> = nullptr>
   static void apply(db::DataBox<tmpl::list<DbTags...>>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
-                    const ArrayIndex& /*array_index*/,
-                    const ActionList /*meta*/,
+                    const Parallel::ConstGlobalCache<Metavariables>& cache,
+                    const ArrayIndex& array_index, const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/,
                     const db::item_type<LinearSolver::Tags::HasConverged>&
                         has_converged) noexcept {
@@ -54,6 +54,20 @@ struct InitializeHasConverged {
                                      local_has_converged) noexcept {
           *local_has_converged = has_converged;
         });
+
+    // This check and the template argument can be removed once the
+    // initialization is done properly in a phase-dependent action list.
+    if (IsReinitializing) {
+      // Proceed with algorithm.
+      // We use `ckLocal()` here since this is essentially retrieving "self",
+      // which is guaranteed to be on the local processor. This ensures the
+      // calls are evaluated in order.
+      Parallel::get_parallel_component<ParallelComponent>(cache)[array_index]
+          .ckLocal()
+          ->set_terminate(false);
+      Parallel::get_parallel_component<ParallelComponent>(cache)[array_index]
+          .perform_algorithm();
+    }
   }
 };
 

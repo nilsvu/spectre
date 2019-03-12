@@ -56,8 +56,10 @@ struct VectorTag : db::SimpleTag {
   static std::string name() noexcept { return "VectorTag"; }
 };
 
+using source_tag = ::Tags::Source<VectorTag>;
+using fields_operator_tag = LinearSolver::Tags::OperatorAppliedTo<VectorTag>;
 using operand_tag = LinearSolver::Tags::Operand<VectorTag>;
-using operator_tag = LinearSolver::Tags::OperatorAppliedTo<operand_tag>;
+using operand_operator_tag = LinearSolver::Tags::OperatorAppliedTo<operand_tag>;
 
 struct ComputeOperatorAction {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -67,10 +69,12 @@ struct ComputeOperatorAction {
                     const Parallel::ConstGlobalCache<Metavariables>& cache,
                     const int /*array_index*/, const ActionList /*meta*/,
                     const ParallelComponent* const /*component*/) noexcept {
-    db::mutate<operator_tag>(make_not_null(&box),
-                             [](const auto Ap, const auto& A,
-                                const auto& p) noexcept { *Ap = A * p; },
-                             get<LinearOperator>(cache), get<operand_tag>(box));
+    db::mutate<operand_operator_tag>(
+        make_not_null(&box),
+        [](const auto Ap, const auto& A, const auto& p) noexcept {
+          *Ap = A * p;
+        },
+        get<LinearOperator>(cache), get<operand_tag>(box));
     return std::forward_as_tuple(std::move(box));
   }
 };
@@ -100,7 +104,8 @@ struct TestResult {
 struct InitializeElement {
   template <typename Metavariables>
   using return_tag_list =
-      tmpl::append<tmpl::list<VectorTag, operand_tag, operator_tag>,
+      tmpl::append<tmpl::list<VectorTag, source_tag, fields_operator_tag,
+                              operand_tag, operand_operator_tag>,
                    typename Metavariables::linear_solver::tags::simple_tags,
                    typename Metavariables::linear_solver::tags::compute_tags>;
 
@@ -117,14 +122,15 @@ struct InitializeElement {
     const auto& x0 = get<InitialGuess>(cache);
 
     auto box = db::create<
-        db::AddSimpleTags<tmpl::list<VectorTag, operand_tag, operator_tag>>>(
-        x0,
+        db::AddSimpleTags<tmpl::list<VectorTag, source_tag, fields_operator_tag,
+                                     operand_tag, operand_operator_tag>>>(
+        x0, b, DenseVector<double>(A * x0),
         make_with_value<db::item_type<operand_tag>>(
             x0, std::numeric_limits<double>::signaling_NaN()),
-        make_with_value<db::item_type<operator_tag>>(
+        make_with_value<db::item_type<operand_operator_tag>>(
             x0, std::numeric_limits<double>::signaling_NaN()));
     auto linear_solver_box = Metavariables::linear_solver::tags::initialize(
-        std::move(box), cache, array_index, parallel_component_meta, b, A * x0);
+        std::move(box), cache, array_index, parallel_component_meta);
     return std::make_tuple(std::move(linear_solver_box));
   }
 };  // namespace

@@ -35,6 +35,7 @@ struct ResidualMonitor;
 namespace LinearSolver {
 namespace gmres_detail {
 
+template <bool IsReinitializing>
 struct NormalizeInitialOperand {
   template <typename... DbTags, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
@@ -42,9 +43,8 @@ struct NormalizeInitialOperand {
             Requires<sizeof...(DbTags) != 0> = nullptr>
   static void apply(db::DataBox<tmpl::list<DbTags...>>& box,
                     tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
-                    const ArrayIndex& /*array_index*/,
-                    const ActionList /*meta*/,
+                    const Parallel::ConstGlobalCache<Metavariables>& cache,
+                    const ArrayIndex& array_index, const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/,
                     const double residual_magnitude,
                     const db::item_type<LinearSolver::Tags::HasConverged>&
@@ -68,6 +68,20 @@ struct NormalizeInitialOperand {
           basis_history->push_back(*operand);
           *local_has_converged = has_converged;
         });
+
+    // This check and the template argument can be removed once the
+    // initialization is done properly in a phase-dependent action list.
+    if (IsReinitializing) {
+      // Proceed with algorithm.
+      // We use `ckLocal()` here since this is essentially retrieving "self",
+      // which is guaranteed to be on the local processor. This ensures the
+      // calls are evaluated in order.
+      Parallel::get_parallel_component<ParallelComponent>(cache)[array_index]
+          .ckLocal()
+          ->set_terminate(false);
+      Parallel::get_parallel_component<ParallelComponent>(cache)[array_index]
+          .perform_algorithm();
+    }
   }
 };
 
@@ -199,7 +213,6 @@ struct NormalizeOperandAndUpdateField {
         LinearSolver::Tags::KrylovSubspaceBasis<fields_tag>;
 
     db::mutate<LinearSolver::Tags::IterationId,
-               ::Tags::Next<LinearSolver::Tags::IterationId>,
                orthogonalization_iteration_id_tag, operand_tag,
                basis_history_tag, fields_tag, LinearSolver::Tags::HasConverged>(
         make_not_null(&box),
@@ -207,9 +220,6 @@ struct NormalizeOperandAndUpdateField {
           normalization, &minres, &has_converged
         ](const gsl::not_null<db::item_type<LinearSolver::Tags::IterationId>*>
               iteration_id,
-          const gsl::not_null<
-              db::item_type<::Tags::Next<LinearSolver::Tags::IterationId>>*>
-              next_iteration_id,
           const gsl::not_null<
               db::item_type<orthogonalization_iteration_id_tag>*>
               orthogonalization_iteration_id,
@@ -220,7 +230,6 @@ struct NormalizeOperandAndUpdateField {
               local_has_converged,
           const db::item_type<initial_fields_tag>& initial_field) noexcept {
           (*iteration_id)++;
-          *next_iteration_id = *iteration_id + 1;
           *orthogonalization_iteration_id = 0;
           *operand /= normalization;
           basis_history->push_back(*operand);

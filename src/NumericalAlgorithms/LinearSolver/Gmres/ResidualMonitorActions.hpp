@@ -26,6 +26,7 @@ class TaggedTuple;
 }  // namespace tuples
 namespace LinearSolver {
 namespace gmres_detail {
+template <bool IsReinitializing>
 struct NormalizeInitialOperand;
 struct OrthogonalizeOperand;
 struct NormalizeOperandAndUpdateField;
@@ -36,7 +37,7 @@ struct NormalizeOperandAndUpdateField;
 namespace LinearSolver {
 namespace gmres_detail {
 
-template <typename BroadcastTarget>
+template <typename BroadcastTarget, bool IsReinitializing>
 struct InitializeResidualMagnitude {
   template <typename... DbTags, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
@@ -55,15 +56,33 @@ struct InitializeResidualMagnitude {
         db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>>;
     using initial_residual_magnitude_tag =
         db::add_tag_prefix<LinearSolver::Tags::Initial, residual_magnitude_tag>;
+    using orthogonalization_iteration_id_tag =
+        db::add_tag_prefix<LinearSolver::Tags::Orthogonalization,
+                           LinearSolver::Tags::IterationId>;
+    using orthogonalization_history_tag =
+        db::add_tag_prefix<LinearSolver::Tags::OrthogonalizationHistory,
+                           fields_tag>;
 
-    db::mutate<residual_magnitude_tag, initial_residual_magnitude_tag>(
-        make_not_null(&box), [residual_magnitude](
-                                 const gsl::not_null<double*>
-                                     local_residual_magnitude,
-                                 const gsl::not_null<double*>
-                                     initial_residual_magnitude) noexcept {
-          *local_residual_magnitude = *initial_residual_magnitude =
-              residual_magnitude;
+    db::mutate<residual_magnitude_tag, initial_residual_magnitude_tag,
+               LinearSolver::Tags::IterationId,
+               orthogonalization_iteration_id_tag,
+               orthogonalization_history_tag>(
+        make_not_null(&box),
+        [residual_magnitude](
+            const gsl::not_null<double*> local_residual_magnitude,
+            const gsl::not_null<double*> initial_residual_magnitude,
+            const gsl::not_null<db::item_type<LinearSolver::Tags::IterationId>*>
+                iteration_id,
+            const gsl::not_null<
+                db::item_type<orthogonalization_iteration_id_tag>*>
+                orthogonalization_iteration_id,
+            const gsl::not_null<db::item_type<orthogonalization_history_tag>*>
+                orthogonalization_history) noexcept {
+          *local_residual_magnitude = residual_magnitude;
+          *initial_residual_magnitude = residual_magnitude;
+          *iteration_id = 0;
+          *orthogonalization_iteration_id = 0;
+          *orthogonalization_history = DenseMatrix<double>{2, 1, 0.};
         });
 
     LinearSolver::observe_detail::contribute_to_reduction_observer(box, cache);
@@ -72,6 +91,11 @@ struct InitializeResidualMagnitude {
     // the compute item.
     const auto& has_converged = db::get<LinearSolver::Tags::HasConverged>(box);
 
+    if (UNLIKELY(static_cast<int>(get<::Tags::Verbosity>(box)) >=
+                 static_cast<int>(::Verbosity::Verbose))) {
+      Parallel::printf("Linear solver initialized with residual %e.\n",
+                       residual_magnitude);
+    }
     if (UNLIKELY(has_converged and
                  static_cast<int>(get<::Tags::Verbosity>(box)) >=
                      static_cast<int>(::Verbosity::Quiet))) {
@@ -80,7 +104,7 @@ struct InitializeResidualMagnitude {
           has_converged);
     }
 
-    Parallel::simple_action<NormalizeInitialOperand>(
+    Parallel::simple_action<NormalizeInitialOperand<IsReinitializing>>(
         Parallel::get_parallel_component<BroadcastTarget>(cache),
         residual_magnitude, has_converged);
   }
