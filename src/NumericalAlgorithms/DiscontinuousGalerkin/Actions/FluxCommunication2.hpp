@@ -80,6 +80,8 @@ struct ReceiveDataForFluxes {
   using fluxes_tag = dg::FluxesTag<FluxLiftingScheme>;
   using all_mortar_data_tag =
       ::Tags::Mortars<typename FluxLiftingScheme::mortar_data_tag, volume_dim>;
+  using mortars_temporal_id_tag =
+      Tags::Mortars<Tags::Next<temporal_id_tag>, volume_dim>;
 
  public:
   using inbox_tags = tmpl::list<fluxes_tag>;
@@ -92,53 +94,64 @@ struct ReceiveDataForFluxes {
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    using neighbor_temporal_id_tag =
-        Tags::Mortars<Tags::Next<temporal_id_tag>, volume_dim>;
-    db::mutate<all_mortar_data_tag, neighbor_temporal_id_tag>(
+    db::mutate<all_mortar_data_tag, mortars_temporal_id_tag>(
         make_not_null(&box),
         [&inboxes](const gsl::not_null<db::item_type<all_mortar_data_tag>*>
-                       mortar_data,
-                   const gsl::not_null<db::item_type<neighbor_temporal_id_tag>*>
-                       neighbor_next_temporal_ids,
+                       all_mortar_data,
+                   const gsl::not_null<db::item_type<mortars_temporal_id_tag>*>
+                       mortars_temporal_id,
                    const db::item_type<Tags::Next<temporal_id_tag>>&
                        local_next_temporal_id) noexcept {
           auto& inbox = tuples::get<fluxes_tag>(inboxes);
-          for (auto received_data = inbox.begin();
-               received_data != inbox.end() and
-               received_data->first < local_next_temporal_id;
-               received_data = inbox.erase(received_data)) {
-            const auto& receive_temporal_id = received_data->first;
-            for (auto& received_mortar_data : received_data->second) {
-              const auto mortar_id = received_mortar_data.first;
-              ASSERT(neighbor_next_temporal_ids->at(mortar_id) ==
-                         receive_temporal_id,
-                     "Expected data at "
-                         << neighbor_next_temporal_ids->at(mortar_id)
-                         << " but received at " << receive_temporal_id);
-              neighbor_next_temporal_ids->at(mortar_id) =
-                  received_mortar_data.second.first;
-              mortar_data->at(mortar_id).remote_insert(
-                  receive_temporal_id,
-                  std::move(received_mortar_data.second.second));
+          // Iterate over all temporal ids that we have received data for,
+          // up to this element's "next" temporal id
+          for (auto received_data_all_mortars = inbox.begin();
+               received_data_all_mortars != inbox.end() and
+               received_data_all_mortars->first < local_next_temporal_id;
+               received_data_all_mortars =
+                   inbox.erase(received_data_all_mortars)) {
+            const auto& received_temporal_id = received_data_all_mortars->first;
+            // Iterate over all mortars that we have received data for at this
+            // temporal id
+            for (auto& received_data : received_data_all_mortars->second) {
+              const auto mortar_id = received_data.first;
+              // Increment the temporal id on the mortar to match the received
+              // data, making sure that we have received data from all
+              // intermediate steps
+              ASSERT(mortars_temporal_id->at(mortar_id) == received_temporal_id,
+                     "Expected data on mortar at temporal id "
+                         << mortars_temporal_id->at(mortar_id)
+                         << " but received data at " << received_temporal_id);
+              mortars_temporal_id->at(mortar_id) = received_data.second.first;
+              // Move the received data from the inbox into the mortar data
+              all_mortar_data->at(mortar_id).remote_insert(
+                  received_temporal_id, std::move(received_data.second.second));
             }
           }
 
+          // At this point we are done with receiving data for this step. We
+          // perform some sanity checks now.
+
+          // Make sure we have received all data up to this element's "next"
+          // temporal id.
           // The apparently pointless lambda wrapping this check
           // prevents gcc-7.3.0 from segfaulting.
-          ASSERT(([
-                   &neighbor_next_temporal_ids, &local_next_temporal_id
-                 ]() noexcept {
+          ASSERT(([&mortars_temporal_id, &local_next_temporal_id ]() noexcept {
                    return std::all_of(
-                       neighbor_next_temporal_ids->begin(),
-                       neighbor_next_temporal_ids->end(),
-                       [&local_next_temporal_id](const auto& next) noexcept {
-                         return next.first.second ==
+                       mortars_temporal_id->begin(), mortars_temporal_id->end(),
+                       [&local_next_temporal_id](
+                           const auto& mortar_id_and_temporal_id) noexcept {
+                         return mortar_id_and_temporal_id.first.second ==
                                     ElementId<
                                         volume_dim>::external_boundary_id() or
-                                next.second >= local_next_temporal_id;
+                                mortar_id_and_temporal_id.second >=
+                                    local_next_temporal_id;
                        });
                  }()),
-                 "apply called before all data received");
+                 "Tried to complete flux communication step, but not all data "
+                 "for this step has been received.");
+          // Make sure we haven't received any data that we should not have been
+          // able to get yet.
           ASSERT(
               inbox.empty() or (inbox.size() == 1 and
                                 inbox.begin()->first == local_next_temporal_id),
@@ -162,25 +175,37 @@ struct ReceiveDataForFluxes {
     const auto& inbox = tuples::get<fluxes_tag>(inboxes);
     const auto& local_next_temporal_id =
         db::get<Tags::Next<temporal_id_tag>>(box);
-    const auto& mortars_next_temporal_id =
+    const auto& mortars_temporal_id =
         db::get<Tags::Mortars<Tags::Next<temporal_id_tag>, volume_dim>>(box);
-    for (const auto& mortar_id_next_temporal_id : mortars_next_temporal_id) {
-      const auto& mortar_id = mortar_id_next_temporal_id.first;
-      // If on an external boundary
+    for (const auto& mortar_id_and_temporal_id : mortars_temporal_id) {
+      const auto& mortar_id = mortar_id_and_temporal_id.first;
+      // Skip external boundaries
       if (mortar_id.second == ElementId<volume_dim>::external_boundary_id()) {
         continue;
       }
-      auto next_temporal_id = mortar_id_next_temporal_id.second;
-      while (next_temporal_id < local_next_temporal_id) {
-        const auto temporal_received = inbox.find(next_temporal_id);
-        if (temporal_received == inbox.end()) {
+      // We are ready once data has been received for all temporal ids between
+      // the current mortar temporal id and (excluding) the "next" temporal id
+      // (We should probably remove the `Next` prefix from the temporal ids on
+      // the mortar, since its meaning is not clear in this context)
+      auto check_temporal_id = mortar_id_and_temporal_id.second;
+      while (check_temporal_id < local_next_temporal_id) {
+        const auto received_data_all_mortars = inbox.find(check_temporal_id);
+        if (received_data_all_mortars == inbox.end()) {
+          // No data has been received at this temporal id at all yet, so we're
+          // not ready
           return false;
         }
-        const auto mortar_received = temporal_received->second.find(mortar_id);
-        if (mortar_received == temporal_received->second.end()) {
+        const auto received_data =
+            received_data_all_mortars->second.find(mortar_id);
+        if (received_data == received_data_all_mortars->second.end()) {
+          // No data has been received at this temporal id for this mortar, so
+          // we're not ready
           return false;
         }
-        next_temporal_id = mortar_received->second.first;
+        // Data has been received at this temporal id for this mortar, so check
+        // the next intermediate temporal id until we have checked all temporal
+        // ids within this element's temporal step
+        check_temporal_id = received_data->second.first;
       }
     }
     return true;
@@ -271,7 +296,7 @@ struct SendDataForFluxes {
           typename FluxLiftingScheme::package_remote_data>(
           box, direction,
           typename FluxLiftingScheme::package_remote_data::argument_tags{},
-          get<typename Metavariables::normal_dot_numerical_flux>(cache));
+          get<typename FluxLiftingScheme::numerical_flux_computer_tag>(cache));
       const auto local_face_data = compute_packaged_face_data<
           typename FluxLiftingScheme::package_local_data>(
           box, direction,

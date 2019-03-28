@@ -65,8 +65,9 @@ struct ComputeFluxes {
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
   static std::tuple<db::DataBox<DbTags>&&> apply(
-      db::DataBox<DbTags>& box, tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      db::DataBox<DbTags>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     using interface_argument_tags =

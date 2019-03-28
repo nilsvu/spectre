@@ -44,6 +44,8 @@ struct StrongFirstOrder {
       db::add_tag_prefix<::Tags::NormalDotNumericalFlux, VariablesTag>;
   using normal_dot_fluxes_tag =
       db::add_tag_prefix<::Tags::NormalDotFlux, VariablesTag>;
+  using flux_computer_type = FluxComputerType;
+  using numerical_flux_computer_tag = NumericalFluxComputerTag;
 
   /// A `Variables` that is communicated to and from the remote element
   using RemoteData =
@@ -140,6 +142,9 @@ struct StrongFirstOrder {
       ::Tags::Mortars<::Tags::Mesh<volume_dim - 1>, volume_dim>,
       ::Tags::Mortars<::Tags::MortarSize<volume_dim - 1>, volume_dim>>;
 
+  using mutate_tags = return_tags;
+  using const_global_cache_tags = tmpl::list<numerical_flux_computer_tag>;
+
   static void apply(
       const gsl::not_null<db::item_type<dt_variables_tag>*> dt_variables,
       const gsl::not_null<
@@ -151,11 +156,16 @@ struct StrongFirstOrder {
       const db::item_type<::Tags::Mortars<::Tags::MortarSize<volume_dim - 1>,
                                           volume_dim>>& mortar_sizes,
       const typename NumericalFluxComputerTag::type&
-          normal_dot_numerical_flux_computer) noexcept {
+          normal_dot_numerical_flux_computer,
+      const bool only_external_directions) noexcept {
     // Iterate over all mortars
     for (auto& mortar_id_and_data : *all_mortar_data) {
       // Retrieve mortar data
       const auto& mortar_id = mortar_id_and_data.first;
+      if (only_external_directions and
+          mortar_id.second != ElementId<volume_dim>::external_boundary_id()) {
+        continue;
+      }
       auto& mortar_data = mortar_id_and_data.second;
       const auto& direction = mortar_id.first;
       const size_t dimension = direction.dimension();

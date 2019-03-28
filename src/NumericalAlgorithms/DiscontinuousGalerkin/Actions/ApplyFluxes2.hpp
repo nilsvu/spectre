@@ -46,7 +46,8 @@ struct ApplyFluxes {
     db::mutate_apply<typename FluxLiftingScheme::return_tags,
                      typename FluxLiftingScheme::argument_tags>(
         FluxLiftingScheme{}, make_not_null(&box),
-        get<typename Metavariables::normal_dot_numerical_flux>(cache));
+        get<typename FluxLiftingScheme::numerical_flux_computer_tag>(cache),
+        false);
     return std::forward_as_tuple(std::move(box));
   }
 };
