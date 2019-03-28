@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "DataStructures/DataBox/DataBoxTag.hpp"
+#include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DenseMatrix.hpp"
 #include "NumericalAlgorithms/Convergence/Criteria.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
@@ -71,6 +72,16 @@ struct IterationId : db::SimpleTag {
   using type = size_t;
   template <typename Tag>
   using step_prefix = OperatorAppliedTo<Tag>;
+};
+
+/*!
+ * \brief Computes the `LinearSolver::Tags::IterationId` incremented by one.
+ */
+struct NextIterationIdCompute : db::ComputeTag, ::Tags::Next<IterationId> {
+  using argument_tags = tmpl::list<IterationId>;
+  static size_t function(const size_t& iteration_id) noexcept {
+    return iteration_id + 1;
+  }
 };
 
 /*!
