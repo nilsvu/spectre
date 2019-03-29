@@ -280,7 +280,7 @@ void solve_constrained_fit(
  * The HWENO limiter reconstructs its new solution from a linear combination of
  * the local DG solution and a "modified" solution from each neighbor element.
  * This function computes the modified solution for a particular tensor and
- * neighbor.
+ * neighbor, following Section 3 of \cite Zhu2016.
  *
  * The modified solution associated with a particular neighbor (the "primary"
  * neighbor) is obtained by solving a constrained fit over the local element,
