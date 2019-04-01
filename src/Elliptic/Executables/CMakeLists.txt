@@ -2,4 +2,5 @@
 # See LICENSE.txt for details.
 
 add_subdirectory(Poisson)
+add_subdirectory(Punctures)
 add_subdirectory(Xcts)
