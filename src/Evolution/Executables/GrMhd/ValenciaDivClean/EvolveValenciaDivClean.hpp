@@ -19,6 +19,8 @@
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/LimiterActions.hpp"
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/Minmod.hpp"
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/Tags.hpp"
+#include "Evolution/DiscontinuousGalerkin/SlopeLimiters/Weno.hpp"
+#include "Evolution/DiscontinuousGalerkin/SlopeLimiters/WenoType.hpp"
 #include "Evolution/EventsAndTriggers/Actions/RunEventsAndTriggers.hpp"  // IWYU pragma: keep
 #include "Evolution/EventsAndTriggers/Event.hpp"
 #include "Evolution/EventsAndTriggers/EventsAndTriggers.hpp"  // IWYU pragma: keep
@@ -96,7 +98,8 @@ struct EvolutionMetavars {
   using normal_dot_numerical_flux = OptionTags::NumericalFluxParams<
       dg::NumericalFluxes::LocalLaxFriedrichs<system>>;
   // Do not limit the divergence-cleaning field Phi
-  using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Minmod<
+  // using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Minmod<
+  using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Weno<
       3, tmpl::list<grmhd::ValenciaDivClean::Tags::TildeD,
                     grmhd::ValenciaDivClean::Tags::TildeTau,
                     grmhd::ValenciaDivClean::Tags::TildeS<Frame::Inertial>,
