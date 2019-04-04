@@ -70,6 +70,10 @@ class HwenoConstrainedFitCache {
   DirectionMap<VolumeDim, DirectionMap<VolumeDim, Matrix>> Ajk_inverse_matrices;
 };
 
+template <size_t VolumeDim>
+const HwenoConstrainedFitCache<VolumeDim>& hweno_constrained_fit_cache(
+    const Element<VolumeDim>& element, const Mesh<VolumeDim>& mesh) noexcept;
+
 // Find the neighboring element where the tensor component given by `Tag` and
 // `tensor_index` has the most different mean from `local_mean`. Note that the
 // neighbor given by `primary_neighbor` is NOT included in the maximization.
@@ -138,6 +142,13 @@ DataVector compute_vector_bj(
     const auto& direction = neighbor_and_data.first.first;
     const auto& neighbor_mesh = mesh;
     const auto& neighbor_quadrature_weights = quadrature_weights;
+
+    ASSERT(interpolation_matrices.contains(direction),
+           "interpolation_matrices does not contain key: " << direction);
+    ASSERT(
+        quadrature_weights_dot_interpolation_matrices.contains(direction),
+        "quadrature_weights_dot_interpolation_matrices does not contain key: "
+            << direction);
     const auto& interpolation_matrix = interpolation_matrices.at(direction);
     const auto& quadrature_weights_dot_interpolation_matrix =
         quadrature_weights_dot_interpolation_matrices.at(direction);
@@ -203,30 +214,14 @@ void solve_constrained_fit(
   //
   // Note that for fully general grids, with h- and p-refinement, the caching
   // will need to be *far* more complicated.
-  static const HwenoConstrainedFitCache<VolumeDim> interior_cache(element,
-                                                                  mesh);
-  static std::unordered_map<ElementId<VolumeDim>,
-                            HwenoConstrainedFitCache<VolumeDim>>
-      boundary_cache{};
-  const HwenoConstrainedFitCache<VolumeDim>* cache;
-  // With no h-refinement, elements at external boundaries can be identified
-  // by the number of neighbors.
-  if (element.neighbors().size() == two_to_the(VolumeDim)) {
-    cache = &interior_cache;
-  } else {
-    const auto& id = element.id();
-    if (boundary_cache.find(id) == boundary_cache.end()) {
-      boundary_cache.insert(std::make_pair(
-          id, HwenoConstrainedFitCache<VolumeDim>(element, mesh)));
-    }
-    cache = &(boundary_cache.at(id));
-  }
+  const HwenoConstrainedFitCache<VolumeDim>& cache =
+      hweno_constrained_fit_cache(element, mesh);
 
-  const DataVector& w = cache->quadrature_weights;
+  const DataVector& w = cache.quadrature_weights;
   const DirectionMap<VolumeDim, DataVector>& w_dot_Ms =
-      cache->quadrature_weights_dot_interpolation_matrices;
-  const DirectionMap<VolumeDim, Matrix>& Ms = cache->interpolation_matrices;
-  const Matrix& Ajk_inverse = cache->get_Ajk_inverse_matrix(
+      cache.quadrature_weights_dot_interpolation_matrices;
+  const DirectionMap<VolumeDim, Matrix>& Ms = cache.interpolation_matrices;
+  const Matrix& Ajk_inverse = cache.get_Ajk_inverse_matrix(
       primary_neighbor.first, skipped_neighbor.first);
   const DataVector bj =
       compute_vector_bj<Tag>(mesh, tensor_index, w, Ms, w_dot_Ms, neighbor_data,

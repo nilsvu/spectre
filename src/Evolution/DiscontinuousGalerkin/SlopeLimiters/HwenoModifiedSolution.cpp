@@ -14,8 +14,10 @@
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/WenoGridHelpers.hpp"
 #include "NumericalAlgorithms/Interpolation/RegularGridInterpolant.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
+#include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/Gsl.hpp"
+#include "Utilities/MakeArray.hpp"
 
 namespace {
 
@@ -223,10 +225,63 @@ HwenoConstrainedFitCache<VolumeDim>::HwenoConstrainedFitCache(
   }
 }
 
+namespace {
+
+template <size_t VolumeDim, size_t DummyIndex>
+const HwenoConstrainedFitCache<VolumeDim>& hweno_constrained_fit_cache_impl(
+    const Element<VolumeDim>& element, const Mesh<VolumeDim>& mesh) noexcept {
+  // todo checks
+  static const HwenoConstrainedFitCache<VolumeDim> result(element, mesh);
+  return result;
+}
+
+template <size_t VolumeDim, size_t... Is>
+const HwenoConstrainedFitCache<VolumeDim>& hweno_constrained_fit_cache(
+    const Element<VolumeDim>& element, const Mesh<VolumeDim>& mesh,
+    std::index_sequence<Is...> /*dummy_indices*/) noexcept {
+  // todo checks
+  static const std::array<
+      const HwenoConstrainedFitCache<VolumeDim>& (*)(const Element<VolumeDim>&,
+                                                     const Mesh<VolumeDim>&),
+      sizeof...(Is)>
+      cache{{&hweno_constrained_fit_cache_impl<VolumeDim, Is>...}};
+
+  const size_t collapsed_element_info = [&element]() noexcept {
+    std::bitset<2 * VolumeDim> bits;
+    for (size_t dim = 0; dim < VolumeDim; ++dim) {
+      for (const Side& side : {Side::Lower, Side::Upper}) {
+        const Direction<VolumeDim> dir(dim, side);
+        // Is there a neighbor in this direction?
+        const bool neighbor_exists =
+            (element.neighbors().find(dir) != element.neighbors().end());
+        // Index into bitset for this direction
+        const size_t index = 2 * dim + (side == Side::Lower ? 0 : 1);
+        bits[index] = neighbor_exists;
+      }
+    }
+    return bits.to_ulong();
+  }
+  ();
+  return gsl::at(cache, collapsed_element_info)(element, mesh);
+}
+
+}  // namespace
+
+template <size_t VolumeDim>
+const HwenoConstrainedFitCache<VolumeDim>& hweno_constrained_fit_cache(
+    const Element<VolumeDim>& element, const Mesh<VolumeDim>& mesh) noexcept {
+  return hweno_constrained_fit_cache<VolumeDim>(
+      element, mesh, std::make_index_sequence<two_to_the(2 * VolumeDim)>{});
+}
+
 // Explicit instantiations
 #define DIM(data) BOOST_PP_TUPLE_ELEM(0, data)
 
-#define INSTANTIATE(_, data) template class HwenoConstrainedFitCache<DIM(data)>;
+#define INSTANTIATE(_, data)                             \
+  template class HwenoConstrainedFitCache<DIM(data)>;    \
+  template const HwenoConstrainedFitCache<DIM(data)>&    \
+  hweno_constrained_fit_cache(const Element<DIM(data)>&, \
+                              const Mesh<DIM(data)>&) noexcept;
 
 GENERATE_INSTANTIATIONS(INSTANTIATE, (1, 2, 3))
 
