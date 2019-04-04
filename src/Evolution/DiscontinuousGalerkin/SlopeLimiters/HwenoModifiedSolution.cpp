@@ -4,20 +4,22 @@
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/HwenoModifiedSolution.hpp"
 
 #include <array>
+#include <bitset>
 #include <cstddef>
 #include <ostream>
 #include <vector>
 
 #include "DataStructures/IndexIterator.hpp"
+#include "Domain/Direction.hpp"
 #include "Domain/Element.hpp"  // IWYU pragma: keep
 #include "Domain/Mesh.hpp"     // IWYU pragma: keep
+#include "Domain/Side.hpp"
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/WenoGridHelpers.hpp"
 #include "NumericalAlgorithms/Interpolation/RegularGridInterpolant.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/Gsl.hpp"
-#include "Utilities/MakeArray.hpp"
 
 namespace {
 
@@ -262,6 +264,10 @@ const HwenoConstrainedFitCache<VolumeDim>& hweno_constrained_fit_cache(
     return bits.to_ulong();
   }
   ();
+  ASSERT(collapsed_element_info >= 0 and collapsed_element_info < sizeof...(Is),
+         "Got collapsed_element_info = " << collapsed_element_info
+                                         << ", but expect only "
+                                         << sizeof...(Is) << " configurations");
   return gsl::at(cache, collapsed_element_info)(element, mesh);
 }
 

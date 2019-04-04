@@ -18,7 +18,6 @@
 #include "Evolution/DiscontinuousGalerkin/SlopeLimiters/WenoGridHelpers.hpp"
 #include "NumericalAlgorithms/LinearOperators/MeanValue.hpp"
 #include "Utilities/Algorithm.hpp"
-#include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/Gsl.hpp"
 
 /// \cond
