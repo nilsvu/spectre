@@ -144,7 +144,10 @@ Matrix compute_Ajk_inverse_matrix(
   ();
 
   for (const auto& dir : directions_with_neighbors) {
-    if (dir == skipped_direction) {
+    // If there is more than one neighbor, then skipped_direction is indeed
+    // meaningful
+    if (directions_with_neighbors.size() > 1 and
+        dir == skipped_direction) {
       continue;
     }
 
@@ -213,10 +216,12 @@ HwenoConstrainedFitCache<VolumeDim>::HwenoConstrainedFitCache(
 
   for (const auto& primary_dir : directions_with_neighbors) {
     for (const auto& skipped_dir : directions_with_neighbors) {
+      // If there is only one neighbor, skipped is set to primary. Else, they
+      // are different.
       // Skip the nonsensical case where the primary and skipped neighbors
       // are the same. This can never be true, and only arises here because
       // of how the data is organized in the cache.
-      if (primary_dir != skipped_dir) {
+      if (directions_with_neighbors.size() == 1 or primary_dir != skipped_dir) {
         Ajk_inverse_matrices[primary_dir][skipped_dir] =
             compute_Ajk_inverse_matrix(
                 element, mesh, quadrature_weights, interpolation_matrices,

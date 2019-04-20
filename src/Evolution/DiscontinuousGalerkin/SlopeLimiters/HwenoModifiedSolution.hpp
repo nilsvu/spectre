@@ -57,8 +57,8 @@ class HwenoConstrainedFitCache {
   const Matrix& get_Ajk_inverse_matrix(
       const Direction<VolumeDim>& primary_dir,
       const Direction<VolumeDim>& skipped_dir) const noexcept {
-    ASSERT(primary_dir != skipped_dir,
-           "Invalid inputs: primary_dir == skipped_dir == " << skipped_dir);
+    //ASSERT(primary_dir != skipped_dir,
+    //       "Invalid inputs: primary_dir == skipped_dir == " << skipped_dir);
     return Ajk_inverse_matrices.at(primary_dir).at(skipped_dir);
   }
 
@@ -86,6 +86,12 @@ find_neighbor_with_most_different_mean(
         neighbor_data,
     const std::pair<Direction<VolumeDim>, ElementId<VolumeDim>>&
         primary_neighbor) noexcept {
+  // Special case: if there is only one neighbor, then no choice but to return
+  // it, even though it will also be the primary_neighbor
+  if (neighbor_data.size() == 1) {
+    return primary_neighbor;
+  }
+
   // Initialize with a negative value to guarantee that at least one comparison
   // will exceed this, because this will set the most different neighbor.
   double running_max_difference = -1.;
@@ -134,7 +140,10 @@ DataVector compute_vector_bj(
 
   // Loop over all neighbors
   for (const auto& neighbor_and_data : neighbor_data) {
-    if (neighbor_and_data.first == skipped_neighbor) {
+    // If more than one neighbor, then skipped_neighbor is meaningful and
+    // should indeed be skipped
+    if (neighbor_data.size() > 1 and
+        neighbor_and_data.first == skipped_neighbor) {
       continue;
     }
 
