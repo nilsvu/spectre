@@ -101,10 +101,10 @@ struct EvolutionMetavars {
 //   using normal_dot_numerical_flux = OptionTags::NumericalFluxParams<
 //       dg::NumericalFluxes::LocalLaxFriedrichs<system>>;
   using normal_dot_numerical_flux = OptionTags::NumericalFluxParams<
-      dg::NumericalFluxes::Hll<system>>;
+      dg::NumericalFluxes::LocalLaxFriedrichs<system>>;
   // Do not limit the divergence-cleaning field Phi
-//   using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Minmod<
-  using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Weno<
+  using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Minmod<
+//   using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Weno<
 //   using limiter = OptionTags::SlopeLimiterParams<SlopeLimiters::Krivodonova<
       3, tmpl::list<grmhd::ValenciaDivClean::Tags::TildeD,
                     grmhd::ValenciaDivClean::Tags::TildeTau,
