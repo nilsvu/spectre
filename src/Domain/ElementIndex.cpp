@@ -6,6 +6,7 @@
 #include <boost/functional/hash.hpp>
 #include <cstring>
 #include <ostream>
+#include <pup.h>  // IWYU pragma: keep
 #include <type_traits>
 
 #include "Domain/ElementId.hpp"  // IWYU pragma: keep
@@ -26,6 +27,8 @@ SegmentIndex::SegmentIndex(size_t block_id,
          "Refinement level out of bounds: " << segment_id.refinement_level());
 }
 
+void SegmentIndex::pup(PUP::er& p) noexcept { p | *this; }
+
 static_assert(std::is_pod<SegmentIndex>::value, "SegmentIndex is not POD");
 static_assert(sizeof(SegmentIndex) == sizeof(int),
               "SegmentIndex does not fit in an int");
@@ -41,6 +44,11 @@ ElementIndex<VolumeDim>::ElementIndex(const ElementId<VolumeDim>& id) noexcept {
     gsl::at(segments_, d) =
         SegmentIndex(id.block_id(), gsl::at(id.segment_ids(), d));
   }
+}
+
+template <size_t VolumeDim>
+void ElementIndex<VolumeDim>::pup(PUP::er& p) noexcept {
+  p | segments_;
 }
 
 static_assert(std::is_pod<ElementIndex<1>>::value, "ElementIndex is not POD");

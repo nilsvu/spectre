@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <functional>
 #include <iosfwd>
+#include <pup.h>  // IWYU pragma: keep
 
 #include "Utilities/ConstantExpressions.hpp"
 
@@ -38,11 +39,16 @@ class SegmentIndex {
   size_t index() const noexcept { return index_; }
   size_t refinement_level() const noexcept { return refinement_level_; }
 
+  /// Serialization for Charm++
+  void pup(PUP::er& p) noexcept;  // NOLINT
+
  private:
   unsigned block_id_ : ElementIndex_detail::block_id_bits;
   unsigned refinement_level_ : ElementIndex_detail::refinement_bits;
   unsigned index_ : ElementIndex_detail::max_refinement_level;
 };
+
+PUPbytes(SegmentIndex);
 
 template <size_t VolumeDim>
 std::ostream& operator<<(std::ostream& s, const SegmentIndex& index) noexcept;
@@ -59,6 +65,9 @@ class ElementIndex {
   const std::array<SegmentIndex, VolumeDim>& segments() const noexcept {
     return segments_;
   }
+
+  /// Serialization for Charm++
+  void pup(PUP::er& p) noexcept;  // NOLINT
 
  private:
   std::array<SegmentIndex, VolumeDim> segments_;
