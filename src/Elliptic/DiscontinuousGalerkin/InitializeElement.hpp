@@ -89,7 +89,7 @@ struct InitializeElement {
             typename ParallelComponent>
   static auto apply(const db::DataBox<tmpl::list<>>& /*box*/,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::ConstGlobalCache<Metavariables>& cache,
+                    Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ElementIndex<Dim>& array_index,
                     const ActionList /*meta*/,
                     const ParallelComponent* const parallel_component_meta,

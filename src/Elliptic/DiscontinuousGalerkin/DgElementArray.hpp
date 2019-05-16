@@ -4,10 +4,14 @@
 #pragma once
 
 #include "AlgorithmArray.hpp"
+#include "DataStructures/DataBox/Actions/SetData.hpp"
 #include "Domain/ElementIndex.hpp"
 #include "Domain/InitialElementIds.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/DiscontinuousGalerkin/InitializeElement.hpp"
+#include "IO/DataImporter/DataFileReader.hpp"
+#include "IO/DataImporter/DataFileReaderActions.hpp"
+#include "IO/DataImporter/ElementActions.hpp"
 #include "IO/Observer/ObservationId.hpp"
 #include "IO/Observer/TypeOfObservation.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
@@ -35,7 +39,7 @@ namespace Elliptic {
  *
  * - `Phase::Initialize`: Create the domain and execute
  * `Elliptic::dg::Actions::InitializeElement` on all elements.
- * - `Phase::RegisterWithObservers` (optional)
+ * - `Phase::RegisterElements` (optional)
  * - `Phase::Solve`: Execute the actions in `ActionList` on all elements. Repeat
  * until an action terminates the algorithm.
  *
@@ -51,7 +55,10 @@ namespace Elliptic {
  * - ConstGlobalCache:
  *   - All items required by the actions in `ActionList`
  */
-template <class Metavariables, class ActionList>
+template <class Metavariables, class ActionList,
+          // Since these template parameters are only needed for the
+          // `ReadElementData` action, we can remove them once we have PDAL's
+          class ImporterOptionsGroup, class ImportFieldsTags>
 struct DgElementArray {
   static constexpr size_t volume_dim = Metavariables::system::volume_dim;
 
@@ -60,8 +67,13 @@ struct DgElementArray {
   using action_list = ActionList;
   using array_index = ElementIndex<volume_dim>;
 
-  using const_global_cache_tag_list =
-      Parallel::get_const_global_cache_tags<action_list>;
+  using read_element_data_action = importer::ThreadedActions::ReadElementData<
+      ImporterOptionsGroup, ImportFieldsTags,
+      db::Actions::SetData<ImportFieldsTags>, DgElementArray>;
+
+  using const_global_cache_tag_list = tmpl::append<
+      Parallel::get_const_global_cache_tags<action_list>,
+      typename read_element_data_action::const_global_cache_tag_list>;
 
   using initial_databox = db::compute_databox_type<
       typename Elliptic::dg::Actions::InitializeElement<
@@ -84,48 +96,39 @@ struct DgElementArray {
       case Metavariables::Phase::Solve:
         dg_element_array.perform_algorithm();
         break;
-      default:
-        try_register_with_observers(next_phase, global_cache);
+      case Metavariables::Phase::RegisterElements:
+        // We currently use an observation_id with a fake time when registering
+        // observers but in the future when we start doing load balancing and
+        // elements migrate around the system they will need to register and
+        // unregister themselves at specific times.
+        Parallel::simple_action<observers::Actions::RegisterWithObservers<
+            observers::TypeOfObservation::ReductionAndVolume>>(
+            dg_element_array,
+            observers::ObservationId(
+                0., typename Metavariables::element_observation_type{}));
+        // Do this here for now. With PDAL's this is part of the action list.
+        Parallel::simple_action<importer::Actions::RegisterWithImporter>(
+            dg_element_array);
         break;
-    }
-  }
-
- private:
-  template <typename PhaseType,
-            Requires<not observers::has_register_with_observer_v<PhaseType>> =
-                nullptr>
-  static void try_register_with_observers(
-      const PhaseType /*next_phase*/,
-      Parallel::CProxy_ConstGlobalCache<
-          Metavariables>& /*global_cache*/) noexcept {}
-
-  template <
-      typename PhaseType,
-      Requires<observers::has_register_with_observer_v<PhaseType>> = nullptr>
-  static void try_register_with_observers(
-      const PhaseType next_phase,
-      Parallel::CProxy_ConstGlobalCache<Metavariables>& global_cache) noexcept {
-    if (next_phase == Metavariables::Phase::RegisterWithObserver) {
-      auto& local_cache = *(global_cache.ckLocalBranch());
-      // We currently use an observation_id with a fake time when registering
-      // observers but in the future when we start doing load balancing and
-      // elements migrate around the system they will need to register and
-      // unregister themselves at specific times.
-      const observers::ObservationId observation_id_with_fake_time(
-          0., typename Metavariables::element_observation_type{});
-      Parallel::simple_action<observers::Actions::RegisterWithObservers<
-          observers::TypeOfObservation::ReductionAndVolume>>(
-          Parallel::get_parallel_component<DgElementArray>(local_cache),
-          observation_id_with_fake_time);
+      case Metavariables::Phase::ImportData:
+        Parallel::threaded_action<read_element_data_action>(
+            Parallel::get_parallel_component<
+                importer::DataFileReader<Metavariables>>(
+                local_cache)[static_cast<size_t>(Parallel::my_node())]);
+        break;
+      default:
+        break;
     }
   }
 };
 
-template <class Metavariables, class ActionList>
-void DgElementArray<Metavariables, ActionList>::initialize(
-    Parallel::CProxy_ConstGlobalCache<Metavariables>& global_cache,
-    const std::unique_ptr<DomainCreator<volume_dim, Frame::Inertial>>
-        domain_creator) noexcept {
+template <class Metavariables, class ActionList, class ImporterOptionsGroup,
+          class ImportFieldsTags>
+void DgElementArray<Metavariables, ActionList, ImporterOptionsGroup,
+                    ImportFieldsTags>::
+    initialize(Parallel::CProxy_ConstGlobalCache<Metavariables>& global_cache,
+               const std::unique_ptr<DomainCreator<volume_dim, Frame::Inertial>>
+                   domain_creator) noexcept {
   auto& dg_element_array = Parallel::get_parallel_component<DgElementArray>(
       *(global_cache.ckLocalBranch()));
 

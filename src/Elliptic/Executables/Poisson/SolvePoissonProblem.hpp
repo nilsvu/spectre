@@ -13,6 +13,7 @@
 #include "Elliptic/Systems/Poisson/Actions/Observe.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
+#include "IO/DataImporter/DataFileReader.hpp"
 #include "IO/Observer/Actions.hpp"
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
@@ -32,6 +33,11 @@
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
+
+struct InitialGuess {
+  using group = importer::OptionTags::Group;
+  static constexpr OptionString help = "Initial guess";
+};
 
 template <size_t Dim>
 struct Metavariables {
@@ -70,29 +76,39 @@ struct Metavariables {
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
       tmpl::list<Poisson::Actions::Observe, linear_solver>>;
 
+  using element_array_component = Elliptic::DgElementArray<
+      Metavariables,
+      tmpl::list<
+          Poisson::Actions::Observe,
+          LinearSolver::Actions::TerminateIfConverged,
+          dg::Actions::ComputeNonconservativeBoundaryFluxes<
+              Tags::InternalDirections<Dim>>,
+          dg::Actions::SendDataForFluxes<Metavariables>,
+          Elliptic::Actions::ComputeOperatorAction,
+          dg::Actions::ComputeNonconservativeBoundaryFluxes<
+              Tags::BoundaryDirectionsInterior<Dim>>,
+          Elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
+              Metavariables>,
+          dg::Actions::ReceiveDataForFluxes<Metavariables>,
+          dg::Actions::ApplyFluxes, typename linear_solver::perform_step>,
+      InitialGuess, tmpl::list<Poisson::Field>>;
+
   // Specify all parallel components that will execute actions at some point.
-  using component_list = tmpl::append<
-      tmpl::list<Elliptic::DgElementArray<
-          Metavariables,
-          tmpl::list<
-              Poisson::Actions::Observe,
-              LinearSolver::Actions::TerminateIfConverged,
-              dg::Actions::ComputeNonconservativeBoundaryFluxes<
-                  Tags::InternalDirections<Dim>>,
-              dg::Actions::SendDataForFluxes<Metavariables>,
-              Elliptic::Actions::ComputeOperatorAction,
-              dg::Actions::ComputeNonconservativeBoundaryFluxes<
-                  Tags::BoundaryDirectionsInterior<Dim>>,
-              Elliptic::dg::Actions::
-                  ImposeHomogeneousDirichletBoundaryConditions<Metavariables>,
-              dg::Actions::ReceiveDataForFluxes<Metavariables>,
-              dg::Actions::ApplyFluxes, typename linear_solver::perform_step>>>,
-      typename linear_solver::component_list,
-      tmpl::list<observers::Observer<Metavariables>,
-                 observers::ObserverWriter<Metavariables>>>;
+  using component_list =
+      tmpl::flatten<tmpl::list<element_array_component,
+                               typename linear_solver::component_list,
+                               observers::Observer<Metavariables>,
+                               observers::ObserverWriter<Metavariables>,
+                               importer::DataFileReader<Metavariables>>>;
 
   // Specify all global synchronization points.
-  enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
+  enum class Phase {
+    Initialization,
+    RegisterElements,
+    ImportData,
+    Solve,
+    Exit
+  };
 
   // Specify the transitions between phases.
   static Phase determine_next_phase(
@@ -101,8 +117,10 @@ struct Metavariables {
           Metavariables>& /*cache_proxy*/) noexcept {
     switch (current_phase) {
       case Phase::Initialization:
-        return Phase::RegisterWithObserver;
-      case Phase::RegisterWithObserver:
+        return Phase::RegisterElements;
+      case Phase::RegisterElements:
+        return Phase::ImportData;
+      case Phase::ImportData:
         return Phase::Solve;
       case Phase::Solve:
         return Phase::Exit;

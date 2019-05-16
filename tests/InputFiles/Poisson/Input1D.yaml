@@ -33,3 +33,9 @@ LinearSolver:
     AbsoluteResidual: 0
     RelativeResidual: 0
   Verbosity: Verbose
+
+DataImporters:
+  InitialGuess:
+    DataFileName: "Poisson1DVolume0.h5"
+    VolumeDataSubgroup: "element_data"
+    ObservationValue: 0.
