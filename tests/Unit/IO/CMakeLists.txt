@@ -4,6 +4,8 @@
 set(LIBRARY "Test_IO")
 
 set(LIBRARY_SOURCES
+  DataImporter/Test_DataFileReader.cpp
+  DataImporter/Test_Tags.cpp
   Observers/Test_ArrayComponentId.cpp
   Observers/Test_Initialize.cpp
   Observers/Test_RegisterElements.cpp
