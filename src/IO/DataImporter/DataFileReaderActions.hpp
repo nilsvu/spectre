@@ -51,6 +51,8 @@ struct RegisterElementWithSelf {
                     const ParallelComponent* const /*meta*/,
                     const observers::ArrayComponentId& array_component_id,
                     const std::string& grid_name) noexcept {
+    Parallel::printf("Node %zu registered element %s\n",
+                     static_cast<size_t>(Parallel::my_node()), grid_name);
     db::mutate<Tags::RegisteredElements>(
         make_not_null(&box),
         [&array_component_id, &grid_name ](
@@ -134,6 +136,8 @@ struct ReadElementData {
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/,
                     const gsl::not_null<CmiNodeLock*> node_lock) noexcept {
+    Parallel::printf("Node %zu reads element data...\n",
+                     static_cast<size_t>(Parallel::my_node()));
     Parallel::lock(node_lock);
     {
       // The scoping is to close the file before unlocking
