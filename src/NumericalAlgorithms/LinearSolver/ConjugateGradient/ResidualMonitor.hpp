@@ -63,11 +63,11 @@ struct ResidualMonitor {
     const auto initial_observation_id = observers::ObservationId(
         db::item_type<LinearSolver::Tags::IterationId>{0},
         typename LinearSolver::observe_detail::ObservationType{});
-    Parallel::simple_action<
-        observers::Actions::RegisterSingletonWithObserverWriter>(
-        Parallel::get_parallel_component<ResidualMonitor>(
-            *(cache.ckLocalBranch())),
-        initial_observation_id);
+    // Parallel::simple_action<
+    //     observers::Actions::RegisterSingletonWithObserverWriter>(
+    //     Parallel::get_parallel_component<ResidualMonitor>(
+    //         *(cache.ckLocalBranch())),
+    //     initial_observation_id);
   }
 
   static void execute_next_phase(

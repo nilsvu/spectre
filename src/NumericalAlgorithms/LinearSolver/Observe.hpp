@@ -48,21 +48,21 @@ void contribute_to_reduction_observer(
       LinearSolver::Tags::Magnitude,
       db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>>;
 
-  const auto observation_id = observers::ObservationId(
-      get<LinearSolver::Tags::IterationId>(box), ObservationType{});
-  auto& reduction_writer = Parallel::get_parallel_component<
-      observers::ObserverWriter<Metavariables>>(cache);
-  Parallel::threaded_action<observers::ThreadedActions::WriteReductionData>(
-      // Node 0 is always the writer, so directly call the component on that
-      // node
-      reduction_writer[0], observation_id,
-      // When multiple linear solves are performed, e.g. for the nonlinear
-      // solver, we'll need to write into separate subgroups, e.g.:
-      // `/linear_residuals/<nonlinear_iteration_id>`
-      std::string{"/linear_residuals"},
-      std::vector<std::string>{"Iteration", "Residual"},
-      reduction_data{get<LinearSolver::Tags::IterationId>(box),
-                     get<residual_magnitude_tag>(box)});
+//   const auto observation_id = observers::ObservationId(
+//       get<LinearSolver::Tags::IterationId>(box), ObservationType{});
+//   auto& reduction_writer = Parallel::get_parallel_component<
+//       observers::ObserverWriter<Metavariables>>(cache);
+//   Parallel::threaded_action<observers::ThreadedActions::WriteReductionData>(
+//       // Node 0 is always the writer, so directly call the component on that
+//       // node
+//       reduction_writer[0], observation_id,
+//       // When multiple linear solves are performed, e.g. for the nonlinear
+//       // solver, we'll need to write into separate subgroups, e.g.:
+//       // `/linear_residuals/<nonlinear_iteration_id>`
+//       std::string{"/linear_residuals"},
+//       std::vector<std::string>{"Iteration", "Residual"},
+//       reduction_data{get<LinearSolver::Tags::IterationId>(box),
+//                      get<residual_magnitude_tag>(box)});
 }
 
 }  // namespace observe_detail
