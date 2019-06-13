@@ -32,6 +32,15 @@ struct dt : db::PrefixTag, db::SimpleTag {
 };
 
 /// \ingroup DataBoxTagsGroup
+/// \brief Prefix indicating the analytic solution value for a quantity
+template <typename Tag>
+struct Analytic : db::PrefixTag, db::SimpleTag {
+  static std::string name() noexcept { return "Analytic(" + Tag::name() + ")"; }
+  using type = db::item_type<Tag>;
+  using tag = Tag;
+};
+
+/// \ingroup DataBoxTagsGroup
 /// \brief Prefix indicating a flux
 template <typename Tag, typename VolumeDim, typename Fr,
           typename = std::nullptr_t>
