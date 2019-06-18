@@ -5,6 +5,7 @@ set(LIBRARY "Test_EllipticActions")
 
 set(LIBRARY_SOURCES
   Test_ComputeOperatorAction.cpp
+  Test_InitializeAnalyticSolution.cpp
   Test_InitializeSystem.cpp
   Test_InitializeTemporalId.cpp
   )
