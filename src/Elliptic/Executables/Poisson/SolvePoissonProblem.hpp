@@ -8,6 +8,7 @@
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/ComputeOperatorAction.hpp"
+#include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/Actions/InitializeSystem.hpp"
 #include "Elliptic/Actions/InitializeTemporalId.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
@@ -91,7 +92,9 @@ struct Metavariables {
       tmpl::size_t<Dim>, Frame::Inertial>;
 
   using initialization_actions = tmpl::list<
-      dg::Actions::InitializeDomain<Dim>, elliptic::Actions::InitializeSystem,
+      dg::Actions::InitializeDomain<Dim>,
+      elliptic::Actions::InitializeAnalyticSolution,
+      elliptic::Actions::InitializeSystem,
       dg::Actions::InitializeInterfaces<
           system,
           dg::Initialization::slice_tags_to_face<

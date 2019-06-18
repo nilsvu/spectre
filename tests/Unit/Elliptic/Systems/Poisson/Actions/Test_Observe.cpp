@@ -11,6 +11,7 @@
 
 #include "DataStructures/DataBox/DataBox.hpp"  // IWYU pragma: keep
 #include "DataStructures/DataBox/DataBoxTag.hpp"
+#include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Matrix.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
@@ -58,7 +59,8 @@ struct MockElementArray {
   using add_options_to_databox = Parallel::AddNoOptionsToDataBox;
   using simple_tags =
       db::AddSimpleTags<LinearSolver::Tags::IterationId, Tags::Mesh<2>,
-                        Poisson::Field, Tags::Coordinates<2, Frame::Inertial>>;
+                        Poisson::Field, ::Tags::Analytic<Poisson::Field>,
+                        Tags::Coordinates<2, Frame::Inertial>>;
   using compute_tags = db::AddComputeTags<>;
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
@@ -112,26 +114,11 @@ struct MockObserverWriterComponent {
       tmpl::list<observers::Actions::InitializeWriter<Metavariables>>>>;
 };
 
-struct AnalyticSolution {
-  tuples::TaggedTuple<Poisson::Field> variables(
-      const tnsr::I<DataVector, 2>& x,
-      tmpl::list<Poisson::Field> /*meta*/) const noexcept {
-    return {Scalar<DataVector>(2. * get<0>(x) + get<1>(x))};
-  }
-  // clang-tidy: do not use references
-  void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
-};
-
-struct AnalyticSolutionTag {
-  using type = AnalyticSolution;
-};
-
 struct Metavariables {
   using component_list = tmpl::list<MockElementArray<Metavariables>,
                                     MockObserverComponent<Metavariables>,
                                     MockObserverWriterComponent<Metavariables>>;
-  using analytic_solution_tag = AnalyticSolutionTag;
-  using const_global_cache_tag_list = tmpl::list<analytic_solution_tag>;
+  using const_global_cache_tag_list = tmpl::list<>;
 
   struct ObservationType {};
   using element_observation_type = ObservationType;
@@ -151,8 +138,7 @@ SPECTRE_TEST_CASE("Unit.Elliptic.Systems.Poisson.Actions.Observe",
   using obs_writer = MockObserverWriterComponent<Metavariables>;
   using element_comp = MockElementArray<Metavariables>;
 
-  tuples::TaggedTuple<AnalyticSolutionTag,
-                      observers::OptionTags::ReductionFileName,
+  tuples::TaggedTuple<observers::OptionTags::ReductionFileName,
                       observers::OptionTags::VolumeFileName>
       cache_data{};
   const auto& reduction_file_name =
@@ -181,6 +167,7 @@ SPECTRE_TEST_CASE("Unit.Elliptic.Systems.Poisson.Actions.Observe",
                  Spectral::Basis::Legendre,
                  Spectral::Quadrature::GaussLobatto},
          Scalar<DataVector>{{{{1., 2., 3., 4., 5., 6.}}}},
+         Scalar<DataVector>{{{{-1., 0., 1., 2., 3., 4.}}}},
          tnsr::I<DataVector, 2, Frame::Inertial>{
              {{{0., 1., 2., 3., 4., 5.}, {-1., -2., -3., -4., -5., -6.}}}}});
   }

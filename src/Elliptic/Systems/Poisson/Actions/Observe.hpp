@@ -50,12 +50,12 @@ namespace Actions {
  *
  * Uses:
  * - Metavariables:
- *   - `analytic_solution_tag`
  *   - Items required by `observers::Observer<Metavariables>`
  * - DataBox:
  *   - `LinearSolver::Tags::IterationId`
  *   - `Tags::Mesh<Dim>`
  *   - `Poisson::Field`
+ *   - `Tags::Analytic<Poisson::Field>`
  *   - `Tags::Coordinates<Dim, Frame::Inertial>`
  *
  * \note This action can be adjusted before compiling an executable to observe
@@ -106,9 +106,7 @@ struct Observe {
     // Compute the analytic solution
     const auto& inertial_coordinates =
         db::get<::Tags::Coordinates<Dim, Frame::Inertial>>(box);
-    const auto field_analytic = get<Poisson::Field>(
-        Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
-            .variables(inertial_coordinates, tmpl::list<Poisson::Field>{}));
+    const auto field_analytic = get<::Tags::Analytic<Poisson::Field>>(box);
 
     // Compute error between numeric and analytic solutions
     const DataVector field_error = get(field) - get(field_analytic);
