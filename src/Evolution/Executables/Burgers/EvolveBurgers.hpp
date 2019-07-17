@@ -23,7 +23,6 @@
 #include "Evolution/Initialization/ConservativeSystem.hpp"
 #include "Evolution/Initialization/DiscontinuousGalerkin.hpp"
 #include "Evolution/Initialization/Evolution.hpp"
-#include "Evolution/Initialization/Interface.hpp"
 #include "Evolution/Initialization/Limiter.hpp"
 #include "Evolution/Systems/Burgers/System.hpp"
 #include "IO/Observer/Actions.hpp"
@@ -35,6 +34,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeInterfaces.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/LocalLaxFriedrichs.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
@@ -138,10 +138,11 @@ struct EvolutionMetavars {
   using initialization_actions = tmpl::list<
       dg::Actions::InitializeDomain<1>,
       Initialization::Actions::ConservativeSystem,
-      Initialization::Actions::Interface<
+      dg::Actions::InitializeInterfaces<
           system,
-          Initialization::slice_tags_to_face<typename system::variables_tag>,
-          Initialization::slice_tags_to_exterior<>>,
+          dg::Initialization::slice_tags_to_face<
+              typename system::variables_tag>,
+          dg::Initialization::slice_tags_to_exterior<>>,
       Initialization::Actions::Evolution<system>,
       Initialization::Actions::DiscontinuousGalerkin<EvolutionMetavars>,
       Initialization::Actions::Minmod<1>,

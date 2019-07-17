@@ -21,7 +21,6 @@
 #include "Evolution/EventsAndTriggers/Tags.hpp"
 #include "Evolution/Initialization/DiscontinuousGalerkin.hpp"
 #include "Evolution/Initialization/Evolution.hpp"
-#include "Evolution/Initialization/Interface.hpp"
 #include "Evolution/Initialization/NonconservativeSystem.hpp"
 #include "Evolution/Systems/ScalarWave/Equations.hpp"  // IWYU pragma: keep // for UpwindFlux
 #include "Evolution/Systems/ScalarWave/System.hpp"
@@ -35,6 +34,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeInterfaces.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
@@ -151,10 +151,11 @@ struct EvolutionMetavars {
   using initialization_actions = tmpl::list<
       dg::Actions::InitializeDomain<system::volume_dim>,
       Initialization::Actions::NonconservativeSystem,
-      Initialization::Actions::Interface<
+      dg::Actions::InitializeInterfaces<
           system,
-          Initialization::slice_tags_to_face<typename system::variables_tag>,
-          Initialization::slice_tags_to_exterior<>>,
+          dg::Initialization::slice_tags_to_face<
+              typename system::variables_tag>,
+          dg::Initialization::slice_tags_to_exterior<>>,
       Initialization::Actions::Evolution<system>,
       Initialization::Actions::DiscontinuousGalerkin<EvolutionMetavars>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;

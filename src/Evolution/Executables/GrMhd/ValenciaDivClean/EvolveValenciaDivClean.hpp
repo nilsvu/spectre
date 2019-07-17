@@ -26,7 +26,6 @@
 #include "Evolution/Initialization/ConservativeSystem.hpp"
 #include "Evolution/Initialization/DiscontinuousGalerkin.hpp"
 #include "Evolution/Initialization/Evolution.hpp"
-#include "Evolution/Initialization/Interface.hpp"
 #include "Evolution/Initialization/Limiter.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/FixConservatives.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/Initialize.hpp"
@@ -46,6 +45,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeInterfaces.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/LocalLaxFriedrichs.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
@@ -171,13 +171,13 @@ struct EvolutionMetavars {
       VariableFixing::Actions::FixVariables<
           VariableFixing::FixToAtmosphere<thermodynamic_dim>>,
       Actions::UpdateConservatives,
-      Initialization::Actions::Interface<
+      dg::Actions::InitializeInterfaces<
           system,
-          Initialization::slice_tags_to_face<
+          dg::Initialization::slice_tags_to_face<
               typename system::variables_tag,
               typename system::spacetime_variables_tag,
               typename system::primitive_variables_tag>,
-          Initialization::slice_tags_to_exterior<
+          dg::Initialization::slice_tags_to_exterior<
               typename system::spacetime_variables_tag,
               typename system::primitive_variables_tag>>,
       Initialization::Actions::Evolution<system>,
