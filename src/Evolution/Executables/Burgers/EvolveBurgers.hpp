@@ -22,7 +22,6 @@
 #include "Evolution/EventsAndTriggers/Tags.hpp"
 #include "Evolution/Initialization/ConservativeSystem.hpp"
 #include "Evolution/Initialization/DiscontinuousGalerkin.hpp"
-#include "Evolution/Initialization/Domain.hpp"
 #include "Evolution/Initialization/Evolution.hpp"
 #include "Evolution/Initialization/Interface.hpp"
 #include "Evolution/Initialization/Limiter.hpp"
@@ -35,6 +34,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"  // IWYU pragma: keep
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/LocalLaxFriedrichs.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
@@ -136,7 +136,7 @@ struct EvolutionMetavars {
   };
 
   using initialization_actions = tmpl::list<
-      Initialization::Actions::Domain<1>,
+      dg::Actions::InitializeDomain<1>,
       Initialization::Actions::ConservativeSystem,
       Initialization::Actions::Interface<
           system,
