@@ -10,5 +10,6 @@ set(LIBRARY_SOURCES
   Actions/Test_FluxCommunicationLts.cpp
   Actions/Test_ImposeBoundaryConditions.cpp
   Actions/Test_InitializeDomain.cpp
+  Actions/Test_InitializeInterfaces.cpp
   PARENT_SCOPE
   )
