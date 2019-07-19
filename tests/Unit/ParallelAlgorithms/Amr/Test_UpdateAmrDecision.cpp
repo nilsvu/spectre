@@ -12,8 +12,6 @@
 #include <utility>
 #include <vector>
 
-#include "Domain/Amr/Flag.hpp"
-#include "Domain/Amr/UpdateAmrDecision.hpp"
 #include "Domain/Direction.hpp"
 #include "Domain/DirectionMap.hpp"
 #include "Domain/Element.hpp"
@@ -21,6 +19,8 @@
 #include "Domain/Neighbors.hpp"
 #include "Domain/SegmentId.hpp"
 #include "Domain/Side.hpp"
+#include "ParallelAlgorithms/Amr/Flag.hpp"
+#include "ParallelAlgorithms/Amr/UpdateAmrDecision.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/StdHelpers.hpp"  // IWYU pragma: keep
 

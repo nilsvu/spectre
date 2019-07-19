@@ -6,13 +6,13 @@
 #include <array>
 #include <cstddef>
 
-#include "Domain/Amr/Flag.hpp"
-#include "Domain/Amr/Helpers.hpp"
 #include "Domain/Direction.hpp"
 #include "Domain/ElementId.hpp"
 #include "Domain/OrientationMap.hpp"
 #include "Domain/SegmentId.hpp"
 #include "ErrorHandling/Error.hpp"
+#include "ParallelAlgorithms/Amr/Flag.hpp"
+#include "ParallelAlgorithms/Amr/Helpers.hpp"
 #include "Utilities/Gsl.hpp"
 #include "tests/Unit/Domain/CoordinateMaps/TestMapHelpers.hpp"
 

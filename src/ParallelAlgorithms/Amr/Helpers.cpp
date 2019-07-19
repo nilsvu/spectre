@@ -1,7 +1,7 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "Domain/Amr/Helpers.hpp"
+#include "ParallelAlgorithms/Amr/Helpers.hpp"
 
 #include "Domain/Direction.hpp"       // IWYU pragma: keep
 #include "Domain/ElementId.hpp"       // IWYU pragma: keep

@@ -6,7 +6,7 @@
 #include <array>
 #include <cstddef>
 
-#include "Domain/Amr/Flag.hpp"
+#include "ParallelAlgorithms/Amr/Flag.hpp"
 
 /// \cond
 namespace gsl {

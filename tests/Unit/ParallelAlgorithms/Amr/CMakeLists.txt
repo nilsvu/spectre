@@ -11,7 +11,7 @@ set(LIBRARY_SOURCES
 
 add_test_library(
   ${LIBRARY}
-  "Domain/Amr"
+  "ParallelAlgorithms/Amr"
   "${LIBRARY_SOURCES}"
   "Amr;Utilities"
   )

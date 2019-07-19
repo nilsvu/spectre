@@ -1,7 +1,7 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "Domain/Amr/Flag.hpp"
+#include "ParallelAlgorithms/Amr/Flag.hpp"
 #include "ErrorHandling/Error.hpp"
 
 #include <ostream>

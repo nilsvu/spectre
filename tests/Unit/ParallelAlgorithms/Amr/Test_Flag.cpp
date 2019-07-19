@@ -5,7 +5,7 @@
 
 #include <string>
 
-#include "Domain/Amr/Flag.hpp"
+#include "ParallelAlgorithms/Amr/Flag.hpp"
 #include "Utilities/GetOutput.hpp"
 
 SPECTRE_TEST_CASE("Unit.Domain.Amr.Flag", "[Domain][Unit]") {

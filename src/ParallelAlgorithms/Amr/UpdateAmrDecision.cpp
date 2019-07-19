@@ -1,14 +1,14 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "Domain/Amr/UpdateAmrDecision.hpp"
+#include "ParallelAlgorithms/Amr/UpdateAmrDecision.hpp"
 
-#include "Domain/Amr/Helpers.hpp"
 #include "Domain/Direction.hpp"
 #include "Domain/Element.hpp"    // IWYU pragma: keep
 #include "Domain/ElementId.hpp"  // IWYU pragma: keep
 #include "Domain/Neighbors.hpp"  // IWYU pragma: keep
 #include "ErrorHandling/Assert.hpp"
+#include "ParallelAlgorithms/Amr/Helpers.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/Gsl.hpp"
 
