@@ -6,12 +6,12 @@
 #include <cstddef>
 #include <random>
 
-#include "ApparentHorizons/ComputeItems.hpp"    // IWYU pragma: keep
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/EagerMath/DeterminantAndInverse.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/Tags.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/ComputeItems.hpp"  // IWYU pragma: keep
 #include "PointwiseFunctions/GeneralRelativity/Christoffel.hpp"
 #include "PointwiseFunctions/GeneralRelativity/ComputeGhQuantities.hpp"
 #include "PointwiseFunctions/GeneralRelativity/ComputeSpacetimeQuantities.hpp"

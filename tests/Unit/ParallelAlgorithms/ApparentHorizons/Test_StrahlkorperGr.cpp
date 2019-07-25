@@ -9,10 +9,6 @@
 #include <cstddef>
 #include <random>
 
-#include "ApparentHorizons/Strahlkorper.hpp"
-#include "ApparentHorizons/StrahlkorperGr.hpp"
-#include "ApparentHorizons/Tags.hpp"  // IWYU pragma: keep
-#include "ApparentHorizons/YlmSpherepack.hpp"
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
 #include "DataStructures/DataVector.hpp"
@@ -21,6 +17,10 @@
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"   // IWYU prgma: keep
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/StrahlkorperGr.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Tags.hpp"  // IWYU pragma: keep
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepack.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrHorizon.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Minkowski.hpp"
@@ -35,7 +35,7 @@
 #include "Utilities/StdHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
-#include "tests/Unit/ApparentHorizons/StrahlkorperGrTestHelpers.hpp"
+#include "tests/Unit/ParallelAlgorithms/ApparentHorizons/StrahlkorperGrTestHelpers.hpp"
 #include "tests/Unit/TestHelpers.hpp"
 #include "tests/Utilities/MakeWithRandomValues.hpp"
 
@@ -779,9 +779,8 @@ SPECTRE_TEST_CASE("Unit.ApparentHorizons.StrahlkorperGr.Expansion",
   test_expansion(
       gr::Solutions::KerrSchild{1.0, {{0.0, 0.0, 0.0}}, {{0.0, 0.0, 0.0}}},
       sphere, [](const size_t size) noexcept { return DataVector(size, 0.0); });
-  test_expansion(
-      gr::Solutions::Minkowski<3>{},
-      sphere, [](const size_t size) noexcept { return DataVector(size, 1.0); });
+  test_expansion(gr::Solutions::Minkowski<3>{}, sphere, [
+  ](const size_t size) noexcept { return DataVector(size, 1.0); });
 
   constexpr int l_max = 20;
   const double mass = 4.444;
@@ -797,10 +796,8 @@ SPECTRE_TEST_CASE("Unit.ApparentHorizons.StrahlkorperGr.Expansion",
   const auto kerr_horizon =
       Strahlkorper<Frame::Inertial>(l_max, l_max, get(horizon_radius), center);
 
-  test_expansion(gr::Solutions::KerrSchild{mass, spin, center},
-                 kerr_horizon, [](const size_t size) noexcept {
-                   return DataVector(size, 0.0);
-                 });
+  test_expansion(gr::Solutions::KerrSchild{mass, spin, center}, kerr_horizon, [
+  ](const size_t size) noexcept { return DataVector(size, 0.0); });
 }
 
 SPECTRE_TEST_CASE("Unit.ApparentHorizons.StrahlkorperGr.ExtrinsicCurvature",
@@ -825,8 +822,7 @@ SPECTRE_TEST_CASE("Unit.ApparentHorizons.StrahlkorperGr.RicciScalar",
         return DataVector(size, 0.5 / square(mass));
       });
   test_ricci_scalar(
-      gr::Solutions::Minkowski<3>{},
-      [](const auto& cartesian_coords) noexcept {
+      gr::Solutions::Minkowski<3>{}, [](const auto& cartesian_coords) noexcept {
         return make_with_value<tnsr::ii<DataVector, 3, Frame::Inertial>>(
             cartesian_coords, 0.0);
       },
@@ -838,11 +834,10 @@ SPECTRE_TEST_CASE("Unit.ApparentHorizons.StrahlkorperGr.AreaElement",
                   "[ApparentHorizons][Unit]") {
   // Check value of dA for a Schwarzschild horizon and a sphere in flat space
   test_area_element(
-      gr::Solutions::KerrSchild{4.0, {{0.0, 0.0, 0.0}}, {{0.0, 0.0, 0.0}}},
-      8.0, [](const size_t size) noexcept { return DataVector(size, 64.0); });
-  test_area_element(
-      gr::Solutions::Minkowski<3>{},
-      2.0, [](const size_t size) noexcept { return DataVector(size, 4.0); });
+      gr::Solutions::KerrSchild{4.0, {{0.0, 0.0, 0.0}}, {{0.0, 0.0, 0.0}}}, 8.0,
+      [](const size_t size) noexcept { return DataVector(size, 64.0); });
+  test_area_element(gr::Solutions::Minkowski<3>{}, 2.0, [
+  ](const size_t size) noexcept { return DataVector(size, 4.0); });
 
   // Check the area of a Kerr horizon
   constexpr int l_max = 22;

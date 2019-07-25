@@ -6,9 +6,9 @@
 #include <array>
 #include <cstddef>
 
-#include "ApparentHorizons/YlmSpherepack.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "Options/Options.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepack.hpp"
 #include "Utilities/ForceInline.hpp"
 
 namespace PUP {
@@ -173,7 +173,7 @@ struct Strahlkorper {
   using type = ::Strahlkorper<Frame>;
   static constexpr OptionString help{"A star-shaped surface"};
 };
-} // namespace OptionTags
+}  // namespace OptionTags
 
 template <typename Frame>
 bool operator==(const Strahlkorper<Frame>& lhs,

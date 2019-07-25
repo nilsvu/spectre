@@ -1,15 +1,15 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "ApparentHorizons/Strahlkorper.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
 
 #include <cmath>
 #include <ostream>
 #include <pup.h>
 #include <utility>
 
-#include "ApparentHorizons/SpherepackIterator.hpp"
 #include "ErrorHandling/Assert.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/SpherepackIterator.hpp"
 #include "Utilities/StdArrayHelpers.hpp"
 /// \cond
 namespace Frame {

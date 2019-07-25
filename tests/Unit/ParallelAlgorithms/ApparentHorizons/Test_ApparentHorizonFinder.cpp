@@ -10,10 +10,6 @@
 #include <random>
 #include <vector>
 
-#include "ApparentHorizons/ComputeItems.hpp"  // IWYU pragma: keep
-#include "ApparentHorizons/FastFlow.hpp"
-#include "ApparentHorizons/Strahlkorper.hpp"
-#include "ApparentHorizons/YlmSpherepack.hpp"
 #include "DataStructures/DataBox/DataBox.hpp"  // IWYU pragma: keep
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
@@ -47,6 +43,10 @@
 #include "Parallel/AddOptionsToDataBox.hpp"
 #include "Parallel/ParallelComponentHelpers.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"  // IWYU pragma: keep
+#include "ParallelAlgorithms/ApparentHorizons/ComputeItems.hpp"  // IWYU pragma: keep
+#include "ParallelAlgorithms/ApparentHorizons/FastFlow.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepack.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrHorizon.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
 #include "PointwiseFunctions/GeneralRelativity/ComputeGhQuantities.hpp"
@@ -116,7 +116,7 @@ struct TestSchwarzschildHorizon {
     const auto& inv_metric =
         get<gr::Tags::InverseSpatialMetric<3, Frame::Inertial>>(box);
     CHECK(strahlkorper.ylm_spherepack().physical_size() ==
-          get<0,0>(inv_metric).size());
+          get<0, 0>(inv_metric).size());
 
     ++test_schwarzschild_horizon_called;
   }
@@ -151,7 +151,7 @@ struct TestKerrHorizon {
     const auto& inv_metric =
         get<gr::Tags::InverseSpatialMetric<3, Frame::Inertial>>(box);
     CHECK(strahlkorper.ylm_spherepack().physical_size() ==
-          get<0,0>(inv_metric).size());
+          get<0, 0>(inv_metric).size());
 
     ++test_kerr_horizon_called;
   }
@@ -216,7 +216,7 @@ struct MockMetavariables {
                  GeneralizedHarmonic::Tags::Pi<3, Frame::Inertial>,
                  GeneralizedHarmonic::Tags::Phi<3, Frame::Inertial>>;
   using interpolation_target_tags = tmpl::list<AhA>;
-  using temporal_id  = ::Tags::TimeId;
+  using temporal_id = ::Tags::TimeId;
   using domain_frame = Frame::Inertial;
   static constexpr size_t domain_dim = 3;
   using component_list =

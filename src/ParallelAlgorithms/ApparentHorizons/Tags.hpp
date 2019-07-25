@@ -5,12 +5,12 @@
 
 #include <string>
 
-#include "ApparentHorizons/Strahlkorper.hpp"
-#include "ApparentHorizons/StrahlkorperGr.hpp"
-#include "ApparentHorizons/TagsDeclarations.hpp"  // IWYU pragma: keep
-#include "ApparentHorizons/TagsTypeAliases.hpp"
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/DataVector.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/StrahlkorperGr.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/TagsDeclarations.hpp"  // IWYU pragma: keep
+#include "ParallelAlgorithms/ApparentHorizons/TagsTypeAliases.hpp"
 #include "PointwiseFunctions/GeneralRelativity/TagsDeclarations.hpp"  // IWYU pragma: keep
 #include "Utilities/ForceInline.hpp"
 #include "Utilities/TMPL.hpp"

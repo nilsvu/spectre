@@ -10,12 +10,12 @@
 #include <random>
 #include <string>
 
-#include "ApparentHorizons/SpherepackIterator.hpp"
-#include "ApparentHorizons/Strahlkorper.hpp"
-#include "ApparentHorizons/YlmSpherepack.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "NumericalAlgorithms/RootFinding/QuadraticEquation.hpp"
 #include "Options/ParseOptions.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/SpherepackIterator.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepack.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
@@ -174,24 +174,24 @@ SPECTRE_TEST_CASE("Unit.ApparentHorizons.Strahlkorper",
   test_average_radius();
   test_physical_center();
   test_point_is_contained();
-  test_constructor_with_different_coefs([](Strahlkorper<Frame::Inertial> & sk,
-                                           double add_to_r) noexcept {
-    auto coefs = sk.coefficients();  // make a copy
-    coefs[0] += sqrt(8.0) * add_to_r;
-    return Strahlkorper<Frame::Inertial>(coefs, std::move(sk));
-  });
-  test_constructor_with_different_coefs([](
-      const Strahlkorper<Frame::Inertial>& sk, double add_to_r) noexcept {
-    auto coefs = sk.coefficients();  // make a copy
-    coefs[0] += sqrt(8.0) * add_to_r;
-    return Strahlkorper<Frame::Inertial>(coefs, sk);
-  });
-  test_constructor_with_different_coefs([](Strahlkorper<Frame::Inertial> & sk,
-                                           double add_to_r) noexcept {
-    auto& coefs = sk.coefficients();  // no copy
-    coefs[0] += sqrt(8.0) * add_to_r;
-    return Strahlkorper<Frame::Inertial>(std::move(sk));
-  });
+  test_constructor_with_different_coefs(
+      [](Strahlkorper<Frame::Inertial> & sk, double add_to_r) noexcept {
+        auto coefs = sk.coefficients();  // make a copy
+        coefs[0] += sqrt(8.0) * add_to_r;
+        return Strahlkorper<Frame::Inertial>(coefs, std::move(sk));
+      });
+  test_constructor_with_different_coefs(
+      [](const Strahlkorper<Frame::Inertial>& sk, double add_to_r) noexcept {
+        auto coefs = sk.coefficients();  // make a copy
+        coefs[0] += sqrt(8.0) * add_to_r;
+        return Strahlkorper<Frame::Inertial>(coefs, sk);
+      });
+  test_constructor_with_different_coefs(
+      [](Strahlkorper<Frame::Inertial> & sk, double add_to_r) noexcept {
+        auto& coefs = sk.coefficients();  // no copy
+        coefs[0] += sqrt(8.0) * add_to_r;
+        return Strahlkorper<Frame::Inertial>(std::move(sk));
+      });
   test_construct_from_options();
 }
 

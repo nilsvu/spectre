@@ -1,7 +1,7 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "ApparentHorizons/FastFlow.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/FastFlow.hpp"
 
 #include <algorithm>
 #include <array>
@@ -10,10 +10,6 @@
 #include <string>
 #include <utility>
 
-#include "ApparentHorizons/SpherepackIterator.hpp"
-#include "ApparentHorizons/Strahlkorper.hpp"
-#include "ApparentHorizons/StrahlkorperGr.hpp"
-#include "ApparentHorizons/Tags.hpp"
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/DataVector.hpp"
@@ -22,6 +18,10 @@
 #include "ErrorHandling/Error.hpp"
 #include "Options/ParseOptions.hpp"
 #include "Parallel/PupStlCpp11.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/SpherepackIterator.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/StrahlkorperGr.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Tags.hpp"
 #include "PointwiseFunctions/GeneralRelativity/IndexManipulation.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/EqualWithinRoundoff.hpp"

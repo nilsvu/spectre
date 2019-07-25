@@ -11,13 +11,13 @@
 #include <utility>
 #include <vector>
 
-#include "ApparentHorizons/YlmSpherepack.hpp"
-#include "ApparentHorizons/YlmSpherepackHelper.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepack.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepackHelper.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/Literals.hpp"
-#include "tests/Unit/ApparentHorizons/YlmTestFunctions.hpp"
+#include "tests/Unit/ParallelAlgorithms/ApparentHorizons/YlmTestFunctions.hpp"
 #include "tests/Unit/TestHelpers.hpp"
 
 namespace {

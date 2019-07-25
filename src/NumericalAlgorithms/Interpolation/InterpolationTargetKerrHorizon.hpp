@@ -6,13 +6,13 @@
 #include <array>
 #include <cstddef>
 
-#include "ApparentHorizons/Strahlkorper.hpp"
-#include "ApparentHorizons/Tags.hpp"
-#include "ApparentHorizons/YlmSpherepack.hpp"
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "NumericalAlgorithms/Interpolation/SendPointsToInterpolator.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Tags.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepack.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrHorizon.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"

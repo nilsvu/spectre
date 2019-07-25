@@ -3,8 +3,8 @@
 
 #include <ostream>
 
-#include "ApparentHorizons/YlmSpherepackHelper.hpp"
 #include "ErrorHandling/Error.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepackHelper.hpp"
 
 namespace YlmSpherepack_detail {
 

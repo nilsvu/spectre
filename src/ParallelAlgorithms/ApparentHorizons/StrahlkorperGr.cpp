@@ -1,16 +1,13 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "ApparentHorizons/StrahlkorperGr.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/StrahlkorperGr.hpp"
 
 #include <array>
 #include <cmath>  // IWYU pragma: keep
 #include <cstddef>
 #include <utility>
 
-#include "ApparentHorizons/SpherepackIterator.hpp"
-#include "ApparentHorizons/Strahlkorper.hpp"
-#include "ApparentHorizons/YlmSpherepack.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Matrix.hpp"
 #include "DataStructures/Tensor/EagerMath/DeterminantAndInverse.hpp"
@@ -18,6 +15,9 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "ErrorHandling/Assert.hpp"
 #include "NumericalAlgorithms/LinearAlgebra/FindGeneralizedEigenvalues.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/SpherepackIterator.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepack.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Christoffel.hpp"
 #include "PointwiseFunctions/GeneralRelativity/IndexManipulation.hpp"
 #include "Utilities/ConstantExpressions.hpp"
@@ -767,8 +767,7 @@ template double StrahlkorperGr::surface_integral_of_scalar(
     const Scalar<DataVector>& area_element, const Scalar<DataVector>& scalar,
     const Strahlkorper<Frame::Inertial>& strahlkorper) noexcept;
 
-template
-double StrahlkorperGr::euclidean_surface_integral_of_vector(
+template double StrahlkorperGr::euclidean_surface_integral_of_vector(
     const Scalar<DataVector>& area_element,
     const tnsr::I<DataVector, 3, Frame::Inertial>& vector,
     const tnsr::i<DataVector, 3, Frame::Inertial>& normal_one_form,

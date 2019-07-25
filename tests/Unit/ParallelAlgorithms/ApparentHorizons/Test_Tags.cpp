@@ -8,18 +8,18 @@
 #include <cstddef>
 #include <string>
 
-#include "ApparentHorizons/SpherepackIterator.hpp"
-#include "ApparentHorizons/Strahlkorper.hpp"
-#include "ApparentHorizons/Tags.hpp"  // IWYU pragma: keep
-#include "ApparentHorizons/YlmSpherepack.hpp"
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/SpherepackIterator.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Tags.hpp"  // IWYU pragma: keep
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepack.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
-#include "tests/Unit/ApparentHorizons/YlmTestFunctions.hpp"
+#include "tests/Unit/ParallelAlgorithms/ApparentHorizons/YlmTestFunctions.hpp"
 
 namespace {
 
@@ -124,11 +124,11 @@ void test_radius_and_derivs() {
         (9. * sin(3. * phi) * sin_theta -
          sin_phi * (7. * sin_theta + 12. * square(cos_phi) * sin(3. * theta))) /
         (16. * square(r));
-    expected_d2x_radius.get(0, 1)[s] =
-        -((cos_phi * (square(cos_phi) +
-                      ((-1. + 3. * cos_2_theta) * square(sin_phi)) / 2.) *
-           sin_theta) /
-          square(r));
+    expected_d2x_radius.get(0, 1)[s] = -(
+        (cos_phi *
+         (square(cos_phi) + ((-1. + 3. * cos_2_theta) * square(sin_phi)) / 2.) *
+         sin_theta) /
+        square(r));
     expected_d2x_radius.get(0, 2)[s] =
         (3. * cos_phi * cos_theta * sin_phi * square(sin_theta)) / square(r);
     expected_d2x_radius.get(1, 1)[s] =
@@ -258,17 +258,19 @@ void test_normals() {
               cos_phi * (2.0 / 3.0) *
                   (amp * (-1. + square(cos_theta)) * sin_phi - r * sin_theta) +
               cos_theta * (-10. * r - 10. * amp * sin_phi * sin_theta)) +
-         0.1 * cos_phi * (amp * (-1. + 1. * square(cos_theta)) * sin_phi -
-                          1. * r * sin_theta) *
+         0.1 * cos_phi *
+             (amp * (-1. + 1. * square(cos_theta)) * sin_phi -
+              1. * r * sin_theta) *
              (1. * amp * square(cos_phi) +
               1. * amp * square(cos_theta) * square(sin_phi) -
               1. * r * sin_phi * sin_theta +
               cos_phi * (amp * (-10. + 10. * square(cos_theta)) * sin_phi -
                          10. * r * sin_theta) +
               cos_theta * (-2. * r - 2. * amp * sin_phi * sin_theta)) +
-         2. * (amp * square(cos_phi) +
-               sin_phi *
-                   (amp * square(cos_theta) * sin_phi - 1. * r * sin_theta)) *
+         2. *
+             (amp * square(cos_phi) +
+              sin_phi *
+                  (amp * square(cos_theta) * sin_phi - 1. * r * sin_theta)) *
              (amp * square(cos_phi) +
               amp * square(cos_theta) * square(sin_phi) -
               1. * r * sin_phi * sin_theta +

@@ -9,16 +9,16 @@
 #include <cstddef>
 #include <vector>
 
-#include "ApparentHorizons/FastFlow.hpp"
-#include "ApparentHorizons/Strahlkorper.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Domain/BlockLogicalCoordinates.hpp"
 #include "Domain/Creators/Shell.hpp"
 #include "Domain/Domain.hpp"
-#include "Informer/Tags.hpp" // IWYU pragma: keep
+#include "Informer/Tags.hpp"  // IWYU pragma: keep
 #include "Informer/Verbosity.hpp"
 #include "NumericalAlgorithms/Interpolation/InterpolationTargetApparentHorizon.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/FastFlow.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Time/Tags.hpp"
 #include "Utilities/Gsl.hpp"

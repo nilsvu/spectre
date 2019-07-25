@@ -11,10 +11,6 @@
 #include <string>
 #include <utility>
 
-#include "ApparentHorizons/FastFlow.hpp"
-#include "ApparentHorizons/SpherepackIterator.hpp"
-#include "ApparentHorizons/Strahlkorper.hpp"
-#include "ApparentHorizons/Tags.hpp"  // IWYU pragma: keep
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
@@ -23,6 +19,10 @@
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "Options/ParseOptions.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/FastFlow.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/SpherepackIterator.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Strahlkorper.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/Tags.hpp"  // IWYU pragma: keep
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Christoffel.hpp"
 #include "PointwiseFunctions/GeneralRelativity/ComputeSpacetimeQuantities.hpp"
@@ -223,8 +223,8 @@ void test_schwarzschild(FastFlow::Flow::type type_of_flow,
   // We have found the horizon once.  Now perturb the strahlkorper
   // and find the horizon again. This checks that fastflow is reset
   // correctly.
-  strahlkorper = [](
-      const Strahlkorper<Frame::Inertial>& strahlkorper_l) noexcept {
+  strahlkorper =
+      [](const Strahlkorper<Frame::Inertial>& strahlkorper_l) noexcept {
     MAKE_GENERATOR(generator);
     std::uniform_real_distribution<> dist(0.0, 0.1);
     auto coefs = strahlkorper_l.coefficients();

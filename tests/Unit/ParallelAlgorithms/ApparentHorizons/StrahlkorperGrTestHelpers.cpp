@@ -1,16 +1,16 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "tests/Unit/ApparentHorizons/StrahlkorperGrTestHelpers.hpp"
+#include "tests/Unit/ParallelAlgorithms/ApparentHorizons/StrahlkorperGrTestHelpers.hpp"
 
 #include <cmath>
 #include <cstddef>
 #include <vector>
 
-#include "ApparentHorizons/YlmSpherepack.hpp"
 #include "DataStructures/DataVector.hpp"                  // IWYU pragma: keep
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"  // IWYU pragma: keep
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepack.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/MakeWithValue.hpp"
@@ -90,7 +90,7 @@ Scalar<DataType> horizon_ricci_scalar(
       (3.0 * square(get(horizon_radius)) - 2.0 * square(kerr_r_plus) -
        3.0 * square(kerr_spin_a)));
   get(ricci_scalar) /= cube(-1.0 * square(get(horizon_radius)) +
-                               square(kerr_spin_a) + 2.0 * square(kerr_r_plus));
+                            square(kerr_spin_a) + 2.0 * square(kerr_r_plus));
   return ricci_scalar;
 }
 

@@ -1,18 +1,18 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "ApparentHorizons/YlmSpherepack.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepack.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <ostream>
 #include <tuple>
 
-#include "ApparentHorizons/SpherepackIterator.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"  // IWYU pragma: keep
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "ErrorHandling/Assert.hpp"
 #include "ErrorHandling/Error.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/SpherepackIterator.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeArray.hpp"
@@ -653,8 +653,8 @@ YlmSpherepack::InterpolationInfo YlmSpherepack::set_up_interpolation_info(
           m + m * l1;  // Index of coef in the final recurrence formula.
       ++idx;
     }
-    ASSERT(idx == index.size(), "Wrong size " << idx << ", expected "
-                                              << index.size());
+    ASSERT(idx == index.size(),
+           "Wrong size " << idx << ", expected " << index.size());
 
     // Now do pmm, which stores Pbar(m,m).
     pmm[0] = M_SQRT1_2;  // 1/sqrt(2) = Pbar(0)(0)
@@ -678,9 +678,9 @@ void YlmSpherepack::interpolate(
     const gsl::not_null<const double*> collocation_values,
     const InterpolationInfo& interpolation_info, const size_t physical_stride,
     const size_t physical_offset) const noexcept {
-  ASSERT(result->size() == interpolation_info.size(),
-         "Size mismatch: " << result->size() << ","
-                           << interpolation_info.size());
+  ASSERT(
+      result->size() == interpolation_info.size(),
+      "Size mismatch: " << result->size() << "," << interpolation_info.size());
   auto& f_k = memory_pool_.get(spectral_size());
   phys_to_spec(f_k.data(), collocation_values, physical_stride, physical_offset,
                1, 0);
@@ -701,9 +701,9 @@ void YlmSpherepack::interpolate_from_coefs(
   // index holds the index into the coefficient array.
   // All are indexed together.
 
-  ASSERT(result->size() == interpolation_info.size(),
-         "Size mismatch: " << result->size() << ","
-                           << interpolation_info.size());
+  ASSERT(
+      result->size() == interpolation_info.size(),
+      "Size mismatch: " << result->size() << "," << interpolation_info.size());
 
   const size_t l1 = m_max_ + 1;
 
@@ -763,8 +763,8 @@ void YlmSpherepack::interpolate_from_coefs(
           fc * intrp_info.cos_m_phi[m] - fs * intrp_info.sin_m_phi[m];
       ++idx;
     }
-    ASSERT(idx == index.size(), "Wrong size " << idx << ", expected "
-                                              << index.size());
+    ASSERT(idx == index.size(),
+           "Wrong size " << idx << ", expected " << index.size());
   }
 }
 

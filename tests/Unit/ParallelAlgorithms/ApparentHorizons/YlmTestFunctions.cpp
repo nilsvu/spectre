@@ -1,7 +1,7 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "tests/Unit/ApparentHorizons/YlmTestFunctions.hpp"
+#include "tests/Unit/ParallelAlgorithms/ApparentHorizons/YlmTestFunctions.hpp"
 
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Utilities/ConstantExpressions.hpp"
@@ -166,8 +166,9 @@ void Y11::scalar_laplacian(const gsl::not_null<DataVector*> slap,
   for (const auto& phi : phis) {
     for (size_t i = 0; i < thetas.size(); ++i, ++s) {
       (*slap)[s * stride + offset] =
-          amplitude * (sin(phi) * (cos(thetas[i]) * cos(thetas[i]) -
-                                   sin(thetas[i]) * sin(thetas[i])) /
+          amplitude * (sin(phi) *
+                           (cos(thetas[i]) * cos(thetas[i]) -
+                            sin(thetas[i]) * sin(thetas[i])) /
                            sin(thetas[i]) -
                        sin(phi) / sin(thetas[i]));
     }

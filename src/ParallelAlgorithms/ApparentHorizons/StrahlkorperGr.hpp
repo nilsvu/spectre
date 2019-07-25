@@ -5,8 +5,8 @@
 
 #include <array>
 
-#include "ApparentHorizons/TagsTypeAliases.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/TagsTypeAliases.hpp"
 
 /// \cond
 class DataVector;

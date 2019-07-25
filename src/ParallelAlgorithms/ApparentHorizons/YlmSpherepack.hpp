@@ -9,9 +9,9 @@
 #include <utility>
 #include <vector>
 
-#include "ApparentHorizons/YlmSpherepackHelper.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
+#include "ParallelAlgorithms/ApparentHorizons/YlmSpherepackHelper.hpp"
 #include "Utilities/Blas.hpp"
 #include "Utilities/ForceInline.hpp"
 #include "Utilities/Gsl.hpp"

@@ -14,7 +14,6 @@ set(SPECTRE_COMPILATION_TESTS "TestCompilationFramework.cpp")
 set_property(GLOBAL PROPERTY SPECTRE_TESTS_LIB_FUNCTIONS_PROPERTY "")
 set_property(GLOBAL PROPERTY SPECTRE_TESTS_LIBS_PROPERTY "")
 
-add_subdirectory(ApparentHorizons)
 add_subdirectory(ControlSystem)
 add_subdirectory(DataStructures)
 add_subdirectory(Domain)
