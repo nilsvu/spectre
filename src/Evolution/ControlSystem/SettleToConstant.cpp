@@ -1,7 +1,7 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "ControlSystem/SettleToConstant.hpp"
+#include "Evolution/ControlSystem/SettleToConstant.hpp"
 
 #include <cmath>
 
@@ -11,8 +11,7 @@
 FunctionsOfTime::SettleToConstant::SettleToConstant(
     const std::array<DataVector, 3>& initial_func_and_derivs,
     const double match_time, const double decay_time) noexcept
-    : match_time_(match_time),
-      inv_decay_time_(1.0 / decay_time) {
+    : match_time_(match_time), inv_decay_time_(1.0 / decay_time) {
   // F = f(t0)
   // the constants are then computed from F and its derivs:
   // C = -dtF-dt2F*decay_time;

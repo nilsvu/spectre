@@ -5,10 +5,10 @@
 
 #include <cstddef>
 
-#include "ControlSystem/Averager.hpp"
-#include "ControlSystem/Controller.hpp"
-#include "ControlSystem/PiecewisePolynomial.hpp"
-#include "ControlSystem/TimescaleTuner.hpp"
+#include "Evolution/ControlSystem/Averager.hpp"
+#include "Evolution/ControlSystem/Controller.hpp"
+#include "Evolution/ControlSystem/PiecewisePolynomial.hpp"
+#include "Evolution/ControlSystem/TimescaleTuner.hpp"
 
 // IWYU pragma: no_forward_declare FunctionsOfTime::PiecewisePolynomial
 

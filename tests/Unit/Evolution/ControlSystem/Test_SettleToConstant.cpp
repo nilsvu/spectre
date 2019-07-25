@@ -5,9 +5,9 @@
 
 #include <array>
 
-#include "ControlSystem/FunctionOfTime.hpp"
-#include "ControlSystem/SettleToConstant.hpp"
 #include "DataStructures/DataVector.hpp"  // IWYU pragma: keep
+#include "Evolution/ControlSystem/FunctionOfTime.hpp"
+#include "Evolution/ControlSystem/SettleToConstant.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 
 SPECTRE_TEST_CASE("Unit.ControlSystem.FunctionsOfTime.SettleToConstant",

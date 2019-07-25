@@ -7,8 +7,8 @@
 #include <cstddef>
 #include <limits>
 
-#include "ControlSystem/FunctionOfTime.hpp"
 #include "DataStructures/DataVector.hpp"
+#include "Evolution/ControlSystem/FunctionOfTime.hpp"
 
 namespace FunctionsOfTime {
 /// \ingroup ControlSystemGroup

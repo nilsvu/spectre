@@ -3,6 +3,7 @@
 
 add_subdirectory(Actions)
 add_subdirectory(Conservative)
+add_subdirectory(ControlSystem)
 add_subdirectory(DiscontinuousGalerkin)
 add_subdirectory(EventsAndTriggers)
 add_subdirectory(Systems)

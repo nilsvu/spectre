@@ -9,8 +9,8 @@
 #include <cstddef>
 #include <type_traits>
 
-#include "ControlSystem/Averager.hpp"
 #include "DataStructures/DataVector.hpp"
+#include "Evolution/ControlSystem/Averager.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 
 SPECTRE_TEST_CASE("Unit.ControlSystem.Averager.Linear",

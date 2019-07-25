@@ -6,9 +6,9 @@
 #include <array>
 #include <cstddef>
 
-#include "ControlSystem/FunctionOfTime.hpp"
-#include "ControlSystem/PiecewisePolynomial.hpp"
 #include "DataStructures/DataVector.hpp"
+#include "Evolution/ControlSystem/FunctionOfTime.hpp"
+#include "Evolution/ControlSystem/PiecewisePolynomial.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 
 SPECTRE_TEST_CASE("Unit.ControlSystem.FunctionsOfTime.PiecewisePolynomial",

@@ -5,9 +5,9 @@
 
 #include <array>
 
-#include "ControlSystem/TimescaleTuner.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "ErrorHandling/Error.hpp"
+#include "Evolution/ControlSystem/TimescaleTuner.hpp"
 #include "Utilities/MakeWithValue.hpp"
 
 SPECTRE_TEST_CASE("Unit.ControlSystem.TimescaleTuner.IncreaseOrDecrease",
@@ -196,7 +196,6 @@ SPECTRE_TEST_CASE("Unit.ControlSystem.TimescaleTuner.NoChangeToTimescale",
   const double less_than_one = 0.9;
 
   auto run_tests = [&](double sign_of_q) {
-
     // (1) |Q| > decrease_timescale_threshold
     //     |\dot{Q}| <= decrease_timescale_threshold/timescale
     DataVector q{sign_of_q * greater_than_one * decrease_timescale_threshold};

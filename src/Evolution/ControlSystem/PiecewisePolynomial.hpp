@@ -7,8 +7,8 @@
 #include <cstddef>
 #include <vector>
 
-#include "ControlSystem/FunctionOfTime.hpp"
 #include "DataStructures/DataVector.hpp"  // IWYU pragma: keep
+#include "Evolution/ControlSystem/FunctionOfTime.hpp"
 
 /// \ingroup ControlSystemGroup
 /// Contains functions of time to support the dual frame system.

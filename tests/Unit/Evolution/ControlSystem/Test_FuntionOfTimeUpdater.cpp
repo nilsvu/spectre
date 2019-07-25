@@ -8,14 +8,14 @@
 #include <cmath>
 #include <cstddef>
 
-#include "ControlSystem/Averager.hpp"
-#include "ControlSystem/Controller.hpp"
-#include "ControlSystem/FunctionOfTimeUpdater.hpp"
-#include "ControlSystem/PiecewisePolynomial.hpp"
-#include "ControlSystem/TimescaleTuner.hpp"
 #include "DataStructures/DataVector.hpp"
+#include "Evolution/ControlSystem/Averager.hpp"
+#include "Evolution/ControlSystem/Controller.hpp"
+#include "Evolution/ControlSystem/FunctionOfTimeUpdater.hpp"
+#include "Evolution/ControlSystem/PiecewisePolynomial.hpp"
+#include "Evolution/ControlSystem/TimescaleTuner.hpp"
 #include "Utilities/Gsl.hpp"
-#include "tests/Unit/ControlSystem/FoTUpdater_Helper.hpp"
+#include "tests/Unit/Evolution/ControlSystem/FoTUpdater_Helper.hpp"
 
 SPECTRE_TEST_CASE("Unit.ControlSystem.FunctionOfTimeUpdater.Translation",
                   "[ControlSystem][Unit]") {

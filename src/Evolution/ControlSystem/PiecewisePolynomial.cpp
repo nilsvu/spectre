@@ -1,7 +1,7 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "ControlSystem/PiecewisePolynomial.hpp"
+#include "Evolution/ControlSystem/PiecewisePolynomial.hpp"
 
 #include <algorithm>
 #include <iterator>
@@ -68,8 +68,9 @@ void FunctionsOfTime::PiecewisePolynomial<MaxDeriv>::update(
 
   if (updated_max_deriv.size() != func.back().size()) {
     ERROR("the number of components trying to be updated ("
-          << updated_max_deriv.size() << ") does "
-                                         "not match the number of components ("
+          << updated_max_deriv.size()
+          << ") does "
+             "not match the number of components ("
           << func.back().size() << ") in the PiecewisePolynomial.");
   }
 

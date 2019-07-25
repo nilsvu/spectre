@@ -7,11 +7,11 @@
 #include <cmath>
 #include <cstddef>
 
-#include "ControlSystem/Controller.hpp"
-#include "ControlSystem/FunctionOfTime.hpp"
-#include "ControlSystem/PiecewisePolynomial.hpp"
-#include "ControlSystem/TimescaleTuner.hpp"
 #include "DataStructures/DataVector.hpp"
+#include "Evolution/ControlSystem/Controller.hpp"
+#include "Evolution/ControlSystem/FunctionOfTime.hpp"
+#include "Evolution/ControlSystem/PiecewisePolynomial.hpp"
+#include "Evolution/ControlSystem/TimescaleTuner.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 
 SPECTRE_TEST_CASE("Unit.ControlSystem.Controller", "[ControlSystem][Unit]") {
