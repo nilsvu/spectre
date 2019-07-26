@@ -9,7 +9,7 @@
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "Domain/Domain.hpp"
 #include "Elliptic/Actions/InitializeSystem.hpp"
-#include "Elliptic/Initialization/BoundaryConditions.hpp"
+#include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
 #include "Elliptic/Initialization/Derivatives.hpp"
 #include "Elliptic/Initialization/DiscontinuousGalerkin.hpp"
 #include "Elliptic/Initialization/Domain.hpp"

@@ -25,7 +25,7 @@
 #include "Domain/FaceNormal.hpp"
 #include "Domain/SegmentId.hpp"
 #include "Domain/Tags.hpp"
-#include "Elliptic/Initialization/BoundaryConditions.hpp"
+#include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
 #include "Elliptic/Initialization/Domain.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
