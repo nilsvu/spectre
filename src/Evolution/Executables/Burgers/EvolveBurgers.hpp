@@ -33,6 +33,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeInterfaces.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeMortars.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/LocalLaxFriedrichs.hpp"
@@ -144,7 +145,8 @@ struct EvolutionMetavars {
                          typename system::variables_tag>,
                      dg::Initialization::slice_tags_to_exterior<>>,
                  Initialization::Actions::Evolution<system>,
-                 dg::Actions::InitializeMortars<EvolutionMetavars>,
+                 dg::Actions::InitializeMortars<EvolutionMetavars, true>,
+                 dg::Actions::InitializeFluxes<EvolutionMetavars>,
                  Initialization::Actions::Minmod<1>,
                  Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 

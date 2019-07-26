@@ -39,6 +39,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeMortars.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/LocalLaxFriedrichs.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
@@ -175,7 +176,8 @@ struct EvolutionMetavars {
                          typename system::primitive_variables_tag,
                          NewtonianEuler::Tags::SoundSpeed<DataVector>>>,
                  Initialization::Actions::Evolution<system>,
-                 dg::Actions::InitializeMortars<EvolutionMetavars>,
+                 dg::Actions::InitializeMortars<EvolutionMetavars, true>,
+                 dg::Actions::InitializeFluxes<EvolutionMetavars>,
                  Initialization::Actions::Minmod<Dim>,
                  Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 

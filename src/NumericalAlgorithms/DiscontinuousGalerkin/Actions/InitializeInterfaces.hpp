@@ -68,8 +68,6 @@ namespace Actions {
 ///
 /// DataBox changes:
 /// - Adds:
-///   * `Tags::Interface<Tags::BoundaryDirectionsExterior<volume_dim>,
-///   variables_tag>` (as a simple tag)
 ///   * `face_tags<Tags::InternalDirections<Dim>>`
 ///   * `face_tags<Tags::BoundaryDirectionsInterior<Dim>>`
 ///   * `face_tags<Tags::BoundaryDirectionsExterior<Dim>>`
@@ -160,30 +158,14 @@ struct InitializeInterfaces {
                     const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
                     const ArrayIndex& /*array_index*/, ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using simple_tags = db::AddSimpleTags<
-        ::Tags::Interface<::Tags::BoundaryDirectionsExterior<dim>,
-                          typename System::variables_tag>>;
+    using simple_tags = db::AddSimpleTags<>;
     using compute_tags =
         tmpl::append<face_tags<::Tags::InternalDirections<dim>>,
                      face_tags<::Tags::BoundaryDirectionsInterior<dim>>,
                      exterior_face_tags>;
-
-    const auto& mesh = db::get<::Tags::Mesh<dim>>(box);
-    std::unordered_map<Direction<dim>,
-                       db::item_type<typename System::variables_tag>>
-        exterior_boundary_vars{};
-
-    for (const auto& direction :
-         db::get<::Tags::Element<dim>>(box).external_boundaries()) {
-      exterior_boundary_vars[direction] =
-          db::item_type<typename System::variables_tag>{
-              mesh.slice_away(direction.dimension()).number_of_grid_points()};
-    }
-
     return std::make_tuple(
         ::Initialization::merge_into_databox<InitializeInterfaces, simple_tags,
-                                             compute_tags>(
-            std::move(box), std::move(exterior_boundary_vars)));
+                                             compute_tags>(std::move(box)));
   }
 };
 }  // namespace Actions
