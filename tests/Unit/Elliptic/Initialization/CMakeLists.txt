@@ -11,7 +11,6 @@ set(LIBRARY_SOURCES
   Test_Interface.cpp
   Test_LinearSolver.cpp
   Test_Source.cpp
-  Test_System.cpp
   )
 
 add_test_library(
