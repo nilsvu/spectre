@@ -97,24 +97,24 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
                     const ParallelComponent* const /*meta*/) noexcept {
     using system = typename Metavariables::system;
     using sources_tag =
-        db::add_tag_prefix<Tags::Source,
-                           typename Metavariables::system::fields_tag>;
+        db::add_tag_prefix<Tags::Source, typename system::fields_tag>;
+    using normal_dot_analytic_fluxes_tag = db::add_tag_prefix<
+        ::Tags::NormalDotFlux,
+        db::add_tag_prefix<::Tags::Analytic, typename system::fields_tag>>;
 
-    const auto& analytic_solution =
-        Parallel::get<typename Metavariables::analytic_solution_tag>(cache);
     const auto& normal_dot_numerical_flux_computer =
         Parallel::get<typename Metavariables::normal_dot_numerical_flux>(cache);
 
     db::mutate<sources_tag>(
         make_not_null(&box),
-        [&analytic_solution, &normal_dot_numerical_flux_computer ](
+        [&normal_dot_numerical_flux_computer](
             const gsl::not_null<db::item_type<sources_tag>*> sources,
             const Mesh<Dim>& mesh,
             const db::item_type<Tags::BoundaryDirectionsInterior<Dim>>&
                 boundary_directions,
             const db::item_type<Tags::Interface<
                 Tags::BoundaryDirectionsInterior<Dim>,
-                Tags::Coordinates<Dim, Frame::Inertial>>>& boundary_coordinates,
+                normal_dot_analytic_fluxes_tag>>& normal_dot_analytic_fluxes,
             const db::item_type<Tags::Interface<
                 Tags::BoundaryDirectionsInterior<Dim>,
                 Tags::Normalized<Tags::UnnormalizedFaceNormal<Dim>>>>&
@@ -127,13 +127,6 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
           for (const auto& direction : boundary_directions) {
             const size_t dimension = direction.dimension();
             const auto mortar_mesh = mesh.slice_away(dimension);
-            // Compute Dirichlet data on mortar
-            Variables<typename system::impose_boundary_conditions_on_fields>
-                dirichlet_boundary_data{mortar_mesh.number_of_grid_points(),
-                                        0.};
-            dirichlet_boundary_data.assign_subset(analytic_solution.variables(
-                boundary_coordinates.at(direction),
-                typename system::impose_boundary_conditions_on_fields{}));
             // Compute the numerical flux contribution from the Dirichlet data
             db::item_type<
                 db::add_tag_prefix<Tags::NormalDotNumericalFlux, sources_tag>>
@@ -142,7 +135,7 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
             compute_dirichlet_boundary_normal_dot_numerical_flux(
                 make_not_null(&boundary_normal_dot_numerical_fluxes),
                 normal_dot_numerical_flux_computer,
-                std::move(dirichlet_boundary_data),
+                normal_dot_analytic_fluxes.at(direction),
                 normalized_face_normals.at(direction));
             // Flip sign of the boundary contributions, making them
             // contributions to the source
@@ -159,7 +152,7 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
         get<Tags::Mesh<Dim>>(box),
         get<Tags::BoundaryDirectionsInterior<Dim>>(box),
         get<Tags::Interface<Tags::BoundaryDirectionsInterior<Dim>,
-                            Tags::Coordinates<Dim, Frame::Inertial>>>(box),
+                            normal_dot_analytic_fluxes_tag>>(box),
         get<Tags::Interface<
             Tags::BoundaryDirectionsInterior<Dim>,
             Tags::Normalized<Tags::UnnormalizedFaceNormal<Dim>>>>(box),

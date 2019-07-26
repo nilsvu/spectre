@@ -11,6 +11,7 @@
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/Actions/InitializeSystem.hpp"
 #include "Elliptic/Actions/InitializeTemporalId.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Actions/InitializeFluxes.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeBoundaryConditions.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
@@ -21,12 +22,12 @@
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ComputeNonconservativeBoundaryFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeInterfaces.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeMortars.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/InternalPenalty.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/LinearSolver/Actions/TerminateIfConverged.hpp"
 #include "NumericalAlgorithms/LinearSolver/Gmres/Gmres.hpp"
@@ -51,7 +52,7 @@ struct Metavariables {
       "Find the solution to a Poisson problem in Dim spatial dimensions.\n"
       "Analytic solution: ProductOfSinusoids\n"
       "Linear solver: GMRES\n"
-      "Numerical flux: FirstOrderInternalPenaltyFlux"};
+      "Numerical flux: FirstOrderInternalPenalty"};
 
   // The system provides all equations specific to the problem.
   using system = Poisson::FirstOrderSystem<Dim>;
@@ -67,15 +68,20 @@ struct Metavariables {
   using temporal_id = LinearSolver::Tags::IterationId;
   static constexpr bool local_time_stepping = false;
 
-  // Parse numerical flux parameters from the input file to store in the cache.
+  // The choice of numerical flux. This tag is used by the flux communication
+  // for building the linear solver operator.
   using normal_dot_numerical_flux =
-      OptionTags::NumericalFlux<Poisson::FirstOrderInternalPenaltyFlux<Dim>>;
+      OptionTags::NumericalFlux<dg::NumericalFluxes::FirstOrderInternalPenalty<
+          Dim, tmpl::list<LinearSolver::Tags::Operand<Poisson::Field>>,
+          tmpl::list<
+              LinearSolver::Tags::Operand<Poisson::AuxiliaryField<Dim>>>>>;
 
   // Set up the domain creator from the input file.
   using domain_creator_tag = OptionTags::DomainCreator<Dim, Frame::Inertial>;
 
   // Collect all items to store in the cache.
-  using const_global_cache_tag_list = tmpl::list<analytic_solution_tag>;
+  using const_global_cache_tag_list =
+      tmpl::list<analytic_solution_tag, normal_dot_numerical_flux>;
 
   // Collect all reduction tags for observers
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
@@ -85,30 +91,16 @@ struct Metavariables {
   enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
 
   // Construct the DgElementArray parallel component
-  using gradients_tag = db::add_tag_prefix<
-      ::Tags::deriv,
-      db::variables_tag_with_tags_list<typename system::variables_tag,
-                                       typename system::gradient_tags>,
-      tmpl::size_t<Dim>, Frame::Inertial>;
-
   using initialization_actions = tmpl::list<
       dg::Actions::InitializeDomain<Dim>,
       elliptic::Actions::InitializeAnalyticSolution,
       elliptic::Actions::InitializeSystem,
       dg::Actions::InitializeInterfaces<
-          system,
-          dg::Initialization::slice_tags_to_face<
-              // We slice the variables and the gradients to all interior
-              // faces
-              typename system::variables_tag, gradients_tag>,
-          dg::Initialization::slice_tags_to_exterior<
-              // We also slice the gradients to the exterior faces. This may
-              // need to be reconsidered when boundary conditions are
-              // reworked.
-              gradients_tag>>,
+          system, dg::Initialization::slice_tags_to_face<>,
+          dg::Initialization::slice_tags_to_exterior<>>,
       elliptic::Actions::InitializeTemporalId,
       dg::Actions::InitializeMortars<Metavariables, true>,
-      dg::Actions::InitializeFluxes<Metavariables>,
+      elliptic::dg::Actions::InitializeFluxes,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource,
       typename linear_solver::initialize_element,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
@@ -131,14 +123,13 @@ struct Metavariables {
               Phase, Phase::Solve,
               tmpl::list<Poisson::Actions::Observe,
                          LinearSolver::Actions::TerminateIfConverged,
-                         dg::Actions::ComputeNonconservativeBoundaryFluxes<
-                             Tags::InternalDirections<Dim>>,
                          dg::Actions::SendDataForFluxes<Metavariables>,
-                         elliptic::Actions::ComputeOperatorAction,
-                         dg::Actions::ComputeNonconservativeBoundaryFluxes<
-                             Tags::BoundaryDirectionsInterior<Dim>>,
+                         elliptic::Actions::ComputeOperatorAction<
+                             Dim, LinearSolver::Tags::OperatorAppliedTo,
+                             typename system::variables_tag>,
                          elliptic::dg::Actions::
-                             ImposeHomogeneousDirichletBoundaryConditions<Metavariables>,
+                             ImposeHomogeneousDirichletBoundaryConditions<
+                                 Metavariables>,
                          dg::Actions::ReceiveDataForFluxes<Metavariables>,
                          dg::Actions::ApplyFluxes,
                          typename linear_solver::perform_step>>>>;

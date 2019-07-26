@@ -45,6 +45,12 @@
 // IWYU pragma: no_forward_declare Variables
 
 namespace {
+
+// - Test Python implementation of fluxes and sources
+// - Test with analytic solutions separately
+// - Test numerical flux consistency, conservation, monotonicity, Python
+// implementation
+
 template <size_t Dim, typename DbTagsList>
 void test_first_order_operator_action(db::DataBox<DbTagsList>&& domain_box) {
   const auto& inertial_coords =
@@ -143,7 +149,7 @@ void test_first_order_normal_dot_fluxes(
   tnsr::I<DataVector, Dim, Frame::Inertial> normal_dot_flux_for_aux_field(
       num_points, 0.0);
 
-  Poisson::ComputeFirstOrderNormalDotFluxes<Dim>::apply(
+  Poisson::first_order_normal_dot_fluxes<Dim>(
       make_not_null(&normal_dot_flux_for_field),
       make_not_null(&normal_dot_flux_for_aux_field),
       get<Poisson::Field>(field_variables),

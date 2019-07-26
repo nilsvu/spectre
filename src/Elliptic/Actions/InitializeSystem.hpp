@@ -12,7 +12,6 @@
 #include "DataStructures/Variables.hpp"
 #include "Domain/Mesh.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
-#include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "NumericalAlgorithms/LinearSolver/Tags.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
@@ -26,6 +25,10 @@ namespace Actions {
  *
  * The system fields are initially set to zero here.
  *
+ * With:
+ * - `fluxes_tag` = `db::add_tag_prefix<Tags::Flux, variables_tag,
+ * tmpl::size_t<volume_dim>, Frame::Inertial>`
+ *
  * Uses:
  * - Metavariables:
  *   - `analytic_solution_tag`
@@ -33,7 +36,8 @@ namespace Actions {
  *   - `volume_dim`
  *   - `fields_tag`
  *   - `variables_tag`
- *   - `gradient_tags`
+ *   - `compute_fluxes`
+ *   - `compute_sources`
  * - DataBox:
  *   - `Tags::Mesh<volume_dim>`
  *   - `Tags::Coordinates<Dim, Frame::Inertial>`
@@ -47,7 +51,9 @@ namespace Actions {
  *   - `variables_tag`
  *   - `db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
  *   variables_tag>`
- *   - `Tags::deriv<variables_tag, volume_dim, Frame::Inertial>>`
+ *   - `fluxes_tag`
+ *   - `db::add_tag_prefix<Tags::Source, variables_tag>`
+ *   - `db::add_tag_prefix<Tags::div, fluxes_tag>`
  */
 struct InitializeSystem {
   template <typename DataBox, typename... InboxTags, typename Metavariables,
@@ -66,6 +72,8 @@ struct InitializeSystem {
     using vars_tag = typename system::variables_tag;
     using operator_applied_to_vars_tag =
         db::add_tag_prefix<::LinearSolver::Tags::OperatorAppliedTo, vars_tag>;
+    using fluxes_tag = db::add_tag_prefix<::Tags::Flux, vars_tag,
+                                          tmpl::size_t<Dim>, Frame::Inertial>;
     using inv_jacobian_tag =
         ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
                                 ::Tags::Coordinates<Dim, Frame::Logical>>;
@@ -74,9 +82,10 @@ struct InitializeSystem {
         db::AddSimpleTags<fields_tag, operator_applied_to_fields_tag,
                           sources_tag, vars_tag, operator_applied_to_vars_tag>;
     using compute_tags = db::AddComputeTags<
-        // The gradients are needed by the elliptic operator
-        ::Tags::DerivCompute<vars_tag, inv_jacobian_tag,
-                             typename system::gradient_tags>>;
+        // First-order fluxes and sources
+        typename system::compute_fluxes, typename system::compute_sources,
+        // Divergence of the system fluxes for the elliptic operator
+        ::Tags::DivCompute<fluxes_tag, inv_jacobian_tag>>;
 
     const auto& mesh = db::get<Tags::Mesh<Dim>>(box);
     const size_t num_grid_points = mesh.number_of_grid_points();
