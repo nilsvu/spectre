@@ -19,7 +19,6 @@
 #include "Evolution/EventsAndTriggers/Event.hpp"
 #include "Evolution/EventsAndTriggers/EventsAndTriggers.hpp"  // IWYU pragma: keep
 #include "Evolution/EventsAndTriggers/Tags.hpp"
-#include "Evolution/Initialization/DiscontinuousGalerkin.hpp"
 #include "Evolution/Initialization/Evolution.hpp"
 #include "Evolution/Initialization/NonconservativeSystem.hpp"
 #include "Evolution/Systems/ScalarWave/Equations.hpp"  // IWYU pragma: keep // for UpwindFlux
@@ -35,6 +34,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeInterfaces.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeMortars.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
@@ -148,17 +148,17 @@ struct EvolutionMetavars {
     Exit
   };
 
-  using initialization_actions = tmpl::list<
-      dg::Actions::InitializeDomain<system::volume_dim>,
-      Initialization::Actions::NonconservativeSystem,
-      dg::Actions::InitializeInterfaces<
-          system,
-          dg::Initialization::slice_tags_to_face<
-              typename system::variables_tag>,
-          dg::Initialization::slice_tags_to_exterior<>>,
-      Initialization::Actions::Evolution<system>,
-      Initialization::Actions::DiscontinuousGalerkin<EvolutionMetavars>,
-      Initialization::Actions::RemoveOptionsAndTerminatePhase>;
+  using initialization_actions =
+      tmpl::list<dg::Actions::InitializeDomain<system::volume_dim>,
+                 Initialization::Actions::NonconservativeSystem,
+                 dg::Actions::InitializeInterfaces<
+                     system,
+                     dg::Initialization::slice_tags_to_face<
+                         typename system::variables_tag>,
+                     dg::Initialization::slice_tags_to_exterior<>>,
+                 Initialization::Actions::Evolution<system>,
+                 dg::Actions::InitializeMortars<EvolutionMetavars>,
+                 Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
   using component_list = tmpl::list<
       observers::Observer<EvolutionMetavars>,

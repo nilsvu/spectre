@@ -24,7 +24,6 @@
 #include "Evolution/EventsAndTriggers/EventsAndTriggers.hpp"
 #include "Evolution/EventsAndTriggers/Tags.hpp"
 #include "Evolution/Initialization/ConservativeSystem.hpp"
-#include "Evolution/Initialization/DiscontinuousGalerkin.hpp"
 #include "Evolution/Initialization/Domain.hpp"
 #include "Evolution/Initialization/Evolution.hpp"
 #include "Evolution/Initialization/Interface.hpp"
@@ -40,6 +39,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeMortars.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/LocalLaxFriedrichs.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
@@ -158,26 +158,26 @@ struct EvolutionMetavars {
     Exit
   };
 
-  using initialization_actions = tmpl::list<
-      Initialization::Actions::Domain<Dim>,
-      Initialization::Actions::ConservativeSystem,
-      Initialization::Actions::AddComputeTags<
-          tmpl::list<NewtonianEuler::Tags::SoundSpeedSquaredCompute<DataVector>,
+  using initialization_actions =
+      tmpl::list<Initialization::Actions::Domain<Dim>,
+                 Initialization::Actions::ConservativeSystem,
+                 Initialization::Actions::AddComputeTags<tmpl::list<
+                     NewtonianEuler::Tags::SoundSpeedSquaredCompute<DataVector>,
                      NewtonianEuler::Tags::SoundSpeedCompute<DataVector>>>,
-      Actions::UpdateConservatives,
-      Initialization::Actions::Interface<
-          system,
-          Initialization::slice_tags_to_face<
-              typename system::variables_tag,
-              typename system::primitive_variables_tag,
-              NewtonianEuler::Tags::SoundSpeed<DataVector>>,
-          Initialization::slice_tags_to_exterior<
-              typename system::primitive_variables_tag,
-              NewtonianEuler::Tags::SoundSpeed<DataVector>>>,
-      Initialization::Actions::Evolution<system>,
-      Initialization::Actions::DiscontinuousGalerkin<EvolutionMetavars>,
-      Initialization::Actions::Minmod<Dim>,
-      Initialization::Actions::RemoveOptionsAndTerminatePhase>;
+                 Actions::UpdateConservatives,
+                 Initialization::Actions::Interface<
+                     system,
+                     Initialization::slice_tags_to_face<
+                         typename system::variables_tag,
+                         typename system::primitive_variables_tag,
+                         NewtonianEuler::Tags::SoundSpeed<DataVector>>,
+                     Initialization::slice_tags_to_exterior<
+                         typename system::primitive_variables_tag,
+                         NewtonianEuler::Tags::SoundSpeed<DataVector>>>,
+                 Initialization::Actions::Evolution<system>,
+                 dg::Actions::InitializeMortars<EvolutionMetavars>,
+                 Initialization::Actions::Minmod<Dim>,
+                 Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
   using component_list = tmpl::list<
       observers::Observer<EvolutionMetavars>,

@@ -38,7 +38,7 @@ class ConstGlobalCache;
 }  // namespace Parallel
 /// \endcond
 
-namespace Initialization {
+namespace dg {
 namespace Actions {
 /// \ingroup InitializationGroup
 /// \brief Initialize items related to the discontinuous Galerkin method.
@@ -66,7 +66,7 @@ namespace Actions {
 /// - Removes: nothing
 /// - Modifies: nothing
 template <typename Metavariables, bool AddFluxBoundaryConditionMortars = true>
-struct DiscontinuousGalerkin {
+struct InitializeMortars {
   static constexpr size_t dim = Metavariables::system::volume_dim;
   using temporal_id_tag = typename Metavariables::temporal_id;
   using flux_comm_types = dg::FluxCommunicationTypes<Metavariables>;
@@ -135,8 +135,8 @@ struct DiscontinuousGalerkin {
       }
     }
 
-    return merge_into_databox<
-        DiscontinuousGalerkin,
+    return ::Initialization::merge_into_databox<
+        InitializeMortars,
         db::AddSimpleTags<mortar_data_tag,
                           ::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>,
                           ::Tags::Mortars<::Tags::Mesh<dim - 1>, dim>,
@@ -197,8 +197,8 @@ struct DiscontinuousGalerkin {
             boundary_num_points, 0.);
       }
 
-      return merge_into_databox<
-          DiscontinuousGalerkin,
+      return ::Initialization::merge_into_databox<
+          InitializeMortars,
           db::AddSimpleTags<
               interface_tag<typename flux_comm_types::normal_dot_fluxes_tag>,
               interior_boundary_tag<
@@ -262,8 +262,8 @@ struct DiscontinuousGalerkin {
     static auto initialize(
         db::DataBox<TagsList>&& box,
         const std::vector<std::array<size_t, dim>>& initial_extents) noexcept {
-      return merge_into_databox<DiscontinuousGalerkin, db::AddSimpleTags<>,
-                                compute_tags>(
+      return ::Initialization::merge_into_databox<
+          InitializeMortars, db::AddSimpleTags<>, compute_tags>(
           add_mortar_data(std::move(box), initial_extents));
     }
   };
@@ -304,4 +304,4 @@ struct DiscontinuousGalerkin {
   }
 };
 }  // namespace Actions
-}  // namespace Initialization
+}  // namespace dg
