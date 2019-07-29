@@ -13,7 +13,6 @@
 #include "Elliptic/Actions/InitializeTemporalId.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/InitializeFluxes.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
-#include "Elliptic/DiscontinuousGalerkin/ImposeBoundaryConditions.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
 #include "Elliptic/Systems/Poisson/Actions/Observe.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
@@ -21,13 +20,14 @@
 #include "IO/Observer/Actions.hpp"
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication2.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeInterfaces.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeMortars.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/InternalPenalty.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/PopulateBoundaryMortars.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/LinearSolver/Actions/TerminateIfConverged.hpp"
 #include "NumericalAlgorithms/LinearSolver/Gmres/Gmres.hpp"
@@ -39,6 +39,7 @@
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
+#include "ParallelAlgorithms/Actions/MutateApply.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
@@ -68,13 +69,19 @@ struct Metavariables {
   using temporal_id = LinearSolver::Tags::IterationId;
   static constexpr bool local_time_stepping = false;
 
-  // The choice of numerical flux. This tag is used by the flux communication
-  // for building the linear solver operator.
+  // Specify the DG boundary scheme. We use the strong first-order scheme here
+  // that only requires us to compute normals dotted into the first-order
+  // fluxes.
   using normal_dot_numerical_flux =
       OptionTags::NumericalFlux<dg::NumericalFluxes::FirstOrderInternalPenalty<
           Dim, tmpl::list<LinearSolver::Tags::Operand<Poisson::Field>>,
           tmpl::list<
               LinearSolver::Tags::Operand<Poisson::AuxiliaryField<Dim>>>>>;
+  using boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
+      Dim, typename system::variables_tag,
+      ::Tags::NormalDotNumericalFluxComputer<
+          typename normal_dot_numerical_flux::type>,
+      LinearSolver::Tags::IterationId>;
 
   // Set up the domain creator from the input file.
   using domain_creator_tag = OptionTags::DomainCreator<Dim, Frame::Inertial>;
@@ -98,9 +105,9 @@ struct Metavariables {
       dg::Actions::InitializeInterfaces<
           system, dg::Initialization::slice_tags_to_face<>,
           dg::Initialization::slice_tags_to_exterior<>>,
-      elliptic::Actions::InitializeTemporalId,
-      dg::Actions::InitializeMortars<Metavariables, true>,
       elliptic::dg::Actions::InitializeFluxes,
+      elliptic::Actions::InitializeTemporalId,
+      dg::Actions::InitializeMortars<boundary_scheme, true>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource,
       typename linear_solver::initialize_element,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
@@ -123,15 +130,14 @@ struct Metavariables {
               Phase, Phase::Solve,
               tmpl::list<Poisson::Actions::Observe,
                          LinearSolver::Actions::TerminateIfConverged,
-                         dg::Actions::SendDataForFluxes<Metavariables>,
+                         dg::Actions::SendDataForFluxes<boundary_scheme>,
                          elliptic::Actions::ComputeOperatorAction<
                              Dim, LinearSolver::Tags::OperatorAppliedTo,
                              typename system::variables_tag>,
-                         elliptic::dg::Actions::
-                             ImposeHomogeneousDirichletBoundaryConditions<
-                                 Metavariables>,
-                         dg::Actions::ReceiveDataForFluxes<Metavariables>,
-                         dg::Actions::ApplyFluxes,
+                         Actions::MutateApply<
+                             ::dg::PopulateBoundaryMortars<boundary_scheme>>,
+                         dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
+                         Actions::MutateApply<boundary_scheme>,
                          typename linear_solver::perform_step>>>>;
 
   // Specify all parallel components that will execute actions at some point.

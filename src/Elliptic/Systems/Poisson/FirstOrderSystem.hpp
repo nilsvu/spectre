@@ -97,7 +97,7 @@ struct FirstOrderSystem {
 
   // Boundary conditions
   // This interface will likely change with generalized boundary conditions
-  using impose_boundary_conditions_on_fields = tmpl::list<Field>;
+  using primal_variables = tmpl::list<LinearSolver::Tags::Operand<Field>>;
   using compute_analytic_fluxes = ComputeFirstOrderFluxes<
       Dim, db::add_tag_prefix<::Tags::Analytic, fields_tag>,
       ::Tags::Analytic<Field>, ::Tags::Analytic<AuxiliaryField<Dim>>>;

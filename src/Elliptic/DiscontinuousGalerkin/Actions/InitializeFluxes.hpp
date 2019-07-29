@@ -9,6 +9,7 @@
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
+#include "Domain/MirrorVariables.hpp"
 #include "Domain/Tags.hpp"
 #include "Evolution/Conservative/Tags.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
@@ -45,10 +46,8 @@ struct InitializeFluxes {
     using div_fluxes_tag = db::add_tag_prefix<::Tags::div, fluxes_tag>;
     using analytic_fields_tag =
         db::add_tag_prefix<::Tags::Analytic, typename system::fields_tag>;
-    using exterior_vars_tag =
-        ::Tags::Interface<::Tags::BoundaryDirectionsExterior<Dim>, vars_tag>;
 
-    using simple_tags = db::AddSimpleTags<exterior_vars_tag>;
+    using simple_tags = db::AddSimpleTags<>;
     using compute_tags = db::AddComputeTags<
         // We slice the fluxes and their divergences to all interior faces
         ::Tags::Slice<::Tags::InternalDirections<Dim>, fluxes_tag>,
@@ -74,34 +73,30 @@ struct InitializeFluxes {
             ::Tags::BoundaryDirectionsInterior<Dim>,
             ::Tags::ComputeNormalDotFlux<analytic_fields_tag, Dim,
                                          Frame::Inertial>>,
+        // We mirror the system variables to the exterior (ghost) faces to
+        // impose homogeneous (zero) boundary conditions. Non-zero boundary
+        // conditions are handled as contributions to the source term during
+        // initialization.
+        ::Tags::Slice<::Tags::BoundaryDirectionsInterior<Dim>, vars_tag>,
+        ::Tags::InterfaceComputeItem<
+            ::Tags::BoundaryDirectionsExterior<Dim>,
+            ::Tags::MirrorVariables<
+                Dim, ::Tags::BoundaryDirectionsInterior<Dim>, vars_tag,
+                typename system::primal_variables>>,
         // On exterior (ghost) boundary faces we compute the fluxes from the
-        // data that is being set there manually to impose homogeneous Dirichlet
+        // data that is being mirrored there to impose homogeneous Dirichlet
         // boundary conditions. Then, we compute their normal-dot-fluxes. The
-        // flux divergences are sliced from the volume. We also need the system
-        // variables to mirror them to the exterior.
+        // flux divergences are sliced from the volume.
         ::Tags::InterfaceComputeItem<::Tags::BoundaryDirectionsExterior<Dim>,
                                      typename system::compute_fluxes>,
         ::Tags::InterfaceComputeItem<
             ::Tags::BoundaryDirectionsExterior<Dim>,
             ::Tags::ComputeNormalDotFlux<vars_tag, Dim, Frame::Inertial>>,
-        ::Tags::Slice<::Tags::BoundaryDirectionsExterior<Dim>, div_fluxes_tag>,
-        ::Tags::Slice<::Tags::BoundaryDirectionsInterior<Dim>, vars_tag>>;
-
-    // Initialize the variables on the exterior (ghost) boundary faces.
-    // These are stored in a simple tag and updated manually to impose boundary
-    // conditions.
-    db::item_type<exterior_vars_tag> exterior_boundary_vars{};
-    const auto& mesh = db::get<::Tags::Mesh<Dim>>(box);
-    for (const auto& direction :
-         db::get<::Tags::BoundaryDirectionsExterior<Dim>>(box)) {
-      exterior_boundary_vars[direction] = db::item_type<vars_tag>{
-          mesh.slice_away(direction.dimension()).number_of_grid_points()};
-    }
+        ::Tags::Slice<::Tags::BoundaryDirectionsExterior<Dim>, div_fluxes_tag>>;
 
     return std::make_tuple(
         ::Initialization::merge_into_databox<InitializeFluxes, simple_tags,
-                                             compute_tags>(
-            std::move(box), std::move(exterior_boundary_vars)));
+                                             compute_tags>(std::move(box)));
   }
 };
 }  // namespace Actions
