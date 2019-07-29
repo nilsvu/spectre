@@ -21,7 +21,6 @@
 #include "Domain/Tags.hpp"
 #include "Evolution/Conservative/Tags.hpp"
 #include "Evolution/Initialization/Helpers.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/FluxCommunicationTypes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
@@ -63,24 +62,22 @@ namespace Actions {
 ///   * Tags::Mortars<Tags::MortarSize<dim - 1>, dim>
 /// - Removes: nothing
 /// - Modifies: nothing
-template <typename Metavariables, bool AddFluxBoundaryConditionMortars = true,
+template <typename BoundaryScheme, bool AddFluxBoundaryConditionMortars = true,
           ::Initialization::MergePolicy MergePolicy =
               ::Initialization::MergePolicy::Error>
 struct InitializeMortars {
  private:
-  static constexpr size_t dim = Metavariables::system::volume_dim;
-  using temporal_id_tag = typename Metavariables::temporal_id;
-  using flux_comm_types = dg::FluxCommunicationTypes<Metavariables>;
-  using mortar_data_tag = tmpl::conditional_t<
-      Metavariables::local_time_stepping,
-      typename flux_comm_types::local_time_stepping_mortar_data_tag,
-      typename flux_comm_types::simple_mortar_data_tag>;
+  static constexpr size_t dim = BoundaryScheme::volume_dim;
+  using temporal_id_tag = typename BoundaryScheme::temporal_id_tag;
+  using mortar_data_tag =
+      ::Tags::Mortars<typename BoundaryScheme::mortar_data_tag, dim>;
 
  public:
   using initialization_option_tags = tmpl::list<::Tags::InitialExtents<dim>>;
 
-  template <typename DbTagsList, typename... InboxTags, typename ArrayIndex,
-            typename ActionList, typename ParallelComponent,
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent,
             Requires<tmpl::list_contains_v<
                 typename db::DataBox<DbTagsList>::simple_item_tags,
                 Tags::InitialExtents<dim>>> = nullptr>
@@ -94,7 +91,23 @@ struct InitializeMortars {
                           ::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>,
                           ::Tags::Mortars<::Tags::Mesh<dim - 1>, dim>,
                           ::Tags::Mortars<::Tags::MortarSize<dim - 1>, dim>>;
-    using compute_tags = db::AddComputeTags<>;
+    using compute_tags = db::AddComputeTags<
+        ::Tags::InterfaceComputeItem<
+            ::Tags::InternalDirections<dim>,
+            typename BoundaryScheme::compute_packaged_remote_data>,
+        ::Tags::InterfaceComputeItem<
+            ::Tags::InternalDirections<dim>,
+            typename BoundaryScheme::compute_packaged_local_data>,
+        // For imposing boundary conditions
+        ::Tags::InterfaceComputeItem<
+            ::Tags::BoundaryDirectionsInterior<dim>,
+            typename BoundaryScheme::compute_packaged_remote_data>,
+        ::Tags::InterfaceComputeItem<
+            ::Tags::BoundaryDirectionsInterior<dim>,
+            typename BoundaryScheme::compute_packaged_local_data>,
+        ::Tags::InterfaceComputeItem<
+            ::Tags::BoundaryDirectionsExterior<dim>,
+            typename BoundaryScheme::compute_packaged_remote_data>>;
 
     const auto& element = db::get<::Tags::Element<dim>>(box);
     const auto& mesh = db::get<::Tags::Mesh<dim>>(box);
@@ -151,12 +164,12 @@ struct InitializeMortars {
             std::move(mortar_sizes)));
   }
 
-  template <
-      typename DbTagsList, typename... InboxTags, typename ArrayIndex,
-      typename ActionList, typename ParallelComponent,
-      Requires<not tmpl::list_contains_v<
-          typename db::DataBox<DbTagsList>::simple_item_tags,
-          Tags::InitialExtents<Metavariables::system::volume_dim>>> = nullptr>
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent,
+            Requires<not tmpl::list_contains_v<
+                typename db::DataBox<DbTagsList>::simple_item_tags,
+                Tags::InitialExtents<BoundaryScheme::volume_dim>>> = nullptr>
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& /*box*/,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
