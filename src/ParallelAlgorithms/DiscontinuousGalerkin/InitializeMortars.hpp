@@ -20,7 +20,6 @@
 #include "Domain/Neighbors.hpp"
 #include "Domain/OrientationMap.hpp"
 #include "Domain/Tags.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/FluxCommunicationTypes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
@@ -75,24 +74,22 @@ namespace Actions {
  * - Removes: nothing
  * - Modifies: nothing
  */
-template <typename Metavariables, bool AddFluxBoundaryConditionMortars = true>
+template <typename BoundaryScheme, bool AddFluxBoundaryConditionMortars = true>
 struct InitializeMortars {
  private:
-  static constexpr size_t dim = Metavariables::system::volume_dim;
-  using temporal_id_tag = typename Metavariables::temporal_id;
-  using flux_comm_types = dg::FluxCommunicationTypes<Metavariables>;
-  using mortar_data_tag = tmpl::conditional_t<
-      Metavariables::local_time_stepping,
-      typename flux_comm_types::local_time_stepping_mortar_data_tag,
-      typename flux_comm_types::simple_mortar_data_tag>;
+  static constexpr size_t dim = BoundaryScheme::volume_dim;
+  using temporal_id_tag = typename BoundaryScheme::temporal_id_tag;
+  using mortar_data_tag =
+      ::Tags::Mortars<typename BoundaryScheme::mortar_data_tag, dim>;
 
  public:
   using initialization_tags = tmpl::list<::Tags::InitialExtents<dim>>;
 
-  template <typename DataBox, typename... InboxTags, typename ArrayIndex,
-            typename ActionList, typename ParallelComponent,
-            Requires<db::tag_is_retrievable_v<::Tags::InitialExtents<dim>,
-                                              DataBox>> = nullptr>
+  template <
+      typename DataBox, typename... InboxTags, typename Metavariables,
+      typename ArrayIndex, typename ActionList, typename ParallelComponent,
+      Requires<db::tag_is_retrievable_v<::Tags::InitialExtents<dim>, DataBox>> =
+          nullptr>
   static auto apply(DataBox& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
                     const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
@@ -149,6 +146,23 @@ struct InitializeMortars {
       }
     }
 
+    using compute_tags = db::AddComputeTags<
+        ::Tags::InterfaceCompute<
+            ::Tags::InternalDirections<dim>,
+            typename BoundaryScheme::compute_packaged_remote_data>,
+        ::Tags::InterfaceCompute<
+            ::Tags::InternalDirections<dim>,
+            typename BoundaryScheme::compute_packaged_local_data>,
+        // For imposing boundary conditions
+        ::Tags::InterfaceCompute<
+            ::Tags::BoundaryDirectionsInterior<dim>,
+            typename BoundaryScheme::compute_packaged_remote_data>,
+        ::Tags::InterfaceCompute<
+            ::Tags::BoundaryDirectionsInterior<dim>,
+            typename BoundaryScheme::compute_packaged_local_data>,
+        ::Tags::InterfaceCompute<
+            ::Tags::BoundaryDirectionsExterior<dim>,
+            typename BoundaryScheme::compute_packaged_remote_data>>;
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeMortars,
@@ -156,14 +170,15 @@ struct InitializeMortars {
                 mortar_data_tag,
                 ::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>,
                 ::Tags::Mortars<::Tags::Mesh<dim - 1>, dim>,
-                ::Tags::Mortars<::Tags::MortarSize<dim - 1>, dim>>>(
-            std::move(box), std::move(mortar_data),
-            std::move(mortar_next_temporal_ids), std::move(mortar_meshes),
-            std::move(mortar_sizes)));
+                ::Tags::Mortars<::Tags::MortarSize<dim - 1>, dim>>,
+            compute_tags>(std::move(box), std::move(mortar_data),
+                          std::move(mortar_next_temporal_ids),
+                          std::move(mortar_meshes), std::move(mortar_sizes)));
   }
 
-  template <typename DataBox, typename... InboxTags, typename ArrayIndex,
-            typename ActionList, typename ParallelComponent,
+  template <typename DataBox, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent,
             Requires<not db::tag_is_retrievable_v<::Tags::InitialExtents<dim>,
                                                   DataBox>> = nullptr>
   static std::tuple<DataBox&&> apply(
