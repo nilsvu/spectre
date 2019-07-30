@@ -6,6 +6,7 @@
 #include "NumericalAlgorithms/LinearSolver/ConjugateGradient/ElementActions.hpp"
 #include "NumericalAlgorithms/LinearSolver/ConjugateGradient/InitializeElement.hpp"
 #include "NumericalAlgorithms/LinearSolver/ConjugateGradient/ResidualMonitor.hpp"
+#include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace LinearSolver {
@@ -99,6 +100,9 @@ struct ConjugateGradient {
    * first step of the algorithm.
    */
   using initialize_element = cg_detail::InitializeElement<Metavariables>;
+  using reinitialize_element =
+      cg_detail::InitializeElement<Metavariables,
+                                   ::Initialization::MergePolicy::Overwrite>;
 
   // Compile-time interface for observers
   using observed_reduction_data_tags = observers::make_reduction_data_tags<
