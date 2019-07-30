@@ -3,3 +3,4 @@
 
 add_subdirectory(Actions)
 add_subdirectory(Initialization)
+add_subdirectory(NonlinearSolver)
