@@ -34,29 +34,6 @@ struct ResidualMonitor;
 namespace LinearSolver {
 namespace cg_detail {
 
-struct InitializeHasConverged {
-  template <
-      typename ParallelComponent, typename DataBox, typename Metavariables,
-      typename ArrayIndex,
-      Requires<db::tag_is_retrievable_v<
-                   typename Metavariables::system::fields_tag, DataBox> and
-               db::tag_is_retrievable_v<LinearSolver::Tags::HasConverged,
-                                        DataBox>> = nullptr>
-  static void apply(DataBox& box,
-                    const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
-                    const ArrayIndex& /*array_index*/,
-                    const db::item_type<LinearSolver::Tags::HasConverged>&
-                        has_converged) noexcept {
-    db::mutate<LinearSolver::Tags::HasConverged>(
-        make_not_null(&box), [&has_converged](
-                                 const gsl::not_null<db::item_type<
-                                     LinearSolver::Tags::HasConverged>*>
-                                     local_has_converged) noexcept {
-          *local_has_converged = has_converged;
-        });
-  }
-};
-
 struct PerformStep {
   template <typename DataBox, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,

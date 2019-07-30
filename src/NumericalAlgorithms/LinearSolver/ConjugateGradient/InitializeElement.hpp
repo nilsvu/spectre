@@ -84,7 +84,38 @@ struct InitializeElement {
                                              compute_tags, MergePolicy>(
             std::move(box), db::item_type<LinearSolver::Tags::IterationId>{0},
             std::move(residual),
-            db::item_type<LinearSolver::Tags::HasConverged>{}));
+            db::item_type<LinearSolver::Tags::HasConverged>{}),
+        // Terminate algorithm for now. The reduction will be broadcast to the
+        // next action which is responsible for restarting the algorithm.
+        true);
+  }
+};
+
+struct InitializeHasConverged {
+  template <
+      typename ParallelComponent, typename DataBox, typename Metavariables,
+      typename ArrayIndex,
+      Requires<db::tag_is_retrievable_v<
+                   typename Metavariables::system::fields_tag, DataBox> and
+               db::tag_is_retrievable_v<LinearSolver::Tags::HasConverged,
+                                        DataBox>> = nullptr>
+  static void apply(DataBox& box,
+                    const Parallel::ConstGlobalCache<Metavariables>& cache,
+                    const ArrayIndex& array_index,
+                    const db::item_type<LinearSolver::Tags::HasConverged>&
+                        has_converged) noexcept {
+    Parallel::printf("callback init linear hasconv\n");
+    db::mutate<LinearSolver::Tags::HasConverged>(
+        make_not_null(&box), [&has_converged](
+                                 const gsl::not_null<db::item_type<
+                                     LinearSolver::Tags::HasConverged>*>
+                                     local_has_converged) noexcept {
+          *local_has_converged = has_converged;
+        });
+
+    // Proceed with algorithm
+    Parallel::get_parallel_component<ParallelComponent>(cache)[array_index]
+        .perform_algorithm(true);
   }
 };
 
