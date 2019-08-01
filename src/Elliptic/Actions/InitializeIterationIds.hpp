@@ -10,36 +10,30 @@
 
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
+#include "Elliptic/IterationId.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
-
-/// \cond
-template <size_t VolumeDim>
-class ElementIndex;
-namespace Frame {
-struct Inertial;
-}  // namespace Frame
-/// \endcond
 
 namespace elliptic {
 namespace Actions {
 
 /*!
- * \brief Initializes the DataBox tag for the temporal ID.
+ * \brief Initializes DataBox tags for the elliptic iteration IDs.
  *
- * Currently, this action simply constructs the temporal ID from a zero integer.
- * This is suitable for elliptic iteration IDs.
- *
- * Uses:
- * - Metavariables:
- *   - `temporal_id`
+ * This action simply constructs all `ComponentTags` from zero integers.
+ * This is suitable for elliptic iteration IDs that represent step numbers.
+ * It also adds a compute tag for the `::Tags::Next` of each of the
+ * `ComponentTags`, as well as for the `elliptic::Tags::IterationId` that
+ * combines all components into a single number.
  *
  * DataBox:
  * - Adds:
- *   - `temporal_id`
- *   - `Tags::Next<temporal_id>`
+ *   - `ComponentTags...`
+ *   - `Tags::Next<ComponentTags>...`
+ *   - `elliptic::Tags::IterationId`
  */
-struct InitializeTemporalId {
+template <typename... ComponentTags>
+struct InitializeIterationIds {
   template <typename DataBox, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
@@ -49,13 +43,14 @@ struct InitializeTemporalId {
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using temporal_id_tag = typename Metavariables::temporal_id;
-    db::item_type<temporal_id_tag> temporal_id{0};
+    using simple_tags = db::AddSimpleTags<ComponentTags...>;
+    using compute_tags = db::AddComputeTags<
+        ::Tags::NextCompute<ComponentTags>...,
+        elliptic::Tags::IterationIdCompute<ComponentTags...>>;
     return std::make_tuple(
-        ::Initialization::merge_into_databox<
-            InitializeTemporalId, db::AddSimpleTags<temporal_id_tag>,
-            db::AddComputeTags<::Tags::NextCompute<temporal_id_tag>>>(
-            std::move(box), std::move(temporal_id)));
+        ::Initialization::merge_into_databox<InitializeIterationIds,
+                                             simple_tags, compute_tags>(
+            std::move(box), db::item_type<ComponentTags>{0}...));
   }
 };
 
