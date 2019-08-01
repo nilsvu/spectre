@@ -37,3 +37,27 @@ add_spectre_parallel_executable(
   Metavariables<3>
   "${LIBS_TO_LINK}"
   )
+
+add_spectre_parallel_executable(
+  SolvePoissonCorrectionProblem1D
+  SolvePoissonCorrectionProblem
+  Elliptic/Executables/Poisson
+  Metavariables<1>
+  "${LIBS_TO_LINK}"
+  )
+
+add_spectre_parallel_executable(
+  SolvePoissonCorrectionProblem2D
+  SolvePoissonCorrectionProblem
+  Elliptic/Executables/Poisson
+  Metavariables<2>
+  "${LIBS_TO_LINK}"
+  )
+
+add_spectre_parallel_executable(
+  SolvePoissonCorrectionProblem3D
+  SolvePoissonCorrectionProblem
+  Elliptic/Executables/Poisson
+  Metavariables<1>
+  "${LIBS_TO_LINK}"
+  )
