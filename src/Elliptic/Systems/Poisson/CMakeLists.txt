@@ -5,6 +5,7 @@ set(LIBRARY Poisson)
 
 set(LIBRARY_SOURCES
   Equations.cpp
+  CorrectionEquations.cpp
   )
 
 add_spectre_library(${LIBRARY} ${LIBRARY_SOURCES})
