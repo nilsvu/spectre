@@ -8,6 +8,7 @@
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Systems/Poisson/Tags.hpp"
+#include "Elliptic/Tags.hpp"
 #include "IO/Observer/Actions.hpp"
 #include "IO/Observer/ArrayComponentId.hpp"
 #include "IO/Observer/Helpers.hpp"
@@ -15,7 +16,6 @@
 #include "IO/Observer/ObserverComponent.hpp"
 #include "IO/Observer/ReductionActions.hpp"
 #include "IO/Observer/VolumeActions.hpp"
-#include "NumericalAlgorithms/LinearSolver/Tags.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "Parallel/Reduction.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
@@ -33,7 +33,7 @@ namespace Actions {
  *
  * This action observes the following:
  * - Reduction data:
- *   - `"Iteration"`: The linear solver iteration
+ *   - `"Iteration"`: The elliptic solver iteration
  *   - `"NumberOfPoints"`: The total number of grid points across all elements
  *   - `"L2Error"`: The standard L2 vector norm of the pointwise difference
  *     between the numerical and analytic solution \f$\sqrt{\sum_i \left(
@@ -52,7 +52,7 @@ namespace Actions {
  * - Metavariables:
  *   - Items required by `observers::Observer<Metavariables>`
  * - DataBox:
- *   - `LinearSolver::Tags::IterationId`
+ *   - `elliptic::Tags::IterationId`
  *   - `Tags::Mesh<Dim>`
  *   - `Poisson::Field`
  *   - `Tags::Analytic<Poisson::Field>`
@@ -64,7 +64,7 @@ namespace Actions {
 struct Observe {
  private:
   using observed_reduction_data = Parallel::ReductionData<
-      Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+      Parallel::ReductionDatum<double, funcl::AssertEqual<>>,
       Parallel::ReductionDatum<size_t, funcl::Plus<>>,
       Parallel::ReductionDatum<double, funcl::Plus<>,
                                funcl::Sqrt<funcl::Divides<>>,
@@ -78,11 +78,9 @@ struct Observe {
   static std::pair<observers::TypeOfObservation, observers::ObservationId>
   register_info(const db::DataBox<DbTagsList>& box,
                 const ArrayIndex& /*array_index*/) noexcept {
-    return {
-        observers::TypeOfObservation::ReductionAndVolume,
-        observers::ObservationId{
-            static_cast<double>(db::get<LinearSolver::Tags::IterationId>(box)),
-            ElementObservationType{}}};
+    return {observers::TypeOfObservation::ReductionAndVolume,
+            observers::ObservationId{db::get<elliptic::Tags::IterationId>(box),
+                                     ElementObservationType{}}};
   }
   using observed_reduction_data_tags =
       observers::make_reduction_data_tags<tmpl::list<observed_reduction_data>>;
@@ -95,7 +93,7 @@ struct Observe {
                     const ElementIndex<Dim>& array_index,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    const auto& iteration_id = get<LinearSolver::Tags::IterationId>(box);
+    const auto& iteration_id = get<elliptic::Tags::IterationId>(box);
     const auto& mesh = get<Tags::Mesh<Dim>>(box);
     const std::string element_name = MakeString{} << ElementId<Dim>(array_index)
                                                   << '/';
