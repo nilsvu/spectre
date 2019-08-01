@@ -109,6 +109,7 @@ struct StrongFirstOrder {
  public:
   static constexpr size_t volume_dim = Dim;
   using temporal_id_tag = TemporalIdTag;
+  using numerical_flux_computer_tag = NumericalFluxComputerTag;
   using variables_tag = VariablesTag;
   using dt_variables_tag =
       db::add_tag_prefix<TemporalIdTag::template step_prefix, variables_tag>;
