@@ -25,7 +25,7 @@ class TaggedTuple;
 }  // namespace tuples
 namespace NonlinearSolver {
 namespace newton_raphson_detail {
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct ResidualMonitor;
 }  // namespace newton_raphson_detail
 }  // namespace NonlinearSolver
@@ -34,7 +34,14 @@ struct ResidualMonitor;
 namespace NonlinearSolver {
 namespace newton_raphson_detail {
 
+template <typename FieldsTag>
 struct PerformStep {
+ private:
+  using fields_tag = FieldsTag;
+  using correction_tag =
+      db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
+
+ public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
@@ -44,10 +51,6 @@ struct PerformStep {
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*mete*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    using fields_tag = typename Metavariables::system::nonlinear_fields_tag;
-    using correction_tag =
-        db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
-
     // Apply the correction that the linear solve has determined to improve
     // the nonlinear solution
     db::mutate<fields_tag>(
@@ -62,7 +65,22 @@ struct PerformStep {
   }
 };
 
+template <typename FieldsTag>
 struct PrepareLinearSolve {
+ private:
+  using fields_tag = FieldsTag;
+  using nonlinear_source_tag =
+      db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
+  using nonlinear_operator_tag =
+      db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo, fields_tag>;
+  using correction_tag =
+      db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
+  using linear_source_tag =
+      db::add_tag_prefix<::Tags::FixedSource, correction_tag>;
+  using linear_operator_tag =
+      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, correction_tag>;
+
+ public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
@@ -72,19 +90,6 @@ struct PrepareLinearSolve {
       const Parallel::ConstGlobalCache<Metavariables>& cache,
       const ArrayIndex& array_index, const ActionList /*mete*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    using fields_tag = typename Metavariables::system::nonlinear_fields_tag;
-    using nonlinear_source_tag = db::add_tag_prefix<::Tags::Source, fields_tag>;
-    using nonlinear_operator_tag =
-        db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo,
-                           fields_tag>;
-    using correction_tag =
-        db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
-    using linear_source_tag =
-        db::add_tag_prefix<::Tags::Source, correction_tag>;
-    using linear_operator_tag =
-        db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
-                           correction_tag>;
-
     db::mutate<linear_source_tag, correction_tag, linear_operator_tag>(
         make_not_null(&box),
         [](const gsl::not_null<db::item_type<linear_source_tag>*> linear_source,
@@ -105,14 +110,15 @@ struct PrepareLinearSolve {
         },
         get<nonlinear_source_tag>(box), get<nonlinear_operator_tag>(box));
 
-    Parallel::contribute_to_reduction<UpdateResidual<ParallelComponent>>(
+    Parallel::contribute_to_reduction<
+        UpdateResidual<FieldsTag, ParallelComponent>>(
         Parallel::ReductionData<
             Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>{
             LinearSolver::inner_product(get<linear_source_tag>(box),
                                         get<linear_source_tag>(box))},
         Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
-        Parallel::get_parallel_component<ResidualMonitor<Metavariables>>(
-            cache));
+        Parallel::get_parallel_component<
+            ResidualMonitor<Metavariables, FieldsTag>>(cache));
 
     // Terminate algorithm for now. The reduction will be broadcast to the
     // action below, which is responsible for restarting the algorithm.
@@ -120,6 +126,7 @@ struct PrepareLinearSolve {
   }
 };
 
+template <typename FieldsTag>
 struct UpdateHasConverged {
   template <typename ParallelComponent, typename DataBox,
             typename Metavariables, typename ArrayIndex,

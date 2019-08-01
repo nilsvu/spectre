@@ -22,10 +22,10 @@ namespace helpers = NonlinearSolverAlgorithmTestHelpers;
 namespace {
 
 struct Metavariables {
-  using system = helpers::System;
-
-  using nonlinear_solver = NonlinearSolver::NewtonRaphson<Metavariables>;
-  using linear_solver = LinearSolver::ConjugateGradient<Metavariables>;
+  using nonlinear_solver =
+      NonlinearSolver::NewtonRaphson<Metavariables, helpers::fields_tag>;
+  using linear_solver =
+      LinearSolver::ConjugateGradient<Metavariables, helpers::correction_tag>;
 
   using component_list =
       tmpl::append<tmpl::list<helpers::ElementArray<Metavariables>,

@@ -24,7 +24,9 @@ class TaggedTuple;
 }  // namespace tuples
 namespace NonlinearSolver {
 namespace newton_raphson_detail {
+template <typename FieldsTag>
 struct InitializeHasConverged;
+template <typename FieldsTag>
 struct UpdateHasConverged;
 }  // namespace newton_raphson_detail
 }  // namespace NonlinearSolver
@@ -33,25 +35,22 @@ struct UpdateHasConverged;
 namespace NonlinearSolver {
 namespace newton_raphson_detail {
 
-template <typename BroadcastTarget>
+template <typename FieldsTag, typename BroadcastTarget>
 struct InitializeResidual {
-  template <
-      typename ParallelComponent, typename DataBox, typename Metavariables,
-      typename ArrayIndex,
-      typename FieldsTag = typename Metavariables::system::nonlinear_fields_tag,
-      typename ResidualMagnitudeTag = db::add_tag_prefix<
-          LinearSolver::Tags::Magnitude,
-          db::add_tag_prefix<NonlinearSolver::Tags::Residual, FieldsTag>>,
-      Requires<db::tag_is_retrievable_v<ResidualMagnitudeTag, DataBox>> =
-          nullptr>
+  using residual_magnitude_tag = db::add_tag_prefix<
+      LinearSolver::Tags::Magnitude,
+      db::add_tag_prefix<NonlinearSolver::Tags::Residual, FieldsTag>>;
+  using initial_residual_magnitude_tag =
+      db::add_tag_prefix<::Tags::Initial, residual_magnitude_tag>;
+
+  template <typename ParallelComponent, typename DataBox,
+            typename Metavariables, typename ArrayIndex,
+            Requires<db::tag_is_retrievable_v<residual_magnitude_tag,
+                                              DataBox>> = nullptr>
   static void apply(DataBox& box,
                     Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
                     const double residual_magnitude) noexcept {
-    using residual_magnitude_tag = ResidualMagnitudeTag;
-    using initial_residual_magnitude_tag =
-        db::add_tag_prefix<::Tags::Initial, residual_magnitude_tag>;
-
     db::mutate<residual_magnitude_tag, initial_residual_magnitude_tag>(
         make_not_null(&box),
         [residual_magnitude](
@@ -62,8 +61,8 @@ struct InitializeResidual {
               residual_magnitude;
         });
 
-    NonlinearSolver::observe_detail::contribute_to_reduction_observer(box,
-                                                                      cache);
+    NonlinearSolver::observe_detail::contribute_to_reduction_observer<
+        FieldsTag>(box, cache);
 
     // Determine whether the nonlinear solver has converged. This invokes the
     // compute item.
@@ -79,33 +78,30 @@ struct InitializeResidual {
                  static_cast<int>(get<NonlinearSolver::Tags::Verbosity>(box)) >=
                      static_cast<int>(::Verbosity::Quiet))) {
       Parallel::printf(
-          "The nonlinear solver has converged without any iterations: %s",
+          "The nonlinear solver has converged without any iterations: %s\n",
           has_converged);
     }
 
-    Parallel::simple_action<InitializeHasConverged>(
+    Parallel::simple_action<InitializeHasConverged<FieldsTag>>(
         Parallel::get_parallel_component<BroadcastTarget>(cache),
         has_converged);
   }
 };
 
-template <typename BroadcastTarget>
+template <typename FieldsTag, typename BroadcastTarget>
 struct UpdateResidual {
-  template <
-      typename ParallelComponent, typename DataBox, typename Metavariables,
-      typename ArrayIndex,
-      typename FieldsTag = typename Metavariables::system::nonlinear_fields_tag,
-      typename ResidualMagnitudeTag = db::add_tag_prefix<
-          LinearSolver::Tags::Magnitude,
-          db::add_tag_prefix<NonlinearSolver::Tags::Residual, FieldsTag>>,
-      Requires<db::tag_is_retrievable_v<ResidualMagnitudeTag, DataBox>> =
-          nullptr>
+  using residual_magnitude_tag = db::add_tag_prefix<
+      LinearSolver::Tags::Magnitude,
+      db::add_tag_prefix<NonlinearSolver::Tags::Residual, FieldsTag>>;
+
+  template <typename ParallelComponent, typename DataBox,
+            typename Metavariables, typename ArrayIndex,
+            Requires<db::tag_is_retrievable_v<residual_magnitude_tag,
+                                              DataBox>> = nullptr>
   static void apply(DataBox& box,
                     Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
                     const double residual_magnitude) noexcept {
-    using residual_magnitude_tag = ResidualMagnitudeTag;
-
     db::mutate<residual_magnitude_tag, NonlinearSolver::Tags::IterationId>(
         make_not_null(&box), [residual_magnitude](
                                  const gsl::not_null<double*>
@@ -122,8 +118,8 @@ struct UpdateResidual {
     // logging and checking convergence before broadcasting back to the
     // elements.
 
-    NonlinearSolver::observe_detail::contribute_to_reduction_observer(box,
-                                                                      cache);
+    NonlinearSolver::observe_detail::contribute_to_reduction_observer<
+        FieldsTag>(box, cache);
 
     // Determine whether the nonlinear solver has converged. This invokes the
     // compute item.
@@ -141,11 +137,11 @@ struct UpdateResidual {
                  static_cast<int>(get<NonlinearSolver::Tags::Verbosity>(box)) >=
                      static_cast<int>(::Verbosity::Quiet))) {
       Parallel::printf(
-          "The nonlinear solver has converged in %zu iterations: %s",
+          "The nonlinear solver has converged in %zu iterations: %s\n",
           get<NonlinearSolver::Tags::IterationId>(box), has_converged);
     }
 
-    Parallel::simple_action<UpdateHasConverged>(
+    Parallel::simple_action<UpdateHasConverged<FieldsTag>>(
         Parallel::get_parallel_component<BroadcastTarget>(cache),
         has_converged);
   }

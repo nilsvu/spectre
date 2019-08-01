@@ -37,7 +37,7 @@ namespace NonlinearSolver {
  * %db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo,
  * typename Metavariables::system::nonlinear_fields_tag>.
  */
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct NewtonRaphson {
   /*!
    * \brief The parallel components used by the nonlinear solver
@@ -46,8 +46,8 @@ struct NewtonRaphson {
    * - System:
    *   * `nonlinear_fields_tag`
    */
-  using component_list =
-      tmpl::list<newton_raphson_detail::ResidualMonitor<Metavariables>>;
+  using component_list = tmpl::list<
+      newton_raphson_detail::ResidualMonitor<Metavariables, FieldsTag>>;
 
   /*!
    * \brief Initialize the tags used by the nonlinear solver
@@ -83,14 +83,15 @@ struct NewtonRaphson {
    * first step of the algorithm.
    */
   using initialize_element =
-      newton_raphson_detail::InitializeElement<Metavariables>;
+      newton_raphson_detail::InitializeElement<Metavariables, FieldsTag>;
 
   // Compile-time interface for observers
   using observed_reduction_data_tags = observers::make_reduction_data_tags<
       tmpl::list<observe_detail::reduction_data>>;
 
-  using prepare_linear_solve = newton_raphson_detail::PrepareLinearSolve;
-  using perform_step = newton_raphson_detail::PerformStep;
+  using prepare_linear_solve =
+      newton_raphson_detail::PrepareLinearSolve<FieldsTag>;
+  using perform_step = newton_raphson_detail::PerformStep<FieldsTag>;
 };
 
 }  // namespace NonlinearSolver

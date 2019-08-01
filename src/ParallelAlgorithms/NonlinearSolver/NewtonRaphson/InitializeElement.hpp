@@ -20,9 +20,9 @@ class TaggedTuple;
 }  // namespace tuples
 namespace LinearSolver {
 namespace newton_raphson_detail {
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct ResidualMonitor;
-template <typename BroadcastTarget>
+template <typename FieldsTag, typename BroadcastTarget>
 struct InitializeResidual;
 }  // namespace newton_raphson_detail
 }  // namespace LinearSolver
@@ -31,17 +31,20 @@ struct InitializeResidual;
 namespace NonlinearSolver {
 namespace newton_raphson_detail {
 
-template <typename Metavariables, Initialization::MergePolicy MergePolicy =
-                                      Initialization::MergePolicy::Error>
+template <typename Metavariables, typename FieldsTag,
+          Initialization::MergePolicy MergePolicy =
+              Initialization::MergePolicy::Error>
 struct InitializeElement {
  private:
-  using fields_tag = typename Metavariables::system::nonlinear_fields_tag;
-  using nonlinear_source_tag = db::add_tag_prefix<::Tags::Source, fields_tag>;
+  using fields_tag = FieldsTag;
+  using nonlinear_source_tag =
+      db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
   using nonlinear_operator_tag =
       db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo, fields_tag>;
   using correction_tag =
       db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
-  using linear_source_tag = db::add_tag_prefix<::Tags::Source, correction_tag>;
+  using linear_source_tag =
+      db::add_tag_prefix<::Tags::FixedSource, correction_tag>;
   using linear_operator_tag =
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, correction_tag>;
 
@@ -79,14 +82,14 @@ struct InitializeElement {
 
     // Perform global reduction to compute initial residual magnitude square for
     // residual monitor
-    Parallel::contribute_to_reduction<
-        newton_raphson_detail::InitializeResidual<ParallelComponent>>(
+    Parallel::contribute_to_reduction<newton_raphson_detail::InitializeResidual<
+        FieldsTag, ParallelComponent>>(
         Parallel::ReductionData<
             Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>{
             LinearSolver::inner_product(linear_source, linear_source)},
         Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
-        Parallel::get_parallel_component<ResidualMonitor<Metavariables>>(
-            cache));
+        Parallel::get_parallel_component<
+            ResidualMonitor<Metavariables, FieldsTag>>(cache));
 
     return std::make_tuple(
         ::Initialization::merge_into_databox<InitializeElement, simple_tags,
@@ -101,6 +104,7 @@ struct InitializeElement {
   }
 };
 
+template <typename FieldsTag>
 struct InitializeHasConverged {
   template <typename ParallelComponent, typename DataBox,
             typename Metavariables, typename ArrayIndex,

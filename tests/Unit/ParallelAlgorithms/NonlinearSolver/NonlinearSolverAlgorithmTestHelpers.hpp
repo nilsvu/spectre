@@ -68,11 +68,12 @@ struct VectorTag : db::SimpleTag {
   static std::string name() noexcept { return "VectorTag"; }
 };
 
-using nonlinear_source_tag = ::Tags::Source<VectorTag>;
+using fields_tag = VectorTag;
+using nonlinear_source_tag = ::Tags::FixedSource<fields_tag>;
 using nonlinear_operator_tag =
-    NonlinearSolver::Tags::OperatorAppliedTo<VectorTag>;
-using correction_tag = NonlinearSolver::Tags::Correction<VectorTag>;
-using linear_source_tag = ::Tags::Source<correction_tag>;
+    NonlinearSolver::Tags::OperatorAppliedTo<fields_tag>;
+using correction_tag = NonlinearSolver::Tags::Correction<fields_tag>;
+using linear_source_tag = ::Tags::FixedSource<correction_tag>;
 using linear_operator_correction_tag =
     LinearSolver::Tags::OperatorAppliedTo<correction_tag>;
 using linear_operand_tag = LinearSolver::Tags::Operand<correction_tag>;
@@ -148,7 +149,7 @@ struct InitializeElement {
                     const int /*array_index*/, const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
     using simple_tags =
-        db::AddSimpleTags<VectorTag, nonlinear_source_tag,
+        db::AddSimpleTags<fields_tag, nonlinear_source_tag,
                           nonlinear_operator_tag, correction_tag,
                           linear_operand_tag, linear_operator_tag>;
     using compute_tags = db::AddComputeTags<>;
@@ -277,11 +278,5 @@ struct ElementArray {
 template <typename Metavariables>
 using OutputCleaner =
     LinearSolverAlgorithmTestHelpers::OutputCleaner<Metavariables>;
-
-struct System {
-  using nonlinear_fields_tag = VectorTag;
-  using fields_tag = correction_tag;
-  using compute_nonlinear_operator_action = ComputeNonlinearOperatorAction;
-};
 
 }  // namespace NonlinearSolverAlgorithmTestHelpers

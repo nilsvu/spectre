@@ -22,7 +22,7 @@ class TaggedTuple;
 }  // namespace tuples
 namespace NonlinearSolver {
 namespace newton_raphson_detail {
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct InitializeResidualMonitor;
 }  // namespace newton_raphson_detail
 }  // namespace NonlinearSolver
@@ -31,7 +31,7 @@ struct InitializeResidualMonitor;
 namespace NonlinearSolver {
 namespace newton_raphson_detail {
 
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct ResidualMonitor {
   using chare_type = Parallel::Algorithms::Singleton;
   using const_global_cache_tag_list =
@@ -43,7 +43,7 @@ struct ResidualMonitor {
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
-          tmpl::list<InitializeResidualMonitor<Metavariables>>>,
+          tmpl::list<InitializeResidualMonitor<Metavariables, FieldsTag>>>,
 
       Parallel::PhaseActions<
           typename Metavariables::Phase,
@@ -63,10 +63,10 @@ struct ResidualMonitor {
   }
 };
 
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct InitializeResidualMonitor {
  private:
-  using fields_tag = typename Metavariables::system::nonlinear_fields_tag;
+  using fields_tag = FieldsTag;
   using residual_magnitude_tag = db::add_tag_prefix<
       LinearSolver::Tags::Magnitude,
       db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>>;
