@@ -18,6 +18,20 @@
 
 namespace Spectral {
 
+std::ostream& operator<<(std::ostream& os,
+                         const MortarSize& mortar_size) noexcept {
+  switch (mortar_size) {
+    case MortarSize::Full:
+      return os << "Full";
+    case MortarSize::UpperHalf:
+      return os << "UpperHalf";
+    case MortarSize::LowerHalf:
+      return os << "LowerHalf";
+    default:
+      ERROR("Invalid mortar size");
+  }
+}
+
 namespace {
 constexpr auto supported_quadratures = {Quadrature::Gauss,
                                         Quadrature::GaussLobatto};
@@ -54,8 +68,8 @@ const Matrix& projection_matrix_mortar_to_element(
       "Mesh has more points than supported by its quadrature.");
   ASSERT(element_mesh.extents(0) <= mortar_mesh.extents(0),
          "Requested projection matrix from mortar with fewer points ("
-         << mortar_mesh.extents(0) << ") than the element ("
-         << element_mesh.extents(0) << ")");
+             << mortar_mesh.extents(0) << ") than the element ("
+             << element_mesh.extents(0) << ")");
 
   switch (size) {
     case MortarSize::Full: {
@@ -245,14 +259,13 @@ const Matrix& projection_matrix_element_to_mortar(
       "Mesh has more points than supported by its quadrature.");
   ASSERT(mortar_mesh.extents(0) >= element_mesh.extents(0),
          "Requested projection matrix to mortar with fewer points ("
-         << mortar_mesh.extents(0) << ") than the element ("
-         << element_mesh.extents(0) << ")");
+             << mortar_mesh.extents(0) << ") than the element ("
+             << element_mesh.extents(0) << ")");
 
   // Element-to-mortar projections are always interpolations.
   const auto make_interpolators = [](auto interval_transform) noexcept {
     return [interval_transform = std::move(interval_transform)](
-        const size_t encoded_quadrature_mortar,
-        const size_t extents_mortar,
+        const size_t encoded_quadrature_mortar, const size_t extents_mortar,
         const size_t encoded_quadrature_element,
         const size_t extents_element) noexcept {
       if (extents_mortar < extents_element) {
