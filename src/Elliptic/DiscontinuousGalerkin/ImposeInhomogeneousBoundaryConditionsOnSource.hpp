@@ -44,7 +44,7 @@ namespace Actions {
  * each of its iterations.
  *
  * With:
- * - `sources_tag` = `db::add_tag_prefix<Tags::Source, system::fields_tag>`
+ * - `sources_tag` = `db::add_tag_prefix<Tags::FixedSource, system::fields_tag>`
  *
  * Uses:
  * - Metavariables:
@@ -69,6 +69,7 @@ namespace Actions {
  * - Modifies:
  *   - `sources_tag`
  */
+template <typename FieldsTag, typename BoundaryScheme>
 struct ImposeInhomogeneousBoundaryConditionsOnSource {
  private:
   template <typename NormalDotNumericalFluxComputer,
@@ -91,45 +92,45 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
             size_t Dim, typename ActionList, typename ParallelComponent>
   static auto apply(DataBox& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::ConstGlobalCache<Metavariables>& cache,
+                    const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
                     const ElementIndex<Dim>& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using system = typename Metavariables::system;
-    using sources_tag =
-        db::add_tag_prefix<Tags::Source, typename system::fields_tag>;
-    using normal_dot_analytic_fluxes_tag = db::add_tag_prefix<
-        ::Tags::NormalDotFlux,
-        db::add_tag_prefix<::Tags::Analytic, typename system::fields_tag>>;
+    using fixed_sources_tag =
+        db::add_tag_prefix<::Tags::FixedSource, FieldsTag>;
+    using normal_dot_analytic_fluxes_tag =
+        db::add_tag_prefix<::Tags::NormalDotFlux,
+                           db::add_tag_prefix<::Tags::Analytic, FieldsTag>>;
 
     const auto& normal_dot_numerical_flux_computer =
-        Parallel::get<typename Metavariables::normal_dot_numerical_flux>(cache);
+        db::get<typename BoundaryScheme::numerical_flux_computer_tag>(box);
 
-    db::mutate<sources_tag>(
+    db::mutate<fixed_sources_tag>(
         make_not_null(&box),
         [&normal_dot_numerical_flux_computer](
-            const gsl::not_null<db::item_type<sources_tag>*> sources,
+            const gsl::not_null<db::item_type<fixed_sources_tag>*>
+                fixed_sources,
             const Mesh<Dim>& mesh,
-            const db::item_type<Tags::BoundaryDirectionsInterior<Dim>>&
+            const db::item_type<::Tags::BoundaryDirectionsInterior<Dim>>&
                 boundary_directions,
-            const db::item_type<Tags::Interface<
-                Tags::BoundaryDirectionsInterior<Dim>,
+            const db::item_type<::Tags::Interface<
+                ::Tags::BoundaryDirectionsInterior<Dim>,
                 normal_dot_analytic_fluxes_tag>>& normal_dot_analytic_fluxes,
-            const db::item_type<Tags::Interface<
-                Tags::BoundaryDirectionsInterior<Dim>,
-                Tags::Normalized<Tags::UnnormalizedFaceNormal<Dim>>>>&
+            const db::item_type<::Tags::Interface<
+                ::Tags::BoundaryDirectionsInterior<Dim>,
+                ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<Dim>>>>&
                 normalized_face_normals,
-            const db::item_type<Tags::Interface<
-                Tags::BoundaryDirectionsInterior<Dim>,
-                Tags::Magnitude<Tags::UnnormalizedFaceNormal<Dim>>>>&
+            const db::item_type<::Tags::Interface<
+                ::Tags::BoundaryDirectionsInterior<Dim>,
+                ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<Dim>>>>&
                 magnitude_of_face_normals) noexcept {
           // Impose Dirichlet boundary conditions as contributions to the source
           for (const auto& direction : boundary_directions) {
             const size_t dimension = direction.dimension();
             const auto mortar_mesh = mesh.slice_away(dimension);
             // Compute the numerical flux contribution from the Dirichlet data
-            db::item_type<
-                db::add_tag_prefix<Tags::NormalDotNumericalFlux, sources_tag>>
+            db::item_type<db::add_tag_prefix<::Tags::NormalDotNumericalFlux,
+                                             fixed_sources_tag>>
                 boundary_normal_dot_numerical_fluxes{
                     mortar_mesh.number_of_grid_points(), 0.};
             compute_dirichlet_boundary_normal_dot_numerical_flux(
@@ -139,26 +140,26 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
                 normalized_face_normals.at(direction));
             // Flip sign of the boundary contributions, making them
             // contributions to the source
-            db::item_type<sources_tag> lifted_boundary_data{
+            db::item_type<fixed_sources_tag> lifted_boundary_data{
                 -1. *
                 ::dg::lift_flux(std::move(boundary_normal_dot_numerical_fluxes),
                                 mesh.extents(dimension),
                                 magnitude_of_face_normals.at(direction))};
-            add_slice_to_data(sources, std::move(lifted_boundary_data),
+            add_slice_to_data(fixed_sources, std::move(lifted_boundary_data),
                               mesh.extents(), dimension,
                               index_to_slice_at(mesh.extents(), direction));
           }
         },
-        get<Tags::Mesh<Dim>>(box),
-        get<Tags::BoundaryDirectionsInterior<Dim>>(box),
-        get<Tags::Interface<Tags::BoundaryDirectionsInterior<Dim>,
-                            normal_dot_analytic_fluxes_tag>>(box),
-        get<Tags::Interface<
-            Tags::BoundaryDirectionsInterior<Dim>,
-            Tags::Normalized<Tags::UnnormalizedFaceNormal<Dim>>>>(box),
-        get<Tags::Interface<
-            Tags::BoundaryDirectionsInterior<Dim>,
-            Tags::Magnitude<Tags::UnnormalizedFaceNormal<Dim>>>>(box));
+        get<::Tags::Mesh<Dim>>(box),
+        get<::Tags::BoundaryDirectionsInterior<Dim>>(box),
+        get<::Tags::Interface<::Tags::BoundaryDirectionsInterior<Dim>,
+                              normal_dot_analytic_fluxes_tag>>(box),
+        get<::Tags::Interface<
+            ::Tags::BoundaryDirectionsInterior<Dim>,
+            ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<Dim>>>>(box),
+        get<::Tags::Interface<
+            ::Tags::BoundaryDirectionsInterior<Dim>,
+            ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<Dim>>>>(box));
 
     return std::forward_as_tuple(std::move(box));
   }
