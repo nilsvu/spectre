@@ -9,8 +9,8 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/ComputeOperatorAction.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
+#include "Elliptic/Actions/InitializeIterationIds.hpp"
 #include "Elliptic/Actions/InitializeSystem.hpp"
-#include "Elliptic/Actions/InitializeTemporalId.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/InitializeFluxes.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
@@ -57,6 +57,7 @@ struct Metavariables {
 
   // The system provides all equations specific to the problem.
   using system = Poisson::FirstOrderSystem<Dim>;
+  using fields_tag = typename system::fields_tag;
 
   // Specify the analytic solution and corresponding source to define the
   // Poisson problem
@@ -65,22 +66,18 @@ struct Metavariables {
 
   // Specify the linear solver algorithm. We must use GMRES since the operator
   // is not positive-definite for the first-order system.
-  using linear_solver = LinearSolver::Gmres<Metavariables>;
-  using temporal_id = LinearSolver::Tags::IterationId;
-  static constexpr bool local_time_stepping = false;
+  using linear_solver = LinearSolver::Gmres<Metavariables, fields_tag>;
+  using linear_operand_tag = typename linear_solver::operand_tag;
 
   // Specify the DG boundary scheme. We use the strong first-order scheme here
   // that only requires us to compute normals dotted into the first-order
   // fluxes.
-  using normal_dot_numerical_flux =
-      OptionTags::NumericalFlux<dg::NumericalFluxes::FirstOrderInternalPenalty<
-          Dim, tmpl::list<LinearSolver::Tags::Operand<Poisson::Field>>,
-          tmpl::list<
-              LinearSolver::Tags::Operand<Poisson::AuxiliaryField<Dim>>>>>;
+  using numerical_flux = dg::NumericalFluxes::FirstOrderInternalPenalty<
+      Dim, tmpl::list<LinearSolver::Tags::Operand<Poisson::Field>>,
+      tmpl::list<LinearSolver::Tags::Operand<Poisson::AuxiliaryField<Dim>>>>;
   using boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
-      Dim, typename system::variables_tag,
-      ::Tags::NormalDotNumericalFluxComputer<
-          typename normal_dot_numerical_flux::type>,
+      Dim, linear_operand_tag,
+      Tags::NormalDotNumericalFluxComputer<numerical_flux>,
       LinearSolver::Tags::IterationId>;
 
   // Set up the domain creator from the input file.
@@ -88,7 +85,8 @@ struct Metavariables {
 
   // Collect all items to store in the cache.
   using const_global_cache_tag_list =
-      tmpl::list<analytic_solution_tag, normal_dot_numerical_flux>;
+      tmpl::list<analytic_solution_tag,
+                 OptionTags::NumericalFlux<numerical_flux>>;
 
   // Collect all reduction tags for observers
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
@@ -105,10 +103,12 @@ struct Metavariables {
       dg::Actions::InitializeInterfaces<
           system, dg::Initialization::slice_tags_to_face<>,
           dg::Initialization::slice_tags_to_exterior<>>,
-      elliptic::dg::Actions::InitializeFluxes,
-      elliptic::Actions::InitializeTemporalId,
+      elliptic::dg::Actions::InitializeFluxes<boundary_scheme, system>,
+      elliptic::Actions::InitializeIterationIds<
+          LinearSolver::Tags::IterationId>,
       dg::Actions::InitializeMortars<boundary_scheme, true>,
-      elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource,
+      elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
+          typename system::fields_tag, boundary_scheme>,
       typename linear_solver::initialize_element,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
@@ -133,7 +133,7 @@ struct Metavariables {
                          dg::Actions::SendDataForFluxes<boundary_scheme>,
                          elliptic::Actions::ComputeOperatorAction<
                              Dim, LinearSolver::Tags::OperatorAppliedTo,
-                             typename system::variables_tag>,
+                             linear_operand_tag>,
                          Actions::MutateApply<
                              ::dg::PopulateBoundaryMortars<boundary_scheme>>,
                          dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
