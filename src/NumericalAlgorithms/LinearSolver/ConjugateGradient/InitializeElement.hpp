@@ -21,9 +21,9 @@ class TaggedTuple;
 }  // namespace tuples
 namespace LinearSolver {
 namespace cg_detail {
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct ResidualMonitor;
-template <typename BroadcastTarget>
+template <typename FieldsTag, typename BroadcastTarget>
 struct InitializeResidual;
 }  // namespace cg_detail
 }  // namespace LinearSolver
@@ -32,12 +32,13 @@ struct InitializeResidual;
 namespace LinearSolver {
 namespace cg_detail {
 
-template <typename Metavariables, Initialization::MergePolicy MergePolicy =
-                                      Initialization::MergePolicy::Error>
+template <typename Metavariables, typename FieldsTag,
+          Initialization::MergePolicy MergePolicy =
+              Initialization::MergePolicy::Error>
 struct InitializeElement {
  private:
-  using fields_tag = typename Metavariables::system::fields_tag;
-  using source_tag = db::add_tag_prefix<::Tags::Source, fields_tag>;
+  using fields_tag = FieldsTag;
+  using source_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
   using operator_applied_to_fields_tag =
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
   using operand_tag =
@@ -71,13 +72,13 @@ struct InitializeElement {
     // Perform global reduction to compute initial residual magnitude square for
     // residual monitor
     Parallel::contribute_to_reduction<
-        cg_detail::InitializeResidual<ParallelComponent>>(
+        cg_detail::InitializeResidual<FieldsTag, ParallelComponent>>(
         Parallel::ReductionData<
             Parallel::ReductionDatum<double, funcl::Plus<>>>{
             inner_product(residual, residual)},
         Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
-        Parallel::get_parallel_component<ResidualMonitor<Metavariables>>(
-            cache));
+        Parallel::get_parallel_component<
+            ResidualMonitor<Metavariables, FieldsTag>>(cache));
 
     return std::make_tuple(
         ::Initialization::merge_into_databox<InitializeElement, simple_tags,
@@ -91,20 +92,17 @@ struct InitializeElement {
   }
 };
 
+template <typename FieldsTag>
 struct InitializeHasConverged {
-  template <
-      typename ParallelComponent, typename DataBox, typename Metavariables,
-      typename ArrayIndex,
-      Requires<db::tag_is_retrievable_v<
-                   typename Metavariables::system::fields_tag, DataBox> and
-               db::tag_is_retrievable_v<LinearSolver::Tags::HasConverged,
-                                        DataBox>> = nullptr>
+  template <typename ParallelComponent, typename DataBox,
+            typename Metavariables, typename ArrayIndex,
+            Requires<db::tag_is_retrievable_v<LinearSolver::Tags::HasConverged,
+                                              DataBox>> = nullptr>
   static void apply(DataBox& box,
                     const Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& array_index,
                     const db::item_type<LinearSolver::Tags::HasConverged>&
                         has_converged) noexcept {
-    Parallel::printf("callback init linear hasconv\n");
     db::mutate<LinearSolver::Tags::HasConverged>(
         make_not_null(&box), [&has_converged](
                                  const gsl::not_null<db::item_type<

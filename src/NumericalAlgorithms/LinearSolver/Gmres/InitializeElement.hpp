@@ -20,9 +20,9 @@ class TaggedTuple;
 }  // namespace tuples
 namespace LinearSolver {
 namespace gmres_detail {
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct ResidualMonitor;
-template <typename BroadcastTarget>
+template <typename FieldsTag, typename BroadcastTarget>
 struct InitializeResidualMagnitude;
 }  // namespace gmres_detail
 }  // namespace LinearSolver
@@ -31,14 +31,15 @@ struct InitializeResidualMagnitude;
 namespace LinearSolver {
 namespace gmres_detail {
 
-template <typename Metavariables, Initialization::MergePolicy MergePolicy =
-                                      Initialization::MergePolicy::Error>
+template <typename Metavariables, typename FieldsTag,
+          Initialization::MergePolicy MergePolicy =
+              Initialization::MergePolicy::Error>
 struct InitializeElement {
  private:
-  using fields_tag = typename Metavariables::system::fields_tag;
+  using fields_tag = FieldsTag;
   using initial_fields_tag =
       db::add_tag_prefix<LinearSolver::Tags::Initial, fields_tag>;
-  using source_tag = db::add_tag_prefix<::Tags::Source, fields_tag>;
+  using source_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
   using operator_applied_to_fields_tag =
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
   using operand_tag =
@@ -71,14 +72,14 @@ struct InitializeElement {
         },
         get<source_tag>(box), get<operator_applied_to_fields_tag>(box));
 
-    Parallel::contribute_to_reduction<
-        gmres_detail::InitializeResidualMagnitude<ParallelComponent>>(
+    Parallel::contribute_to_reduction<gmres_detail::InitializeResidualMagnitude<
+        FieldsTag, ParallelComponent>>(
         Parallel::ReductionData<
             Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>{
             inner_product(get<operand_tag>(box), get<operand_tag>(box))},
         Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
-        Parallel::get_parallel_component<ResidualMonitor<Metavariables>>(
-            cache));
+        Parallel::get_parallel_component<
+            ResidualMonitor<Metavariables, FieldsTag>>(cache));
 
     db::item_type<initial_fields_tag> x0(get<fields_tag>(box));
     db::item_type<basis_history_tag> basis_history{};
@@ -89,7 +90,49 @@ struct InitializeElement {
             std::move(box), db::item_type<LinearSolver::Tags::IterationId>{0},
             std::move(x0), db::item_type<orthogonalization_iteration_id_tag>{0},
             std::move(basis_history),
-            db::item_type<LinearSolver::Tags::HasConverged>{}));
+            db::item_type<LinearSolver::Tags::HasConverged>{}),
+        // Terminate algorithm for now. The reduction will be broadcast to the
+        // next action which is responsible for restarting the algorithm.
+        true);
+  }
+};
+
+template <typename FieldsTag>
+struct NormalizeInitialOperand {
+  template <typename ParallelComponent, typename DataBox,
+            typename Metavariables, typename ArrayIndex,
+            Requires<db::tag_is_retrievable_v<FieldsTag, DataBox> and
+                     db::tag_is_retrievable_v<LinearSolver::Tags::HasConverged,
+                                              DataBox>> = nullptr>
+  static void apply(DataBox& box,
+                    const Parallel::ConstGlobalCache<Metavariables>& cache,
+                    const ArrayIndex& array_index,
+                    const double residual_magnitude,
+                    const db::item_type<LinearSolver::Tags::HasConverged>&
+                        has_converged) noexcept {
+    using fields_tag = FieldsTag;
+    using operand_tag =
+        db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+    using basis_history_tag =
+        LinearSolver::Tags::KrylovSubspaceBasis<fields_tag>;
+
+    db::mutate<operand_tag, basis_history_tag,
+               LinearSolver::Tags::HasConverged>(
+        make_not_null(&box),
+        [
+          residual_magnitude, &has_converged
+        ](const gsl::not_null<db::item_type<operand_tag>*> operand,
+          const gsl::not_null<db::item_type<basis_history_tag>*> basis_history,
+          const gsl::not_null<db::item_type<LinearSolver::Tags::HasConverged>*>
+              local_has_converged) noexcept {
+          *operand /= residual_magnitude;
+          basis_history->push_back(*operand);
+          *local_has_converged = has_converged;
+        });
+
+    // Proceed with algorithm
+    Parallel::get_parallel_component<ParallelComponent>(cache)[array_index]
+        .perform_algorithm(true);
   }
 };
 

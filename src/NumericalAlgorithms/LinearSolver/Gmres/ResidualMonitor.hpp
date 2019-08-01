@@ -25,7 +25,7 @@ class TaggedTuple;
 }  // namespace tuples
 namespace LinearSolver {
 namespace gmres_detail {
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct InitializeResidualMonitor;
 }  // namespace gmres_detail
 }  // namespace LinearSolver
@@ -37,7 +37,7 @@ struct Criteria;
 namespace LinearSolver {
 namespace gmres_detail {
 
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct ResidualMonitor {
   using chare_type = Parallel::Algorithms::Singleton;
   using const_global_cache_tag_list =
@@ -49,7 +49,7 @@ struct ResidualMonitor {
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
-          tmpl::list<InitializeResidualMonitor<Metavariables>>>,
+          tmpl::list<InitializeResidualMonitor<Metavariables, FieldsTag>>>,
 
       Parallel::PhaseActions<
           typename Metavariables::Phase,
@@ -69,10 +69,10 @@ struct ResidualMonitor {
   }
 };
 
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct InitializeResidualMonitor {
  private:
-  using fields_tag = typename Metavariables::system::fields_tag;
+  using fields_tag = FieldsTag;
   using residual_magnitude_tag = db::add_tag_prefix<
       LinearSolver::Tags::Magnitude,
       db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>>;

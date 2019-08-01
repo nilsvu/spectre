@@ -7,6 +7,7 @@
 #include "NumericalAlgorithms/LinearSolver/Gmres/ElementActions.hpp"
 #include "NumericalAlgorithms/LinearSolver/Gmres/InitializeElement.hpp"
 #include "NumericalAlgorithms/LinearSolver/Gmres/ResidualMonitor.hpp"
+#include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace LinearSolver {
@@ -62,8 +63,11 @@ namespace LinearSolver {
  * \see ConjugateGradient for a linear solver that is more efficient when the
  * linear operator \f$A\f$ is symmetric.
  */
-template <typename Metavariables>
+template <typename Metavariables, typename FieldsTag>
 struct Gmres {
+  using operand_tag =
+      db::add_tag_prefix<LinearSolver::Tags::Operand, FieldsTag>;
+
   /*!
    * \brief The parallel components used by the GMRES linear solver
    *
@@ -72,7 +76,7 @@ struct Gmres {
    *   * `fields_tag`
    */
   using component_list =
-      tmpl::list<gmres_detail::ResidualMonitor<Metavariables>>;
+      tmpl::list<gmres_detail::ResidualMonitor<Metavariables, FieldsTag>>;
 
   /*!
    * \brief Initialize the tags used by the GMRES linear solver
@@ -114,7 +118,11 @@ struct Gmres {
    * not need to be initialized until it is computed for the first time in the
    * first step of the algorithm.
    */
-  using initialize_element = gmres_detail::InitializeElement<Metavariables>;
+  using initialize_element =
+      gmres_detail::InitializeElement<Metavariables, FieldsTag>;
+  using reinitialize_element =
+      gmres_detail::InitializeElement<Metavariables, FieldsTag,
+                                      ::Initialization::MergePolicy::Overwrite>;
 
   // Compile-time interface for observers
   using observed_reduction_data_tags = observers::make_reduction_data_tags<
@@ -149,7 +157,7 @@ struct Gmres {
    *   * `basis_history_tag`
    *   * `LinearSolver::Tags::HasConverged`
    */
-  using perform_step = gmres_detail::PerformStep;
+  using perform_step = gmres_detail::PerformStep<FieldsTag>;
 };
 
 }  // namespace LinearSolver
