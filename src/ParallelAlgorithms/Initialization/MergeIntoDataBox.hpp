@@ -73,12 +73,14 @@ template <
 void merge_simple_tag_value(
     const gsl::not_null<db::DataBox<DbTagsList>*> /*box*/,
     db::item_type<SimpleTag>&& /*simple_tag*/) noexcept {
-  static_assert(Policy != MergePolicy::Error,
-                "The tag being added does not have an equivalence operator and "
-                "is already in the DataBox. See the first template parameter "
-                "of the 'merge_simple_tag_value' function in the error message "
-                "for the action trying to re-add the simple tag and the second "
-                "template parameter for the simple tag being added.");
+  if (Policy == MergePolicy::Error) {
+    ERROR(
+        "The tag being added does not have an equivalence operator and "
+        "is already in the DataBox. See the first template parameter "
+        "of the 'merge_simple_tag_value' function in the error message "
+        "for the action trying to re-add the simple tag and the second "
+        "template parameter for the simple tag being added.");
+  }
 }
 
 template <typename AddingAction, typename ComputeTagsList, MergePolicy Policy,
