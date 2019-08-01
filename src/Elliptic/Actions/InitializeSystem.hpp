@@ -47,7 +47,7 @@ namespace Actions {
  * - Adds:
  *   - `fields_tag`
  *   - `db::add_tag_prefix<::LinearSolver::Tags::OperatorAppliedTo, fields_tag>`
- *   - `db::add_tag_prefix<::Tags::Source, fields_tag>`
+ *   - `db::add_tag_prefix<::Tags::FixedSource, fields_tag>`
  *   - `variables_tag`
  *   - `db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
  *   variables_tag>`
@@ -68,8 +68,10 @@ struct InitializeSystem {
     using fields_tag = typename system::fields_tag;
     using operator_applied_to_fields_tag =
         db::add_tag_prefix<::LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
-    using sources_tag = db::add_tag_prefix<::Tags::Source, fields_tag>;
-    using vars_tag = typename system::variables_tag;
+    using fixed_sources_tag =
+        db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
+    using vars_tag =
+        db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
     using operator_applied_to_vars_tag =
         db::add_tag_prefix<::LinearSolver::Tags::OperatorAppliedTo, vars_tag>;
     using fluxes_tag = db::add_tag_prefix<::Tags::Flux, vars_tag,
@@ -80,7 +82,8 @@ struct InitializeSystem {
 
     using simple_tags =
         db::AddSimpleTags<fields_tag, operator_applied_to_fields_tag,
-                          sources_tag, vars_tag, operator_applied_to_vars_tag>;
+                          fixed_sources_tag, vars_tag,
+                          operator_applied_to_vars_tag>;
     using compute_tags = db::AddComputeTags<
         // First-order fluxes and sources
         typename system::compute_fluxes, typename system::compute_sources,
@@ -98,13 +101,10 @@ struct InitializeSystem {
     db::item_type<operator_applied_to_fields_tag> operator_applied_to_fields{
         num_grid_points, 0.};
 
-    db::item_type<sources_tag> sources(num_grid_points, 0.);
-    // This actually sets the complete set of tags in the Variables, but there
-    // is no Variables constructor from a TaggedTuple (yet)
-    sources.assign_subset(
+    auto fixed_sources = variables_from_tagged_tuple(
         Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
             .variables(inertial_coords,
-                       db::get_variables_tags_list<sources_tag>{}));
+                       db::get_variables_tags_list<fixed_sources_tag>{}));
 
     // Initialize the variables for the elliptic solve. Their initial value is
     // determined by the linear solver. The value is also updated by the linear
@@ -120,7 +120,7 @@ struct InitializeSystem {
         ::Initialization::merge_into_databox<InitializeSystem, simple_tags,
                                              compute_tags>(
             std::move(box), std::move(fields),
-            std::move(operator_applied_to_fields), std::move(sources),
+            std::move(operator_applied_to_fields), std::move(fixed_sources),
             std::move(vars), std::move(operator_applied_to_vars)));
   }
 };
