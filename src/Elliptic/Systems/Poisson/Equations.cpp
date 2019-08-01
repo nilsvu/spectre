@@ -52,7 +52,9 @@ void first_order_sources(
 #include "NumericalAlgorithms/LinearOperators/Divergence.tpp"  // IWYU pragma: keep
 
 template <size_t Dim>
-using variables_tag = typename Poisson::FirstOrderSystem<Dim>::variables_tag;
+using variables_tag =
+    db::add_tag_prefix<LinearSolver::Tags::Operand,
+                       typename Poisson::FirstOrderSystem<Dim>::fields_tag>;
 template <size_t Dim>
 using fluxes_tags_list = db::get_variables_tags_list<db::add_tag_prefix<
     ::Tags::Flux, variables_tag<Dim>, tmpl::size_t<Dim>, Frame::Inertial>>;

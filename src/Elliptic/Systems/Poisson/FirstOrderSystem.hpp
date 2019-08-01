@@ -84,15 +84,13 @@ struct FirstOrderSystem {
   // The physical fields to solve for
   using fields_tag = Tags::Variables<tmpl::list<Field, AuxiliaryField<Dim>>>;
 
-  // The variables for the linear solve
-  using variables_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
-  using compute_fluxes =
-      ComputeFirstOrderFluxes<Dim, variables_tag,
-                              LinearSolver::Tags::Operand<Field>,
-                              LinearSolver::Tags::Operand<AuxiliaryField<Dim>>>;
+  using compute_fluxes = ComputeFirstOrderFluxes<
+      Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
+      LinearSolver::Tags::Operand<Field>,
+      LinearSolver::Tags::Operand<AuxiliaryField<Dim>>>;
   using compute_sources = ComputeFirstOrderSources<
-      Dim, variables_tag, LinearSolver::Tags::Operand<Field>,
+      Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
+      LinearSolver::Tags::Operand<Field>,
       LinearSolver::Tags::Operand<AuxiliaryField<Dim>>>;
 
   // Boundary conditions
