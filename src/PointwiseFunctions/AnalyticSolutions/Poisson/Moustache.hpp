@@ -70,12 +70,13 @@ class Moustache {
       -> tuples::TaggedTuple<AuxiliaryField<Dim>>;
 
   auto variables(const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
-                 tmpl::list<::Tags::Source<Field>> /*meta*/) const noexcept
-      -> tuples::TaggedTuple<::Tags::Source<Field>>;
+                 tmpl::list<::Tags::FixedSource<Field>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<::Tags::FixedSource<Field>>;
 
-  auto variables(const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
-                 tmpl::list<::Tags::Source<AuxiliaryField<Dim>>> /*meta*/) const
-      noexcept -> tuples::TaggedTuple<::Tags::Source<AuxiliaryField<Dim>>>;
+  auto variables(
+      const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
+      tmpl::list<::Tags::FixedSource<AuxiliaryField<Dim>>> /*meta*/) const
+      noexcept -> tuples::TaggedTuple<::Tags::FixedSource<AuxiliaryField<Dim>>>;
   // @}
 
   /// Retrieve a collection of variables at coordinates `x`

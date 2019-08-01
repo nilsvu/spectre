@@ -63,9 +63,9 @@ tuples::TaggedTuple<AuxiliaryField<2>> Moustache<2>::variables(
 }
 
 template <>
-tuples::TaggedTuple<::Tags::Source<Field>> Moustache<1>::variables(
+tuples::TaggedTuple<::Tags::FixedSource<Field>> Moustache<1>::variables(
     const tnsr::I<DataVector, 1>& x,
-    tmpl::list<::Tags::Source<Field>> /*meta*/) const noexcept {
+    tmpl::list<::Tags::FixedSource<Field>> /*meta*/) const noexcept {
   const auto x1 = get<0>(x) - 0.5;
   // This polynomial is minus the laplacian of the 1D solution
   Scalar<DataVector> field_source(abs(x1) * (20. * square(x1) - 1.5));
@@ -73,9 +73,9 @@ tuples::TaggedTuple<::Tags::Source<Field>> Moustache<1>::variables(
 }
 
 template <>
-tuples::TaggedTuple<::Tags::Source<Field>> Moustache<2>::variables(
+tuples::TaggedTuple<::Tags::FixedSource<Field>> Moustache<2>::variables(
     const tnsr::I<DataVector, 2>& x,
-    tmpl::list<::Tags::Source<Field>> /*meta*/) const noexcept {
+    tmpl::list<::Tags::FixedSource<Field>> /*meta*/) const noexcept {
   const auto x1 = get<0>(x) - 0.5;
   const auto x2 = get<1>(x) - 0.5;
   const auto x1_square = square(x1);
@@ -91,10 +91,11 @@ tuples::TaggedTuple<::Tags::Source<Field>> Moustache<2>::variables(
 }
 
 template <size_t Dim>
-tuples::TaggedTuple<::Tags::Source<AuxiliaryField<Dim>>>
+tuples::TaggedTuple<::Tags::FixedSource<AuxiliaryField<Dim>>>
 Moustache<Dim>::variables(
     const tnsr::I<DataVector, Dim>& x,
-    tmpl::list<::Tags::Source<AuxiliaryField<Dim>>> /*meta*/) const noexcept {
+    tmpl::list<::Tags::FixedSource<AuxiliaryField<Dim>>> /*meta*/) const
+    noexcept {
   return {make_with_value<tnsr::I<DataVector, Dim, Frame::Inertial>>(x, 0.)};
 }
 /// \endcond
