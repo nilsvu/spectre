@@ -128,6 +128,13 @@ class ConstantDensityStar {
 
   template <typename DataType>
   auto variables(const tnsr::I<DataType, 3, Frame::Inertial>& x,
+                 tmpl::list<Xcts::Tags::ConformalFactorGradient<
+                     3, Frame::Inertial, DataType>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<
+          Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>;
+
+  template <typename DataType>
+  auto variables(const tnsr::I<DataType, 3, Frame::Inertial>& x,
                  tmpl::list<::Tags::Initial<
                      Xcts::Tags::ConformalFactor<DataType>>> /*meta*/) const
       noexcept -> tuples::TaggedTuple<
@@ -141,18 +148,18 @@ class ConstantDensityStar {
           Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>>;
 
   template <typename DataType>
-  auto variables(
-      const tnsr::I<DataType, 3, Frame::Inertial>& x,
-      tmpl::list<
-          ::Tags::Source<Xcts::Tags::ConformalFactor<DataType>>> /*meta*/) const
+  auto variables(const tnsr::I<DataType, 3, Frame::Inertial>& x,
+                 tmpl::list<::Tags::FixedSource<
+                     Xcts::Tags::ConformalFactor<DataType>>> /*meta*/) const
       noexcept -> tuples::TaggedTuple<
-          ::Tags::Source<Xcts::Tags::ConformalFactor<DataType>>>;
+          ::Tags::FixedSource<Xcts::Tags::ConformalFactor<DataType>>>;
 
   template <typename DataType>
-  auto variables(const tnsr::I<DataType, 3, Frame::Inertial>& x,
-                 tmpl::list<::Tags::Source<Xcts::Tags::ConformalFactorGradient<
-                     3, Frame::Inertial, DataType>>> /*meta*/) const noexcept
-      -> tuples::TaggedTuple<::Tags::Source<
+  auto variables(
+      const tnsr::I<DataType, 3, Frame::Inertial>& x,
+      tmpl::list<::Tags::FixedSource<Xcts::Tags::ConformalFactorGradient<
+          3, Frame::Inertial, DataType>>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<::Tags::FixedSource<
           Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>>;
 
   template <typename DataType>
