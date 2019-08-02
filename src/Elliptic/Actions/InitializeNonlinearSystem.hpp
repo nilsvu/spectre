@@ -71,7 +71,7 @@ struct InitializeNonlinearSystem {
         ::Tags::DivCompute<linear_fluxes_tag, inv_jacobian_tag>,
         ::Tags::DivCompute<nonlinear_fluxes_tag, inv_jacobian_tag>>;
 
-    const auto& mesh = db::get<Tags::Mesh<Dim>>(box);
+    const auto& mesh = db::get<::Tags::Mesh<Dim>>(box);
     const size_t num_grid_points = mesh.number_of_grid_points();
     const auto& inertial_coords =
         get<::Tags::Coordinates<Dim, Frame::Inertial>>(box);
