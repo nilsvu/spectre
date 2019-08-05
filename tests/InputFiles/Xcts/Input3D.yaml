@@ -8,24 +8,25 @@
 #   Xcts3DVolume0.h5
 
 AnalyticSolution:
-  ConstantDensityStar:
-    Density: 0.01
-    Radius: 1.
+  TovStar:
+    CentralDensity: 1e-6 # 0.0008087415253997405 # h = 1.2
+    PolytropicConstant: 123.6489
+    PolytropicExponent: 2.
 
 DomainCreator:
   Sphere:
-    InnerRadius: 1.5
-    OuterRadius: 3.
+    InnerRadius: 5.
+    OuterRadius: 15.
     InitialRefinement: 1
     InitialGridPoints: [4, 4]
     UseEquiangularMap: False
 
 NumericalFlux:
   InternalPenalty:
-    PenaltyParameter: 30 # p^2 / h
+    PenaltyParameter: 5. # p^2 / h
 CorrectionNumFlux:
   InternalPenalty:
-    PenaltyParameter: 30 # p^2 / h
+    PenaltyParameter: 5. # p^2 / h
 
 Observers:
   VolumeFileName: "Xcts3DVolume"
@@ -33,14 +34,14 @@ Observers:
 
 NonlinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 10
-    RelativeResidual: 1e-5
+    MaxIterations: 4
+    RelativeResidual: 1e-1
     AbsoluteResidual: 1e-15
   Verbosity: Verbose
 
 LinearSolver:
   ConvergenceCriteria:
     MaxIterations: 300
-    RelativeResidual: 1e-5
+    RelativeResidual: 1e-2
     AbsoluteResidual: 1e-15
   Verbosity: Verbose
