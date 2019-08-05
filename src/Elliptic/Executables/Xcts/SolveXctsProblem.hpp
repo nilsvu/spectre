@@ -15,6 +15,7 @@
 #include "Elliptic/DiscontinuousGalerkin/Actions/InitializeFluxes.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
+#include "Elliptic/Systems/Xcts/Actions/LapseAtOrigin.hpp"
 #include "Elliptic/Systems/Xcts/Actions/Observe.hpp"
 #include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
 #include "Elliptic/Tags.hpp"
@@ -41,12 +42,15 @@
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
 #include "ParallelAlgorithms/Actions/MutateApply.hpp"
+#include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Actions/TerminateIfConverged.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Tov.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/ConstantDensityStar.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Xcts/TovStar.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -128,7 +132,7 @@ struct Metavariables {
       "Numerical flux: FirstOrderInternalPenaltyFlux"};
 
   // The system provides all equations specific to the problem.
-  using system = Xcts::FirstOrderSystem<Dim>;
+  using system = Xcts::FirstOrderHamiltonianAndLapseSystem<Dim>;
   using nonlinear_fields_tag = typename system::fields_tag;
 
   using linearized_system = typename system::linearized_system;
@@ -136,8 +140,8 @@ struct Metavariables {
 
   // The analytic solution and corresponding source to solve the XCTS
   // equation for
-  using analytic_solution_tag =
-      OptionTags::AnalyticSolution<Xcts::Solutions::ConstantDensityStar>;
+  using analytic_solution_tag = OptionTags::AnalyticSolution<
+      Xcts::Solutions::TovStar<gr::Solutions::TovSolution>>;
   using initial_guess_tag = analytic_solution_tag;
 
   using nonlinear_solver =
@@ -180,10 +184,17 @@ struct Metavariables {
       tmpl::list<Xcts::Actions::Observe, linear_solver, nonlinear_solver>>;
 
   // Specify all global synchronization points.
-  enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
+  enum class Phase {
+    Initialization,
+    RegisterWithObserver,
+    Observe,
+    Solve,
+    Exit
+  };
 
   // Construct the DgElementArray parallel component
   using apply_nonlinear_operator = tmpl::list<
+      Xcts::Actions::UpdateLapseAtOrigin,
       dg::Actions::SendDataForFluxes<nonlinear_boundary_scheme>,
       elliptic::Actions::ComputeOperatorAction<
           Dim, NonlinearSolver::Tags::OperatorAppliedTo, nonlinear_fields_tag>,
@@ -204,7 +215,8 @@ struct Metavariables {
   using initialization_actions = tmpl::flatten<tmpl::list<
       dg::Actions::InitializeDomain<Dim>,
       elliptic::Actions::InitializeAnalyticSolution,
-      elliptic::Actions::InitializeBackgroundFields,
+      //   elliptic::Actions::InitializeBackgroundFields,
+      Xcts::Actions::InitializeLapseAtOrigin,
       elliptic::Actions::InitializeNonlinearSystem,
       dg::Actions::InitializeInterfaces<
           system, dg::Initialization::slice_tags_to_face<>,
@@ -239,6 +251,10 @@ struct Metavariables {
               tmpl::list<observers::Actions::RegisterWithObservers<
                              Xcts::Actions::Observe>,
                          Parallel::Actions::TerminatePhase>>,
+
+          Parallel::PhaseActions<Phase, Phase::Observe,
+                                 tmpl::list<Xcts::Actions::Observe,
+                                            Parallel::Actions::TerminatePhase>>,
 
           Parallel::PhaseActions<
               Phase, Phase::Solve,
@@ -275,6 +291,8 @@ struct Metavariables {
       case Phase::Initialization:
         return Phase::RegisterWithObserver;
       case Phase::RegisterWithObserver:
+        return Phase::Observe;
+      case Phase::Observe:
         return Phase::Solve;
       case Phase::Solve:
         return Phase::Exit;
