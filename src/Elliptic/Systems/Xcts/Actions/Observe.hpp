@@ -69,6 +69,9 @@ struct Observe {
     // Retrieve the current numeric solution
     const auto& conformal_factor =
         get<Xcts::Tags::ConformalFactor<DataVector>>(box);
+    const auto& lapse =
+        get(get<Xcts::Tags::LapseTimesConformalFactor<DataVector>>(box)) /
+        get(get<Xcts::Tags::ConformalFactor<DataVector>>(box));
     // const auto& conformal_factor_correction =
     //     get<NonlinearSolver::Tags::Correction<
     //         Xcts::Tags::ConformalFactor<DataVector>>>(box);
@@ -91,25 +94,17 @@ struct Observe {
     // Collect volume data
     // Remove tensor types, only storing individual components
     std::vector<TensorComponent> components;
-    components.reserve(3 + Dim + 1);
+    components.reserve(Dim + 4);
     components.emplace_back(
         element_name + Xcts::Tags::ConformalFactor<DataVector>::name(),
         get(conformal_factor));
-    components.emplace_back(
-        element_name + Xcts::Tags::ConformalFactor<DataVector>::name() +
-            "Analytic",
-        get(conformal_factor_analytic));
-    components.emplace_back(
-        element_name + Xcts::Tags::ConformalFactor<DataVector>::name() +
-            "Error",
-        conformal_factor_error);
+    components.emplace_back(element_name + "Lapse", lapse);
     components.emplace_back(
         element_name + gr::Tags::EnergyDensity<DataVector>::name(),
         get(get<gr::Tags::EnergyDensity<DataVector>>(box)));
-    // components.emplace_back(
-    //     element_name + Xcts::Tags::ConformalFactor<DataVector>::name() +
-    //         "Correction",
-    //     get(conformal_factor_correction));
+    components.emplace_back(
+        element_name + gr::Tags::StressTrace<DataVector>::name(),
+        get(get<gr::Tags::StressTrace<DataVector>>(box)));
     components.emplace_back(element_name + "InertialCoordinates_x",
                             get<0>(inertial_coordinates));
     if (Dim >= 2) {
