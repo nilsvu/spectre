@@ -79,5 +79,7 @@ template <size_t Dim, typename Frame = Frame::Inertial,
 struct SpatialRicci;
 template <typename DataType = DataVector>
 struct EnergyDensity;
+template <typename DataType = DataVector>
+struct StressTrace;
 }  // namespace Tags
 }  // namespace gr
