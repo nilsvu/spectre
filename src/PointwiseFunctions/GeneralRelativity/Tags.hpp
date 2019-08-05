@@ -164,6 +164,12 @@ struct EnergyDensity : db::SimpleTag {
   using type = Scalar<DataType>;
   static std::string name() noexcept { return "EnergyDensity"; }
 };
+
+template <typename DataType>
+struct StressTrace : db::SimpleTag {
+  using type = Scalar<DataType>;
+  static std::string name() noexcept { return "StressTrace"; }
+};
 }  // namespace Tags
 
 /// The tags for the variables returned by GR analytic solutions.

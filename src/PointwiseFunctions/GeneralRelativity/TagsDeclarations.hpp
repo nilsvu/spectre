@@ -77,5 +77,7 @@ struct TraceExtrinsicCurvature;
 
 template <typename DataType = DataVector>
 struct EnergyDensity;
+template <typename DataType = DataVector>
+struct StressTrace;
 }  // namespace Tags
 }  // namespace gr
