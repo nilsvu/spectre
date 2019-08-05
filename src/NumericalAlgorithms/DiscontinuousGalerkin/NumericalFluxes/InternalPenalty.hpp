@@ -114,7 +114,7 @@ struct FirstOrderInternalPenalty<Dim, tmpl::list<FieldTags...>,
   using argument_tags =
       tmpl::list<Tags::NormalDotFlux<AuxiliaryFieldTags>...,
                  Tags::div<Tags::Flux<AuxiliaryFieldTags, tmpl::size_t<Dim>,
-                                      Frame::Inertial>...>,
+                                      Frame::Inertial>>...,
                  Tags::Normalized<Tags::UnnormalizedFaceNormal<Dim>>>;
 
   // This is the data needed to compute the numerical flux.
