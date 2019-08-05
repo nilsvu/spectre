@@ -62,14 +62,16 @@ struct InitializeNonlinearSystem {
                           operator_applied_to_nonlinear_fields_tag,
                           correction_tag, linear_operand_tag,
                           operator_applied_to_linear_operand_tag>;
-    using compute_tags = db::AddComputeTags<
-        // First-order fluxes and sources
-        typename system::compute_fluxes, typename system::compute_sources,
-        typename system::linearized_system::compute_fluxes,
-        typename system::linearized_system::compute_sources,
-        // Divergence of the system fluxes for the elliptic operator
-        ::Tags::DivCompute<linear_fluxes_tag, inv_jacobian_tag>,
-        ::Tags::DivCompute<nonlinear_fluxes_tag, inv_jacobian_tag>>;
+    using compute_tags = tmpl::append<
+        typename Metavariables::analytic_solution_tag::type::compute_tags,
+        db::AddComputeTags<
+            // First-order fluxes and sources
+            typename system::compute_fluxes, typename system::compute_sources,
+            typename system::linearized_system::compute_fluxes,
+            typename system::linearized_system::compute_sources,
+            // Divergence of the system fluxes for the elliptic operator
+            ::Tags::DivCompute<linear_fluxes_tag, inv_jacobian_tag>,
+            ::Tags::DivCompute<nonlinear_fluxes_tag, inv_jacobian_tag>>>;
 
     const auto& mesh = db::get<::Tags::Mesh<Dim>>(box);
     const size_t num_grid_points = mesh.number_of_grid_points();
