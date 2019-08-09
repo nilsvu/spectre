@@ -15,10 +15,13 @@
 #include "Elliptic/DiscontinuousGalerkin/InitializeFluxes.hpp"
 #include "Elliptic/DiscontinuousGalerkin/NumericalFluxes/FirstOrderInternalPenalty.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
+#include "Elliptic/NumericInitialGuess.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Elliptic/Triggers/EveryNIterations.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
+#include "IO/DataImporter/DataFileReader.hpp"
+#include "IO/DataImporter/ElementActions.hpp"
 #include "IO/Observer/Actions.hpp"
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
@@ -71,6 +74,13 @@ struct Metavariables {
   using analytic_solution_tag =
       Tags::AnalyticSolution<Poisson::Solutions::ProductOfSinusoids<Dim>>;
 
+  // The initial guess for the elliptic solve. Set to the `analytic_solution`
+  // if it provides an initial guess, or to `elliptic::NumericInitialGuess`
+  // to load data from disk. With #1812 the initial guess will be chosen when
+  // setting up the executable instead.
+  using initial_guess = tmpl::type_from<analytic_solution_tag>;
+  // using initial_guess = elliptic::NumericInitialGuess<system>;
+
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
   using linear_solver =
@@ -112,7 +122,13 @@ struct Metavariables {
           typename Event<events>::creatable_classes, linear_solver>>>;
 
   // Specify all global synchronization points.
-  enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
+  enum class Phase {
+    Initialization,
+    RegisterWithObserver,
+    ImportData,
+    Solve,
+    Exit
+  };
 
   using initialization_actions = tmpl::list<
       dg::Actions::InitializeDomain<Dim>, elliptic::Actions::InitializeSystem,
@@ -134,8 +150,8 @@ struct Metavariables {
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
   // Specify all parallel components that will execute actions at some point.
-  using component_list = tmpl::append<
-      tmpl::list<elliptic::DgElementArray<
+  using component_list = tmpl::flatten<tmpl::list<
+      elliptic::DgElementArray<
           Metavariables,
           tmpl::list<
               Parallel::PhaseActions<Phase, Phase::Initialization,
@@ -143,11 +159,16 @@ struct Metavariables {
 
               Parallel::PhaseActions<
                   Phase, Phase::RegisterWithObserver,
-                  tmpl::list<observers::Actions::RegisterWithObservers<
-                                 observers::RegisterObservers<
-                                     LinearSolver::Tags::IterationId,
-                                     element_observation_type>>,
-                             Parallel::Actions::TerminatePhase>>,
+                  tmpl::list<
+                      observers::Actions::RegisterWithObservers<
+                          observers::RegisterObservers<
+                              LinearSolver::Tags::IterationId,
+                              element_observation_type>>,
+                      tmpl::conditional_t<
+                          elliptic::is_numeric_initial_guess_v<initial_guess>,
+                          importer::Actions::RegisterWithImporter,
+                          tmpl::list<>>,
+                      Parallel::Actions::TerminatePhase>>,
 
               Parallel::PhaseActions<
                   Phase, Phase::Solve,
@@ -163,10 +184,13 @@ struct Metavariables {
                              dg::Actions::ReceiveDataForFluxes<Metavariables>,
                              dg::Actions::ApplyFluxes,
                              typename linear_solver::perform_step,
-                             typename linear_solver::prepare_step>>>>>,
+                             typename linear_solver::prepare_step>>>>,
       typename linear_solver::component_list,
-      tmpl::list<observers::Observer<Metavariables>,
-                 observers::ObserverWriter<Metavariables>>>;
+      observers::Observer<Metavariables>,
+      observers::ObserverWriter<Metavariables>,
+      tmpl::conditional_t<elliptic::is_numeric_initial_guess_v<initial_guess>,
+                          importer::DataFileReader<Metavariables>,
+                          tmpl::list<>>>>;
 
   // Specify the transitions between phases.
   static Phase determine_next_phase(
@@ -177,6 +201,10 @@ struct Metavariables {
       case Phase::Initialization:
         return Phase::RegisterWithObserver;
       case Phase::RegisterWithObserver:
+        return elliptic::is_numeric_initial_guess_v<initial_guess>
+                   ? Phase::ImportData
+                   : Phase::Solve;
+      case Phase::ImportData:
         return Phase::Solve;
       case Phase::Solve:
         return Phase::Exit;

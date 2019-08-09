@@ -6,6 +6,8 @@
 #include <string>
 
 #include "DataStructures/DataBox/DataBoxTag.hpp"
+#include "IO/DataImporter/Tags.hpp"
+#include "Options/Options.hpp"
 #include "Utilities/PrettyType.hpp"
 
 namespace elliptic {
@@ -37,4 +39,17 @@ struct FluxesComputer : db::SimpleTag {
 };
 
 }  // namespace Tags
+
+namespace OptionTags {
+
+/*!
+ * \brief Holds option tags for importing numeric data as initial guess for an
+ * elliptic solve.
+ */
+struct NumericInitialGuess {
+  using group = importer::OptionTags::Group;
+  static constexpr OptionString help = "Initial guess";
+};
+
+}  // namespace OptionTags
 }  // namespace elliptic
