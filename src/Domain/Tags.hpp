@@ -143,6 +143,47 @@ struct InverseJacobian : db::ComputeTag, db::PrefixTag {
   using argument_tags = tmpl::list<MapTag, SourceCoordsTag>;
 };
 
+template <size_t Dim, typename SourceFrame, typename TargetFrame>
+struct Jacobian : db::SimpleTag {
+  using type = ::Jacobian<DataVector, Dim, SourceFrame, TargetFrame>;
+  static std::string name() noexcept { return "Jacobian()"; }
+};
+
+template <typename MapTag, typename SourceCoordsTag>
+struct JacobianCompute : Jacobian<db::item_type<MapTag>::dim,
+                                  typename db::item_type<MapTag>::source_frame,
+                                  typename db::item_type<MapTag>::target_frame>,
+                         db::ComputeTag {
+  using base = Jacobian<db::item_type<MapTag>::dim,
+                        typename db::item_type<MapTag>::source_frame,
+                        typename db::item_type<MapTag>::target_frame>;
+  using argument_tags = tmpl::list<MapTag, SourceCoordsTag>;
+  using volume_tags = tmpl::list<MapTag>;
+  static constexpr auto function(
+      const db::item_type<MapTag>& map,
+      const db::item_type<SourceCoordsTag>& source_coords) noexcept {
+    return map.jacobian(source_coords);
+  }
+};
+
+template <typename MapTag, typename SourceCoordsTag>
+struct JacobianInverseCompute
+    : Jacobian<db::item_type<MapTag>::dim,
+               typename db::item_type<MapTag>::target_frame,
+               typename db::item_type<MapTag>::source_frame>,
+      db::ComputeTag {
+  using base = Jacobian<db::item_type<MapTag>::dim,
+                        typename db::item_type<MapTag>::target_frame,
+                        typename db::item_type<MapTag>::source_frame>;
+  using argument_tags = tmpl::list<MapTag, SourceCoordsTag>;
+  using volume_tags = tmpl::list<MapTag>;
+  static constexpr auto function(
+      const db::item_type<MapTag>& map,
+      const db::item_type<SourceCoordsTag>& source_coords) noexcept {
+    return map.inv_jacobian(source_coords);
+  }
+};
+
 /// \ingroup DataBoxTagsGroup
 /// \ingroup DomainGroup
 /// Base tag for boundary data needed for updating the variables.
@@ -191,7 +232,6 @@ struct BoundaryDirectionsExterior : db::ComputeTag {
     return element.external_boundaries();
   }
 };
-
 
 /// \ingroup DataBoxTagsGroup
 /// \ingroup ComputationalDomainGroup
@@ -295,7 +335,8 @@ struct evaluate_compute_item<DirectionsTag, BaseComputeItem,
   using volume_tags = typename volume_tags<BaseComputeItem>::type;
   static_assert(
       tmpl::size<tmpl::list_difference<
-          volume_tags, typename BaseComputeItem::argument_tags>>::value == 0,
+              volume_tags, typename BaseComputeItem::argument_tags>>::value ==
+          0,
       "volume_tags contains tags not in argument_tags");
 
  private:
@@ -370,7 +411,7 @@ struct GetBaseTagIfPresent<DirectionsTag, Tag,
 /// \ingroup DataBoxTagsGroup
 /// \ingroup ComputationalDomainGroup
 /// ::Direction to an interface
-template<size_t VolumeDim>
+template <size_t VolumeDim>
 struct Direction : db::SimpleTag {
   static std::string name() noexcept { return "Direction"; }
   using type = ::Direction<VolumeDim>;
@@ -381,11 +422,11 @@ struct Direction : db::SimpleTag {
 /// Computes the `VolumeDim-1` dimensional mesh on an interface from the volume
 /// mesh. `Tags::InterfaceComputeItem<Dirs, InterfaceMesh<VolumeDim>>` is
 /// retrievable as Tags::Interface<Dirs, Mesh<VolumeDim>>` from the DataBox.
-template<size_t VolumeDim>
+template <size_t VolumeDim>
 struct InterfaceMesh : db::ComputeTag, Tags::Mesh<VolumeDim - 1> {
   static constexpr auto function(
-      const ::Direction<VolumeDim> &direction,
-      const ::Mesh<VolumeDim> &volume_mesh) noexcept {
+      const ::Direction<VolumeDim>& direction,
+      const ::Mesh<VolumeDim>& volume_mesh) noexcept {
     return volume_mesh.slice_away(direction.dimension());
   }
   using base = Tags::Mesh<VolumeDim - 1>;
@@ -402,9 +443,9 @@ template <size_t VolumeDim, typename Frame = ::Frame::Inertial>
 struct BoundaryCoordinates : db::ComputeTag,
                              Tags::Coordinates<VolumeDim, Frame> {
   static constexpr auto function(
-      const ::Direction<VolumeDim> &direction,
-      const ::Mesh<VolumeDim - 1> &interface_mesh,
-      const ::ElementMap<VolumeDim, Frame> &map) noexcept {
+      const ::Direction<VolumeDim>& direction,
+      const ::Mesh<VolumeDim - 1>& interface_mesh,
+      const ::ElementMap<VolumeDim, Frame>& map) noexcept {
     return map(interface_logical_coordinates(interface_mesh, direction));
   }
   static std::string name() noexcept { return "BoundaryCoordinates"; }
@@ -447,10 +488,9 @@ struct Interface : virtual db::SimpleTag,
 /// \tparam DirectionsTag the item of Directions
 /// \tparam Tag the tag labeling the item
 template <typename DirectionsTag, typename Tag>
-struct InterfaceComputeItem
-    : Interface<DirectionsTag, Tag>,
-      db::ComputeTag,
-      virtual db::PrefixTag {
+struct InterfaceComputeItem : Interface<DirectionsTag, Tag>,
+                              db::ComputeTag,
+                              virtual db::PrefixTag {
   static_assert(db::is_compute_item_v<Tag>,
                 "Cannot use a non compute item as an interface compute item.");
   // Defining name here prevents an ambiguous function call when using base
@@ -575,8 +615,8 @@ struct InterfaceSubitemsImpl {
           get<typename Subtag::tag>(direction_vars.second);
       auto& sub_var = (*sub_value)[direction];
       auto sub_var_it = sub_var.begin();
-      for (auto vars_it = parent_vars.begin();
-           vars_it != parent_vars.end(); ++vars_it, ++sub_var_it) {
+      for (auto vars_it = parent_vars.begin(); vars_it != parent_vars.end();
+           ++vars_it, ++sub_var_it) {
         // clang-tidy: do not use const_cast
         // The DataBox will only give out a const reference to the
         // result of a compute item.  Here, that is a reference to a
@@ -596,8 +636,7 @@ template <typename TagList, typename DirectionsTag, typename VariablesTag>
 struct Subitems<
     TagList, Tags::Interface<DirectionsTag, VariablesTag>,
     Requires<tt::is_a_v<Variables, item_type<VariablesTag, TagList>>>>
-    : detail::InterfaceSubitemsImpl<TagList, DirectionsTag, VariablesTag> {
-};
+    : detail::InterfaceSubitemsImpl<TagList, DirectionsTag, VariablesTag> {};
 template <typename TagList, typename DirectionsTag, typename VariablesTag>
 struct Subitems<
     TagList, Tags::InterfaceComputeItem<DirectionsTag, VariablesTag>,
@@ -608,5 +647,5 @@ template <typename TagList, typename DirectionsTag, typename VariablesTag>
 struct Subitems<
     TagList, Tags::Slice<DirectionsTag, VariablesTag>,
     Requires<tt::is_a_v<Variables, item_type<VariablesTag, TagList>>>>
-: detail::InterfaceSubitemsImpl<TagList, DirectionsTag, VariablesTag> {};
+    : detail::InterfaceSubitemsImpl<TagList, DirectionsTag, VariablesTag> {};
 }  // namespace db
