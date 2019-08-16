@@ -7,6 +7,8 @@
 
 #include "DataStructures/Variables.hpp"
 #include "Domain/OrientationMapHelpers.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
+#include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace dg {
@@ -23,7 +25,7 @@ struct MortarData {
   Variables<MortarTags> mortar_data;
 
   /// Data on the element face that needs no projection to the mortar mesh
-  Variables<FaceTags> face_data;
+  tuples::tagged_tuple_from_typelist<FaceTags> face_data;
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) noexcept {
