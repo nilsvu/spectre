@@ -201,6 +201,11 @@ const Matrix& differentiation_matrix(size_t num_points) noexcept;
  */
 const Matrix& differentiation_matrix(const Mesh<1>& mesh) noexcept;
 
+template <Basis BasisType, Quadrature QuadratureType>
+const Matrix& mass_matrix(size_t num_points) noexcept;
+
+const Matrix& mass_matrix(const Mesh<1>& mesh) noexcept;
+
 /*!
  * \brief %Matrix used to perform an indefinite integral of a function over the
  * logical grid. The left boundary condition is such that the integral is 0 at

@@ -153,6 +153,23 @@ struct DifferentiationMatrixGenerator {
 };
 
 template <Basis BasisType, Quadrature QuadratureType>
+struct MassMatrixGenerator {
+  Matrix operator()(const size_t num_points) const noexcept {
+    auto normalized_vandermonde_matrix =
+        Spectral::modal_to_nodal_matrix<BasisType, QuadratureType>(num_points);
+    for (size_t j = 0; j < num_points; j++) {
+      const double normalization =
+          sqrt(compute_basis_function_normalization_square<BasisType>(j));
+      for (size_t i = 0; i < num_points; i++) {
+        normalized_vandermonde_matrix(i, j) /= normalization;
+      }
+    }
+    return inv(normalized_vandermonde_matrix *
+               trans(normalized_vandermonde_matrix));
+  }
+};
+
+template <Basis BasisType, Quadrature QuadratureType>
 struct IntegrationMatrixGenerator {
   Matrix operator()(const size_t num_points) const noexcept {
     return Spectral::modal_to_nodal_matrix<BasisType, QuadratureType>(
@@ -274,6 +291,7 @@ const DataVector& quadrature_weights(const size_t num_points) noexcept {
 
 PRECOMPUTED_SPECTRAL_QUANTITY(differentiation_matrix, Matrix,
                               DifferentiationMatrixGenerator)
+PRECOMPUTED_SPECTRAL_QUANTITY(mass_matrix, Matrix, MassMatrixGenerator)
 PRECOMPUTED_SPECTRAL_QUANTITY(integration_matrix, Matrix,
                               IntegrationMatrixGenerator)
 PRECOMPUTED_SPECTRAL_QUANTITY(modal_to_nodal_matrix, Matrix,
@@ -397,6 +415,7 @@ decltype(auto) get_spectral_quantity_for_mesh(F&& f,
 SPECTRAL_QUANTITY_FOR_MESH(collocation_points, DataVector)
 SPECTRAL_QUANTITY_FOR_MESH(quadrature_weights, DataVector)
 SPECTRAL_QUANTITY_FOR_MESH(differentiation_matrix, Matrix)
+SPECTRAL_QUANTITY_FOR_MESH(mass_matrix, Matrix)
 SPECTRAL_QUANTITY_FOR_MESH(integration_matrix, Matrix)
 SPECTRAL_QUANTITY_FOR_MESH(modal_to_nodal_matrix, Matrix)
 SPECTRAL_QUANTITY_FOR_MESH(nodal_to_modal_matrix, Matrix)
@@ -431,6 +450,8 @@ Matrix interpolation_matrix(const Mesh<1>& mesh,
   template const Matrix&                                                      \
       Spectral::differentiation_matrix<BASIS(data), QUAD(data)>(              \
           size_t) noexcept;                                                   \
+  template const Matrix& Spectral::mass_matrix<BASIS(data), QUAD(data)>(      \
+      size_t) noexcept;                                                       \
   template const Matrix&                                                      \
       Spectral::integration_matrix<BASIS(data), QUAD(data)>(size_t) noexcept; \
   template const Matrix&                                                      \
