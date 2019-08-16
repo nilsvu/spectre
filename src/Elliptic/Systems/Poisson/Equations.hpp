@@ -49,6 +49,29 @@ class er;
 
 namespace Poisson {
 
+template <size_t Dim>
+void second_order_flux(
+    const gsl::not_null<tnsr::IJ<DataVector, Dim, Frame::Inertial>*> flux,
+    const Scalar<DataVector>& field) noexcept;
+
+template <size_t Dim, typename VarsTag, typename FieldTag>
+struct ComputeSecondOrderFluxes
+    : db::add_tag_prefix<::Tags::SecondOrderFlux, VarsTag, tmpl::size_t<Dim>,
+                         Frame::Inertial>,
+      db::ComputeTag {
+  using base = db::add_tag_prefix<::Tags::SecondOrderFlux, VarsTag,
+                                  tmpl::size_t<Dim>, Frame::Inertial>;
+  using argument_tags = tmpl::list<VarsTag>;
+  static constexpr auto function(const db::item_type<VarsTag>& vars) noexcept {
+    auto fluxes = make_with_value<db::item_type<base>>(vars, 0.);
+    second_order_flux(
+        make_not_null(&get<::Tags::SecondOrderFlux<FieldTag, tmpl::size_t<Dim>,
+                                                   Frame::Inertial>>(fluxes)),
+        get<FieldTag>(vars));
+    return fluxes;
+  }
+};
+
 // @{
 /*!
  * \brief Compute the fluxes \f$F^i_A\f$ for the first-order formulation of the
@@ -94,6 +117,16 @@ struct ComputeFirstOrderFluxes
   }
 };
 // @}
+
+template <size_t Dim, typename VarsTag, typename FieldTag>
+struct ComputeSecondOrderSources : db::add_tag_prefix<::Tags::Source, VarsTag>,
+                                   db::ComputeTag {
+  using argument_tags = tmpl::list<VarsTag>;
+  static constexpr auto function(const db::item_type<VarsTag>& vars) noexcept {
+    return make_with_value<
+        db::item_type<db::add_tag_prefix<::Tags::Source, VarsTag>>>(vars, 0.);
+  }
+};
 
 // @{
 /*!

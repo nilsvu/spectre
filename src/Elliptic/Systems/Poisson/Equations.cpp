@@ -20,6 +20,17 @@
 namespace Poisson {
 
 template <size_t Dim>
+void second_order_flux(
+    const gsl::not_null<tnsr::IJ<DataVector, Dim, Frame::Inertial>*> flux,
+    const Scalar<DataVector>& field) noexcept {
+  *flux =
+      make_with_value<tnsr::IJ<DataVector, Dim, Frame::Inertial>>(field, 0.);
+  for (size_t d = 0; d < Dim; d++) {
+    flux->get(d, d) = get(field);
+  }
+}
+
+template <size_t Dim>
 void first_order_fluxes(
     const gsl::not_null<tnsr::I<DataVector, Dim, Frame::Inertial>*>
         flux_for_field,
@@ -28,11 +39,7 @@ void first_order_fluxes(
     const Scalar<DataVector>& field,
     const tnsr::I<DataVector, Dim, Frame::Inertial>& auxiliary_field) noexcept {
   *flux_for_field = auxiliary_field;
-  *flux_for_auxiliary_field =
-      make_with_value<tnsr::IJ<DataVector, Dim, Frame::Inertial>>(field, 0.);
-  for (size_t d = 0; d < Dim; d++) {
-    flux_for_auxiliary_field->get(d, d) = get(field);
-  }
+  second_order_flux(flux_for_auxiliary_field, field);
 }
 
 template <size_t Dim>
