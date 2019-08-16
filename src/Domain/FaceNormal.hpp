@@ -123,4 +123,77 @@ struct InterfaceComputeItem<Tags::BoundaryDirectionsExterior<VolumeDim>,
   using argument_tags = tmpl::list<Tags::Interface<dirs, Mesh<VolumeDim - 1>>,
                                    Tags::ElementMap<VolumeDim, Frame>>;
 };
+
+/// The face normal dotted into the Tensor or Variables in `Tag`
+template <typename Tag, typename = std::nullptr_t>
+struct NormalDot;
+
+/// \cond
+template <typename Tag>
+struct NormalDot<Tag, Requires<tt::is_a_v<Tensor, db::item_type<Tag>>>>
+    : db::PrefixTag, db::SimpleTag {
+  using type = TensorMetafunctions::remove_first_index<db::item_type<Tag>>;
+  using tag = Tag;
+  static std::string name() noexcept {
+    return "NormalDot(" + db::tag_name<Tag>() + ")";
+  }
+};
+
+template <typename Tag>
+struct NormalDot<Tag, Requires<tt::is_a_v<::Variables, db::item_type<Tag>>>>
+    : db::PrefixTag, db::SimpleTag {
+  using type = db::item_type<Tag>;
+  using tag = Tag;
+  static std::string name() noexcept {
+    return "NormalDot(" + db::tag_name<Tag>() + ")";
+  }
+};
+/// \endcond
+
+}  // namespace Tags
+
+/*!
+ * \brief Compute the `normal` dotted into all tensors in the `variables`.
+ */
+template <typename VariablesTags, size_t VolumeDim, typename Frame>
+static Variables<db::wrap_tags_in<Tags::NormalDot, VariablesTags>> normal_dot(
+    const Variables<VariablesTags>& variables,
+    const tnsr::i<DataVector, VolumeDim, Frame>& normal) noexcept {
+  auto result = Variables<db::wrap_tags_in<Tags::NormalDot, VariablesTags>>(
+      variables.number_of_grid_points(), 0.);
+  // Check if this can be optimized for Variables
+  tmpl::for_each<VariablesTags>(
+      [&result, &variables, &normal ](auto local_tag) noexcept {
+        using tensor_tag = tmpl::type_from<decltype(local_tag)>;
+        auto& result_tensor = get<Tags::NormalDot<tensor_tag>>(result);
+        const auto& tensor = get<tensor_tag>(variables);
+        for (auto it = result_tensor.begin(); it != result_tensor.end(); ++it) {
+          const auto result_indices = result_tensor.get_tensor_index(it);
+          for (size_t d = 0; d < VolumeDim; ++d) {
+            *it += normal.get(d) * tensor.get(prepend(result_indices, d));
+          }
+        }
+      });
+  return result;
+}
+
+namespace Tags {
+
+/*!
+ * \brief Compute the interface unit normal dotted into all tensors in the
+ * `VariablesTag`.
+ *
+ * \see `normal_dot`
+ */
+template <typename VariablesTag, size_t VolumeDim, typename Frame>
+struct NormalDotCompute : db::add_tag_prefix<NormalDot, VariablesTag>,
+                          db::ComputeTag {
+  using base = db::add_tag_prefix<NormalDot, VariablesTag>;
+  using argument_tags = tmpl::list<
+      VariablesTag,
+      Tags::Normalized<Tags::UnnormalizedFaceNormal<VolumeDim, Frame>>>;
+  static constexpr auto function =
+      normal_dot<db::get_variables_tags_list<VariablesTag>, VolumeDim, Frame>;
+};
+
 }  // namespace Tags
