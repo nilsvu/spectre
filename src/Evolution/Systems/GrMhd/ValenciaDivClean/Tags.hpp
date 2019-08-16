@@ -93,26 +93,3 @@ struct DampingParameter {
 }  // namespace OptionTags
 }  // namespace ValenciaDivClean
 }  // namespace grmhd
-
-namespace grmhd {
-namespace ValenciaDivClean {
-namespace OptionTags {
-/// \ingroup OptionGroupsGroup
-/// Groups option tags related to the ValenciaDivClean evolution system.
-struct ValenciaDivCleanGroup {
-  static std::string name() noexcept { return "ValenciaDivClean"; }
-  static constexpr OptionString help{"Options for the evolution system"};
-  using group = ::OptionTags::EvolutionSystemGroup;
-};
-
-/// \brief The constraint damping parameter
-struct DampingParameter : Tags::ConstraintDampingParameter {
-  static std::string name() noexcept { return "DampingParameter"; }
-  using type = double;
-  static constexpr OptionString help{
-      "Constraint damping parameter for divergence cleaning"};
-  using group = ValenciaDivCleanGroup;
-};
-}  // namespace OptionTags
-}  // namespace ValenciaDivClean
-}  // namespace grmhd

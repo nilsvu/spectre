@@ -19,6 +19,8 @@
 #include "Utilities/GetOutput.hpp"
 #include "Utilities/Math.hpp"
 
+#include "Parallel/Printf.hpp"
+
 SPECTRE_TEST_CASE("Unit.Numerical.Spectral.streaming",
                   "[NumericalAlgorithms][Spectral][Unit]") {
   CHECK(get_output(Spectral::Basis::Legendre) == "Legendre");
@@ -101,6 +103,18 @@ SPECTRE_TEST_CASE("Unit.Numerical.Spectral.ExactDifferentiation",
     test_exact_differentiation<Spectral::Basis::Chebyshev,
                                Spectral::Quadrature::GaussLobatto>(minus_one);
   }
+}
+
+SPECTRE_TEST_CASE("Unit.Numerical.Spectral.MassMatrix",
+                  "[NumericalAlgorithms][Spectral][Unit]") {
+  Parallel::printf(
+      "V:\n%s\n",
+      Spectral::modal_to_nodal_matrix<Spectral::Basis::Legendre,
+                            Spectral::Quadrature::GaussLobatto>(4));
+  Parallel::printf(
+      "Mass:\n%s\n",
+      Spectral::mass_matrix<Spectral::Basis::Legendre,
+                            Spectral::Quadrature::GaussLobatto>(4));
 }
 
 namespace {

@@ -3,13 +3,13 @@
 
 set(LIBRARY "Test_ElasticitySolutions")
 
-set(LIBRARY_SOURCES
-  Test_BentBeam.cpp
-  )
+# set(LIBRARY_SOURCES
+#   Test_BentBeam.cpp
+#   )
 
-add_test_library(
-  ${LIBRARY}
-  "PointwiseFunctions/AnalyticSolutions/Elasticity/"
-  "${LIBRARY_SOURCES}"
-  "ElasticitySolutions;Utilities"
-  )
+# add_test_library(
+#   ${LIBRARY}
+#   "PointwiseFunctions/AnalyticSolutions/Elasticity/"
+#   "${LIBRARY_SOURCES}"
+#   "ElasticitySolutions;Utilities"
+#   )

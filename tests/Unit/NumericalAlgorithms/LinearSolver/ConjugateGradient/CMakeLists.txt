@@ -4,21 +4,21 @@
 set(LIBRARY "Test_ConjugateGradient")
 
 set(LIBRARY_SOURCES
-  Test_ElementActions.cpp
-  Test_ResidualMonitorActions.cpp
+  # Test_ElementActions.cpp
+  # Test_ResidualMonitorActions.cpp
   )
 
-add_test_library(
-  ${LIBRARY}
-  "NumericalAlgorithms/LinearSolver/ConjugateGradient"
-  "${LIBRARY_SOURCES}"
-  "Convergence;DataStructures;IO"
-  )
+# add_test_library(
+#   ${LIBRARY}
+#   "NumericalAlgorithms/LinearSolver/ConjugateGradient"
+#   "${LIBRARY_SOURCES}"
+#   "Convergence;DataStructures;IO"
+#   )
 
-add_dependencies(
-  ${LIBRARY}
-  module_ConstGlobalCache
-  )
+# add_dependencies(
+#   ${LIBRARY}
+#   module_ConstGlobalCache
+#   )
 
 # This code is adapted from Parallel/CMakeLists.txt
 
@@ -63,5 +63,5 @@ function(add_algorithm_test TEST_NAME)
     ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endfunction()
 
-add_algorithm_test("ConjugateGradientAlgorithm")
-add_algorithm_test("DistributedConjugateGradientAlgorithm")
+# add_algorithm_test("ConjugateGradientAlgorithm")
+# add_algorithm_test("DistributedConjugateGradientAlgorithm")

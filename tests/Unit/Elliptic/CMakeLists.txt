@@ -8,12 +8,12 @@ add_subdirectory(Systems)
 set(LIBRARY "Test_Elliptic")
 
 set(LIBRARY_SOURCES
-  Test_IterationId.cpp
+  # Test_IterationId.cpp
   )
 
-add_test_library(
-  ${LIBRARY}
-  "Elliptic/"
-  "${LIBRARY_SOURCES}"
-  "DataStructures;LinearSolver;ErrorHandling"
-  )
+# add_test_library(
+#   ${LIBRARY}
+#   "Elliptic/"
+#   "${LIBRARY_SOURCES}"
+#   "DataStructures;LinearSolver;ErrorHandling"
+#   )

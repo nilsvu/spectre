@@ -6,7 +6,7 @@ add_subdirectory(Actions)
 set(LIBRARY "Test_Poisson")
 
 set(LIBRARY_SOURCES
-  Test_Equations.cpp
+  # Test_Equations.cpp
   Test_Tags.cpp
   )
 

@@ -76,6 +76,10 @@ struct InitializeSystem {
         db::add_tag_prefix<::LinearSolver::Tags::OperatorAppliedTo, vars_tag>;
     using fluxes_tag = db::add_tag_prefix<::Tags::Flux, vars_tag,
                                           tmpl::size_t<Dim>, Frame::Inertial>;
+    using second_order_fluxes_tag =
+        db::add_tag_prefix<::Tags::SecondOrderFlux, vars_tag, tmpl::size_t<Dim>,
+                           Frame::Inertial>;
+    using div_fluxes_tag = db::add_tag_prefix<::Tags::div, fluxes_tag>;
     using inv_jacobian_tag =
         ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
                                 ::Tags::Coordinates<Dim, Frame::Logical>>;
@@ -88,9 +92,11 @@ struct InitializeSystem {
         // First-order fluxes and sources
         typename system::compute_fluxes, typename system::compute_sources,
         // Divergence of the system fluxes for the elliptic operator
+        ::Tags::DivCompute<second_order_fluxes_tag, inv_jacobian_tag,
+                           fluxes_tag>,
         ::Tags::DivCompute<fluxes_tag, inv_jacobian_tag>>;
 
-    const auto& mesh = db::get<Tags::Mesh<Dim>>(box);
+    const auto& mesh = db::get<::Tags::Mesh<Dim>>(box);
     const size_t num_grid_points = mesh.number_of_grid_points();
     const auto& inertial_coords =
         get<::Tags::Coordinates<Dim, Frame::Inertial>>(box);

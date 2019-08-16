@@ -4,20 +4,20 @@
 set(LIBRARY "Test_EllipticActions")
 
 set(LIBRARY_SOURCES
-  Test_ComputeOperatorAction.cpp
-  Test_InitializeAnalyticSolution.cpp
-  Test_InitializeSystem.cpp
-  Test_InitializeTemporalId.cpp
+  # Test_ComputeOperatorAction.cpp
+  # Test_InitializeAnalyticSolution.cpp
+  # Test_InitializeSystem.cpp
+  # Test_InitializeTemporalId.cpp
   )
 
-add_test_library(
-  ${LIBRARY}
-  "Elliptic/Actions/"
-  "${LIBRARY_SOURCES}"
-  "DataStructures;Domain;ErrorHandling"
-  )
+# add_test_library(
+#   ${LIBRARY}
+#   "Elliptic/Actions/"
+#   "${LIBRARY_SOURCES}"
+#   "DataStructures;Domain;ErrorHandling"
+#   )
 
-add_dependencies(
-  ${LIBRARY}
-  module_ConstGlobalCache
-  )
+# add_dependencies(
+#   ${LIBRARY}
+#   module_ConstGlobalCache
+#   )

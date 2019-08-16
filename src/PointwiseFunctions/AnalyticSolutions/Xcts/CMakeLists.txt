@@ -4,17 +4,17 @@
 set(LIBRARY XctsSolutions)
 
 set(LIBRARY_SOURCES
-  ConstantDensityStar.cpp
-  TovStar.cpp
+  # ConstantDensityStar.cpp
+  # TovStar.cpp
   )
 
-add_spectre_library(${LIBRARY} ${LIBRARY_SOURCES})
+# add_spectre_library(${LIBRARY} ${LIBRARY_SOURCES})
 
-target_link_libraries(
-  ${LIBRARY}
-  INTERFACE DataStructures
-  INTERFACE ErrorHandling
-  INTERFACE GeneralRelativitySolutions
-  INTERFACE Hydro
-  INTERFACE Utilities
-  )
+# target_link_libraries(
+#   ${LIBRARY}
+#   INTERFACE DataStructures
+#   INTERFACE ErrorHandling
+#   INTERFACE GeneralRelativitySolutions
+#   INTERFACE Hydro
+#   INTERFACE Utilities
+#   )

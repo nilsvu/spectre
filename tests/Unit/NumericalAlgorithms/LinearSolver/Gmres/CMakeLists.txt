@@ -4,21 +4,21 @@
 set(LIBRARY "Test_Gmres")
 
 set(LIBRARY_SOURCES
-  Test_ElementActions.cpp
-  Test_ResidualMonitorActions.cpp
+  # Test_ElementActions.cpp
+  # Test_ResidualMonitorActions.cpp
   )
 
-add_test_library(
-  ${LIBRARY}
-  "NumericalAlgorithms/LinearSolver/Gmres"
-  "${LIBRARY_SOURCES}"
-  "Convergence;DataStructures;IO"
-  )
+# add_test_library(
+#   ${LIBRARY}
+#   "NumericalAlgorithms/LinearSolver/Gmres"
+#   "${LIBRARY_SOURCES}"
+#   "Convergence;DataStructures;IO"
+#   )
 
-add_dependencies(
-  ${LIBRARY}
-  module_ConstGlobalCache
-  )
+# add_dependencies(
+#   ${LIBRARY}
+#   module_ConstGlobalCache
+#   )
 
 # This code is adapted from Parallel/CMakeLists.txt
 
@@ -63,5 +63,5 @@ function(add_algorithm_test TEST_NAME)
     ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endfunction()
 
-add_algorithm_test("GmresAlgorithm")
-add_algorithm_test("DistributedGmresAlgorithm")
+# add_algorithm_test("GmresAlgorithm")
+# add_algorithm_test("DistributedGmresAlgorithm")

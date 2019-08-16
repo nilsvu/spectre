@@ -9,12 +9,20 @@ add_spectre_executable(
   ${EXECUTABLE}.cpp
   # The following lines list the source files with tests in them to be
   # compiled into the executable.
-  ../DataStructures/Test_DataVector.cpp
+  ../Elliptic/DiscontinuousGalerkin/Test_StrongSecondOrderInternalPenalty.cpp
   )
 
 target_link_libraries(
   ${EXECUTABLE}
   DataStructures
+  LinearOperators
+  Domain
+  DomainCreators
+  Spectral
+  Utilities
+  Informer
+  ErrorHandling
+  ${SPECTRE_LIBRARIES}
   )
 
 set_target_properties(

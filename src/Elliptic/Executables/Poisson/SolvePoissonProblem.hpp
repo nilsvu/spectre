@@ -56,7 +56,7 @@ struct Metavariables {
       "Numerical flux: FirstOrderInternalPenalty"};
 
   // The system provides all equations specific to the problem.
-  using system = Poisson::FirstOrderSystem<Dim>;
+  using system = Poisson::SecondOrderSystem<Dim>;
   using fields_tag = typename system::fields_tag;
 
   // Specify the analytic solution and corresponding source to define the
@@ -72,21 +72,26 @@ struct Metavariables {
   // Specify the DG boundary scheme. We use the strong first-order scheme here
   // that only requires us to compute normals dotted into the first-order
   // fluxes.
-  using numerical_flux = dg::NumericalFluxes::FirstOrderInternalPenalty<
-      Dim, tmpl::list<LinearSolver::Tags::Operand<Poisson::Field>>,
-      tmpl::list<LinearSolver::Tags::Operand<Poisson::AuxiliaryField<Dim>>>>;
-  using boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
-      Dim, linear_operand_tag,
-      Tags::NormalDotNumericalFluxComputer<numerical_flux>,
-      LinearSolver::Tags::IterationId>;
+//   using numerical_flux = dg::NumericalFluxes::FirstOrderInternalPenalty<
+//       Dim, tmpl::list<LinearSolver::Tags::Operand<Poisson::Field>>,
+//       tmpl::list<LinearSolver::Tags::Operand<Poisson::AuxiliaryField<Dim>>>>;
+//   using boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
+//       Dim, linear_operand_tag,
+//       Tags::NormalDotNumericalFluxComputer<numerical_flux>,
+//       LinearSolver::Tags::IterationId>;
+  using boundary_scheme =
+      elliptic::dg::BoundarySchemes::StrongSecondOrderInternalPenalty<
+          Dim, linear_operand_tag, LinearSolver::Tags::IterationId>;
 
   // Set up the domain creator from the input file.
   using domain_creator_tag = OptionTags::DomainCreator<Dim, Frame::Inertial>;
 
   // Collect all items to store in the cache.
+//   using const_global_cache_tag_list =
+//       tmpl::list<analytic_solution_tag,
+//                  OptionTags::NumericalFlux<numerical_flux>>;
   using const_global_cache_tag_list =
-      tmpl::list<analytic_solution_tag,
-                 OptionTags::NumericalFlux<numerical_flux>>;
+      tmpl::list<analytic_solution_tag, boundary_scheme>;
 
   // Collect all reduction tags for observers
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
@@ -106,9 +111,9 @@ struct Metavariables {
       elliptic::dg::Actions::InitializeFluxes<boundary_scheme, system>,
       elliptic::Actions::InitializeIterationIds<
           LinearSolver::Tags::IterationId>,
-      dg::Actions::InitializeMortars<boundary_scheme, true>,
-      elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
-          typename system::fields_tag, boundary_scheme>,
+      dg::Actions::InitializeMortars<boundary_scheme, false>,
+    //   elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
+    //       typename system::fields_tag, boundary_scheme>,
       typename linear_solver::initialize_element,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
@@ -134,8 +139,8 @@ struct Metavariables {
                          elliptic::Actions::ComputeOperatorAction<
                              Dim, LinearSolver::Tags::OperatorAppliedTo,
                              linear_operand_tag>,
-                         Actions::MutateApply<
-                             ::dg::PopulateBoundaryMortars<boundary_scheme>>,
+                        //  Actions::MutateApply<
+                        //      ::dg::PopulateBoundaryMortars<boundary_scheme>>,
                          dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
                          Actions::MutateApply<boundary_scheme>,
                          typename linear_solver::perform_step>>>>;

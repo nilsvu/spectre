@@ -3,13 +3,13 @@
 
 set(LIBRARY "Test_XctsSolutions")
 
-set(LIBRARY_SOURCES
-  Test_ConstantDensityStar.cpp
-  )
+# set(LIBRARY_SOURCES
+#   # Test_ConstantDensityStar.cpp
+#   )
 
-add_test_library(
-  ${LIBRARY}
-  "PointwiseFunctions/AnalyticSolutions/Xcts/"
-  "${LIBRARY_SOURCES}"
-  "XctsSolutions;Utilities"
-  )
+# add_test_library(
+#   ${LIBRARY}
+#   "PointwiseFunctions/AnalyticSolutions/Xcts/"
+#   "${LIBRARY_SOURCES}"
+#   "XctsSolutions;Utilities"
+#   )

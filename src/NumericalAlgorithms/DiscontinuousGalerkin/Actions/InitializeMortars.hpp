@@ -104,10 +104,12 @@ struct InitializeMortars {
             typename BoundaryScheme::compute_packaged_remote_data>,
         ::Tags::InterfaceComputeItem<
             ::Tags::BoundaryDirectionsInterior<dim>,
-            typename BoundaryScheme::compute_packaged_local_data>,
-        ::Tags::InterfaceComputeItem<
-            ::Tags::BoundaryDirectionsExterior<dim>,
-            typename BoundaryScheme::compute_packaged_remote_data>>;
+            typename BoundaryScheme::compute_packaged_local_data>
+        //     ,
+        // ::Tags::InterfaceComputeItem<
+        //     ::Tags::BoundaryDirectionsExterior<dim>,
+        //     typename BoundaryScheme::compute_packaged_remote_data>
+            >;
 
     const auto& element = db::get<::Tags::Element<dim>>(box);
     const auto& mesh = db::get<::Tags::Mesh<dim>>(box);
