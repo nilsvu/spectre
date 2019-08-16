@@ -4,14 +4,15 @@
 set(LIBRARY "Test_EllipticDG")
 
 set(LIBRARY_SOURCES
-  Test_ImposeInhomogeneousBoundaryConditionsOnSource.cpp
+  Test_StrongSecondOrderInternalPenalty.cpp
+  # Test_ImposeInhomogeneousBoundaryConditionsOnSource.cpp
   )
 
 add_test_library(
   ${LIBRARY}
   "Elliptic/DiscontinuousGalerkin/"
   "${LIBRARY_SOURCES}"
-  "DataStructures;Domain;ErrorHandling"
+  "DataStructures;Domain;DomainCreators;ErrorHandling;Utilities;Poisson"
   )
 
 add_dependencies(
