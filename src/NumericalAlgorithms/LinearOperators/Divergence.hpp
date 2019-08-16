@@ -76,8 +76,9 @@ namespace Tags {
 /// `InverseJacobianTag`.  The map must map from the logical frame.
 ///
 /// This tag inherits from `db::add_prefix_tag<Tags::div, Tag>`.
-template <typename Tag, typename InverseJacobianTag>
-struct DivCompute : db::add_tag_prefix<div, Tag>, db::ComputeTag {
+template <typename Tag, typename InverseJacobianTag,
+          typename ResultTag = db::add_tag_prefix<div, Tag>>
+struct DivCompute : ResultTag, db::ComputeTag {
  private:
   using inv_jac_indices =
       typename db::item_type<InverseJacobianTag>::index_list;
@@ -87,9 +88,15 @@ struct DivCompute : db::add_tag_prefix<div, Tag>, db::ComputeTag {
                 "Must map from the logical frame.");
 
  public:
-  static constexpr auto function =
-      divergence<typename db::item_type<Tag>::tags_list, dim,
-                 typename tmpl::back<inv_jac_indices>::Frame>;
-  using argument_tags = tmpl::list<Tag, Tags::Mesh<dim>, InverseJacobianTag>;
+  using argument_tags = tmpl::list<Tag, ::Tags::Mesh<dim>, InverseJacobianTag>;
+  // static constexpr auto function =
+  //     divergence<db::get_variables_tags_list<Tag>, dim,
+  //                typename tmpl::back<inv_jac_indices>::Frame,
+  //                db::get_variables_tags_list<ResultTag>>;
+  static auto function(
+      const db::item_type<Tag>& tag, const ::Mesh<dim>& mesh,
+      const db::item_type<InverseJacobianTag>& inv_jac) noexcept {
+    return db::item_type<ResultTag>(divergence(tag, mesh, inv_jac));
+  }
 };
 }  // namespace Tags
