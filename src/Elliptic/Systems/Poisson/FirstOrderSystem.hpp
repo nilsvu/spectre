@@ -12,24 +12,9 @@
 #include "Elliptic/Protocols.hpp"
 #include "Elliptic/Systems/Poisson/Equations.hpp"
 #include "Elliptic/Systems/Poisson/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "NumericalAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/TMPL.hpp"
-
-/// \cond
-namespace Tags {
-template <typename>
-class Variables;
-template <typename, typename>
-class div;
-}  // namespace Tags
-
-namespace LinearSolver {
-namespace Tags {
-template <typename>
-struct Operand;
-}  // namespace Tags
-}  // namespace LinearSolver
-/// \endcond
 
 namespace Poisson {
 
@@ -40,19 +25,23 @@ struct SecondOrderSystem : elliptic::Protocols::SecondOrderSystem {
   // The physical fields to solve for
   using fields_tag = Tags::Variables<tmpl::list<Field>>;
 
-  using compute_fluxes = ComputeSecondOrderFluxes<
-      Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
-      LinearSolver::Tags::Operand<Field>>;
-  using compute_sources = ComputeSecondOrderSources<
-      Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
-      LinearSolver::Tags::Operand<Field>>;
+  //   using compute_fluxes =
+  //       ComputeFlux<Dim,
+  //                   db::add_tag_prefix<LinearSolver::Tags::Operand,
+  //                   fields_tag>, LinearSolver::Tags::Operand<Field>,
+  //                   ::Tags::deriv<LinearSolver::Tags::Operand<Field>,
+  //                                 tmpl::size_t<Dim>, Frame::Inertial>>;
+  //   using compute_sources = ComputeSecondOrderSources<
+  //       Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
+  //       LinearSolver::Tags::Operand<Field>>;
 
   // Boundary conditions
   // This interface will likely change with generalized boundary conditions
-  using compute_analytic_fluxes =
-      ComputeSecondOrderFluxes<Dim,
-                               db::add_tag_prefix<::Tags::Analytic, fields_tag>,
-                               ::Tags::Analytic<Field>>;
+  //   using compute_analytic_fluxes =
+  //       ComputeFlux<Dim, db::add_tag_prefix<::Tags::Analytic, fields_tag>,
+  //                   ::Tags::Analytic<Field>,
+  //                   ::Tags::deriv<::Tags::Analytic<Field>, tmpl::size_t<Dim>,
+  //                                 Frame::Inertial>>;
 
   // The tag of the operator to compute magnitudes on the manifold, e.g. to
   // normalize vectors on the faces of an element

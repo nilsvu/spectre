@@ -61,9 +61,18 @@ ResultVariables lifted_internal_flux(
           0.5 * jump_fluxes_on_face),
       face_mesh, face_dimension, volume_jacobian_on_face));
 
-  const auto div_term_on_face =
-      mass_on_face(jump_second_order_fluxes_on_face, face_mesh, face_dimension,
-                   volume_jacobian_on_face);
+  const auto div_term_on_face = mass_on_face(
+      // Here we should compute the second-order fluxes from the
+      // normal-times-field-jumps _on the face_ instead of using the
+      // second-order fluxes that were computed on each side of the mortar. This
+      // only makes a difference if the flux-computation depends on the field
+      // values. We are making the approximation that this is the case, since it
+      // most commonly is and we can then avoid communicating the
+      // normal-times-fields separately. Even if the approximation does not
+      // hold, we can hope that the scheme converges anyway. This should be
+      // revisited if it turns out to be problematic.
+      jump_second_order_fluxes_on_face, face_mesh, face_dimension,
+      volume_jacobian_on_face);
   Variables<db::wrap_tags_in<Tags::Mass, JumpSecondOrderFluxesTags>>
       div_term_in_volume{volume_mesh.number_of_grid_points(), 0.};
   add_slice_to_data(make_not_null(&div_term_in_volume), div_term_on_face,
@@ -79,11 +88,10 @@ ResultVariables lifted_internal_flux(
   return result;
 }
 
-template <typename ResultVariables, typename NormalDotSecondOrderFluxesTags,
+template <typename ResultVariables, typename SecondOrderFluxesTags,
           size_t VolumeDim>
 ResultVariables lifted_dirichlet_flux(
-    const Variables<NormalDotSecondOrderFluxesTags>&
-        normal_dot_second_order_fluxes_on_face,
+    const Variables<SecondOrderFluxesTags>& second_order_fluxes_on_face,
     const Mesh<VolumeDim>& volume_mesh,
     const Direction<VolumeDim>& face_direction,
     const Jacobian<DataVector, VolumeDim, Frame::Logical, Frame::Inertial>&
@@ -96,16 +104,15 @@ ResultVariables lifted_dirichlet_flux(
   const Mesh<VolumeDim - 1> face_mesh = volume_mesh.slice_away(face_dimension);
 
   const auto mass_term_on_face = ResultVariables(mass_on_face(
-      Variables<
-          db::wrap_tags_in<::Tags::NormalDot, NormalDotSecondOrderFluxesTags>>(
+      Variables<db::wrap_tags_in<::Tags::NormalDot, SecondOrderFluxesTags>>(
           2. * get(penalty) *
-          normal_dot(normal_dot_second_order_fluxes_on_face, face_normal)),
+          normal_dot(second_order_fluxes_on_face, face_normal)),
       face_mesh, face_dimension, volume_jacobian_on_face));
 
   const auto div_term_on_face =
-      mass_on_face(normal_dot_second_order_fluxes_on_face, face_mesh,
-                   face_dimension, volume_jacobian_on_face);
-  Variables<db::wrap_tags_in<Tags::Mass, NormalDotSecondOrderFluxesTags>>
+      mass_on_face(second_order_fluxes_on_face, face_mesh, face_dimension,
+                   volume_jacobian_on_face);
+  Variables<db::wrap_tags_in<Tags::Mass, SecondOrderFluxesTags>>
       div_term_in_volume{volume_mesh.number_of_grid_points(), 0.};
   add_slice_to_data(make_not_null(&div_term_in_volume), div_term_on_face,
                     volume_mesh.extents(), face_dimension,
@@ -272,24 +279,17 @@ struct StrongSecondOrderInternalPenalty {
   using second_order_fluxes_tag =
       db::add_tag_prefix<::Tags::SecondOrderFlux, variables_tag,
                          tmpl::size_t<Dim>, Frame::Inertial>;
-  using normal_dot_second_order_fluxes_tag =
-      db::add_tag_prefix<::Tags::NormalDot, second_order_fluxes_tag>;
   using fluxes_tag = db::add_tag_prefix<::Tags::Flux, variables_tag,
                                         tmpl::size_t<Dim>, Frame::Inertial>;
   using div_fluxes_tag = db::add_tag_prefix<::Tags::div, fluxes_tag>;
   using normal_dot_fluxes_tag =
       db::add_tag_prefix<::Tags::NormalDot, fluxes_tag>;
-  using analytic_second_order_fluxes_tag =
-      db::add_tag_prefix<::Tags::Analytic, second_order_fluxes_tag>;
-  using normal_dot_analytic_second_order_fluxes_tag =
-      db::add_tag_prefix<::Tags::NormalDot, analytic_second_order_fluxes_tag>;
 
   /// Data that is communicated to and from the remote element.
   /// Must have `project_to_mortar` and `orient_on_slice` functions.
   using RemoteData = ::dg::MortarData<
-      tmpl::append<
-          db::get_variables_tags_list<normal_dot_second_order_fluxes_tag>,
-          db::get_variables_tags_list<normal_dot_fluxes_tag>>,
+      tmpl::append<db::get_variables_tags_list<second_order_fluxes_tag>,
+                   db::get_variables_tags_list<normal_dot_fluxes_tag>>,
       tmpl::list<
           StrongSecondOrderInternalPenalty_detail::Tags::PolynomialDegree,
           StrongSecondOrderInternalPenalty_detail::Tags::ElementSize>>;
@@ -381,46 +381,41 @@ struct StrongSecondOrderInternalPenalty {
       const RemoteData& remote_data = extracted_mortar_data.second;
 
       // Combine local and remote data on mortars by computing jumps
-      db::item_type<normal_dot_second_order_fluxes_tag>
-          normal_dot_second_order_fluxes_local{mortar_num_points};
+      db::item_type<second_order_fluxes_tag> second_order_fluxes_local{
+          mortar_num_points};
       db::item_type<normal_dot_fluxes_tag> normal_dot_fluxes_local{
           mortar_num_points};
-      db::item_type<normal_dot_second_order_fluxes_tag>
-          normal_dot_second_order_fluxes_remote{mortar_num_points};
+      db::item_type<second_order_fluxes_tag> second_order_fluxes_remote{
+          mortar_num_points};
       db::item_type<normal_dot_fluxes_tag> normal_dot_fluxes_remote{
           mortar_num_points};
       tmpl::for_each<db::get_variables_tags_list<variables_tag>>([
-        &normal_dot_second_order_fluxes_local,
-        &normal_dot_second_order_fluxes_remote, &normal_dot_fluxes_local,
-        &normal_dot_fluxes_remote, &local_data, &remote_data
+        &second_order_fluxes_local, &second_order_fluxes_remote,
+        &normal_dot_fluxes_local, &normal_dot_fluxes_remote, &local_data,
+        &remote_data
       ](const auto field_tag_v) noexcept {
         using field_tag = tmpl::type_from<decltype(field_tag_v)>;
-        using normal_dot_second_order_flux_tag =
-            ::Tags::NormalDot<::Tags::SecondOrderFlux<
-                field_tag, tmpl::size_t<Dim>, Frame::Inertial>>;
+        using second_order_flux_tag =
+            ::Tags::SecondOrderFlux<field_tag, tmpl::size_t<Dim>,
+                                    Frame::Inertial>;
         using normal_dot_flux_tag = ::Tags::NormalDot<
             ::Tags::Flux<field_tag, tmpl::size_t<Dim>, Frame::Inertial>>;
-        get<normal_dot_second_order_flux_tag>(
-            normal_dot_second_order_fluxes_local) =
-            get<normal_dot_second_order_flux_tag>(local_data.mortar_data);
-        get<normal_dot_second_order_flux_tag>(
-            normal_dot_second_order_fluxes_remote) =
-            get<normal_dot_second_order_flux_tag>(remote_data.mortar_data);
+        get<second_order_flux_tag>(second_order_fluxes_local) =
+            get<second_order_flux_tag>(local_data.mortar_data);
+        get<second_order_flux_tag>(second_order_fluxes_remote) =
+            get<second_order_flux_tag>(remote_data.mortar_data);
         get<normal_dot_flux_tag>(normal_dot_fluxes_local) =
             get<normal_dot_flux_tag>(local_data.mortar_data);
         get<normal_dot_flux_tag>(normal_dot_fluxes_remote) =
             get<normal_dot_flux_tag>(remote_data.mortar_data);
       });
-      auto jump_second_order_fluxes =
-          db::item_type<normal_dot_second_order_fluxes_tag>(
-              normal_dot_second_order_fluxes_local +
-              normal_dot_second_order_fluxes_remote);
+      auto jump_second_order_fluxes = db::item_type<second_order_fluxes_tag>(
+          second_order_fluxes_local + second_order_fluxes_remote);
       auto jump_fluxes = db::item_type<normal_dot_fluxes_tag>(
           normal_dot_fluxes_local + normal_dot_fluxes_remote);
 
       // Project from the mortar back to the face if needed
-      db::item_type<normal_dot_second_order_fluxes_tag>
-          jump_second_order_fluxes_on_face;
+      db::item_type<second_order_fluxes_tag> jump_second_order_fluxes_on_face;
       db::item_type<normal_dot_fluxes_tag> jump_fluxes_on_face;
       if (face_mesh != mortar_mesh or
           std::any_of(
@@ -478,17 +473,17 @@ struct StrongSecondOrderInternalPenalty {
       const auto& local_data = direction_and_data.second;
 
       // Instead of jumps, just retrieve the normal dotted into the fluxes
-      db::item_type<normal_dot_second_order_fluxes_tag>
-          normal_dot_second_order_fluxes{face_num_points};
+      db::item_type<second_order_fluxes_tag> second_order_fluxes{
+          face_num_points};
       tmpl::for_each<db::get_variables_tags_list<variables_tag>>([
-        &normal_dot_second_order_fluxes, &local_data
+        &second_order_fluxes, &local_data
       ](const auto field_tag_v) noexcept {
         using field_tag = tmpl::type_from<decltype(field_tag_v)>;
-        using normal_dot_second_order_flux_tag =
-            ::Tags::NormalDot<::Tags::SecondOrderFlux<
-                field_tag, tmpl::size_t<Dim>, Frame::Inertial>>;
-        get<normal_dot_second_order_flux_tag>(normal_dot_second_order_fluxes) =
-            get<normal_dot_second_order_flux_tag>(local_data.mortar_data);
+        using second_order_flux_tag =
+            ::Tags::SecondOrderFlux<field_tag, tmpl::size_t<Dim>,
+                                    Frame::Inertial>;
+        get<second_order_flux_tag>(second_order_fluxes) =
+            get<second_order_flux_tag>(local_data.mortar_data);
       });
 
       const auto penalty = StrongSecondOrderInternalPenalty_detail::penalty(
@@ -501,7 +496,7 @@ struct StrongSecondOrderInternalPenalty {
       auto lifted_flux =
           StrongSecondOrderInternalPenalty_detail::lifted_dirichlet_flux<
               db::item_type<operator_applied_to_variables_tag>>(
-              normal_dot_second_order_fluxes, volume_mesh, direction,
+              second_order_fluxes, volume_mesh, direction,
               volume_jacobian_on_boundary_faces.at(direction),
               inverse_volume_jacobian,
               get<StrongSecondOrderInternalPenalty_detail::Tags::FaceNormal<

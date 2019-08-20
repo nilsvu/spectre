@@ -7,26 +7,22 @@
 
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
-#include "DataStructures/Variables.hpp"  // IWYU pragma: keep
+#include "DataStructures/Variables.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
-#include "Elliptic/Systems/Poisson/Tags.hpp"  // IWYU pragma: keep
+#include "Elliptic/Systems/Poisson/Tags.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
 
-// IWYU pragma: no_forward_declare Variables
-// IWYU pragma: no_forward_declare Tensor
-
 namespace Poisson {
 
 template <size_t Dim>
-void second_order_flux(
-    const gsl::not_null<tnsr::IJ<DataVector, Dim, Frame::Inertial>*> flux,
-    const Scalar<DataVector>& field) noexcept {
-  *flux =
-      make_with_value<tnsr::IJ<DataVector, Dim, Frame::Inertial>>(field, 0.);
+void flux(
+    const gsl::not_null<tnsr::I<DataVector, Dim, Frame::Inertial>*>
+        flux_for_field,
+    const tnsr::i<DataVector, Dim, Frame::Inertial>& field_gradient) noexcept {
   for (size_t d = 0; d < Dim; d++) {
-    flux->get(d, d) = get(field);
+    flux_for_field->get(d) = field_gradient.get(d);
   }
 }
 
@@ -39,7 +35,11 @@ void first_order_fluxes(
     const Scalar<DataVector>& field,
     const tnsr::I<DataVector, Dim, Frame::Inertial>& auxiliary_field) noexcept {
   *flux_for_field = auxiliary_field;
-  second_order_flux(flux_for_auxiliary_field, field);
+  *flux_for_auxiliary_field =
+      make_with_value<tnsr::IJ<DataVector, Dim, Frame::Inertial>>(field, 0.);
+  for (size_t d = 0; d < Dim; d++) {
+    flux_for_auxiliary_field->get(d, d) = get(field);
+  }
 }
 
 template <size_t Dim>
@@ -56,12 +56,15 @@ void first_order_sources(
 }  // namespace Poisson
 
 // Instantiate needed derivative templates
-#include "NumericalAlgorithms/LinearOperators/Divergence.tpp"  // IWYU pragma: keep
+#include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
+#include "NumericalAlgorithms/LinearOperators/PartialDerivatives.tpp"
 
 template <size_t Dim>
 using variables_tag =
     db::add_tag_prefix<LinearSolver::Tags::Operand,
-                       typename Poisson::FirstOrderSystem<Dim>::fields_tag>;
+                       typename Poisson::SecondOrderSystem<Dim>::fields_tag>;
+template <size_t Dim>
+using gradients_tags_list = db::get_variables_tags_list<variables_tag<Dim>>;
 template <size_t Dim>
 using fluxes_tags_list = db::get_variables_tags_list<db::add_tag_prefix<
     ::Tags::Flux, variables_tag<Dim>, tmpl::size_t<Dim>, Frame::Inertial>>;
@@ -69,6 +72,9 @@ using fluxes_tags_list = db::get_variables_tags_list<db::add_tag_prefix<
 #define DIM(data) BOOST_PP_TUPLE_ELEM(0, data)
 
 #define INSTANTIATION(_, data)                                                 \
+  template void Poisson::flux<DIM(data)>(                                      \
+      const gsl::not_null<tnsr::I<DataVector, DIM(data), Frame::Inertial>*>,   \
+      const tnsr::i<DataVector, DIM(data), Frame::Inertial>&) noexcept;        \
   template void Poisson::first_order_fluxes<DIM(data)>(                        \
       const gsl::not_null<tnsr::I<DataVector, DIM(data), Frame::Inertial>*>,   \
       const gsl::not_null<tnsr::IJ<DataVector, DIM(data), Frame::Inertial>*>,  \
@@ -79,11 +85,19 @@ using fluxes_tags_list = db::get_variables_tags_list<db::add_tag_prefix<
       const gsl::not_null<tnsr::I<DataVector, DIM(data), Frame::Inertial>*>,   \
       const Scalar<DataVector>&,                                               \
       const tnsr::I<DataVector, DIM(data), Frame::Inertial>&) noexcept;        \
-  template Variables<db::wrap_tags_in<Tags::div, fluxes_tags_list<DIM(data)>>> \
-  divergence<fluxes_tags_list<DIM(data)>, DIM(data), Frame::Inertial>(         \
-      const Variables<fluxes_tags_list<DIM(data)>>&, const Mesh<DIM(data)>&,   \
+  template Variables<                                                          \
+      db::wrap_tags_in<::Tags::deriv, gradients_tags_list<DIM(data)>,          \
+                       tmpl::size_t<DIM(data)>, Frame::Inertial>>              \
+  partial_derivatives<gradients_tags_list<DIM(data)>>(                         \
+      const Variables<gradients_tags_list<DIM(data)>>&,                        \
+      const Mesh<DIM(data)>&,                                                  \
       const InverseJacobian<DataVector, DIM(data), Frame::Logical,             \
-                            Frame::Inertial>&) noexcept;
+                            Frame::Inertial>&) noexcept;                       \
+  template Variables<db::wrap_tags_in<Tags::div, fluxes_tags_list<DIM(data)>>> \
+  divergence(const Variables<fluxes_tags_list<DIM(data)>>&,                    \
+             const Mesh<DIM(data)>&,                                           \
+             const InverseJacobian<DataVector, DIM(data), Frame::Logical,      \
+                                   Frame::Inertial>&) noexcept;
 
 GENERATE_INSTANTIATIONS(INSTANTIATION, (1, 2, 3))
 

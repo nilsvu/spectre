@@ -4,6 +4,8 @@
 #include "tests/Unit/TestingFramework.hpp"
 
 #include <array>
+#include <blaze/math/Serialization.h>
+#include <blaze/util/serialization/Archive.h>
 #include <cstddef>
 #include <memory>
 #include <pup.h>
@@ -39,6 +41,7 @@
 #include "Elliptic/DiscontinuousGalerkin/StrongSecondOrderInternalPenalty.hpp"
 #include "Elliptic/Systems/Poisson/Equations.hpp"
 #include "Evolution/Initialization/Helpers.hpp"
+#include "Informer/InfoFromBuild.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication2.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InitializeInterfaces.hpp"
@@ -51,6 +54,7 @@
 #include "PointwiseFunctions/MathFunctions/MathFunction.hpp"
 #include "PointwiseFunctions/MathFunctions/PowX.hpp"
 #include "PointwiseFunctions/MathFunctions/TensorProduct.hpp"
+#include "Utilities/FileSystem.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
 #include "tests/Unit/ActionTesting.hpp"
@@ -74,9 +78,8 @@ using JumpFluxTag =
                                           tmpl::size_t<Dim>, Frame::Inertial>>;
 template <size_t Dim>
 using JumpSecondOrderFluxTag =
-    db::add_tag_prefix<Tags::NormalDot,
-                       db::add_tag_prefix<Tags::SecondOrderFlux, FieldsTag,
-                                          tmpl::size_t<Dim>, Frame::Inertial>>;
+    db::add_tag_prefix<Tags::SecondOrderFlux, FieldsTag, tmpl::size_t<Dim>,
+                       Frame::Inertial>;
 
 template <size_t VolumeDim, typename... CoordMaps>
 void test_lifted_flux(
@@ -102,8 +105,8 @@ void test_lifted_flux(
 
   db::item_type<JumpSecondOrderFluxTag<VolumeDim>>
       jump_second_order_fluxes_on_face{face_mesh.number_of_grid_points()};
-  get<Tags::NormalDot<Tags::SecondOrderFlux<
-      ScalarFieldTag, tmpl::size_t<VolumeDim>, Frame::Inertial>>>(
+  get<Tags::SecondOrderFlux<ScalarFieldTag, tmpl::size_t<VolumeDim>,
+                            Frame::Inertial>>(
       jump_second_order_fluxes_on_face) =
       scalar_field_jump_second_order_fluxes_on_face;
   db::item_type<JumpFluxTag<VolumeDim>> jump_fluxes_on_face{
@@ -269,12 +272,10 @@ struct ElementArray {
                   ::Tags::JacobianInverseCompute<
                       ::Tags::ElementMap<Dim>,
                       ::Tags::Coordinates<Dim, Frame::Logical>>,
-                  Poisson::ComputeSecondOrderFluxes<Dim, variables_tag,
-                                                    ScalarFieldTag>,
-                  ::Tags::DivCompute<
-                      second_order_fluxes_tag,
-                      ::Tags::Jacobian<Dim, Frame::Inertial, Frame::Logical>,
-                      fluxes_tag>,
+                  ::Tags::DerivCompute<
+                      variables_tag,
+                      ::Tags::Jacobian<Dim, Frame::Inertial, Frame::Logical>>,
+                  Poisson::ComputeFluxes<Dim, variables_tag, ScalarFieldTag>,
                   ::Tags::DivCompute<
                       fluxes_tag,
                       ::Tags::Jacobian<Dim, Frame::Inertial, Frame::Logical>>>>,
@@ -282,13 +283,13 @@ struct ElementArray {
                   typename Metavariables::system,
                   dg::Initialization::slice_tags_to_face<
                       ::Tags::Jacobian<Dim, Frame::Logical, Frame::Inertial>,
-                      second_order_fluxes_tag, fluxes_tag>,
+                      fluxes_tag, variables_tag>,
                   dg::Initialization::slice_tags_to_exterior<>,
                   dg::Initialization::face_compute_tags<
-                      ::Tags::NormalDotCompute<second_order_fluxes_tag, Dim,
-                                               Frame::Inertial>,
                       ::Tags::NormalDotCompute<fluxes_tag, Dim,
                                                Frame::Inertial>,
+                      Poisson::ComputeSecondOrderFluxes<Dim, variables_tag,
+                                                        ScalarFieldTag>,
                       typename dg_scheme::compute_packaged_remote_data,
                       typename dg_scheme::compute_packaged_local_data>>,
               dg::Actions::InitializeMortars<
@@ -353,7 +354,10 @@ struct ApplyDgOperator {
 };
 
 template <size_t Dim>
-void test_ip() {
+void test_operator_matrix(
+    const double penalty_parameter,
+    const DomainCreator<Dim, Frame::Inertial>& domain_creator,
+    const std::string& expected_matrix_filename) {
   using metavariables = Metavariables<Dim>;
   using element_array = ElementArray<Dim, metavariables>;
 
@@ -362,13 +366,6 @@ void test_ip() {
   using temporal_id_tag = typename DgScheme::temporal_id_tag;
   using operator_applied_to_variables_tag =
       db::add_tag_prefix<temporal_id_tag::template step_prefix, variables_tag>;
-
-  const domain::creators::Interval<Frame::Inertial> domain_creator{
-      {{0.}}, {{M_PI}}, {{false}}, {{1}}, {{3}}};
-  // Register the coordinate map for serialization
-  PUPable_reg(
-      SINGLE_ARG(domain::CoordinateMap<Frame::Logical, Frame::Inertial,
-                                       domain::CoordinateMaps::Affine>));
 
   const auto domain = domain_creator.create_domain();
   const auto initial_extents = domain_creator.initial_extents();
@@ -408,9 +405,11 @@ void test_ip() {
 
   runner.set_phase(metavariables::Phase::Testing);
 
-  DgScheme dg_operator{1.5};
-  DenseMatrix<double> dg_operator_matrix{total_num_points, total_num_points};
+  DgScheme dg_operator{penalty_parameter};
+  DenseMatrix<double, blaze::rowMajor> dg_operator_matrix{total_num_points,
+                                                          total_num_points};
 
+  // Build the matrix by applying the operator to unit vectors
   size_t i_across_elements = 0;
   size_t j_across_elements = 0;
   for (const auto& active_element : element_ids) {
@@ -420,48 +419,37 @@ void test_ip() {
             .number_of_grid_points();
     for (size_t i = 0; i < num_points; i++) {
       for (const auto& element_id : element_ids) {
-        const auto get_tag = [&runner,
-                              &element_id](auto tag_v) -> decltype(auto) {
-          using tag = std::decay_t<decltype(tag_v)>;
-          return ActionTesting::get_databox_tag<element_array, tag>(runner,
-                                                                    element_id);
-        };
-
         const auto& mesh =
             ActionTesting::get_databox_tag<element_array, ::Tags::Mesh<Dim>>(
                 runner, element_id);
 
+        // Construct a unit vector
         db::item_type<variables_tag> vars{mesh.number_of_grid_points(), 0.};
         if (element_id == active_element) {
           get(get<ScalarFieldTag>(vars))[i] = 1.;
         }
-
         ActionTesting::simple_action<element_array, SetData<variables_tag>>(
             make_not_null(&runner), element_id, std::move(vars));
+
         // Send data
         ActionTesting::next_action<element_array>(make_not_null(&runner),
                                                   element_id);
       }
       // Split the loop to have all elements send their data before receiving
       for (const auto& element_id : element_ids) {
-        const auto get_tag = [&runner,
-                              &element_id](auto tag_v) -> decltype(auto) {
-          using tag = std::decay_t<decltype(tag_v)>;
-          return ActionTesting::get_databox_tag<element_array, tag>(runner,
-                                                                    element_id);
-        };
-
         // Receive data
         ActionTesting::next_action<element_array>(make_not_null(&runner),
                                                   element_id);
+
+        // Apply the operator
         ActionTesting::simple_action<element_array, ApplyDgOperator>(
             make_not_null(&runner), element_id, dg_operator);
-
         const auto& operator_applied_to_vars =
             ActionTesting::get_databox_tag<element_array,
                                            operator_applied_to_variables_tag>(
                 runner, element_id);
 
+        // Store result in matrix
         for (size_t j = 0; j < operator_applied_to_vars.number_of_grid_points();
              j++) {
           dg_operator_matrix(i_across_elements, j_across_elements) =
@@ -475,14 +463,81 @@ void test_ip() {
     }
   }
 
-  Parallel::printf("DG operator:\n%s\n", dg_operator_matrix);
+  // Load expected matrix from file
+  std::ifstream expected_matrix_file{unit_test_path() +
+                                     "/Elliptic/DiscontinuousGalerkin/" +
+                                     expected_matrix_filename};
+  std::istream_iterator<double> expected_matrix_file_element{
+      expected_matrix_file};
+  DenseMatrix<double, blaze::rowMajor> expected_matrix{total_num_points,
+                                                       total_num_points};
+  for (size_t row = 0; row < total_num_points; row++) {
+    for (DenseMatrix<double, blaze::rowMajor>::Iterator
+             expected_matrix_element = expected_matrix.begin(row);
+         expected_matrix_element != expected_matrix.end(row);
+         expected_matrix_element++) {
+      *expected_matrix_element = *expected_matrix_file_element;
+      expected_matrix_file_element++;
+    }
+  }
+  // Make sure we have reached the end of the file
+  CHECK(expected_matrix_file_element == std::istream_iterator<double>{});
+
+  CHECK_MATRIX_APPROX(dg_operator_matrix, expected_matrix);
 }
 }  // namespace
 
+// [[TimeOut, 20]]
 SPECTRE_TEST_CASE(
-    "Unit.Elliptic.StrongSecondOrderInternalPenalty.CreateFromOptions",
+    "Unit.Elliptic.StrongSecondOrderInternalPenalty.OperatorMatrix",
     "[Elliptic][Unit]") {
-  test_ip<1>();
-  //   test_ip<2>();
-  //   test_ip<3>();
+  // These tests build the matrix representation of the DG operator and compare
+  // it to a matrix that was computed independently using the code available at
+  // https://github.com/nilsleiffischer/dgpy at commit c0a87ce.
+
+  {
+    INFO("1D");
+    const domain::creators::Interval<Frame::Inertial> domain_creator{
+        {{0.}}, {{M_PI}}, {{false}}, {{1}}, {{3}}};
+    // Register the coordinate map for serialization
+    PUPable_reg(
+        SINGLE_ARG(domain::CoordinateMap<Frame::Logical, Frame::Inertial,
+                                         domain::CoordinateMaps::Affine>));
+
+    test_operator_matrix(1.5, std::move(domain_creator),
+                         "DgPoissonOperator1DSample.dat");
+  }
+  {
+    INFO("2D");
+    const domain::creators::Rectangle<Frame::Inertial> domain_creator{
+        {{0., 0.}}, {{M_PI, M_PI}}, {{false, false}}, {{1, 1}}, {{3, 3}}};
+    // Register the coordinate map for serialization
+    PUPable_reg(
+        SINGLE_ARG(domain::CoordinateMap<Frame::Logical, Frame::Inertial,
+                                         domain::CoordinateMaps::ProductOf2Maps<
+                                             domain::CoordinateMaps::Affine,
+                                             domain::CoordinateMaps::Affine>>));
+
+    test_operator_matrix(1.5, std::move(domain_creator),
+                         "DgPoissonOperator2DSample.dat");
+  }
+  {
+    INFO("3D");
+    const domain::creators::Brick<Frame::Inertial> domain_creator{
+        {{0., 0., 0.}},
+        {{M_PI, M_PI, M_PI}},
+        {{false, false, false}},
+        {{1, 1, 1}},
+        {{3, 3, 3}}};
+    // Register the coordinate map for serialization
+    PUPable_reg(SINGLE_ARG(
+        domain::CoordinateMap<
+            Frame::Logical, Frame::Inertial,
+            domain::CoordinateMaps::ProductOf3Maps<
+                domain::CoordinateMaps::Affine, domain::CoordinateMaps::Affine,
+                domain::CoordinateMaps::Affine>>));
+
+    test_operator_matrix(1.5, std::move(domain_creator),
+                         "DgPoissonOperator3DSample.dat");
+  }
 }
