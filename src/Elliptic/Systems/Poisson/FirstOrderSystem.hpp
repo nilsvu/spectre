@@ -25,12 +25,13 @@ struct SecondOrderSystem : elliptic::Protocols::SecondOrderSystem {
   // The physical fields to solve for
   using fields_tag = Tags::Variables<tmpl::list<Field>>;
 
-  //   using compute_fluxes =
-  //       ComputeFlux<Dim,
-  //                   db::add_tag_prefix<LinearSolver::Tags::Operand,
-  //                   fields_tag>, LinearSolver::Tags::Operand<Field>,
-  //                   ::Tags::deriv<LinearSolver::Tags::Operand<Field>,
-  //                                 tmpl::size_t<Dim>, Frame::Inertial>>;
+  using compute_fluxes =
+      ComputeFluxes<Dim,
+                    db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
+                    LinearSolver::Tags::Operand<Field>>;
+  using compute_second_order_fluxes = ComputeSecondOrderFluxes<
+      Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
+      LinearSolver::Tags::Operand<Field>>;
   //   using compute_sources = ComputeSecondOrderSources<
   //       Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
   //       LinearSolver::Tags::Operand<Field>>;

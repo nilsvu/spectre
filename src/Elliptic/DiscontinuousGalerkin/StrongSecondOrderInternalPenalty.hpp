@@ -26,7 +26,7 @@
 
 namespace elliptic {
 namespace dg {
-namespace BoundarySchemes {
+namespace Schemes {
 
 namespace StrongSecondOrderInternalPenalty_detail {
 
@@ -73,7 +73,7 @@ ResultVariables lifted_internal_flux(
       // revisited if it turns out to be problematic.
       jump_second_order_fluxes_on_face, face_mesh, face_dimension,
       volume_jacobian_on_face);
-  Variables<db::wrap_tags_in<Tags::Mass, JumpSecondOrderFluxesTags>>
+  Variables<db::wrap_tags_in<::Tags::Mass, JumpSecondOrderFluxesTags>>
       div_term_in_volume{volume_mesh.number_of_grid_points(), 0.};
   add_slice_to_data(make_not_null(&div_term_in_volume), div_term_on_face,
                     volume_mesh.extents(), face_dimension,
@@ -112,7 +112,7 @@ ResultVariables lifted_dirichlet_flux(
   const auto div_term_on_face =
       mass_on_face(second_order_fluxes_on_face, face_mesh, face_dimension,
                    volume_jacobian_on_face);
-  Variables<db::wrap_tags_in<Tags::Mass, SecondOrderFluxesTags>>
+  Variables<db::wrap_tags_in<::Tags::Mass, SecondOrderFluxesTags>>
       div_term_in_volume{volume_mesh.number_of_grid_points(), 0.};
   add_slice_to_data(make_not_null(&div_term_in_volume), div_term_on_face,
                     volume_mesh.extents(), face_dimension,
@@ -251,7 +251,7 @@ struct compute_packaged_local_data_impl<
 }  // namespace StrongSecondOrderInternalPenalty_detail
 
 template <size_t Dim, typename VariablesTag, typename TemporalIdTag>
-struct StrongSecondOrderInternalPenalty {
+struct StrongSecondOrderInternalPenalty : db::SimpleTag {
  public:
   struct PenaltyParameter {
     using type = double;
@@ -259,7 +259,9 @@ struct StrongSecondOrderInternalPenalty {
         "The prefactor to the penalty term of the flux."};
     static double lower_bound() { return 1.; }
   };
+  using type = StrongSecondOrderInternalPenalty;
   using options = tmpl::list<PenaltyParameter>;
+  using container_tag = StrongSecondOrderInternalPenalty;
   static constexpr OptionString help = {
       "Internal penalty flux for elliptic systems."};
   static std::string name() noexcept { return "InternalPenalty"; }
@@ -512,6 +514,6 @@ struct StrongSecondOrderInternalPenalty {
   double penalty_parameter_{};
 };
 
-}  // namespace BoundarySchemes
+}  // namespace Schemes
 }  // namespace dg
 }  // namespace elliptic

@@ -11,7 +11,9 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Domain/Mesh.hpp"
+#include "Domain/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
+#include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "NumericalAlgorithms/LinearSolver/Tags.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
@@ -89,12 +91,17 @@ struct InitializeSystem {
                           fixed_sources_tag, vars_tag,
                           operator_applied_to_vars_tag>;
     using compute_tags = db::AddComputeTags<
-        // First-order fluxes and sources
-        typename system::compute_fluxes, typename system::compute_sources,
-        // Divergence of the system fluxes for the elliptic operator
-        ::Tags::DivCompute<second_order_fluxes_tag, inv_jacobian_tag,
-                           fluxes_tag>,
-        ::Tags::DivCompute<fluxes_tag, inv_jacobian_tag>>;
+        // // First-order fluxes and sources
+        // typename system::compute_fluxes, typename system::compute_sources,
+        // // Divergence of the system fluxes for the elliptic operator
+        // ::Tags::DivCompute<second_order_fluxes_tag, inv_jacobian_tag,
+        //                    fluxes_tag>,
+        // ::Tags::DivCompute<fluxes_tag, inv_jacobian_tag>,
+        ::Tags::DerivCompute<
+            vars_tag, ::Tags::Jacobian<Dim, Frame::Inertial, Frame::Logical>>,
+        typename system::compute_fluxes,
+        ::Tags::DivCompute<fluxes_tag, ::Tags::Jacobian<Dim, Frame::Inertial,
+                                                        Frame::Logical>>>;
 
     const auto& mesh = db::get<::Tags::Mesh<Dim>>(box);
     const size_t num_grid_points = mesh.number_of_grid_points();

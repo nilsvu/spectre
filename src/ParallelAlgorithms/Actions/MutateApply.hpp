@@ -6,6 +6,8 @@
 #include <tuple>
 
 #include "DataStructures/DataBox/DataBox.hpp"
+#include "DataStructures/DataBox/DataBoxTag.hpp"
+#include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
 
 /// \cond
@@ -36,8 +38,11 @@ namespace Actions {
  * - Modifies:
  *   - All elements in `Mutator::return_tags`
  */
+template <typename Mutator, typename = std::nullptr_t>
+struct MutateApply;
+
 template <typename Mutator>
-struct MutateApply {
+struct MutateApply<Mutator, Requires<not db::is_tag_v<Mutator>>> {
   template <typename DataBox, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
@@ -47,6 +52,22 @@ struct MutateApply {
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     db::mutate_apply<Mutator>(make_not_null(&box));
+    return {std::move(box)};
+  }
+};
+
+template <typename Mutator>
+struct MutateApply<Mutator, Requires<db::is_tag_v<Mutator>>> {
+  template <typename DataBox, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<DataBox&&> apply(
+      DataBox& box, const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    const auto& mutator = db::get<Mutator>(box);
+    db::mutate_apply(mutator, make_not_null(&box));
     return {std::move(box)};
   }
 };

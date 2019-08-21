@@ -14,6 +14,7 @@
 #include "Elliptic/DiscontinuousGalerkin/Actions/InitializeFluxes.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
+#include "Elliptic/DiscontinuousGalerkin/StrongSecondOrderInternalPenalty.hpp"
 #include "Elliptic/Systems/Poisson/Actions/Observe.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
@@ -72,26 +73,25 @@ struct Metavariables {
   // Specify the DG boundary scheme. We use the strong first-order scheme here
   // that only requires us to compute normals dotted into the first-order
   // fluxes.
-//   using numerical_flux = dg::NumericalFluxes::FirstOrderInternalPenalty<
-//       Dim, tmpl::list<LinearSolver::Tags::Operand<Poisson::Field>>,
-//       tmpl::list<LinearSolver::Tags::Operand<Poisson::AuxiliaryField<Dim>>>>;
-//   using boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
-//       Dim, linear_operand_tag,
-//       Tags::NormalDotNumericalFluxComputer<numerical_flux>,
-//       LinearSolver::Tags::IterationId>;
-  using boundary_scheme =
-      elliptic::dg::BoundarySchemes::StrongSecondOrderInternalPenalty<
-          Dim, linear_operand_tag, LinearSolver::Tags::IterationId>;
+  //   using numerical_flux = dg::NumericalFluxes::FirstOrderInternalPenalty<
+  //       Dim, tmpl::list<LinearSolver::Tags::Operand<Poisson::Field>>,
+  //     tmpl::list<LinearSolver::Tags::Operand<Poisson::AuxiliaryField<Dim>>>>;
+  //   using dg_scheme = dg::BoundarySchemes::StrongFirstOrder<
+  //       Dim, linear_operand_tag,
+  //       Tags::NormalDotNumericalFluxComputer<numerical_flux>,
+  //       LinearSolver::Tags::IterationId>;
+  using dg_scheme = elliptic::dg::Schemes::StrongSecondOrderInternalPenalty<
+      Dim, linear_operand_tag, LinearSolver::Tags::IterationId>;
 
   // Set up the domain creator from the input file.
   using domain_creator_tag = OptionTags::DomainCreator<Dim, Frame::Inertial>;
 
   // Collect all items to store in the cache.
-//   using const_global_cache_tag_list =
-//       tmpl::list<analytic_solution_tag,
-//                  OptionTags::NumericalFlux<numerical_flux>>;
+  //   using const_global_cache_tag_list =
+  //       tmpl::list<analytic_solution_tag,
+  //                  OptionTags::NumericalFlux<numerical_flux>>;
   using const_global_cache_tag_list =
-      tmpl::list<analytic_solution_tag, boundary_scheme>;
+      tmpl::list<analytic_solution_tag, dg_scheme>;
 
   // Collect all reduction tags for observers
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
@@ -100,20 +100,30 @@ struct Metavariables {
   // Specify all global synchronization points.
   enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
 
+  using variables_tag = typename dg_scheme::variables_tag;
+  using fluxes_tag = db::add_tag_prefix<::Tags::Flux, variables_tag,
+                                        tmpl::size_t<Dim>, Frame::Inertial>;
+
   // Construct the DgElementArray parallel component
   using initialization_actions = tmpl::list<
       dg::Actions::InitializeDomain<Dim>,
       elliptic::Actions::InitializeAnalyticSolution,
       elliptic::Actions::InitializeSystem,
       dg::Actions::InitializeInterfaces<
-          system, dg::Initialization::slice_tags_to_face<>,
-          dg::Initialization::slice_tags_to_exterior<>>,
-      elliptic::dg::Actions::InitializeFluxes<boundary_scheme, system>,
+          system,
+          dg::Initialization::slice_tags_to_face<
+              ::Tags::Jacobian<Dim, Frame::Logical, Frame::Inertial>,
+              fluxes_tag, variables_tag>,
+          dg::Initialization::slice_tags_to_exterior<>,
+          dg::Initialization::face_compute_tags<
+              ::Tags::NormalDotCompute<fluxes_tag, Dim, Frame::Inertial>,
+              typename system::compute_second_order_fluxes>>,
+      // elliptic::dg::Actions::InitializeFluxes<dg_scheme, system>,
       elliptic::Actions::InitializeIterationIds<
           LinearSolver::Tags::IterationId>,
-      dg::Actions::InitializeMortars<boundary_scheme, false>,
-    //   elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
-    //       typename system::fields_tag, boundary_scheme>,
+      dg::Actions::InitializeMortars<dg_scheme, false>,
+      //   elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
+      //       typename system::fields_tag, dg_scheme>,
       typename linear_solver::initialize_element,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
@@ -135,14 +145,14 @@ struct Metavariables {
               Phase, Phase::Solve,
               tmpl::list<Poisson::Actions::Observe,
                          LinearSolver::Actions::TerminateIfConverged,
-                         dg::Actions::SendDataForFluxes<boundary_scheme>,
-                         elliptic::Actions::ComputeOperatorAction<
-                             Dim, LinearSolver::Tags::OperatorAppliedTo,
-                             linear_operand_tag>,
-                        //  Actions::MutateApply<
-                        //      ::dg::PopulateBoundaryMortars<boundary_scheme>>,
-                         dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
-                         Actions::MutateApply<boundary_scheme>,
+                         dg::Actions::SendDataForFluxes<dg_scheme>,
+                         //  elliptic::Actions::ComputeOperatorAction<
+                         //      Dim, LinearSolver::Tags::OperatorAppliedTo,
+                         //      linear_operand_tag>,
+                         //  Actions::MutateApply<
+                         //      ::dg::PopulateBoundaryMortars<dg_scheme>>,
+                         dg::Actions::ReceiveDataForFluxes<dg_scheme>,
+                         Actions::MutateApply<dg_scheme>,
                          typename linear_solver::perform_step>>>>;
 
   // Specify all parallel components that will execute actions at some point.
