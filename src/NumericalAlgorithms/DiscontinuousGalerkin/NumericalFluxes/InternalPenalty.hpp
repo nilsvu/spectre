@@ -109,13 +109,24 @@ struct FirstOrderInternalPenalty<Dim, tmpl::list<FieldTags...>,
     }
   };
 
+  template <typename Tag>
+  struct NormalDotNormalFieldFlux : db::PrefixTag, db::SimpleTag {
+    using tag = Tag;
+    using type = TensorMetafunctions::remove_first_index<typename Tag::type>;
+    static std::string name() noexcept {
+      return "NormalDotNormalFieldFlux(" + Tag::name() + ")";
+    }
+  };
+
   // These tags are sliced to the interface of the element and passed to
   // `package_data` to provide the data needed to compute the numerical fluxes.
-  using argument_tags =
-      tmpl::list<Tags::NormalDotFlux<AuxiliaryFieldTags>...,
-                 Tags::div<Tags::Flux<AuxiliaryFieldTags, tmpl::size_t<Dim>,
-                                      Frame::Inertial>>...,
-                 Tags::Normalized<Tags::UnnormalizedFaceNormal<Dim>>>;
+  using argument_tags = tmpl::list<
+      Tags::NormalDotFlux<AuxiliaryFieldTags>...,
+      Tags::Flux<
+          Tags::div<Tags::Flux<FieldTags, tmpl::size_t<Dim>, Frame::Inertial>>,
+          tmpl::size_t<Dim>, Frame::Inertial>...,
+      Tags::NormalFlux<FieldTags, tmpl::size_t<Dim>, Frame::Inertial>...,
+      Tags::Normalized<Tags::UnnormalizedFaceNormal<Dim>>>;
 
   // This is the data needed to compute the numerical flux.
   // `SendBoundaryFluxes` calls `package_data` to store these tags in a
@@ -123,7 +134,8 @@ struct FirstOrderInternalPenalty<Dim, tmpl::list<FieldTags...>,
   // `()` operator.
   using package_tags =
       tmpl::list<Tags::NormalDotFlux<AuxiliaryFieldTags>...,
-                 NormalDotDivFlux<AuxiliaryFieldTags>..., FaceNormal>;
+                 NormalDotDivFlux<AuxiliaryFieldTags>...,
+                 NormalDotNormalFieldFlux<AuxiliaryFieldTags>..., FaceNormal>;
 
   // Following the packaged_data pointer, this function expects as arguments the
   // types in `argument_tags`.
@@ -131,28 +143,37 @@ struct FirstOrderInternalPenalty<Dim, tmpl::list<FieldTags...>,
       const gsl::not_null<Variables<package_tags>*> packaged_data,
       const db::item_type<Tags::NormalDotFlux<
           AuxiliaryFieldTags>>&... normal_dot_auxiliary_field_fluxes,
-      const db::item_type<Tags::div<
-          Tags::Flux<AuxiliaryFieldTags, tmpl::size_t<Dim>,
-                     Frame::Inertial>>>&... div_auxiliary_field_fluxes,
+      const db::item_type<Tags::Flux<
+          Tags::div<Tags::Flux<FieldTags, tmpl::size_t<Dim>, Frame::Inertial>>,
+          tmpl::size_t<Dim>, Frame::Inertial>>&... div_auxiliary_field_fluxes,
+      const db::item_type<
+          Tags::NormalFlux<FieldTags, tmpl::size_t<Dim>,
+                           Frame::Inertial>>&... normal_field_fluxes,
       const tnsr::i<DataVector, Dim, Frame::Inertial>& interface_unit_normal)
       const noexcept {
     const auto helper = [&packaged_data, &interface_unit_normal ](
         const auto auxiliary_field_tag_v,
         const auto normal_dot_auxiliary_field_flux,
-        const auto div_auxiliary_field_flux) noexcept {
+        const auto div_auxiliary_field_flux,
+        const auto normal_field_flux) noexcept {
       using auxiliary_field_tag = std::decay_t<decltype(auxiliary_field_tag_v)>;
       get<Tags::NormalDotFlux<auxiliary_field_tag>>(*packaged_data) =
           normal_dot_auxiliary_field_flux;
       get(get<NormalDotDivFlux<auxiliary_field_tag>>(*packaged_data)) =
           get<0>(interface_unit_normal) * get<0>(div_auxiliary_field_flux);
+      get(get<NormalDotNormalFieldFlux<auxiliary_field_tag>>(*packaged_data)) =
+          get<0>(interface_unit_normal) * get<0>(normal_field_flux);
       for (size_t d = 1; d < Dim; d++) {
         get(get<NormalDotDivFlux<auxiliary_field_tag>>(*packaged_data)) +=
             interface_unit_normal.get(d) * div_auxiliary_field_flux.get(d);
+        get(get<NormalDotNormalFieldFlux<auxiliary_field_tag>>(
+            *packaged_data)) +=
+            interface_unit_normal.get(d) * normal_field_flux.get(d);
       }
     };
-    EXPAND_PACK_LEFT_TO_RIGHT(helper(AuxiliaryFieldTags{},
-                                     normal_dot_auxiliary_field_fluxes,
-                                     div_auxiliary_field_fluxes));
+    EXPAND_PACK_LEFT_TO_RIGHT(
+        helper(AuxiliaryFieldTags{}, normal_dot_auxiliary_field_fluxes,
+               div_auxiliary_field_fluxes, normal_field_fluxes));
     get<FaceNormal>(*packaged_data) = interface_unit_normal;
   }
 
@@ -169,12 +190,16 @@ struct FirstOrderInternalPenalty<Dim, tmpl::list<FieldTags...>,
           AuxiliaryFieldTags>>&... normal_dot_auxiliary_flux_interiors,
       const db::item_type<NormalDotDivFlux<
           AuxiliaryFieldTags>>&... normal_dot_div_auxiliary_flux_interiors,
+      const db::item_type<NormalDotNormalFieldFlux<
+          AuxiliaryFieldTags>>&... normal_dot_normal_field_flux_interiors,
       const tnsr::i<DataVector, Dim, Frame::Inertial>&
           interface_unit_normal_interior,
       const db::item_type<Tags::NormalDotFlux<
           AuxiliaryFieldTags>>&... minus_normal_dot_auxiliary_flux_exteriors,
       const db::item_type<NormalDotDivFlux<
           AuxiliaryFieldTags>>&... minus_normal_dot_div_aux_flux_exteriors,
+      const db::item_type<NormalDotNormalFieldFlux<
+          AuxiliaryFieldTags>>&... minus_normal_dot_normal_field_flux_exteriors,
       const tnsr::i<DataVector, Dim, Frame::Inertial>&
           interface_unit_normal_exterior) const noexcept {
     // Need polynomial degress and element size to compute this dynamically
@@ -188,36 +213,31 @@ struct FirstOrderInternalPenalty<Dim, tmpl::list<FieldTags...>,
           const auto numerical_flux_for_auxiliary_field,
           const auto normal_dot_auxiliary_flux_interior,
           const auto normal_dot_div_auxiliary_flux_interior,
+          const auto normal_dot_normal_field_flux_interior,
           const auto minus_normal_dot_auxiliary_flux_exterior,
-          const auto minus_normal_dot_div_aux_flux_exterior) noexcept {
+          const auto minus_normal_dot_div_aux_flux_exterior,
+          const auto minus_normal_dot_normal_field_flux_exterior) noexcept {
       for (size_t d = 0; d < Dim; d++) {
         numerical_flux_for_auxiliary_field->get(d) =
             0.5 * (normal_dot_auxiliary_flux_interior.get(d) -
                    minus_normal_dot_auxiliary_flux_exterior.get(d));
       }
       DataVector jump_normal_dot_auxiliary_field_flux =
-          get<0>(interface_unit_normal_interior) *
-              get<0>(normal_dot_auxiliary_flux_interior) -
-          get<0>(interface_unit_normal_exterior) *
-              get<0>(minus_normal_dot_auxiliary_flux_exterior);
-      for (size_t d = 1; d < Dim; d++) {
-        jump_normal_dot_auxiliary_field_flux +=
-            interface_unit_normal_interior.get(d) *
-                normal_dot_auxiliary_flux_interior.get(d) -
-            interface_unit_normal_exterior.get(d) *
-                minus_normal_dot_auxiliary_flux_exterior.get(d);
-      }
+          get(normal_dot_normal_field_flux_interior) +
+          get(minus_normal_dot_normal_field_flux_exterior);
       get(*numerical_flux_for_field) =
           0.5 * (get(normal_dot_div_auxiliary_flux_interior) -
                  get(minus_normal_dot_div_aux_flux_exterior)) -
           penalty * jump_normal_dot_auxiliary_field_flux;
     };
-    EXPAND_PACK_LEFT_TO_RIGHT(helper(numerical_flux_for_fields,
-                                     numerical_flux_for_auxiliary_fields,
-                                     normal_dot_auxiliary_flux_interiors,
-                                     normal_dot_div_auxiliary_flux_interiors,
-                                     minus_normal_dot_auxiliary_flux_exteriors,
-                                     minus_normal_dot_div_aux_flux_exteriors));
+    EXPAND_PACK_LEFT_TO_RIGHT(
+        helper(numerical_flux_for_fields, numerical_flux_for_auxiliary_fields,
+               normal_dot_auxiliary_flux_interiors,
+               normal_dot_div_auxiliary_flux_interiors,
+               normal_dot_normal_field_flux_interiors,
+               minus_normal_dot_auxiliary_flux_exteriors,
+               minus_normal_dot_div_aux_flux_exteriors,
+               minus_normal_dot_normal_field_flux_exteriors));
   }
 
   // This function computes the boundary contributions from Dirichlet boundary

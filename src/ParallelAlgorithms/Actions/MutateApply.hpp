@@ -7,6 +7,7 @@
 
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/DataBoxTag.hpp"
+#include "Parallel/ParallelComponentHelpers.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -43,6 +44,9 @@ struct MutateApply;
 
 template <typename Mutator>
 struct MutateApply<Mutator, Requires<not db::is_tag_v<Mutator>>> {
+  using const_global_cache_tags =
+      Parallel::get_const_global_cache_tags_from_action<Mutator>;
+
   template <typename DataBox, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
@@ -58,6 +62,9 @@ struct MutateApply<Mutator, Requires<not db::is_tag_v<Mutator>>> {
 
 template <typename Mutator>
 struct MutateApply<Mutator, Requires<db::is_tag_v<Mutator>>> {
+  using const_global_cache_tags =
+      Parallel::get_const_global_cache_tags_from_action<Mutator>;
+
   template <typename DataBox, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>

@@ -24,6 +24,19 @@ void flux(
         flux_for_field,
     const tnsr::i<DataVector, Dim, Frame::Inertial>& field_gradient) noexcept;
 
+template <size_t Dim>
+struct Flux {
+  void operator()(
+      const gsl::not_null<tnsr::I<DataVector, Dim, Frame::Inertial>*>
+          flux_for_field,
+      const tnsr::i<DataVector, Dim, Frame::Inertial>& field_gradient) const
+      noexcept {
+    flux(flux_for_field, field_gradient);
+  }
+
+  void pup(PUP::er& /*p*/) noexcept {}
+};
+
 template <size_t Dim, typename VarsTag, typename FieldTag>
 struct ComputeFluxes : db::add_tag_prefix<::Tags::Flux, VarsTag,
                                           tmpl::size_t<Dim>, Frame::Inertial>,
@@ -45,11 +58,11 @@ struct ComputeFluxes : db::add_tag_prefix<::Tags::Flux, VarsTag,
 };
 
 template <size_t Dim, typename VarsTag, typename FieldTag>
-struct ComputeSecondOrderFluxes
-    : db::add_tag_prefix<::Tags::SecondOrderFlux, VarsTag, tmpl::size_t<Dim>,
+struct ComputeNormalFluxes
+    : db::add_tag_prefix<::Tags::NormalFlux, VarsTag, tmpl::size_t<Dim>,
                          Frame::Inertial>,
       db::ComputeTag {
-  using base = db::add_tag_prefix<::Tags::SecondOrderFlux, VarsTag,
+  using base = db::add_tag_prefix<::Tags::NormalFlux, VarsTag,
                                   tmpl::size_t<Dim>, Frame::Inertial>;
   using argument_tags = tmpl::list<
       FieldTag,
@@ -62,8 +75,8 @@ struct ComputeSecondOrderFluxes
       normal_times_field.get(d) *= get(field);
     }
     auto fluxes = make_with_value<db::item_type<base>>(field, 0.);
-    flux(make_not_null(&get<::Tags::SecondOrderFlux<FieldTag, tmpl::size_t<Dim>,
-                                                    Frame::Inertial>>(fluxes)),
+    flux(make_not_null(&get<::Tags::NormalFlux<FieldTag, tmpl::size_t<Dim>,
+                                               Frame::Inertial>>(fluxes)),
          std::move(normal_times_field));
     return fluxes;
   }
@@ -86,10 +99,10 @@ template <size_t Dim>
 void first_order_fluxes(
     const gsl::not_null<tnsr::I<DataVector, Dim, Frame::Inertial>*>
         flux_for_field,
-    const gsl::not_null<tnsr::IJ<DataVector, Dim, Frame::Inertial>*>
+    const gsl::not_null<tnsr::Ij<DataVector, Dim, Frame::Inertial>*>
         flux_for_auxiliary_field,
     const Scalar<DataVector>& field,
-    const tnsr::I<DataVector, Dim, Frame::Inertial>& auxiliary_field) noexcept;
+    const tnsr::i<DataVector, Dim, Frame::Inertial>& auxiliary_field) noexcept;
 
 template <size_t Dim, typename VarsTag, typename FieldTag,
           typename AuxiliaryFieldTag>
@@ -101,8 +114,7 @@ struct ComputeFirstOrderFluxes
                                   Frame::Inertial>;
   using argument_tags = tmpl::list<VarsTag>;
   static constexpr auto function(const db::item_type<VarsTag>& vars) noexcept {
-    auto fluxes = make_with_value<db::item_type<db::add_tag_prefix<
-        ::Tags::Flux, VarsTag, tmpl::size_t<Dim>, Frame::Inertial>>>(vars, 0.);
+    auto fluxes = make_with_value<db::item_type<base>>(vars, 0.);
     first_order_fluxes(
         make_not_null(
             &get<::Tags::Flux<FieldTag, tmpl::size_t<Dim>, Frame::Inertial>>(
@@ -114,6 +126,38 @@ struct ComputeFirstOrderFluxes
   }
 };
 // @}
+
+template <size_t Dim, typename VarsTag, typename FieldTag,
+          typename AuxiliaryFieldTag>
+struct ComputeFirstOrderNormalFluxes
+    : db::add_tag_prefix<::Tags::NormalFlux, VarsTag, tmpl::size_t<Dim>,
+                         Frame::Inertial>,
+      db::ComputeTag {
+  using base = db::add_tag_prefix<::Tags::NormalFlux, VarsTag,
+                                  tmpl::size_t<Dim>, Frame::Inertial>;
+  using argument_tags = tmpl::list<
+      FieldTag,
+      ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<Dim, Frame::Inertial>>>;
+  static constexpr auto function(
+      const Scalar<DataVector>& field,
+      const tnsr::i<DataVector, Dim, Frame::Inertial>& face_normal) noexcept {
+    auto normal_times_field = face_normal;
+    for (size_t d = 0; d < Dim; d++) {
+      normal_times_field.get(d) *= get(field);
+    }
+    auto fluxes = make_with_value<db::item_type<base>>(field, 0.);
+    first_order_fluxes(
+        make_not_null(&get<::Tags::NormalFlux<FieldTag, tmpl::size_t<Dim>,
+                                              Frame::Inertial>>(fluxes)),
+        make_not_null(
+            &get<::Tags::NormalFlux<AuxiliaryFieldTag, tmpl::size_t<Dim>,
+                                    Frame::Inertial>>(fluxes)),
+        make_with_value<Scalar<DataVector>>(
+            field, std::numeric_limits<double>::signaling_NaN()),
+        std::move(normal_times_field));
+    return fluxes;
+  }
+};
 
 template <size_t Dim, typename VarsTag, typename FieldTag>
 struct ComputeSecondOrderSources : db::add_tag_prefix<::Tags::Source, VarsTag>,
@@ -139,10 +183,9 @@ struct ComputeSecondOrderSources : db::add_tag_prefix<::Tags::Source, VarsTag>,
 template <size_t Dim>
 void first_order_sources(
     const gsl::not_null<Scalar<DataVector>*> source_for_field,
-    const gsl::not_null<tnsr::I<DataVector, Dim, Frame::Inertial>*>
+    const gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*>
         source_for_auxiliary_field,
-    const Scalar<DataVector>& field,
-    const tnsr::I<DataVector, Dim, Frame::Inertial>& auxiliary_field) noexcept;
+    const tnsr::i<DataVector, Dim, Frame::Inertial>& auxiliary_field) noexcept;
 
 template <size_t Dim, typename VarsTag, typename FieldTag,
           typename AuxiliaryFieldTag>
@@ -155,7 +198,7 @@ struct ComputeFirstOrderSources : db::add_tag_prefix<::Tags::Source, VarsTag>,
     first_order_sources(
         make_not_null(&get<::Tags::Source<FieldTag>>(sources)),
         make_not_null(&get<::Tags::Source<AuxiliaryFieldTag>>(sources)),
-        get<FieldTag>(vars), get<AuxiliaryFieldTag>(vars));
+        get<AuxiliaryFieldTag>(vars));
     return sources;
   }
 };

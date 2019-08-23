@@ -14,6 +14,7 @@
 
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/Index.hpp"
+#include "DataStructures/Tensor/EagerMath/Determinant.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "DataStructures/VariablesHelpers.hpp"
 #include "Domain/Creators/DomainCreator.hpp"  // IWYU pragma: keep
@@ -181,6 +182,25 @@ struct JacobianInverseCompute
       const db::item_type<MapTag>& map,
       const db::item_type<SourceCoordsTag>& source_coords) noexcept {
     return map.inv_jacobian(source_coords);
+  }
+};
+
+template <typename SourceFrame, typename TargetFrame>
+struct JacobianDeterminant : db::SimpleTag {
+  using type = Scalar<DataVector>;
+  static std::string name() noexcept { return "JacobianDeterminant()"; }
+};
+
+template <size_t Dim, typename SourceFrame, typename TargetFrame>
+struct JacobianDeterminantCompute
+    : JacobianDeterminant<SourceFrame, TargetFrame>,
+      db::ComputeTag {
+  using base = JacobianDeterminant<SourceFrame, TargetFrame>;
+  using argument_tags = tmpl::list<Jacobian<Dim, SourceFrame, TargetFrame>>;
+  static Scalar<DataVector> function(
+      const ::Jacobian<DataVector, Dim, SourceFrame, TargetFrame>&
+          jacobian) noexcept {
+    return determinant(jacobian);
   }
 };
 

@@ -87,8 +87,12 @@ struct InitializeDomain {
         ::Tags::LogicalCoordinates<Dim>,
         ::Tags::MappedCoordinates<::Tags::ElementMap<Dim>,
                                   ::Tags::Coordinates<Dim, Frame::Logical>>,
-        ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
+        ::Tags::JacobianCompute<::Tags::ElementMap<Dim>,
                                 ::Tags::Coordinates<Dim, Frame::Logical>>,
+        ::Tags::JacobianInverseCompute<
+            ::Tags::ElementMap<Dim>, ::Tags::Coordinates<Dim, Frame::Logical>>,
+        ::Tags::JacobianDeterminantCompute<Dim, Frame::Logical,
+                                           Frame::Inertial>,
         ::Tags::MinimumGridSpacing<Dim, Frame::Inertial>>>;
 
     const auto& initial_extents = db::get<::Tags::InitialExtents<Dim>>(box);

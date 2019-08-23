@@ -74,34 +74,6 @@ struct InitializeSystem {
         db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
     using vars_tag =
         db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
-    using operator_applied_to_vars_tag =
-        db::add_tag_prefix<::LinearSolver::Tags::OperatorAppliedTo, vars_tag>;
-    using fluxes_tag = db::add_tag_prefix<::Tags::Flux, vars_tag,
-                                          tmpl::size_t<Dim>, Frame::Inertial>;
-    using second_order_fluxes_tag =
-        db::add_tag_prefix<::Tags::SecondOrderFlux, vars_tag, tmpl::size_t<Dim>,
-                           Frame::Inertial>;
-    using div_fluxes_tag = db::add_tag_prefix<::Tags::div, fluxes_tag>;
-    using inv_jacobian_tag =
-        ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
-                                ::Tags::Coordinates<Dim, Frame::Logical>>;
-
-    using simple_tags =
-        db::AddSimpleTags<fields_tag, operator_applied_to_fields_tag,
-                          fixed_sources_tag, vars_tag,
-                          operator_applied_to_vars_tag>;
-    using compute_tags = db::AddComputeTags<
-        // // First-order fluxes and sources
-        // typename system::compute_fluxes, typename system::compute_sources,
-        // // Divergence of the system fluxes for the elliptic operator
-        // ::Tags::DivCompute<second_order_fluxes_tag, inv_jacobian_tag,
-        //                    fluxes_tag>,
-        // ::Tags::DivCompute<fluxes_tag, inv_jacobian_tag>,
-        ::Tags::DerivCompute<
-            vars_tag, ::Tags::Jacobian<Dim, Frame::Inertial, Frame::Logical>>,
-        typename system::compute_fluxes,
-        ::Tags::DivCompute<fluxes_tag, ::Tags::Jacobian<Dim, Frame::Inertial,
-                                                        Frame::Logical>>>;
 
     const auto& mesh = db::get<::Tags::Mesh<Dim>>(box);
     const size_t num_grid_points = mesh.number_of_grid_points();
@@ -126,15 +98,17 @@ struct InitializeSystem {
 
     // Initialize the linear operator applied to the variables. It needs no
     // initial value, but is computed in every step of the elliptic solve.
-    db::item_type<operator_applied_to_vars_tag> operator_applied_to_vars{
-        num_grid_points};
+    // db::item_type<operator_applied_to_vars_tag> operator_applied_to_vars{
+    //     num_grid_points};
 
     return std::make_tuple(
-        ::Initialization::merge_into_databox<InitializeSystem, simple_tags,
-                                             compute_tags>(
+        ::Initialization::merge_into_databox<
+            InitializeSystem,
+            db::AddSimpleTags<fields_tag, operator_applied_to_fields_tag,
+                              fixed_sources_tag, vars_tag>>(
             std::move(box), std::move(fields),
             std::move(operator_applied_to_fields), std::move(fixed_sources),
-            std::move(vars), std::move(operator_applied_to_vars)));
+            std::move(vars)));
   }
 };
 

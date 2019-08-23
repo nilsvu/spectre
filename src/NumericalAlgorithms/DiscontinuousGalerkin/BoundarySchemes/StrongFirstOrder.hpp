@@ -14,10 +14,16 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
 #include "DataStructures/VariablesHelpers.hpp"
+#include "Evolution/Conservative/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarData.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "Utilities/TMPL.hpp"
+
+#include "Domain/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
+#include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 
 // namespace {
 // template <typename SubTags, typename Tags>
@@ -81,10 +87,78 @@ struct compute_packaged_local_data_impl : PackagedLocalDataTag, db::ComputeTag {
         normal_dot_fluxes.number_of_grid_points());
     local_data.mortar_data.assign_subset(normal_dot_fluxes);
     local_data.mortar_data.assign_subset(remote_data.mortar_data);
-    local_data.face_data.initialize(normal_dot_fluxes.number_of_grid_points());
     get<MagnitudeOfFaceNormalTag>(local_data.face_data) =
         magnitude_of_face_normal;
     return local_data;
+  }
+};
+
+template <typename Scheme>
+struct InitializeElement {
+ private:
+  static constexpr size_t volume_dim = Scheme::volume_dim;
+  using temporal_id_tag = typename Scheme::temporal_id_tag;
+  using variables_tag = typename Scheme::variables_tag;
+  using operator_applied_to_variables_tag =
+      db::add_tag_prefix<temporal_id_tag::template step_prefix, variables_tag>;
+  using fluxes_tag =
+      db::add_tag_prefix<::Tags::Flux, variables_tag, tmpl::size_t<volume_dim>,
+                         Frame::Inertial>;
+
+  template <typename Directions>
+  using interior_face_tags = tmpl::flatten<tmpl::list<
+      ::Tags::Slice<Directions, fluxes_tag>,
+      ::Tags::InterfaceComputeItem<
+          Directions, ::Tags::ComputeNormalDotFlux<variables_tag, volume_dim,
+                                                   Frame::Inertial>>,
+      ::Tags::InterfaceComputeItem<
+          Directions, typename Scheme::compute_packaged_remote_data>,
+      ::Tags::InterfaceComputeItem<
+          Directions, typename Scheme::compute_packaged_local_data>>>;
+
+  using exterior_face_tags = tmpl::list<
+      ::Tags::Slice<::Tags::BoundaryDirectionsExterior<volume_dim>, fluxes_tag>,
+      ::Tags::InterfaceComputeItem<
+          ::Tags::BoundaryDirectionsExterior<volume_dim>,
+          ::Tags::ComputeNormalDotFlux<variables_tag, volume_dim,
+                                       Frame::Inertial>>,
+      ::Tags::InterfaceComputeItem<
+          ::Tags::BoundaryDirectionsExterior<volume_dim>,
+          typename Scheme::compute_packaged_remote_data>,
+      ::Tags::InterfaceComputeItem<
+          ::Tags::BoundaryDirectionsExterior<volume_dim>,
+          typename Scheme::compute_packaged_local_data>>;
+
+ public:
+  template <typename DataBox, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static auto apply(DataBox& box,
+                    const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+                    const Parallel::ConstGlobalCache<Metavariables>&
+                    /*cache*/,
+                    const ArrayIndex& /*array_index*/,
+                    const ActionList /*meta*/, const ParallelComponent* const
+                    /*meta*/) noexcept {
+    const auto& mesh = db::get<::Tags::Mesh<volume_dim>>(box);
+    const size_t num_grid_points = mesh.number_of_grid_points();
+    db::item_type<operator_applied_to_variables_tag> operator_applied_to_vars{
+        num_grid_points};
+
+    using compute_tags = tmpl::flatten<tmpl::list<
+        typename Scheme::compute_fluxes, typename Scheme::compute_sources,
+        ::Tags::DivCompute<
+            fluxes_tag,
+            ::Tags::Jacobian<volume_dim, Frame::Inertial, Frame::Logical>>,
+        interior_face_tags<::Tags::InternalDirections<volume_dim>>,
+        interior_face_tags<::Tags::BoundaryDirectionsInterior<volume_dim>>,
+        exterior_face_tags>>;
+
+    return std::make_tuple(
+        ::Initialization::merge_into_databox<
+            InitializeElement,
+            db::AddSimpleTags<operator_applied_to_variables_tag>, compute_tags>(
+            std::move(box), std::move(operator_applied_to_vars)));
   }
 };
 
@@ -95,7 +169,8 @@ struct compute_packaged_local_data_impl : PackagedLocalDataTag, db::ComputeTag {
  * \brief Strong
  */
 template <size_t Dim, typename VariablesTag, typename NumericalFluxComputerTag,
-          typename TemporalIdTag>
+          typename TemporalIdTag, typename ComputeFluxes,
+          typename ComputeSources>
 struct StrongFirstOrder {
  private:
   // Can't use `::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<Dim>>` for
@@ -108,6 +183,7 @@ struct StrongFirstOrder {
 
  public:
   static constexpr size_t volume_dim = Dim;
+  static constexpr bool use_external_mortars = true;
   using temporal_id_tag = TemporalIdTag;
   using numerical_flux_computer_tag = NumericalFluxComputerTag;
   using variables_tag = VariablesTag;
@@ -117,6 +193,13 @@ struct StrongFirstOrder {
       db::add_tag_prefix<::Tags::NormalDotNumericalFlux, VariablesTag>;
   using normal_dot_fluxes_tag =
       db::add_tag_prefix<::Tags::NormalDotFlux, VariablesTag>;
+  using fluxes_tag = db::add_tag_prefix<::Tags::Flux, variables_tag,
+                                        tmpl::size_t<Dim>, Frame::Inertial>;
+  using div_fluxes_tag = db::add_tag_prefix<::Tags::div, fluxes_tag>;
+  using sources_tag = db::add_tag_prefix<::Tags::Source, variables_tag>;
+
+  using compute_fluxes = ComputeFluxes;
+  using compute_sources = ComputeSources;
 
   /// Data that is communicated to and from the remote element.
   /// Must have `project_to_mortar` and `orient_on_slice` functions.
@@ -149,24 +232,34 @@ struct StrongFirstOrder {
   using mortar_data_tag = Tags::SimpleBoundaryData<db::item_type<TemporalIdTag>,
                                                    LocalData, RemoteData>;
 
+  using initialize_element =
+      StrongFirstOrder_detail::InitializeElement<StrongFirstOrder>;
+
   using return_tags =
       tmpl::list<dt_variables_tag, ::Tags::Mortars<mortar_data_tag, Dim>>;
   using argument_tags =
-      tmpl::list<::Tags::Mesh<Dim>, ::Tags::Mortars<::Tags::Mesh<Dim - 1>, Dim>,
+      tmpl::list<div_fluxes_tag, sources_tag, ::Tags::Mesh<Dim>,
+                 ::Tags::Mortars<::Tags::Mesh<Dim - 1>, Dim>,
                  ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>,
                  NumericalFluxComputerTag>;
+
+  using const_global_cache_tags = tmpl::list<
+      ::OptionTags::NumericalFlux<db::item_type<NumericalFluxComputerTag>>>;
 
   static void apply(
       const gsl::not_null<db::item_type<dt_variables_tag>*> dt_variables,
       const gsl::not_null<db::item_type<::Tags::Mortars<mortar_data_tag, Dim>>*>
           all_mortar_data,
-      const Mesh<Dim>& volume_mesh,
+      const db::item_type<div_fluxes_tag>& div_fluxes,
+      const db::item_type<sources_tag>& sources, const Mesh<Dim>& volume_mesh,
       const db::item_type<::Tags::Mortars<::Tags::Mesh<Dim - 1>, Dim>>&
           mortar_meshes,
       const db::item_type<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>&
           mortar_sizes,
       const db::item_type<NumericalFluxComputerTag>&
           normal_dot_numerical_flux_computer) noexcept {
+    *dt_variables = db::item_type<dt_variables_tag>{-1. * div_fluxes + sources};
+
     // Iterate over all mortars
     for (auto& mortar_id_and_data : *all_mortar_data) {
       // Retrieve mortar data

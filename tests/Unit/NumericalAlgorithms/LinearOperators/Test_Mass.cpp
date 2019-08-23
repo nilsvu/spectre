@@ -15,6 +15,7 @@
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
 #include "DataStructures/DataVector.hpp"        // IWYU pragma: keep
+#include "DataStructures/Tensor/EagerMath/Determinant.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"  // IWYU pragma: keep
 #include "Domain/CoordinateMaps/Affine.hpp"
@@ -46,11 +47,12 @@ void test_mass(const Mesh<Dim>& mesh,
                const DataVector& expected_massive_scalar_field) noexcept {
   const size_t num_grid_points = mesh.number_of_grid_points();
   const auto logical_coords = logical_coordinates(mesh);
-  const auto jacobian = coordinate_map.jacobian(logical_coords);
+  const auto jacobian_determinant =
+      determinant(coordinate_map.jacobian(logical_coords));
 
   Variables<tmpl::list<ScalarFieldTag>> vars{num_grid_points};
   get<ScalarFieldTag>(vars) = Scalar<DataVector>(scalar_field);
-  const auto massive_vars = mass(vars, mesh, jacobian);
+  const auto massive_vars = mass(vars, mesh, jacobian_determinant);
   CHECK_ITERABLE_APPROX(get(get<::Tags::Mass<ScalarFieldTag>>(massive_vars)),
                         expected_massive_scalar_field);
 }

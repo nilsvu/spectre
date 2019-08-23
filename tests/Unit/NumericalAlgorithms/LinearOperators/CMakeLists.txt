@@ -10,7 +10,7 @@ set(LIBRARY_SOURCES
   Test_Divergence.cpp
   Test_IndefiniteIntegral.cpp
   Test_Linearize.cpp
-  Test_Mass.cpp
+  # Test_Mass.cpp
   Test_MeanValue.cpp
   Test_PartialDerivatives.cpp
   Test_Transpose.cpp

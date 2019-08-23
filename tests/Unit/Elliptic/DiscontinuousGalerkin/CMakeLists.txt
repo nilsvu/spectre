@@ -4,6 +4,7 @@
 set(LIBRARY "Test_EllipticDG")
 
 set(LIBRARY_SOURCES
+  # Test_StrongFirstOrderInternalPenalty.cpp
   Test_StrongSecondOrderInternalPenalty.cpp
   # Test_ImposeInhomogeneousBoundaryConditionsOnSource.cpp
   )

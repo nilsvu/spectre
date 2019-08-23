@@ -71,29 +71,29 @@ struct Flux<Tag, VolumeDim, Fr,
 /// \brief Prefix indicating a second-order flux
 template <typename Tag, typename VolumeDim, typename Fr,
           typename = std::nullptr_t>
-struct SecondOrderFlux;
+struct NormalFlux;
 
 /// \cond
 template <typename Tag, typename VolumeDim, typename Fr>
-struct SecondOrderFlux<Tag, VolumeDim, Fr,
+struct NormalFlux<Tag, VolumeDim, Fr,
                        Requires<tt::is_a_v<Tensor, db::item_type<Tag>>>>
     : db::PrefixTag, db::SimpleTag {
   using type = TensorMetafunctions::prepend_spatial_index<
       db::item_type<Tag>, VolumeDim::value, UpLo::Up, Fr>;
   using tag = Tag;
   static std::string name() noexcept {
-    return "SecondOrderFlux(" + db::tag_name<Tag>() + ")";
+    return "NormalFlux(" + db::tag_name<Tag>() + ")";
   }
 };
 
 template <typename Tag, typename VolumeDim, typename Fr>
-struct SecondOrderFlux<Tag, VolumeDim, Fr,
-                       Requires<tt::is_a_v<::Variables, db::item_type<Tag>>>>
+struct NormalFlux<Tag, VolumeDim, Fr,
+                  Requires<tt::is_a_v<::Variables, db::item_type<Tag>>>>
     : db::PrefixTag, db::SimpleTag {
   using type = db::item_type<Tag>;
   using tag = Tag;
   static std::string name() noexcept {
-    return "SecondOrderFlux(" + db::tag_name<Tag>() + ")";
+    return "NormalFlux(" + db::tag_name<Tag>() + ")";
   }
 };
 /// \endcond

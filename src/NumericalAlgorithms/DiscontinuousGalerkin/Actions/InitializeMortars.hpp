@@ -91,25 +91,7 @@ struct InitializeMortars {
                           ::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>,
                           ::Tags::Mortars<::Tags::Mesh<dim - 1>, dim>,
                           ::Tags::Mortars<::Tags::MortarSize<dim - 1>, dim>>;
-    using compute_tags = db::AddComputeTags<
-        ::Tags::InterfaceComputeItem<
-            ::Tags::InternalDirections<dim>,
-            typename BoundaryScheme::compute_packaged_remote_data>,
-        ::Tags::InterfaceComputeItem<
-            ::Tags::InternalDirections<dim>,
-            typename BoundaryScheme::compute_packaged_local_data>,
-        // For imposing boundary conditions
-        ::Tags::InterfaceComputeItem<
-            ::Tags::BoundaryDirectionsInterior<dim>,
-            typename BoundaryScheme::compute_packaged_remote_data>,
-        ::Tags::InterfaceComputeItem<
-            ::Tags::BoundaryDirectionsInterior<dim>,
-            typename BoundaryScheme::compute_packaged_local_data>
-        //     ,
-        // ::Tags::InterfaceComputeItem<
-        //     ::Tags::BoundaryDirectionsExterior<dim>,
-        //     typename BoundaryScheme::compute_packaged_remote_data>
-            >;
+    using compute_tags = db::AddComputeTags<>;
 
     const auto& element = db::get<::Tags::Element<dim>>(box);
     const auto& mesh = db::get<::Tags::Mesh<dim>>(box);

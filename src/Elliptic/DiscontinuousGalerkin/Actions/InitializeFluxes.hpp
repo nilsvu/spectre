@@ -49,7 +49,7 @@ struct InhomogeneousBoundaryComputeTags<Dim, System, true> {
       ::Tags::InterfaceComputeItem<
           ::Tags::BoundaryDirectionsExterior<Dim>,
           ::Tags::NormalDotCompute<
-              db::add_tag_prefix<::Tags::SecondOrderFlux, analytic_fields_tag,
+              db::add_tag_prefix<::Tags::NormalFlux, analytic_fields_tag,
                                  tmpl::size_t<Dim>, Frame::Inertial>,
               Dim, Frame::Inertial>>>;
 };
@@ -62,8 +62,8 @@ struct InitializeFluxes {
  private:
   static constexpr size_t Dim = BoundaryScheme::volume_dim;
   using vars_tag = typename BoundaryScheme::variables_tag;
-  using second_order_fluxes_tag =
-      db::add_tag_prefix<::Tags::SecondOrderFlux, vars_tag, tmpl::size_t<Dim>,
+  using normal_fluxes_tag =
+      db::add_tag_prefix<::Tags::NormalFlux, vars_tag, tmpl::size_t<Dim>,
                          Frame::Inertial>;
   using fluxes_tag = db::add_tag_prefix<::Tags::Flux, vars_tag,
                                         tmpl::size_t<Dim>, Frame::Inertial>;
@@ -83,10 +83,9 @@ struct InitializeFluxes {
         tmpl::list<
             // We slice the fluxes and their divergences to all interior
             // faces
-            ::Tags::Slice<::Tags::InternalDirections<Dim>,
-                          second_order_fluxes_tag>,
+            ::Tags::Slice<::Tags::InternalDirections<Dim>, normal_fluxes_tag>,
             ::Tags::Slice<::Tags::BoundaryDirectionsInterior<Dim>,
-                          second_order_fluxes_tag>,
+                          normal_fluxes_tag>,
             ::Tags::Slice<::Tags::InternalDirections<Dim>, fluxes_tag>,
             ::Tags::Slice<::Tags::BoundaryDirectionsInterior<Dim>, fluxes_tag>,
             // ::Tags::Slice<::Tags::InternalDirections<Dim>, div_fluxes_tag>,
@@ -96,11 +95,11 @@ struct InitializeFluxes {
             // normal dotted into the fluxes.
             ::Tags::InterfaceComputeItem<
                 ::Tags::InternalDirections<Dim>,
-                ::Tags::NormalDotCompute<second_order_fluxes_tag, Dim,
+                ::Tags::NormalDotCompute<normal_fluxes_tag, Dim,
                                          Frame::Inertial>>,
             ::Tags::InterfaceComputeItem<
                 ::Tags::BoundaryDirectionsInterior<Dim>,
-                ::Tags::NormalDotCompute<second_order_fluxes_tag, Dim,
+                ::Tags::NormalDotCompute<normal_fluxes_tag, Dim,
                                          Frame::Inertial>>,
             ::Tags::InterfaceComputeItem<
                 ::Tags::InternalDirections<Dim>,

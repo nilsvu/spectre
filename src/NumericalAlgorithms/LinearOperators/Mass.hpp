@@ -43,21 +43,19 @@ struct Mass : db::PrefixTag, db::SimpleTag {
 
 }  // namespace Tags
 
-template <typename VariablesTags, size_t Dim, typename IntegrationFrame>
+template <typename VariablesTags, size_t Dim>
 Variables<db::wrap_tags_in<Tags::Mass, VariablesTags>> mass(
     const Variables<VariablesTags>& variables, const Mesh<Dim>& mesh,
-    const Jacobian<DataVector, Dim, Frame::Logical, IntegrationFrame>&
-        jacobian) noexcept {
+    const Scalar<DataVector>&
+        logical_to_integration_frame_jacobian_determinant) noexcept {
   std::array<Matrix, Dim> mass_matrices{};
-  DataVector jacobian_determinant{mesh.number_of_grid_points(), 1.};
   for (size_t d = 0; d < Dim; d++) {
     gsl::at(mass_matrices, d) = Spectral::mass_matrix(mesh.slice_through(d));
-    // Jacobian is diagonal, so we just multiply diagonal elements for the
-    // determinant.
-    jacobian_determinant *= jacobian.get(d, d);
   }
   return Variables<db::wrap_tags_in<Tags::Mass, VariablesTags>>(apply_matrices(
-      mass_matrices, variables * jacobian_determinant, mesh.extents()));
+      mass_matrices,
+      variables * get(logical_to_integration_frame_jacobian_determinant),
+      mesh.extents()));
 }
 
 // namespace Tags {
@@ -79,61 +77,57 @@ Variables<db::wrap_tags_in<Tags::Mass, VariablesTags>> mass(
 
 namespace Mass_detail {
 
-template <size_t VolumeDim>
+template <size_t FaceDim>
 struct MassOnFaceImpl {
-  template <typename VariablesTags, typename IntegrationFrame>
+  template <typename VariablesTags>
   static Variables<db::wrap_tags_in<Tags::Mass, VariablesTags>> apply(
       const Variables<VariablesTags>& variables_on_face,
-      const Mesh<VolumeDim - 1>& face_mesh, const size_t face_dimension,
-      const Jacobian<DataVector, VolumeDim, Frame::Logical, IntegrationFrame>&
-          volume_jacobian_on_face) noexcept {
-    std::array<Matrix, VolumeDim - 1> mass_matrices{};
-    DataVector jacobian_determinant{face_mesh.number_of_grid_points(), 1.};
-    for (size_t d = 0; d < VolumeDim - 1; d++) {
+      const Mesh<FaceDim>& face_mesh,
+      const Scalar<DataVector>&
+          logical_to_integration_frame_surface_jacobian_determinant) noexcept {
+    std::array<Matrix, FaceDim> mass_matrices{};
+    for (size_t d = 0; d < FaceDim; d++) {
       gsl::at(mass_matrices, d) =
           Spectral::mass_matrix(face_mesh.slice_through(d));
-      // Jacobian is diagonal, so we just multiply diagonal elements for the
-      // determinant. We omit the dimension that the face slices through to get
-      // the surface jacobian determinant.
-      const size_t d_in_volume = d + (d >= face_dimension ? 1 : 0);
-      jacobian_determinant *=
-          volume_jacobian_on_face.get(d_in_volume, d_in_volume);
     }
     return Variables<db::wrap_tags_in<Tags::Mass, VariablesTags>>(
-        apply_matrices(mass_matrices, variables_on_face * jacobian_determinant,
-                       face_mesh.extents()));
+        apply_matrices(
+            mass_matrices,
+            variables_on_face *
+                get(logical_to_integration_frame_surface_jacobian_determinant),
+            face_mesh.extents()));
   }
 };
 
 template <>
-struct MassOnFaceImpl<1> {
-  template <typename VariablesTags, typename IntegrationFrame>
+struct MassOnFaceImpl<0> {
+  template <typename VariablesTags>
   static Variables<db::wrap_tags_in<Tags::Mass, VariablesTags>> apply(
       const Variables<VariablesTags>& variables_on_face,
-      const Mesh<0>& /*face_mesh*/, const size_t /*face_dimension*/,
-      const Jacobian<DataVector, 1, Frame::Logical, IntegrationFrame>&
-      /*volume_jacobian_on_face*/) noexcept {
+      const Mesh<0>& /*face_mesh*/, const Scalar<DataVector>&
+      /*logical_to_integration_frame_surface_jacobian_determinant*/) noexcept {
     return Variables<db::wrap_tags_in<Tags::Mass, VariablesTags>>(
         variables_on_face);
   }
 };
 }  // namespace Mass_detail
 
-template <typename VariablesTags, size_t VolumeDim, typename IntegrationFrame>
+template <typename VariablesTags, size_t FaceDim>
 Variables<db::wrap_tags_in<Tags::Mass, VariablesTags>> mass_on_face(
     const Variables<VariablesTags>& variables_on_face,
-    const Mesh<VolumeDim - 1>& face_mesh, const size_t face_dimension,
-    const Jacobian<DataVector, VolumeDim, Frame::Logical, IntegrationFrame>&
-        volume_jacobian_on_face) noexcept {
-  return Mass_detail::MassOnFaceImpl<VolumeDim>::apply(
-      variables_on_face, face_mesh, face_dimension, volume_jacobian_on_face);
+    const Mesh<FaceDim>& face_mesh,
+    const Scalar<DataVector>&
+        logical_to_integration_frame_surface_jacobian_determinant) noexcept {
+  return Mass_detail::MassOnFaceImpl<FaceDim>::apply(
+      variables_on_face, face_mesh,
+      logical_to_integration_frame_surface_jacobian_determinant);
 }
 
 template <typename VariablesTags, size_t VolumeDim, typename DiffFrame>
 Variables<db::wrap_tags_in<::Tags::div, VariablesTags>> stiffness(
     const Variables<VariablesTags>& variables, const Mesh<VolumeDim>& mesh,
     const InverseJacobian<DataVector, VolumeDim, Frame::Logical, DiffFrame>&
-        inv_jacobian) noexcept {
+        inverse_jacobian) noexcept {
   Variables<db::wrap_tags_in<::Tags::div, VariablesTags>> result{
       variables.number_of_grid_points(), 0.};
   for (size_t d = 0; d < VolumeDim; d++) {
@@ -141,21 +135,14 @@ Variables<db::wrap_tags_in<::Tags::div, VariablesTags>> stiffness(
     Matrix& diff_matrix = gsl::at(diff_matrices_transpose, d);
     diff_matrix =
         trans(Spectral::differentiation_matrix(mesh.slice_through(d)));
-    // // Jacobian is diagonal
-    // const DataVector& jacobian_factor = inv_jacobian.get(d, d);
-    // for (size_t i = 0; i < jacobian_factor.size(); i++) {
-    //   for (size_t j = 0; j < jacobian_factor.size(); j++) {
-    //     diff_matrix(i, j) *= jacobian_factor[j];
-    //   }
-    // }
     // We only need the d-th first-index component of the tensors in
     // `variables`, so instead of taking that in the loop below we could take it
-    // here already, could speed this up
+    // here already to speed this up
     auto derivs_this_dim =
         apply_matrices(diff_matrices_transpose, variables, mesh.extents());
 
     tmpl::for_each<VariablesTags>([
-      &result, &derivs_this_dim, &d, &inv_jacobian
+      &result, &derivs_this_dim, &d, &inverse_jacobian
     ](auto deriv_tag_v) noexcept {
       using deriv_tag = tmpl::type_from<decltype(deriv_tag_v)>;
       using div_tag = ::Tags::div<deriv_tag>;
@@ -172,10 +159,11 @@ Variables<db::wrap_tags_in<::Tags::div, VariablesTags>> stiffness(
       auto& div = get<div_tag>(result);
       for (auto it = div.begin(); it != div.end(); ++it) {
         const auto div_indices = div.get_tensor_index(it);
-        const auto flux_indices = prepend(div_indices, d);
-        // Jacobian is diagonal
-        *it += inv_jacobian.get(d, d) *
-               get<deriv_tag>(derivs_this_dim).get(flux_indices);
+        for (size_t i0 = 0; i0 < VolumeDim; i0++) {
+          const auto flux_indices = prepend(div_indices, i0);
+          *it += inverse_jacobian.get(d, i0) *
+                 get<deriv_tag>(derivs_this_dim).get(flux_indices);
+        }
       }
     });
   }

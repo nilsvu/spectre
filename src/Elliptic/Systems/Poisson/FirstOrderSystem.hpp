@@ -29,9 +29,11 @@ struct SecondOrderSystem : elliptic::Protocols::SecondOrderSystem {
       ComputeFluxes<Dim,
                     db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
                     LinearSolver::Tags::Operand<Field>>;
-  using compute_second_order_fluxes = ComputeSecondOrderFluxes<
+  using compute_normal_fluxes = ComputeNormalFluxes<
       Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
       LinearSolver::Tags::Operand<Field>>;
+  using compute_normal_fluxes_of_fields =
+      ComputeNormalFluxes<Dim, fields_tag, Field>;
   //   using compute_sources = ComputeSecondOrderSources<
   //       Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
   //       LinearSolver::Tags::Operand<Field>>;
@@ -100,23 +102,43 @@ struct FirstOrderSystem {
   static constexpr size_t volume_dim = Dim;
 
   // The physical fields to solve for
-  using fields_tag = Tags::Variables<tmpl::list<Field, AuxiliaryField<Dim>>>;
+  using auxiliary_field =
+      ::Tags::deriv<Field, tmpl::size_t<Dim>, Frame::Inertial>;
+  using fields_tag = Tags::Variables<tmpl::list<Field, auxiliary_field>>;
 
   using compute_fluxes = ComputeFirstOrderFluxes<
       Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
       LinearSolver::Tags::Operand<Field>,
-      LinearSolver::Tags::Operand<AuxiliaryField<Dim>>>;
+      LinearSolver::Tags::Operand<auxiliary_field>>;
+//   using compute_fluxes_of_div = ComputeFirstOrderFluxes<
+//       Dim,
+//       db::add_tag_prefix<
+//           ::Tags::div,
+//           db::add_tag_prefix<
+//               ::Tags::Flux,
+//               db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
+//               tmpl::size_t<Dim>, Frame::Inertial>>,
+//       Field,
+//       ::Tags::div<::Tags::Flux<LinearSolver::Tags::Operand<auxiliary_field>,
+//                                tmpl::size_t<Dim>, Frame::Inertial>>>;
+//   using compute_normal_fluxes = ComputeFirstOrderNormalFluxes<
+//       Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
+//       LinearSolver::Tags::Operand<Field>,
+//       LinearSolver::Tags::Operand<auxiliary_field>>;
+//   using compute_normal_fluxes_of_fields =
+//       ComputeFirstOrderNormalFluxes<Dim, fields_tag, Field, auxiliary_field>;
+
   using compute_sources = ComputeFirstOrderSources<
       Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
       LinearSolver::Tags::Operand<Field>,
-      LinearSolver::Tags::Operand<AuxiliaryField<Dim>>>;
+      LinearSolver::Tags::Operand<auxiliary_field>>;
 
   // Boundary conditions
   // This interface will likely change with generalized boundary conditions
   using primal_variables = tmpl::list<LinearSolver::Tags::Operand<Field>>;
   using compute_analytic_fluxes = ComputeFirstOrderFluxes<
       Dim, db::add_tag_prefix<::Tags::Analytic, fields_tag>,
-      ::Tags::Analytic<Field>, ::Tags::Analytic<AuxiliaryField<Dim>>>;
+      ::Tags::Analytic<Field>, ::Tags::Analytic<auxiliary_field>>;
 
   // The tag of the operator to compute magnitudes on the manifold, e.g. to
   // normalize vectors on the faces of an element

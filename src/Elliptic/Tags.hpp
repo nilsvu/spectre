@@ -12,6 +12,14 @@ namespace elliptic {
 /// The \ref DataBoxGroup tags for elliptic solves
 namespace Tags {
 
+struct FluxComputerBase : db::BaseTag {};
+
+template <typename FluxType>
+struct FluxComputer : db::SimpleTag, FluxComputerBase {
+  using type = FluxType;
+  static std::string name() noexcept { return "FluxComputer"; }
+};
+
 /*!
  * \brief Identifies a step in an elliptic solve.
  *
