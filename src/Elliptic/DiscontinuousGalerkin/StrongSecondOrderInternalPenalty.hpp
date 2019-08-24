@@ -282,6 +282,7 @@ struct InitializeElement {
         num_grid_points};
 
     using compute_tags = tmpl::flatten<tmpl::list<
+        typename Scheme::compute_sources,
         ::Tags::DerivCompute<
             variables_tag,
             ::Tags::Jacobian<volume_dim, Frame::Inertial, Frame::Logical>>,
@@ -290,9 +291,8 @@ struct InitializeElement {
             fluxes_tag,
             ::Tags::Jacobian<volume_dim, Frame::Inertial, Frame::Logical>>,
         interior_face_tags<::Tags::InternalDirections<volume_dim>>,
-        interior_face_tags<::Tags::BoundaryDirectionsInterior<volume_dim>>
-        ,exterior_face_tags
-        >>;
+        interior_face_tags<::Tags::BoundaryDirectionsInterior<volume_dim>>,
+        exterior_face_tags>>;
 
     return std::make_tuple(
         ::Initialization::merge_into_databox<
@@ -309,7 +309,8 @@ struct ImposeBoundaryConditionsOnSourceImpl;
 
 template <size_t Dim, typename FieldsTag, typename VariablesTag,
           typename TemporalIdTag, typename ComputeFluxes,
-          typename ComputeNormalFluxes, typename ComputeNormalFluxesOfFields>
+          typename ComputeSources, typename ComputeNormalFluxes,
+          typename ComputeNormalFluxesOfFields>
 struct StrongSecondOrderInternalPenalty {
   static constexpr size_t volume_dim = Dim;
   static constexpr bool use_external_mortars = false;
@@ -322,11 +323,13 @@ struct StrongSecondOrderInternalPenalty {
                          Frame::Inertial>;
   using fluxes_tag = db::add_tag_prefix<::Tags::Flux, variables_tag,
                                         tmpl::size_t<Dim>, Frame::Inertial>;
+  using sources_tag = db::add_tag_prefix<::Tags::Source, variables_tag>;
   using div_fluxes_tag = db::add_tag_prefix<::Tags::div, fluxes_tag>;
   using normal_dot_fluxes_tag =
       db::add_tag_prefix<::Tags::NormalDot, fluxes_tag>;
 
   using compute_fluxes = ComputeFluxes;
+  using compute_sources = ComputeSources;
   using compute_normal_fluxes = ComputeNormalFluxes;
   using compute_normal_fluxes_of_fields = ComputeNormalFluxesOfFields;
 
@@ -364,7 +367,7 @@ struct StrongSecondOrderInternalPenalty {
   using return_tags = tmpl::list<operator_applied_to_variables_tag,
                                  ::Tags::Mortars<mortar_data_tag, Dim>>;
   using argument_tags = tmpl::list<
-      div_fluxes_tag,
+      div_fluxes_tag, sources_tag,
       ::Tags::Interface<::Tags::BoundaryDirectionsInterior<Dim>,
                         packaged_local_data_tag>,
       ::Tags::Mesh<Dim>,
@@ -395,6 +398,7 @@ struct StrongSecondOrderInternalPenalty {
       const gsl::not_null<db::item_type<::Tags::Mortars<mortar_data_tag, Dim>>*>
           all_mortar_data,
       const db::item_type<div_fluxes_tag>& div_fluxes,
+      const db::item_type<sources_tag>& sources,
       const std::unordered_map<Direction<Dim>, LocalData>& all_boundary_data,
       const Mesh<Dim>& volume_mesh,
       const Scalar<DataVector>& logical_to_inertial_jacobian_determinant,
@@ -417,9 +421,10 @@ struct StrongSecondOrderInternalPenalty {
       const double penalty_parameter) noexcept {
     // Apply mass matrix to volume operator
     *operator_applied_to_variables =
-        db::item_type<operator_applied_to_variables_tag>(
-            -1. * mass(div_fluxes, volume_mesh,
-                       logical_to_inertial_jacobian_determinant));
+        db::item_type<operator_applied_to_variables_tag>(mass(
+            db::item_type<operator_applied_to_variables_tag>{-1. * div_fluxes +
+                                                             sources},
+            volume_mesh, logical_to_inertial_jacobian_determinant));
 
     // Iterate over all mortars. They cover all internal faces of the element.
     for (auto& mortar_id_and_data : *all_mortar_data) {
@@ -442,8 +447,7 @@ struct StrongSecondOrderInternalPenalty {
       db::item_type<normal_fluxes_tag> normal_fluxes_local{mortar_num_points};
       db::item_type<normal_dot_fluxes_tag> normal_dot_fluxes_local{
           mortar_num_points};
-      db::item_type<normal_fluxes_tag> normal_fluxes_remote{
-          mortar_num_points};
+      db::item_type<normal_fluxes_tag> normal_fluxes_remote{mortar_num_points};
       db::item_type<normal_dot_fluxes_tag> normal_dot_fluxes_remote{
           mortar_num_points};
       tmpl::for_each<db::get_variables_tags_list<variables_tag>>([

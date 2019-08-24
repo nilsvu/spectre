@@ -18,6 +18,14 @@
 
 namespace Xcts {
 
+void hamiltonian_sources(
+    const gsl::not_null<Scalar<DataVector>*> source_for_conformal_factor,
+    const Scalar<DataVector>& conformal_factor,
+    const Scalar<DataVector>& energy_density) noexcept {
+  get(*source_for_conformal_factor) -=
+      2. * M_PI * get(energy_density) * pow<5>(get(conformal_factor));
+}
+
 template <size_t Dim>
 void first_order_hamiltonian_sources(
     const gsl::not_null<Scalar<DataVector>*> source_for_conformal_factor,
@@ -26,9 +34,10 @@ void first_order_hamiltonian_sources(
     const Scalar<DataVector>& conformal_factor,
     const tnsr::I<DataVector, Dim, Frame::Inertial>& conformal_factor_gradient,
     const Scalar<DataVector>& energy_density) noexcept {
-  Poisson::first_order_sources(source_for_conformal_factor,
-                               source_for_conformal_factor_gradient,
-                               conformal_factor, conformal_factor_gradient);
+  //   Poisson::first_order_sources(source_for_conformal_factor,
+  //                                source_for_conformal_factor_gradient,
+  //                                conformal_factor,
+  //                                conformal_factor_gradient);
   get(*source_for_conformal_factor) -=
       2. * M_PI * get(energy_density) * pow<5>(get(conformal_factor));
 }
@@ -44,13 +53,35 @@ void first_order_linearized_hamiltonian_sources(
         conformal_factor_gradient_correction,
     const Scalar<DataVector>& conformal_factor,
     const Scalar<DataVector>& energy_density) noexcept {
-  Poisson::first_order_sources(source_for_conformal_factor_correction,
-                               source_for_conformal_factor_gradient_correction,
-                               conformal_factor_correction,
-                               conformal_factor_gradient_correction);
+  //   Poisson::first_order_sources(source_for_conformal_factor_correction,
+  //                            source_for_conformal_factor_gradient_correction,
+  //                                conformal_factor_correction,
+  //                                conformal_factor_gradient_correction);
   get(*source_for_conformal_factor_correction) -=
       10. * M_PI * get(energy_density) * pow<4>(get(conformal_factor)) *
       get(conformal_factor_correction);
+}
+
+void linearized_hamiltonian_sources(
+    const gsl::not_null<Scalar<DataVector>*>
+        source_for_conformal_factor_correction,
+    const Scalar<DataVector>& conformal_factor_correction,
+    const Scalar<DataVector>& conformal_factor,
+    const Scalar<DataVector>& energy_density) noexcept {
+  get(*source_for_conformal_factor_correction) -=
+      10. * M_PI * get(energy_density) * pow<4>(get(conformal_factor)) *
+      get(conformal_factor_correction);
+}
+
+void lapse_sources(const gsl::not_null<Scalar<DataVector>*>
+                       source_for_lapse_times_conformal_factor,
+                   const Scalar<DataVector>& lapse_times_conformal_factor,
+                   const Scalar<DataVector>& conformal_factor,
+                   const Scalar<DataVector>& energy_density,
+                   const Scalar<DataVector>& stress_trace) noexcept {
+  get(*source_for_lapse_times_conformal_factor) +=
+      2. * M_PI * (get(energy_density) + 2. * get(stress_trace)) *
+      get(lapse_times_conformal_factor) * pow<4>(get(conformal_factor));
 }
 
 template <size_t Dim>
@@ -65,10 +96,10 @@ void first_order_lapse_sources(
     const Scalar<DataVector>& conformal_factor,
     const Scalar<DataVector>& energy_density,
     const Scalar<DataVector>& stress_trace) noexcept {
-  Poisson::first_order_sources(source_for_lapse_times_conformal_factor,
-                               source_for_lapse_times_conformal_factor_gradient,
-                               lapse_times_conformal_factor,
-                               lapse_times_conformal_factor_gradient);
+  //   Poisson::first_order_sources(source_for_lapse_times_conformal_factor,
+  //                           source_for_lapse_times_conformal_factor_gradient,
+  //                                lapse_times_conformal_factor,
+  //                                lapse_times_conformal_factor_gradient);
   get(*source_for_lapse_times_conformal_factor) +=
       2. * M_PI * (get(energy_density) + 2. * get(stress_trace)) *
       get(lapse_times_conformal_factor) * pow<4>(get(conformal_factor));
@@ -88,11 +119,28 @@ void first_order_linearized_lapse_sources(
     const Scalar<DataVector>& lapse_times_conformal_factor,
     const Scalar<DataVector>& energy_density,
     const Scalar<DataVector>& stress_trace) noexcept {
-  Poisson::first_order_sources(
-      source_for_lapse_times_conformal_factor_correction,
-      source_for_lapse_times_conformal_factor_gradient_correction,
-      lapse_times_conformal_factor_correction,
-      lapse_times_conformal_factor_gradient_correction);
+  //   Poisson::first_order_sources(
+  //       source_for_lapse_times_conformal_factor_correction,
+  //       source_for_lapse_times_conformal_factor_gradient_correction,
+  //       lapse_times_conformal_factor_correction,
+  //       lapse_times_conformal_factor_gradient_correction);
+  get(*source_for_lapse_times_conformal_factor_correction) +=
+      2. * M_PI * (get(energy_density) + 2 * get(stress_trace)) *
+      (pow<4>(get(conformal_factor)) *
+           get(lapse_times_conformal_factor_correction) +
+       4. * get(lapse_times_conformal_factor) * pow<3>(get(conformal_factor)) *
+           get(conformal_factor_correction));
+}
+
+void linearized_lapse_sources(
+    const gsl::not_null<Scalar<DataVector>*>
+        source_for_lapse_times_conformal_factor_correction,
+    const Scalar<DataVector>& conformal_factor_correction,
+    const Scalar<DataVector>& lapse_times_conformal_factor_correction,
+    const Scalar<DataVector>& conformal_factor,
+    const Scalar<DataVector>& lapse_times_conformal_factor,
+    const Scalar<DataVector>& energy_density,
+    const Scalar<DataVector>& stress_trace) noexcept {
   get(*source_for_lapse_times_conformal_factor_correction) +=
       2. * M_PI * (get(energy_density) + 2 * get(stress_trace)) *
       (pow<4>(get(conformal_factor)) *
@@ -135,7 +183,7 @@ void first_order_linearized_lapse_sources(
 
 GENERATE_INSTANTIATIONS(INSTANTIATE_EQUATIONS, (1, 2, 3))
 
-#include "NumericalAlgorithms/LinearOperators/Divergence.tpp"  // IWYU pragma: keep
+#include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
 
 #define SYSTEM(data) BOOST_PP_TUPLE_ELEM(1, data)
 
@@ -161,6 +209,35 @@ GENERATE_INSTANTIATIONS(INSTANTIATE_EQUATIONS, (1, 2, 3))
       const InverseJacobian<DataVector, DIM(data), Frame::Logical,             \
                             Frame::Inertial>&) noexcept;                       \
   template Variables<                                                          \
+      db::wrap_tags_in<::Tags::deriv, LINEAR_VARS_TAGS_LIST(data),             \
+                       tmpl::size_t<DIM(data)>, Frame::Inertial>>              \
+  partial_derivatives<LINEAR_VARS_TAGS_LIST(data)>(                            \
+      const Variables<LINEAR_VARS_TAGS_LIST(data)>&, const Mesh<DIM(data)>&,   \
+      const InverseJacobian<DataVector, DIM(data), Frame::Logical,             \
+                            Frame::Inertial>&) noexcept;                       \
+  template Variables<                                                          \
+      db::wrap_tags_in<Tags::div, NONLINEAR_VARS_TAGS_LIST(data)>>             \
+  divergence<NONLINEAR_VARS_TAGS_LIST(data), DIM(data), Frame::Inertial>(      \
+      const Variables<NONLINEAR_VARS_TAGS_LIST(data)>&,                        \
+      const Mesh<DIM(data)>&,                                                  \
+      const InverseJacobian<DataVector, DIM(data), Frame::Logical,             \
+                            Frame::Inertial>&) noexcept;                       \
+  template Variables<                                                          \
+      db::wrap_tags_in<::Tags::deriv, NONLINEAR_VARS_TAGS_LIST(data),          \
+                       tmpl::size_t<DIM(data)>, Frame::Inertial>>              \
+  partial_derivatives<NONLINEAR_VARS_TAGS_LIST(data)>(                         \
+      const Variables<NONLINEAR_VARS_TAGS_LIST(data)>&,                        \
+      const Mesh<DIM(data)>&,                                                  \
+      const InverseJacobian<DataVector, DIM(data), Frame::Logical,             \
+                            Frame::Inertial>&) noexcept;
+
+#define INSTANTIATE_FIRST_ORDER_SYSTEM_DERIVATIVES(_, data)                    \
+  template Variables<db::wrap_tags_in<Tags::div, LINEAR_VARS_TAGS_LIST(data)>> \
+  divergence<LINEAR_VARS_TAGS_LIST(data), DIM(data), Frame::Inertial>(         \
+      const Variables<LINEAR_VARS_TAGS_LIST(data)>&, const Mesh<DIM(data)>&,   \
+      const InverseJacobian<DataVector, DIM(data), Frame::Logical,             \
+                            Frame::Inertial>&) noexcept;                       \
+  template Variables<                                                          \
       db::wrap_tags_in<Tags::div, NONLINEAR_VARS_TAGS_LIST(data)>>             \
   divergence<NONLINEAR_VARS_TAGS_LIST(data), DIM(data), Frame::Inertial>(      \
       const Variables<NONLINEAR_VARS_TAGS_LIST(data)>&,                        \
@@ -169,10 +246,14 @@ GENERATE_INSTANTIATIONS(INSTANTIATE_EQUATIONS, (1, 2, 3))
                             Frame::Inertial>&) noexcept;
 
 GENERATE_INSTANTIATIONS(INSTANTIATE_DERIVATIVES, (1, 2, 3),
+                        (Xcts::HamiltonianAndLapseSystem))
+
+GENERATE_INSTANTIATIONS(INSTANTIATE_FIRST_ORDER_SYSTEM_DERIVATIVES, (1, 2, 3),
                         (Xcts::FirstOrderHamiltonianSystem,
                          Xcts::FirstOrderHamiltonianAndLapseSystem))
 
 #undef INSTANTIATE_EQUATIONS
 #undef INSTANTIATE_DERIVATIVES
+#undef INSTANTIATE_FIRST_ORDER_SYSTEM_DERIVATIVES
 #undef DIM
 #undef SYSTEM

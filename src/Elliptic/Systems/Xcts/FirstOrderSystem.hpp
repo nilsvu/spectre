@@ -204,4 +204,88 @@ struct FirstOrderHamiltonianAndLapseSystem {
   using magnitude_tag = ::Tags::EuclideanMagnitude<Tag>;
 };
 
+template <size_t Dim>
+struct LinearizedHamiltonianAndLapseSystem {
+ private:
+  using conformal_factor = Tags::ConformalFactor<DataVector>;
+  using lapse_times_conformal_factor =
+      Tags::LapseTimesConformalFactor<DataVector>;
+
+ public:
+  static constexpr size_t volume_dim = Dim;
+
+  using fields_tag =
+      db::add_tag_prefix<NonlinearSolver::Tags::Correction,
+                         ::Tags::Variables<tmpl::list<
+                             conformal_factor, lapse_times_conformal_factor>>>;
+
+  using compute_fluxes = ComputeHamiltonianAndLapseFluxes<
+      Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
+      LinearSolver::Tags::Operand<
+          NonlinearSolver::Tags::Correction<conformal_factor>>,
+      LinearSolver::Tags::Operand<
+          NonlinearSolver::Tags::Correction<lapse_times_conformal_factor>>>;
+  using compute_sources = ComputeLinearizedHamiltonianAndLapseSources<
+      Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
+      LinearSolver::Tags::Operand<
+          NonlinearSolver::Tags::Correction<conformal_factor>>,
+      LinearSolver::Tags::Operand<
+          NonlinearSolver::Tags::Correction<lapse_times_conformal_factor>>,
+      conformal_factor, lapse_times_conformal_factor>;
+  using compute_normal_fluxes = ComputeHamiltonianAndLapseNormalFluxes<
+      Dim, db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>,
+      LinearSolver::Tags::Operand<
+          NonlinearSolver::Tags::Correction<conformal_factor>>,
+      LinearSolver::Tags::Operand<
+          NonlinearSolver::Tags::Correction<lapse_times_conformal_factor>>>;
+  using compute_normal_fluxes_of_fields =
+      ComputeHamiltonianAndLapseNormalFluxes<
+          Dim, fields_tag, NonlinearSolver::Tags::Correction<conformal_factor>,
+          NonlinearSolver::Tags::Correction<lapse_times_conformal_factor>>;
+};
+
+template <size_t Dim>
+struct HamiltonianAndLapseSystem {
+ private:
+  using conformal_factor = Tags::ConformalFactor<DataVector>;
+  using lapse_times_conformal_factor =
+      Tags::LapseTimesConformalFactor<DataVector>;
+
+ public:
+  static constexpr size_t volume_dim = Dim;
+
+  // The physical fields to solve for
+  using fields_tag = ::Tags::Variables<
+      tmpl::list<conformal_factor, lapse_times_conformal_factor>>;
+
+  using background_fields = tmpl::list<gr::Tags::EnergyDensity<DataVector>>;
+
+  using compute_fluxes =
+      ComputeHamiltonianAndLapseFluxes<Dim, fields_tag, conformal_factor,
+                                       lapse_times_conformal_factor>;
+  using compute_sources =
+      ComputeHamiltonianAndLapseSources<Dim, fields_tag, conformal_factor,
+                                        lapse_times_conformal_factor>;
+  using compute_normal_fluxes =
+      ComputeHamiltonianAndLapseNormalFluxes<Dim, fields_tag, conformal_factor,
+                                             lapse_times_conformal_factor>;
+  using compute_normal_fluxes_of_fields =
+      ComputeHamiltonianAndLapseNormalFluxes<Dim, fields_tag, conformal_factor,
+                                             lapse_times_conformal_factor>;
+
+  // Boundary conditions
+  // This interface will likely change with generalized boundary conditions
+  using compute_analytic_fluxes = ComputeHamiltonianAndLapseFluxes<
+      Dim, db::add_tag_prefix<::Tags::Analytic, fields_tag>,
+      ::Tags::Analytic<conformal_factor>,
+      ::Tags::Analytic<lapse_times_conformal_factor>>;
+
+  using linearized_system = LinearizedHamiltonianAndLapseSystem<Dim>;
+
+  // The tag of the operator to compute magnitudes on the manifold, e.g. to
+  // normalize vectors on the faces of an element
+  template <typename Tag>
+  using magnitude_tag = ::Tags::EuclideanMagnitude<Tag>;
+};
+
 }  // namespace Xcts

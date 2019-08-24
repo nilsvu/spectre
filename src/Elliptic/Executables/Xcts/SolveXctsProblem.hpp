@@ -15,6 +15,7 @@
 #include "Elliptic/DiscontinuousGalerkin/Actions/InitializeFluxes.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
+#include "Elliptic/DiscontinuousGalerkin/StrongSecondOrderInternalPenalty.hpp"
 #include "Elliptic/Systems/Xcts/Actions/LapseAtOrigin.hpp"
 #include "Elliptic/Systems/Xcts/Actions/Observe.hpp"
 #include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
@@ -53,6 +54,32 @@
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/TovStar.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
+
+namespace Tags {
+template <size_t Dim, typename FieldsTag, typename ComputerTag>
+struct BoundaryConditionsCompute : FieldsTag, db::ComputeTag {
+  using base = FieldsTag;
+  using argument_tags =
+      tmpl::list<ComputerTag, ::Tags::Coordinates<Dim, Frame::Inertial>>;
+  using volume_tags = tmpl::list<ComputerTag>;
+  static db::item_type<FieldsTag> function(
+      const db::item_type<ComputerTag>& computer,
+      const tnsr::I<DataVector, Dim, Frame::Inertial>&
+          inertial_coords) noexcept {
+    return variables_from_tagged_tuple(computer.variables(
+        inertial_coords, db::get_variables_tags_list<FieldsTag>{}));
+  }
+};
+template <size_t Dim, typename FieldsTag>
+struct SetHomogeneousBoundaryConditions : FieldsTag, db::ComputeTag {
+  using base = FieldsTag;
+  using argument_tags = tmpl::list<::Tags::Mesh<Dim - 1>>;
+  static db::item_type<FieldsTag> function(
+      const ::Mesh<Dim - 1>& mesh) noexcept {
+    return db::item_type<FieldsTag>{mesh.number_of_grid_points(), 0.};
+  }
+};
+}  // namespace Tags
 
 namespace {
 
@@ -132,7 +159,7 @@ struct Metavariables {
       "Numerical flux: FirstOrderInternalPenaltyFlux"};
 
   // The system provides all equations specific to the problem.
-  using system = Xcts::FirstOrderHamiltonianAndLapseSystem<Dim>;
+  using system = Xcts::HamiltonianAndLapseSystem<Dim>;
   using nonlinear_fields_tag = typename system::fields_tag;
 
   using linearized_system = typename system::linearized_system;
@@ -155,30 +182,43 @@ struct Metavariables {
   // Specify the DG boundary scheme. We use the strong first-order scheme here
   // that only requires us to compute normals dotted into the first-order
   // fluxes.
-  using nonlinear_numerical_flux =
-      dg::NumericalFluxes::FirstOrderInternalPenalty<
-          Dim, typename system::primal_variables,
-          typename system::auxiliary_variables>;
-  using nonlinear_boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
-      Dim, nonlinear_fields_tag,
-      Tags::NormalDotNumericalFluxComputer<nonlinear_numerical_flux>,
-      NonlinearSolver::Tags::IterationId>;
-  using linear_numerical_flux = dg::NumericalFluxes::FirstOrderInternalPenalty<
-      Dim, typename linearized_system::primal_variables,
-      typename linearized_system::auxiliary_variables>;
-  using linear_boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
-      Dim, linear_operand_tag,
-      Tags::NormalDotNumericalFluxComputer<linear_numerical_flux>,
-      LinearSolver::Tags::IterationId>;
+  //   using nonlinear_numerical_flux =
+  //       dg::NumericalFluxes::FirstOrderInternalPenalty<
+  //           Dim, typename system::primal_variables,
+  //           typename system::auxiliary_variables>;
+  //   using nonlinear_boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
+  //       Dim, nonlinear_fields_tag,
+  //       Tags::NormalDotNumericalFluxComputer<nonlinear_numerical_flux>,
+  //       NonlinearSolver::Tags::IterationId>;
+  //   using linear_numerical_flux =
+  //   dg::NumericalFluxes::FirstOrderInternalPenalty<
+  //       Dim, typename linearized_system::primal_variables,
+  //       typename linearized_system::auxiliary_variables>;
+  //   using linear_boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
+  //       Dim, linear_operand_tag,
+  //       Tags::NormalDotNumericalFluxComputer<linear_numerical_flux>,
+  //       LinearSolver::Tags::IterationId>;
+  using nonlinear_dg_scheme =
+      elliptic::dg::Schemes::StrongSecondOrderInternalPenalty<
+          Dim, nonlinear_fields_tag, nonlinear_fields_tag,
+          NonlinearSolver::Tags::IterationId, typename system::compute_fluxes,
+          typename system::compute_sources,
+          typename system::compute_normal_fluxes,
+          typename system::compute_normal_fluxes_of_fields>;
+  using linear_dg_scheme =
+      elliptic::dg::Schemes::StrongSecondOrderInternalPenalty<
+          Dim, linear_fields_tag, linear_operand_tag,
+          LinearSolver::Tags::IterationId,
+          typename linearized_system::compute_fluxes,
+          typename linearized_system::compute_sources,
+          typename linearized_system::compute_normal_fluxes,
+          typename linearized_system::compute_normal_fluxes_of_fields>;
 
   // Set up the domain creator from the input file.
   using domain_creator_tag = OptionTags::DomainCreator<Dim, Frame::Inertial>;
 
   // Collect all items to store in the cache.
-  using const_global_cache_tag_list =
-      tmpl::list<OptionTags::NumericalFlux<linear_numerical_flux>,
-                 CorrectionNumericalFlux<nonlinear_numerical_flux>,
-                 analytic_solution_tag>;
+  using const_global_cache_tag_list = tmpl::list<analytic_solution_tag>;
 
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
       tmpl::list<Xcts::Actions::Observe, linear_solver, nonlinear_solver>>;
@@ -193,24 +233,16 @@ struct Metavariables {
   };
 
   // Construct the DgElementArray parallel component
-  using apply_nonlinear_operator = tmpl::list<
-      Xcts::Actions::UpdateLapseAtOrigin,
-      dg::Actions::SendDataForFluxes<nonlinear_boundary_scheme>,
-      elliptic::Actions::ComputeOperatorAction<
-          Dim, NonlinearSolver::Tags::OperatorAppliedTo, nonlinear_fields_tag>,
-      Actions::MutateApply<
-          ::dg::PopulateBoundaryMortars<nonlinear_boundary_scheme>>,
-      dg::Actions::ReceiveDataForFluxes<nonlinear_boundary_scheme>,
-      Actions::MutateApply<nonlinear_boundary_scheme>>;
+  using apply_nonlinear_operator =
+      tmpl::list<Xcts::Actions::UpdateLapseAtOrigin,
+                 dg::Actions::SendDataForFluxes<nonlinear_dg_scheme>,
+                 dg::Actions::ReceiveDataForFluxes<nonlinear_dg_scheme>,
+                 Actions::MutateApply<nonlinear_dg_scheme>>;
 
-  using apply_linear_operator = tmpl::list<
-      dg::Actions::SendDataForFluxes<linear_boundary_scheme>,
-      elliptic::Actions::ComputeOperatorAction<
-          Dim, LinearSolver::Tags::OperatorAppliedTo, linear_operand_tag>,
-      Actions::MutateApply<
-          ::dg::PopulateBoundaryMortars<linear_boundary_scheme>>,
-      dg::Actions::ReceiveDataForFluxes<linear_boundary_scheme>,
-      Actions::MutateApply<linear_boundary_scheme>>;
+  using apply_linear_operator =
+      tmpl::list<dg::Actions::SendDataForFluxes<linear_dg_scheme>,
+                 dg::Actions::ReceiveDataForFluxes<linear_dg_scheme>,
+                 Actions::MutateApply<linear_dg_scheme>>;
 
   using initialization_actions = tmpl::flatten<tmpl::list<
       dg::Actions::InitializeDomain<Dim>,
@@ -219,20 +251,36 @@ struct Metavariables {
       Xcts::Actions::InitializeLapseAtOrigin,
       elliptic::Actions::InitializeNonlinearSystem,
       dg::Actions::InitializeInterfaces<
-          system, dg::Initialization::slice_tags_to_face<>,
-          dg::Initialization::slice_tags_to_exterior<>>,
-      elliptic::dg::Actions::InitializeFluxes<nonlinear_boundary_scheme,
-                                              system>,
-      elliptic::dg::Actions::InitializeFluxes<linear_boundary_scheme,
-                                              linearized_system, false>,
+          system,
+          dg::Initialization::slice_tags_to_face<nonlinear_fields_tag,
+                                                 linear_operand_tag>,
+          dg::Initialization::slice_tags_to_exterior<>,
+          dg::Initialization::face_compute_tags<>,
+          dg::Initialization::exterior_compute_tags<
+              ::Tags::SetHomogeneousBoundaryConditions<Dim, linear_fields_tag>,
+              ::Tags::BoundaryConditionsCompute<
+                  Dim, nonlinear_fields_tag,
+                  ::Tags::AnalyticSolutionComputer<
+                      typename analytic_solution_tag::type>>>>,
+      typename nonlinear_dg_scheme::initialize_element,
+      typename linear_dg_scheme::initialize_element,
+      //   elliptic::dg::Actions::InitializeFluxes<nonlinear_boundary_scheme,
+      //                                           system>,
+      //   elliptic::dg::Actions::InitializeFluxes<linear_boundary_scheme,
+      //                                           linearized_system, false>,
       elliptic::Actions::InitializeIterationIds<
           NonlinearSolver::Tags::IterationId, LinearSolver::Tags::IterationId>,
-      dg::Actions::InitializeMortars<linear_boundary_scheme, true>,
-      dg::Actions::InitializeMortars<nonlinear_boundary_scheme, true>,
-      elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
-          nonlinear_fields_tag, nonlinear_boundary_scheme>,
+      dg::Actions::InitializeMortars<linear_dg_scheme,
+                                     linear_dg_scheme::use_external_mortars>,
+      dg::Actions::InitializeMortars<nonlinear_dg_scheme,
+                                     nonlinear_dg_scheme::use_external_mortars>,
+      //   elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
+      //       nonlinear_fields_tag, nonlinear_boundary_scheme>,
+      Actions::MutateApply<typename nonlinear_dg_scheme::
+                               impose_boundary_conditions_on_fixed_source>,
       apply_nonlinear_operator,
-      dg::Actions::InitializeMortars<nonlinear_boundary_scheme, true,
+      dg::Actions::InitializeMortars<nonlinear_dg_scheme,
+                                     nonlinear_dg_scheme::use_external_mortars,
                                      ::Initialization::MergePolicy::Overwrite>,
       typename nonlinear_solver::initialize_element,
       typename linear_solver::initialize_element,
@@ -264,7 +312,7 @@ struct Metavariables {
                   NonlinearSolver::Actions::TerminateIfConverged,
                   typename linear_solver::reinitialize_element,
                   dg::Actions::InitializeMortars<
-                      linear_boundary_scheme, true,
+                      linear_dg_scheme, linear_dg_scheme::use_external_mortars,
                       ::Initialization::MergePolicy::Overwrite>,
                   Actions::Label<LinearSolverReinitializationEnd>,
                   apply_linear_operator, typename linear_solver::perform_step,

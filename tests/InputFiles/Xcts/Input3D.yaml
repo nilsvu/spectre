@@ -9,7 +9,7 @@
 
 AnalyticSolution:
   TovStar:
-    CentralDensity: 1e-6 # 0.0008087415253997405 # h = 1.2
+    CentralDensity: 1e-10 # 0.0008087415253997405 # h = 1.2
     PolytropicConstant: 123.6489
     PolytropicExponent: 2.
 
@@ -21,12 +21,13 @@ DomainCreator:
     InitialGridPoints: [4, 4]
     UseEquiangularMap: False
 
-NumericalFlux:
-  InternalPenalty:
-    PenaltyParameter: 5. # p^2 / h
-CorrectionNumFlux:
-  InternalPenalty:
-    PenaltyParameter: 5. # p^2 / h
+# NumericalFlux:
+#   InternalPenalty:
+#     PenaltyParameter: 5. # p^2 / h
+# CorrectionNumFlux:
+#   InternalPenalty:
+#     PenaltyParameter: 5. # p^2 / h
+PenaltyParameter: 5.
 
 Observers:
   VolumeFileName: "Xcts3DVolume"
@@ -34,14 +35,14 @@ Observers:
 
 NonlinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 4
-    RelativeResidual: 1e-1
+    MaxIterations: 10
+    RelativeResidual: 1e-3
     AbsoluteResidual: 1e-15
   Verbosity: Verbose
 
 LinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 300
+    MaxIterations: 500
     RelativeResidual: 1e-2
     AbsoluteResidual: 1e-15
   Verbosity: Verbose

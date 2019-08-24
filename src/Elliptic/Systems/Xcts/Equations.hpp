@@ -78,6 +78,78 @@ struct ComputeFirstOrderHamiltonianAndLapseFluxes
 };
 // @}
 
+template <size_t Dim, typename VarsTag, typename ConformalFactorTag,
+          typename LapseTimesConformalFactorTag>
+struct ComputeHamiltonianAndLapseFluxes
+    : db::add_tag_prefix<::Tags::Flux, VarsTag, tmpl::size_t<Dim>,
+                         Frame::Inertial>,
+      db::ComputeTag {
+  using base = db::add_tag_prefix<::Tags::Flux, VarsTag, tmpl::size_t<Dim>,
+                                  Frame::Inertial>;
+  using argument_tags = tmpl::list<
+      ::Tags::deriv<ConformalFactorTag, tmpl::size_t<Dim>, Frame::Inertial>,
+      ::Tags::deriv<LapseTimesConformalFactorTag, tmpl::size_t<Dim>,
+                    Frame::Inertial>>;
+  static constexpr auto function(
+      const tnsr::i<DataVector, Dim, Frame::Inertial>&
+          conformal_factor_gradient,
+      const tnsr::i<DataVector, Dim, Frame::Inertial>&
+          lapse_times_conformal_factor_gradient) noexcept {
+    auto fluxes = make_with_value<db::item_type<db::add_tag_prefix<
+        ::Tags::Flux, VarsTag, tmpl::size_t<Dim>, Frame::Inertial>>>(
+        conformal_factor_gradient, 0.);
+    Poisson::flux(
+        make_not_null(&get<::Tags::Flux<ConformalFactorTag, tmpl::size_t<Dim>,
+                                        Frame::Inertial>>(fluxes)),
+        conformal_factor_gradient);
+    Poisson::flux(
+        make_not_null(
+            &get<::Tags::Flux<LapseTimesConformalFactorTag, tmpl::size_t<Dim>,
+                              Frame::Inertial>>(fluxes)),
+        lapse_times_conformal_factor_gradient);
+    return fluxes;
+  }
+};
+
+template <size_t Dim, typename VarsTag, typename ConformalFactorTag,
+          typename LapseTimesConformalFactorTag>
+struct ComputeHamiltonianAndLapseNormalFluxes
+    : db::add_tag_prefix<::Tags::NormalFlux, VarsTag, tmpl::size_t<Dim>,
+                         Frame::Inertial>,
+      db::ComputeTag {
+  using base = db::add_tag_prefix<::Tags::NormalFlux, VarsTag,
+                                  tmpl::size_t<Dim>, Frame::Inertial>;
+  using argument_tags = tmpl::list<
+      ConformalFactorTag, LapseTimesConformalFactorTag,
+      ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<Dim, Frame::Inertial>>>;
+  static constexpr auto function(
+      const Scalar<DataVector>& conformal_factor,
+      const Scalar<DataVector>& lapse_times_conformal_factor,
+      const tnsr::i<DataVector, Dim, Frame::Inertial>& face_normal) noexcept {
+    auto normal_times_conformal_factor = face_normal;
+    for (size_t d = 0; d < Dim; d++) {
+      normal_times_conformal_factor.get(d) *= get(conformal_factor);
+    }
+    auto fluxes = make_with_value<db::item_type<base>>(conformal_factor, 0.);
+    Poisson::flux(
+        make_not_null(
+            &get<::Tags::NormalFlux<ConformalFactorTag, tmpl::size_t<Dim>,
+                                    Frame::Inertial>>(fluxes)),
+        std::move(normal_times_conformal_factor));
+    auto normal_times_lapse_times_conformal_factor = face_normal;
+    for (size_t d = 0; d < Dim; d++) {
+      normal_times_lapse_times_conformal_factor.get(d) *= get(conformal_factor);
+    }
+    Poisson::flux(
+        make_not_null(
+            &get<::Tags::NormalFlux<LapseTimesConformalFactorTag,
+                                    tmpl::size_t<Dim>, Frame::Inertial>>(
+                fluxes)),
+        std::move(normal_times_lapse_times_conformal_factor));
+    return fluxes;
+  }
+};
+
 // @{
 /*!
  * \brief Compute the sources \f$S_A\f$ for the first-order formulation of the
@@ -89,6 +161,11 @@ struct ComputeFirstOrderHamiltonianAndLapseFluxes
  *
  * \see `Xcts::FirstOrderSystem`
  */
+void hamiltonian_sources(
+    const gsl::not_null<Scalar<DataVector>*> source_for_conformal_factor,
+    const Scalar<DataVector>& conformal_factor,
+    const Scalar<DataVector>& energy_density) noexcept;
+
 template <size_t Dim>
 void first_order_hamiltonian_sources(
     const gsl::not_null<Scalar<DataVector>*> source_for_conformal_factor,
@@ -119,6 +196,13 @@ struct ComputeFirstOrderHamiltonianSources
     return sources;
   }
 };
+
+void lapse_sources(const gsl::not_null<Scalar<DataVector>*>
+                       source_for_lapse_times_conformal_factor,
+                   const Scalar<DataVector>& lapse_times_conformal_factor,
+                   const Scalar<DataVector>& conformal_factor,
+                   const Scalar<DataVector>& energy_density,
+                   const Scalar<DataVector>& stress_trace) noexcept;
 
 template <size_t Dim>
 void first_order_lapse_sources(
@@ -168,6 +252,31 @@ struct ComputeFirstOrderHamiltonianAndLapseSources
 };
 // @}
 
+template <size_t Dim, typename VarsTag, typename ConformalFactorTag,
+          typename LapseTimesConformalFactorTag>
+struct ComputeHamiltonianAndLapseSources
+    : db::add_tag_prefix<::Tags::Source, VarsTag>,
+      db::ComputeTag {
+  using argument_tags = tmpl::list<VarsTag, gr::Tags::EnergyDensity<DataVector>,
+                                   gr::Tags::StressTrace<DataVector>>;
+  static constexpr auto function(
+      const db::item_type<VarsTag>& vars,
+      const Scalar<DataVector>& energy_density,
+      const Scalar<DataVector>& stress_trace) noexcept {
+    auto sources = make_with_value<
+        db::item_type<db::add_tag_prefix<::Tags::Source, VarsTag>>>(vars, 0.);
+    hamiltonian_sources(
+        make_not_null(&get<::Tags::Source<ConformalFactorTag>>(sources)),
+        get<ConformalFactorTag>(vars), energy_density);
+    lapse_sources(
+        make_not_null(
+            &get<::Tags::Source<LapseTimesConformalFactorTag>>(sources)),
+        get<LapseTimesConformalFactorTag>(vars), get<ConformalFactorTag>(vars),
+        energy_density, stress_trace);
+    return sources;
+  }
+};
+
 // @{
 /*!
  * \brief Compute the sources \f$S_A\f$ for the first-order formulation of the
@@ -179,6 +288,13 @@ struct ComputeFirstOrderHamiltonianAndLapseSources
  *
  * \see `Xcts::FirstOrderSystem`
  */
+void linearized_hamiltonian_sources(
+    const gsl::not_null<Scalar<DataVector>*>
+        source_for_conformal_factor_correction,
+    const Scalar<DataVector>& conformal_factor_correction,
+    const Scalar<DataVector>& conformal_factor,
+    const Scalar<DataVector>& energy_density) noexcept;
+
 template <size_t Dim>
 void first_order_linearized_hamiltonian_sources(
     const gsl::not_null<Scalar<DataVector>*>
@@ -233,6 +349,16 @@ void first_order_linearized_lapse_sources(
     const Scalar<DataVector>& energy_density,
     const Scalar<DataVector>& stress_trace) noexcept;
 
+void linearized_lapse_sources(
+    const gsl::not_null<Scalar<DataVector>*>
+        source_for_lapse_times_conformal_factor_correction,
+    const Scalar<DataVector>& conformal_factor_correction,
+    const Scalar<DataVector>& lapse_times_conformal_factor_correction,
+    const Scalar<DataVector>& conformal_factor,
+    const Scalar<DataVector>& lapse_times_conformal_factor,
+    const Scalar<DataVector>& energy_density,
+    const Scalar<DataVector>& stress_trace) noexcept;
+
 template <size_t Dim, typename VarsTag, typename ConformalFactorCorrectionTag,
           typename ConformalFactorGradientCorrectionTag,
           typename LapseTimesConformalFactorCorrectionTag,
@@ -279,5 +405,39 @@ struct ComputeFirstOrderLinearizedHamiltonianAndLapseSources
   }
 };
 // @}
+
+template <size_t Dim, typename VarsTag, typename ConformalFactorCorrectionTag,
+          typename LapseTimesConformalFactorCorrectionTag,
+          typename ConformalFactorTag, typename LapseTimesConformalFactorTag>
+struct ComputeLinearizedHamiltonianAndLapseSources
+    : db::add_tag_prefix<::Tags::Source, VarsTag>,
+      db::ComputeTag {
+  using argument_tags =
+      tmpl::list<VarsTag, ConformalFactorTag, LapseTimesConformalFactorTag,
+                 gr::Tags::EnergyDensity<DataVector>,
+                 gr::Tags::StressTrace<DataVector>>;
+  static constexpr auto function(
+      const db::item_type<VarsTag>& vars,
+      const Scalar<DataVector>& conformal_factor,
+      const Scalar<DataVector>& lapse_times_conformal_factor,
+      const Scalar<DataVector>& energy_density,
+      const Scalar<DataVector>& stress_trace) noexcept {
+    auto sources = make_with_value<
+        db::item_type<db::add_tag_prefix<::Tags::Source, VarsTag>>>(vars, 0.);
+    linearized_hamiltonian_sources(
+        make_not_null(
+            &get<::Tags::Source<ConformalFactorCorrectionTag>>(sources)),
+        get<ConformalFactorCorrectionTag>(vars), conformal_factor,
+        energy_density);
+    linearized_lapse_sources(
+        make_not_null(
+            &get<::Tags::Source<LapseTimesConformalFactorCorrectionTag>>(
+                sources)),
+        get<ConformalFactorCorrectionTag>(vars),
+        get<LapseTimesConformalFactorCorrectionTag>(vars), conformal_factor,
+        lapse_times_conformal_factor, energy_density, stress_trace);
+    return sources;
+  }
+};
 
 }  // namespace Xcts
