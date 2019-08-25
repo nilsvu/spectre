@@ -45,6 +45,7 @@
 #include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Actions/TerminateIfConverged.hpp"
+#include "ParallelAlgorithms/NonlinearSolver/Globalization/LineSearch/LineSearch.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Tov.hpp"
@@ -75,6 +76,7 @@ struct CorrectionNumericalFlux {
       ::Tags::NormalDotNumericalFluxComputer<NumericalFluxType>;
 };
 
+struct NonlinearSolverStepStart {};
 struct NonlinearSolverStepEnd {};
 struct LinearSolverReinitializationEnd {};
 
@@ -120,6 +122,28 @@ struct SkipNonlinearSolverStepIfNotConverged {
                              ::Actions::Label<NonlinearSolverStepEnd>>::value);
   }
 };
+struct RepeatNonlinearGlobalizationIfNotConverged {
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static auto apply(db::DataBox<DbTagsList>& box,
+                    tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+                    const Parallel::ConstGlobalCache<Metavariables>&
+                    /*cache*/,
+                    const ArrayIndex& /*array_index*/,
+                    const ActionList /*meta*/, const ParallelComponent* const
+                    /*meta*/) noexcept {
+    return std::tuple<db::DataBox<DbTagsList>&&, bool, size_t>(
+        std::move(box), false,
+        db::get<NonlinearSolver::Tags::GlobalizationHasConverged>(box)
+            ? tmpl::index_of<
+                  ActionList,
+                  RepeatNonlinearGlobalizationIfNotConverged>::value +
+                  1
+            : tmpl::index_of<ActionList, ::Actions::Label<
+                                             NonlinearSolverStepStart>>::value);
+  }
+};
 
 }  // namespace
 
@@ -144,8 +168,9 @@ struct Metavariables {
       Xcts::Solutions::TovStar<gr::Solutions::TovSolution>>;
   using initial_guess_tag = analytic_solution_tag;
 
-  using nonlinear_solver =
-      NonlinearSolver::NewtonRaphson<Metavariables, nonlinear_fields_tag>;
+  using nonlinear_solver = NonlinearSolver::NewtonRaphson<
+      Metavariables, nonlinear_fields_tag,
+      NonlinearSolver::Globalization::LineSearch>;
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
@@ -162,7 +187,7 @@ struct Metavariables {
   using nonlinear_boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
       Dim, nonlinear_fields_tag,
       Tags::NormalDotNumericalFluxComputer<nonlinear_numerical_flux>,
-      NonlinearSolver::Tags::IterationId>;
+      NonlinearSolver::Tags::TemporalId>;
   using linear_numerical_flux = dg::NumericalFluxes::FirstOrderInternalPenalty<
       Dim, typename linearized_system::primal_variables,
       typename linearized_system::auxiliary_variables>;
@@ -227,6 +252,7 @@ struct Metavariables {
                                               linearized_system, false>,
       elliptic::Actions::InitializeIterationIds<
           NonlinearSolver::Tags::IterationId, LinearSolver::Tags::IterationId>,
+      typename nonlinear_solver::globalization_strategy::initialize_element,
       dg::Actions::InitializeMortars<linear_boundary_scheme, true>,
       dg::Actions::InitializeMortars<nonlinear_boundary_scheme, true>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
@@ -269,9 +295,13 @@ struct Metavariables {
                   Actions::Label<LinearSolverReinitializationEnd>,
                   apply_linear_operator, typename linear_solver::perform_step,
                   SkipNonlinearSolverStepIfNotConverged,
+                  Actions::Label<NonlinearSolverStepStart>,
                   typename nonlinear_solver::perform_step,
                   apply_nonlinear_operator,
-                  typename nonlinear_solver::prepare_linear_solve,
+                  typename nonlinear_solver::apply_globalization,
+                  RepeatNonlinearGlobalizationIfNotConverged,
+                  typename nonlinear_solver::globalization_strategy::
+                      reinitialize_element,
                   Actions::Label<NonlinearSolverStepEnd>>>>>>;
 
   // Specify all parallel components that will execute actions at some point.

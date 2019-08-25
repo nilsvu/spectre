@@ -37,8 +37,11 @@ namespace NonlinearSolver {
  * %db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo,
  * typename Metavariables::system::nonlinear_fields_tag>.
  */
-template <typename Metavariables, typename FieldsTag>
+template <typename Metavariables, typename FieldsTag,
+          typename GlobalizationStrategy>
 struct NewtonRaphson {
+  using globalization_strategy = GlobalizationStrategy;
+
   /*!
    * \brief The parallel components used by the nonlinear solver
    *
@@ -89,8 +92,9 @@ struct NewtonRaphson {
   using observed_reduction_data_tags = observers::make_reduction_data_tags<
       tmpl::list<observe_detail::reduction_data>>;
 
-  using prepare_linear_solve =
-      newton_raphson_detail::PrepareLinearSolve<FieldsTag>;
+  using apply_globalization =
+      newton_raphson_detail::ApplyGlobalization<FieldsTag,
+                                                GlobalizationStrategy>;
   using perform_step = newton_raphson_detail::PerformStep<FieldsTag>;
 };
 

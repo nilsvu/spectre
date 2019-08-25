@@ -17,6 +17,8 @@
 #include "NumericalAlgorithms/Convergence/Criteria.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
 #include "NumericalAlgorithms/LinearSolver/Tags.hpp"
+#include "Utilities/Functional.hpp"
+#include "Utilities/Numeric.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TypeTraits.hpp"
 
@@ -88,6 +90,56 @@ struct Residual : db::PrefixTag, db::SimpleTag {
   }
   using type = typename Tag::type;
   using tag = Tag;
+};
+
+struct StepLength : db::SimpleTag {
+  using type = double;
+  static std::string name() noexcept { return "StepLength"; }
+};
+
+/*!
+ * \brief Holds a flag that signals the globalization has converged.
+ */
+struct GlobalizationHasConverged : db::SimpleTag {
+  static std::string name() noexcept {
+    return "NonlinearGlobalizationHasConverged";
+  }
+  using type = bool;
+};
+
+struct GlobalizationIterationId : db::SimpleTag {
+  using type = size_t;
+  static std::string name() noexcept { return "GlobalizationIterationId"; }
+};
+
+struct GlobalizationIterationsHistory : db::SimpleTag {
+  using type = std::vector<size_t>;
+  static std::string name() noexcept {
+    return "GlobalizationIterationsHistory";
+  }
+};
+
+struct TemporalId : db::SimpleTag {
+  using type = size_t;
+  static std::string name() noexcept { return "TemporalId"; }
+  template <typename Tag>
+  using step_prefix = OperatorAppliedTo<Tag>;
+};
+
+struct TemporalIdCompute : db::ComputeTag, TemporalId {
+  using argument_tags =
+      tmpl::list<GlobalizationIterationId, GlobalizationIterationsHistory>;
+  static size_t function(
+      const size_t& globalization_iteration_id,
+      const std::vector<size_t>& globalization_iterations_history) {
+    return alg::accumulate(globalization_iterations_history, size_t{0},
+                           funcl::Plus<>{}) +
+           globalization_iteration_id;
+  }
+};
+struct TemporalIdNextCompute : db::ComputeTag, ::Tags::Next<TemporalId> {
+  using argument_tags = tmpl::list<TemporalId>;
+  static size_t function(const size_t& temporal_id) { return temporal_id + 1; }
 };
 
 /*!

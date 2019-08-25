@@ -88,7 +88,8 @@ struct InitializeResidual {
   }
 };
 
-template <typename FieldsTag, typename BroadcastTarget>
+template <typename FieldsTag, typename GlobalizationStrategy,
+          typename BroadcastTarget>
 struct UpdateResidual {
   using residual_magnitude_tag = db::add_tag_prefix<
       LinearSolver::Tags::Magnitude,
@@ -102,6 +103,27 @@ struct UpdateResidual {
                     Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
                     const double residual_magnitude) noexcept {
+    // Make sure we are converging. Far away from the solution this is not
+    // guaranteed, so we emply a globalization strategy to guide the solver
+    // towards the solution when the residual doesn't decrease sufficiently.
+    // The _sufficient decrease condition_ is the decrease predicted by the
+    // Taylor approximation, i.e. ...
+    // TODO: Add sufficient decrease condition
+    if (residual_magnitude - get<residual_magnitude_tag>(box) > 0.) {
+      // Do some logging
+      if (UNLIKELY(static_cast<int>(get<NonlinearSolver::Tags::Verbosity>(
+                       box)) >= static_cast<int>(::Verbosity::Verbose))) {
+        Parallel::printf(
+            "Apply globalization to decrease nonlinear solver iteration %zu "
+            "residual: %e\n",
+            get<NonlinearSolver::Tags::IterationId>(box), residual_magnitude);
+      }
+
+      Parallel::simple_action<typename GlobalizationStrategy::perform_step>(
+          Parallel::get_parallel_component<BroadcastTarget>(cache));
+      return;
+    }
+
     db::mutate<residual_magnitude_tag, NonlinearSolver::Tags::IterationId>(
         make_not_null(&box), [residual_magnitude](
                                  const gsl::not_null<double*>

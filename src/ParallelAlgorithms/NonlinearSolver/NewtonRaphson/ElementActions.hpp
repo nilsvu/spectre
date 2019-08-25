@@ -56,17 +56,16 @@ struct PerformStep {
     db::mutate<fields_tag>(
         make_not_null(&box),
         [](const gsl::not_null<db::item_type<fields_tag>*> fields,
-           const db::item_type<correction_tag>& correction) {
-          *fields += correction;
-        },
-        get<correction_tag>(box));
+           const db::item_type<correction_tag>& correction,
+           const double& step_length) { *fields += step_length * correction; },
+        get<correction_tag>(box), get<NonlinearSolver::Tags::StepLength>(box));
 
     return {std::move(box)};
   }
 };
 
-template <typename FieldsTag>
-struct PrepareLinearSolve {
+template <typename FieldsTag, typename GlobalizationStrategy>
+struct ApplyGlobalization {
  private:
   using fields_tag = FieldsTag;
   using nonlinear_source_tag =
@@ -77,8 +76,6 @@ struct PrepareLinearSolve {
       db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
   using linear_source_tag =
       db::add_tag_prefix<::Tags::FixedSource, correction_tag>;
-  using linear_operator_tag =
-      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, correction_tag>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -90,12 +87,9 @@ struct PrepareLinearSolve {
       const Parallel::ConstGlobalCache<Metavariables>& cache,
       const ArrayIndex& array_index, const ActionList /*mete*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    db::mutate<linear_source_tag, correction_tag, linear_operator_tag>(
+    db::mutate<linear_source_tag>(
         make_not_null(&box),
         [](const gsl::not_null<db::item_type<linear_source_tag>*> linear_source,
-           const gsl::not_null<db::item_type<correction_tag>*> correction,
-           const gsl::not_null<db::item_type<linear_operator_tag>*>
-               linear_operator,
            const db::item_type<nonlinear_source_tag>& nonlinear_source,
            const db::item_type<nonlinear_operator_tag>& nonlinear_operator) {
           // Compute new nonlinear residual, which sources the next linear
@@ -103,15 +97,11 @@ struct PrepareLinearSolve {
           // nonlinear operator to the new field values. We assume this has been
           // done at this point.
           *linear_source = nonlinear_source - nonlinear_operator;
-          // Begin the linear solve with a zero initial guess
-          *correction = make_with_value<db::item_type<correction_tag>>(
-              nonlinear_source, 0.);
-          *linear_operator = *correction;
         },
         get<nonlinear_source_tag>(box), get<nonlinear_operator_tag>(box));
 
     Parallel::contribute_to_reduction<
-        UpdateResidual<FieldsTag, ParallelComponent>>(
+        UpdateResidual<FieldsTag, GlobalizationStrategy, ParallelComponent>>(
         Parallel::ReductionData<
             Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>{
             LinearSolver::inner_product(get<linear_source_tag>(box),
@@ -128,27 +118,55 @@ struct PrepareLinearSolve {
 
 template <typename FieldsTag>
 struct UpdateHasConverged {
-  template <typename ParallelComponent, typename DataBox,
-            typename Metavariables, typename ArrayIndex,
-            Requires<db::tag_is_retrievable_v<
-                NonlinearSolver::Tags::HasConverged, DataBox>> = nullptr>
+ private:
+  using fields_tag = FieldsTag;
+  using correction_tag =
+      db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
+  using linear_operator_tag =
+      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, correction_tag>;
+
+ public:
+  template <
+      typename ParallelComponent, typename DataBox, typename Metavariables,
+      typename ArrayIndex,
+      Requires<
+          db::tag_is_retrievable_v<NonlinearSolver::Tags::HasConverged,
+                                   DataBox> and
+          db::tag_is_retrievable_v<NonlinearSolver::Tags::IterationId,
+                                   DataBox> and
+          db::tag_is_retrievable_v<
+              NonlinearSolver::Tags::GlobalizationHasConverged, DataBox> and
+          db::tag_is_retrievable_v<correction_tag, DataBox> and
+          db::tag_is_retrievable_v<linear_operator_tag, DataBox>> = nullptr>
   static void apply(DataBox& box,
-                    const Parallel::ConstGlobalCache<Metavariables>& cache,
+                    Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& array_index,
                     const db::item_type<NonlinearSolver::Tags::HasConverged>&
                         has_converged) noexcept {
     db::mutate<NonlinearSolver::Tags::HasConverged,
-               NonlinearSolver::Tags::IterationId>(
-        make_not_null(&box), [&has_converged](
-                                 const gsl::not_null<db::item_type<
-                                     NonlinearSolver::Tags::HasConverged>*>
-                                     local_has_converged,
-                                 const gsl::not_null<db::item_type<
-                                     NonlinearSolver::Tags::IterationId>*>
-                                     iteration_id) noexcept {
+               NonlinearSolver::Tags::IterationId,
+               NonlinearSolver::Tags::GlobalizationHasConverged, correction_tag,
+               linear_operator_tag>(
+        make_not_null(&box),
+        [&has_converged](
+            const gsl::not_null<
+                db::item_type<NonlinearSolver::Tags::HasConverged>*>
+                local_has_converged,
+            const gsl::not_null<
+                db::item_type<NonlinearSolver::Tags::IterationId>*>
+                iteration_id,
+            const gsl::not_null<bool*> globalization_has_converged,
+            const gsl::not_null<db::item_type<correction_tag>*> correction,
+            const gsl::not_null<db::item_type<linear_operator_tag>*>
+                linear_operator) noexcept {
           *local_has_converged = has_converged;
+          *globalization_has_converged = true;
           // Prepare for next iteration
           (*iteration_id)++;
+          // Begin the linear solve with a zero initial guess
+          *correction = make_with_value<db::item_type<correction_tag>>(
+              *linear_operator, 0.);
+          *linear_operator = *correction;
         });
 
     // Proceed with algorithm
