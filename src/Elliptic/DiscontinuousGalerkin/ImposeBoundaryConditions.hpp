@@ -129,10 +129,11 @@ struct ImposeHomogeneousDirichletBoundaryConditions {
                   tmpl::type_from<decltype(dirichlet_tag_val)>;
               using dirichlet_operand_tag =
                   LinearSolver::Tags::Operand<dirichlet_tag>;
-              // Use mirror principle. This only works for scalars right now.
-              get(get<dirichlet_operand_tag>(exterior_vars)) =
-                  -1. *
-                  get<dirichlet_operand_tag>(interior_vars.at(direction)).get();
+              // Use mirror principle
+              const db::item_type<typename system::variables_tag>
+                  mirrored_interior_vars{-1. * interior_vars.at(direction)};
+              get<dirichlet_operand_tag>(exterior_vars) =
+                  get<dirichlet_operand_tag>(mirrored_interior_vars);
             });
           }
         },
