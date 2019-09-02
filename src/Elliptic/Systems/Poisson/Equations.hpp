@@ -60,6 +60,17 @@ void euclidean_fluxes(
     const tnsr::i<DataVector, Dim, Frame::Inertial>& field_gradient) noexcept;
 
 /*!
+ * \brief Compute the fluxes \f$F^i=\sqrt{\gamma}\gamma^{ij}\f$ for
+ * the curved-space Poisson equation on a metric \f$\gamma_{ij}\f$.
+ */
+template <size_t Dim>
+void noneuclidean_fluxes(
+    gsl::not_null<tnsr::I<DataVector, Dim, Frame::Inertial>*> flux_for_field,
+    const Scalar<DataVector>& det_metric,
+    const tnsr::II<DataVector, Dim, Frame::Inertial>& inv_metric,
+    const tnsr::i<DataVector, Dim, Frame::Inertial>& field_gradient) noexcept;
+
+/*!
  * \brief Compute the fluxes \f$F^i_j=\delta^i_j u(x)\f$ for the auxiliary
  * field in the first-order formulation of the Poisson equation.
  *

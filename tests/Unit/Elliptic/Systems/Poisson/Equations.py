@@ -8,6 +8,10 @@ def euclidean_fluxes(field_gradient):
     return field_gradient
 
 
+def noneuclidean_fluxes(det_metric, inv_metric, field_gradient):
+    return np.sqrt(det_metric) * np.einsum('ij,j', inv_metric, field_gradient)
+
+
 def auxiliary_fluxes(field, dim):
     return np.diag(np.repeat(field, dim))
 
