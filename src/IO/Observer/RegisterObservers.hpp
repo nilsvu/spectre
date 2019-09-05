@@ -8,11 +8,10 @@
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "IO/Observer/ObservationId.hpp"
 #include "IO/Observer/TypeOfObservation.hpp"
-#include "Time/Tags.hpp"
 
 namespace observers {
 /// Passed to `RegisterWithObservers` action to register observer event.
-template <typename ObsType>
+template <typename TemporalId, typename ObsType>
 struct RegisterObservers {
   template <typename ParallelComponent, typename DbTagsList,
             typename ArrayIndex>
@@ -20,7 +19,8 @@ struct RegisterObservers {
   register_info(const db::DataBox<DbTagsList>& box,
                 const ArrayIndex& /*array_index*/) noexcept {
     return {observers::TypeOfObservation::ReductionAndVolume,
-            observers::ObservationId{db::get<::Tags::Time>(box), ObsType{}}};
+            observers::ObservationId{
+                static_cast<double>(db::get<TemporalId>(box)), ObsType{}}};
   }
 };
 }  // namespace observers

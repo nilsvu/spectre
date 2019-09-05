@@ -11,6 +11,7 @@
 #include "Evolution/Actions/ComputeTimeDerivative.hpp"  // IWYU pragma: keep
 #include "Evolution/Actions/ComputeVolumeFluxes.hpp"
 #include "Evolution/Actions/ComputeVolumeSources.hpp"
+#include "Evolution/ComputeTags.hpp"
 #include "Evolution/Conservative/UpdateConservatives.hpp"
 #include "Evolution/Conservative/UpdatePrimitives.hpp"
 #include "Evolution/DiscontinuousGalerkin/DgElementArray.hpp"
@@ -55,6 +56,7 @@
 #include "ParallelAlgorithms/EventsAndTriggers/Event.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/EventsAndTriggers.hpp"  // IWYU pragma: keep
 #include "ParallelAlgorithms/EventsAndTriggers/Tags.hpp"
+#include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "PointwiseFunctions/AnalyticData/GrMhd/BondiHoyleAccretion.hpp"
 #include "PointwiseFunctions/AnalyticData/GrMhd/CylindricalBlastWave.hpp"
@@ -131,12 +133,12 @@ struct EvolutionMetavars {
 
   // public for use by the Charm++ registration code
   using events = tmpl::flatten<tmpl::list<
-      tmpl::conditional_t<
-          evolution::is_analytic_solution_v<initial_data>,
-          dg::Events::Registrars::ObserveErrorNorms<3, analytic_variables_tags>,
-          tmpl::list<>>,
+      tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
+                          dg::Events::Registrars::ObserveErrorNorms<
+                              Tags::Time, analytic_variables_tags>,
+                          tmpl::list<>>,
       dg::Events::Registrars::ObserveFields<
-          3,
+          3, Tags::Time,
           tmpl::append<
               db::get_variables_tags_list<typename system::variables_tag>,
               db::get_variables_tags_list<
@@ -189,7 +191,7 @@ struct EvolutionMetavars {
     Exit
   };
 
-  using initialization_actions = tmpl::list<
+  using initialization_actions = tmpl::flatten<tmpl::list<
       dg::Actions::InitializeDomain<3>,
       grmhd::ValenciaDivClean::Actions::InitializeGrTags,
       Initialization::Actions::ConservativeSystem,
@@ -206,10 +208,16 @@ struct EvolutionMetavars {
               typename system::spacetime_variables_tag,
               typename system::primitive_variables_tag>>,
       Initialization::Actions::Evolution<EvolutionMetavars>,
+      tmpl::conditional_t<
+          evolution::is_analytic_solution_v<initial_data>,
+          Initialization::Actions::AddComputeTags<
+              tmpl::list<evolution::Tags::AnalyticCompute<
+                  3, initial_data_tag, analytic_variables_tags>>>,
+          tmpl::list<>>,
       dg::Actions::InitializeMortars<EvolutionMetavars>,
       Initialization::Actions::DiscontinuousGalerkin<EvolutionMetavars>,
       Initialization::Actions::Minmod<3>,
-      Initialization::Actions::RemoveOptionsAndTerminatePhase>;
+      Initialization::Actions::RemoveOptionsAndTerminatePhase>>;
 
   using component_list = tmpl::list<
       observers::Observer<EvolutionMetavars>,
@@ -229,7 +237,7 @@ struct EvolutionMetavars {
                   Phase, Phase::RegisterWithObserver,
                   tmpl::list<observers::Actions::RegisterWithObservers<
                                  observers::RegisterObservers<
-                                     element_observation_type>>,
+                                     Tags::Time, element_observation_type>>,
                              Parallel::Actions::TerminatePhase>>,
 
               Parallel::PhaseActions<
