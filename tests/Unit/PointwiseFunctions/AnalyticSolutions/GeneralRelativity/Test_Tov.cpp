@@ -102,20 +102,38 @@ void test_tov(
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.Tov",
                   "[Unit][PointwiseFunctions]") {
-  std::unique_ptr<EquationsOfState::EquationOfState<true, 1>>
-      equation_of_state =
-          std::make_unique<EquationsOfState::PolytropicFluid<true>>(
-              polytropic_constant, 2.0);
-  /* Each iteration of the loop is for a different value of the final
-     log_enthalpy in the integration. This is done to test the interpolation:
-     the integration is stopped at some final log_enthalpy between the center
-     and surface, and values are compared to those obtained by interpolation of
-     the full integration up to the surface.
-  */
-  const size_t num_pts = 25;
-  for (size_t i = 0; i < num_pts; i++) {
-    test_tov(*equation_of_state, 1.0e-10, num_pts, i, true);
-    test_tov(*equation_of_state, 1.0e-03, num_pts, i, false);
+  //   std::unique_ptr<EquationsOfState::EquationOfState<true, 1>>
+  //       equation_of_state =
+  //           std::make_unique<EquationsOfState::PolytropicFluid<true>>(
+  //               polytropic_constant, 2.0);
+  //   /* Each iteration of the loop is for a different value of the final
+  //      log_enthalpy in the integration. This is done to test the
+  //      interpolation: the integration is stopped at some final log_enthalpy
+  //      between the center and surface, and values are compared to those
+  //      obtained by interpolation of the full integration up to the surface.
+  //   */
+  //   const size_t num_pts = 25;
+  //   for (size_t i = 0; i < num_pts; i++) {
+  //     test_tov(*equation_of_state, 1.0e-10, num_pts, i, true);
+  //     test_tov(*equation_of_state, 1.0e-03, num_pts, i, false);
+  //   }
+
+  {
+    INFO("Interpolation");
+    const gr::Solutions::TovSolution solution(
+        EquationsOfState::PolytropicFluid<true>{123.6489, 2.},
+        // Central enthalpy h=1.2
+        0.0008087415253997405);
+    const double outer_radius = solution.outer_radius();
+    const double step = outer_radius / 1000;
+    for (double current_radius = 0.; current_radius <= outer_radius;
+         current_radius += step) {
+      CAPTURE(current_radius);
+      const double current_mass = solution.mass(current_radius);
+      CAPTURE(current_mass);
+      CHECK(current_mass >= 0.);
+      CHECK(current_mass <= current_radius / 2.);
+    }
   }
 }
 
