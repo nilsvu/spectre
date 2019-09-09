@@ -1,0 +1,15 @@
+// Distributed under the MIT License.
+// See LICENSE.txt for details.
+
+#include <boost/python.hpp>
+
+namespace EquationsOfState {
+namespace py_bindings {
+void bind_polytropic_fluid();
+}  // namespace py_bindings
+}  // namespace EquationsOfState
+
+BOOST_PYTHON_MODULE(_EquationsOfState) {
+  Py_Initialize();
+  EquationsOfState::py_bindings::bind_polytropic_fluid();
+}
