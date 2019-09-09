@@ -34,7 +34,7 @@ Observers:
 
 NonlinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 20
+    MaxIterations: 5
     RelativeResidual: 1e-3
     AbsoluteResidual: 1e-15
   Verbosity: Verbose
