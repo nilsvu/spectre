@@ -183,12 +183,12 @@ TovSolution::TovSolution(
   total_mass_ = observer.mass.back();
   log_lapse_at_outer_radius_ =
       0.5 * log(1.0 - 2.0 * total_mass_ / outer_radius_);
-  mass_interpolant_ =
-      intrp::BarycentricRational(observer.radius, observer.mass, 5);
-  // log_enthalpy(radius) is almost linear so an interpolant of order 3
-  // maximizes precision
+  // Interpolating with cubic splines, because a barycentric rational
+  // interpolation is unstable for large polytropic constants with this many
+  // datapoints
+  mass_interpolant_ = intrp::CubicSpline(observer.radius, observer.mass);
   log_enthalpy_interpolant_ =
-      intrp::BarycentricRational(observer.radius, observer.log_enthalpy, 3);
+      intrp::CubicSpline(observer.radius, observer.log_enthalpy);
 }
 
 double TovSolution::outer_radius() const noexcept { return outer_radius_; }
