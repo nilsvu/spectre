@@ -81,10 +81,15 @@ struct Observe {
         db::get<::Tags::Coordinates<Dim, Frame::Inertial>>(box);
     const auto conformal_factor_analytic =
         get<::Tags::Analytic<Xcts::Tags::ConformalFactor<DataVector>>>(box);
+    const auto lapse_analytic =
+        get(get<::Tags::Analytic<
+                Xcts::Tags::LapseTimesConformalFactor<DataVector>>>(box)) /
+        get(conformal_factor_analytic);
 
     // Compute error between numeric and analytic solutions
     const DataVector conformal_factor_error =
         get(conformal_factor) - get(conformal_factor_analytic);
+    const DataVector lapse_error = lapse - lapse_analytic;
 
     // Compute l2 error squared over local element
     const double local_l2_error_square =
@@ -94,11 +99,21 @@ struct Observe {
     // Collect volume data
     // Remove tensor types, only storing individual components
     std::vector<TensorComponent> components;
-    components.reserve(Dim + 4);
+    components.reserve(Dim + 8);
     components.emplace_back(
         element_name + Xcts::Tags::ConformalFactor<DataVector>::name(),
         get(conformal_factor));
+    components.emplace_back(
+        element_name + "Error(" +
+            Xcts::Tags::ConformalFactor<DataVector>::name() + ")",
+        conformal_factor_error);
+    components.emplace_back(
+        element_name +
+            ::Tags::Analytic<Xcts::Tags::ConformalFactor<DataVector>>::name(),
+        get(conformal_factor_analytic));
     components.emplace_back(element_name + "Lapse", lapse);
+    components.emplace_back(element_name + "Error(Lapse)", lapse_error);
+    components.emplace_back(element_name + "Analytic(Lapse)", lapse_analytic);
     components.emplace_back(
         element_name + gr::Tags::EnergyDensity<DataVector>::name(),
         get(get<gr::Tags::EnergyDensity<DataVector>>(box)));

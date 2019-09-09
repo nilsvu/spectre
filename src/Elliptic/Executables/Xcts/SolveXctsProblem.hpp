@@ -164,8 +164,8 @@ struct Metavariables {
 
   // The analytic solution and corresponding source to solve the XCTS
   // equation for
-  using analytic_solution_tag = OptionTags::AnalyticSolution<
-      Xcts::Solutions::TovStar<gr::Solutions::TovSolution>>;
+  using analytic_solution_tag =
+      OptionTags::AnalyticSolution<Xcts::Solutions::TovStar>;
   using initial_guess_tag = analytic_solution_tag;
 
   using nonlinear_solver = NonlinearSolver::NewtonRaphson<

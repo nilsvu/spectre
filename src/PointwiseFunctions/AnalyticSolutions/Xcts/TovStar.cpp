@@ -3,10 +3,14 @@
 
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/TovStar.hpp"
 
+// Need Boost MultiArray because it is used internally by ODEINT
+#include "DataStructures/BoostMultiArray.hpp"
+
+#include <boost/numeric/odeint.hpp>
 #include <cstddef>
 
-#include "DataStructures/DataVector.hpp"                  // IWYU pragma: keep
-#include "DataStructures/Tensor/EagerMath/Magnitude.hpp"  // IWYU pragma: keep
+#include "DataStructures/DataVector.hpp"
+#include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "ErrorHandling/Error.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Tov.hpp"
@@ -14,61 +18,46 @@
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/MakeWithValue.hpp"
 
-// IWYU pragma: no_include <complex>
-
 namespace Xcts {
 namespace Solutions {
 
-template <typename RadialSolution>
-TovStar<RadialSolution>::TovStar(const double central_rest_mass_density,
-                                 const double polytropic_constant,
-                                 const double polytropic_exponent) noexcept
+TovStar::TovStar(const double central_rest_mass_density,
+                 const double polytropic_constant,
+                 const double polytropic_exponent) noexcept
     : central_rest_mass_density_(central_rest_mass_density),
       polytropic_constant_(polytropic_constant),
       polytropic_exponent_(polytropic_exponent),
-      equation_of_state_{polytropic_constant_, polytropic_exponent_} {}
+      equation_of_state_{polytropic_constant_, polytropic_exponent_},
+      radial_solution_{equation_of_state_, central_rest_mass_density_, 0.0} {}
 
-template <typename RadialSolution>
-void TovStar<RadialSolution>::pup(PUP::er& p) noexcept {
+void TovStar::pup(PUP::er& p) noexcept {
   p | central_rest_mass_density_;
   p | polytropic_constant_;
   p | polytropic_exponent_;
   p | equation_of_state_;
+  p | radial_solution_;
 }
 
-template <>
-const gr::Solutions::TovSolution&
-TovStar<gr::Solutions::TovSolution>::radial_tov_solution() const noexcept {
-  static const gr::Solutions::TovSolution solution(
-      equation_of_state_, central_rest_mass_density_, 0.0);
-  return solution;
-}
-
-template <typename RadialSolution>
 template <typename DataType>
-tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DataType>>
-TovStar<RadialSolution>::variables(
-    const tnsr::I<DataType, 3>& x,
+tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DataType>> TovStar::variables(
+    const tnsr::I<DataType, 3>& /*x*/,
     tmpl::list<Xcts::Tags::ConformalFactor<DataType>> /*meta*/,
-    const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
-  // This only holds asymptotically
-  return {make_with_value<Scalar<DataType>>(x, 1.)};
+    const RadialVariables<DataType>& radial_vars) const noexcept {
+  return {radial_vars.conformal_factor};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<::Tags::Initial<Xcts::Tags::ConformalFactor<DataType>>>
-TovStar<RadialSolution>::variables(
+TovStar::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<::Tags::Initial<Xcts::Tags::ConformalFactor<DataType>>> /*meta*/,
     const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
   return {make_with_value<Scalar<DataType>>(x, 1.)};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<::Tags::FixedSource<Xcts::Tags::ConformalFactor<DataType>>>
-TovStar<RadialSolution>::variables(
+TovStar::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<
         ::Tags::FixedSource<Xcts::Tags::ConformalFactor<DataType>>> /*meta*/,
@@ -76,23 +65,28 @@ TovStar<RadialSolution>::variables(
   return {make_with_value<Scalar<DataType>>(x, 0.)};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<
     Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>
-TovStar<RadialSolution>::variables(
-    const tnsr::I<DataType, 3>& x,
-    tmpl::list<Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial,
-                                                   DataType>> /*meta*/,
-    const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
-  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+TovStar::variables(const tnsr::I<DataType, 3>& x,
+                   tmpl::list<Xcts::Tags::ConformalFactorGradient<
+                       3, Frame::Inertial, DataType>> /*meta*/,
+                   const RadialVariables<DataType>& radial_vars) const
+    noexcept {
+  auto result = make_with_value<tnsr::I<DataType, 3>>(x, 0.);
+  get<0>(result) = get<0>(x) / radial_vars.isotropic_radius *
+                   get(radial_vars.dr_conformal_factor);
+  get<1>(result) = get<1>(x) / radial_vars.isotropic_radius *
+                   get(radial_vars.dr_conformal_factor);
+  get<2>(result) = get<2>(x) / radial_vars.isotropic_radius *
+                   get(radial_vars.dr_conformal_factor);
+  return {std::move(result)};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<::Tags::Initial<
     Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>>
-TovStar<RadialSolution>::variables(
+TovStar::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<::Tags::Initial<Xcts::Tags::ConformalFactorGradient<
         3, Frame::Inertial, DataType>>> /*meta*/,
@@ -100,11 +94,10 @@ TovStar<RadialSolution>::variables(
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<::Tags::FixedSource<
     Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>>
-TovStar<RadialSolution>::variables(
+TovStar::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<::Tags::FixedSource<Xcts::Tags::ConformalFactorGradient<
         3, Frame::Inertial, DataType>>> /*meta*/,
@@ -112,22 +105,20 @@ TovStar<RadialSolution>::variables(
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<Xcts::Tags::LapseTimesConformalFactor<DataType>>
-TovStar<RadialSolution>::variables(
-    const tnsr::I<DataType, 3>& x,
+TovStar::variables(
+    const tnsr::I<DataType, 3>& /*x*/,
     tmpl::list<Xcts::Tags::LapseTimesConformalFactor<DataType>> /*meta*/,
-    const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
-  // This only holds asymptotically
-  return {make_with_value<Scalar<DataType>>(x, 1.)};
+    const RadialVariables<DataType>& radial_vars) const noexcept {
+  return {Scalar<DataType>{get(radial_vars.lapse) *
+                           get(radial_vars.conformal_factor)}};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<
     ::Tags::Initial<Xcts::Tags::LapseTimesConformalFactor<DataType>>>
-TovStar<RadialSolution>::variables(
+TovStar::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<::Tags::Initial<
         Xcts::Tags::LapseTimesConformalFactor<DataType>>> /*meta*/,
@@ -135,11 +126,10 @@ TovStar<RadialSolution>::variables(
   return {make_with_value<Scalar<DataType>>(x, 1.)};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<
     ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactor<DataType>>>
-TovStar<RadialSolution>::variables(
+TovStar::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<::Tags::FixedSource<
         Xcts::Tags::LapseTimesConformalFactor<DataType>>> /*meta*/,
@@ -147,24 +137,29 @@ TovStar<RadialSolution>::variables(
   return {make_with_value<Scalar<DataType>>(x, 0.)};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<
     Xcts::Tags::LapseTimesConformalFactorGradient<3, Frame::Inertial, DataType>>
-TovStar<RadialSolution>::variables(
-    const tnsr::I<DataType, 3>& x,
-    tmpl::list<Xcts::Tags::LapseTimesConformalFactorGradient<
-        3, Frame::Inertial, DataType>> /*meta*/,
-    const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
-  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+TovStar::variables(const tnsr::I<DataType, 3>& x,
+                   tmpl::list<Xcts::Tags::LapseTimesConformalFactorGradient<
+                       3, Frame::Inertial, DataType>> /*meta*/,
+                   const RadialVariables<DataType>& radial_vars) const
+    noexcept {
+  DataType deriv_factor =
+      get(radial_vars.dr_lapse) * get(radial_vars.conformal_factor) +
+      get(radial_vars.dr_conformal_factor) * get(radial_vars.lapse);
+  auto result = make_with_value<tnsr::I<DataType, 3>>(x, 0.);
+  get<0>(result) = get<0>(x) / radial_vars.isotropic_radius * deriv_factor;
+  get<1>(result) = get<1>(x) / radial_vars.isotropic_radius * deriv_factor;
+  get<2>(result) = get<2>(x) / radial_vars.isotropic_radius * deriv_factor;
+  return {std::move(result)};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<
     ::Tags::Initial<Xcts::Tags::LapseTimesConformalFactorGradient<
         3, Frame::Inertial, DataType>>>
-TovStar<RadialSolution>::variables(
+TovStar::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<::Tags::Initial<Xcts::Tags::LapseTimesConformalFactorGradient<
         3, Frame::Inertial, DataType>>> /*meta*/,
@@ -172,12 +167,11 @@ TovStar<RadialSolution>::variables(
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
 tuples::TaggedTuple<
     ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactorGradient<
         3, Frame::Inertial, DataType>>>
-TovStar<RadialSolution>::variables(
+TovStar::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<
         ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactorGradient<
@@ -186,21 +180,18 @@ TovStar<RadialSolution>::variables(
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
-template <typename RadialSolution>
 template <typename DataType>
-tuples::TaggedTuple<hydro::Tags::SpecificEnthalpy<DataType>>
-TovStar<RadialSolution>::variables(
+tuples::TaggedTuple<hydro::Tags::SpecificEnthalpy<DataType>> TovStar::variables(
     const tnsr::I<DataType, 3>& /*x*/,
     tmpl::list<hydro::Tags::SpecificEnthalpy<DataType>> /*meta*/,
-    const RadialVariables<DataType>& radial_vars) const noexcept {
+    const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
   ERROR("Invalid radial vars");
-  return radial_vars.specific_enthalpy;
+  //   return radial_vars.specific_enthalpy;
 }
 
-// template <typename RadialSolution>
 // template <typename DataType>
 // tuples::TaggedTuple<gr::Tags::Lapse<DataType>>
-// TovStar<RadialSolution>::variables(
+// TovStar::variables(
 //     const tnsr::I<DataType, 3>& /*x*/,
 //     tmpl::list<gr::Tags::Lapse<DataType>> /*meta*/,
 //     const RadialVariables<DataType>& radial_vars) const noexcept {
@@ -208,9 +199,7 @@ TovStar<RadialSolution>::variables(
 //   return Scalar<DataType>{exp(radial_vars.metric_time_potential)};
 // }
 
-template <typename RadialSolution>
-bool operator==(const TovStar<RadialSolution>& lhs,
-                const TovStar<RadialSolution>& rhs) noexcept {
+bool operator==(const TovStar& lhs, const TovStar& rhs) noexcept {
   // there is no comparison operator for the EoS, but should be okay as
   // the `polytropic_exponent`s and `polytropic_constant`s are compared
   return lhs.central_rest_mass_density_ == rhs.central_rest_mass_density_ and
@@ -218,86 +207,83 @@ bool operator==(const TovStar<RadialSolution>& lhs,
          lhs.polytropic_exponent_ == rhs.polytropic_exponent_;
 }
 
-template <typename RadialSolution>
-bool operator!=(const TovStar<RadialSolution>& lhs,
-                const TovStar<RadialSolution>& rhs) noexcept {
+bool operator!=(const TovStar& lhs, const TovStar& rhs) noexcept {
   return not(lhs == rhs);
 }
 
-#define STYPE(data) BOOST_PP_TUPLE_ELEM(0, data)
-#define DTYPE(data) BOOST_PP_TUPLE_ELEM(1, data)
+#define DTYPE(data) BOOST_PP_TUPLE_ELEM(0, data)
 #define INSTANTIATE_VARS(_, data)                                              \
   template tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DTYPE(data)>>       \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<Xcts::Tags::ConformalFactor<DTYPE(data)>> /*meta*/,           \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
   template tuples::TaggedTuple<                                                \
       ::Tags::Initial<Xcts::Tags::ConformalFactor<DTYPE(data)>>>               \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<                                                              \
           ::Tags::Initial<Xcts::Tags::ConformalFactor<DTYPE(data)>>> /*meta*/, \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
   template tuples::TaggedTuple<                                                \
       ::Tags::FixedSource<Xcts::Tags::ConformalFactor<DTYPE(data)>>>           \
-  TovStar<STYPE(data)>::variables(                                             \
-      const tnsr::I<DTYPE(data), 3>& x,                                        \
-      tmpl::list<::Tags::FixedSource<                                          \
-          Xcts::Tags::ConformalFactor<DTYPE(data)>>> /*meta*/,                 \
-      const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
+  TovStar::variables(const tnsr::I<DTYPE(data), 3>& x,                         \
+                     tmpl::list<::Tags::FixedSource<                           \
+                         Xcts::Tags::ConformalFactor<DTYPE(data)>>> /*meta*/,  \
+                     const RadialVariables<DTYPE(data)>& radial_vars)          \
+      const noexcept;                                                          \
   template tuples::TaggedTuple<                                                \
       Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DTYPE(data)>>    \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial,       \
                                                      DTYPE(data)>> /*meta*/,   \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
   template tuples::TaggedTuple<::Tags::Initial<                                \
       Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DTYPE(data)>>>   \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<::Tags::Initial<Xcts::Tags::ConformalFactorGradient<          \
           3, Frame::Inertial, DTYPE(data)>>> /*meta*/,                         \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
   template tuples::TaggedTuple<::Tags::FixedSource<                            \
       Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DTYPE(data)>>>   \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<::Tags::FixedSource<Xcts::Tags::ConformalFactorGradient<      \
           3, Frame::Inertial, DTYPE(data)>>> /*meta*/,                         \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
   template tuples::TaggedTuple<                                                \
       Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>                      \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>> /*meta*/, \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
   template tuples::TaggedTuple<                                                \
       ::Tags::Initial<Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>>     \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<::Tags::Initial<                                              \
           Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>> /*meta*/,       \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
   template tuples::TaggedTuple<                                                \
       ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>> \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<::Tags::FixedSource<                                          \
           Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>> /*meta*/,       \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
   template tuples::TaggedTuple<Xcts::Tags::LapseTimesConformalFactorGradient<  \
       3, Frame::Inertial, DTYPE(data)>>                                        \
-  TovStar<STYPE(data)>::variables(                                             \
-      const tnsr::I<DTYPE(data), 3>& x,                                        \
-      tmpl::list<Xcts::Tags::LapseTimesConformalFactorGradient<                \
-          3, Frame::Inertial, DTYPE(data)>> /*meta*/,                          \
-      const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
+  TovStar::variables(const tnsr::I<DTYPE(data), 3>& x,                         \
+                     tmpl::list<Xcts::Tags::LapseTimesConformalFactorGradient< \
+                         3, Frame::Inertial, DTYPE(data)>> /*meta*/,           \
+                     const RadialVariables<DTYPE(data)>& radial_vars)          \
+      const noexcept;                                                          \
   template tuples::TaggedTuple<                                                \
       ::Tags::Initial<Xcts::Tags::LapseTimesConformalFactorGradient<           \
           3, Frame::Inertial, DTYPE(data)>>>                                   \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<                                                              \
           ::Tags::Initial<Xcts::Tags::LapseTimesConformalFactorGradient<       \
@@ -306,26 +292,19 @@ bool operator!=(const TovStar<RadialSolution>& lhs,
   template tuples::TaggedTuple<                                                \
       ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactorGradient<       \
           3, Frame::Inertial, DTYPE(data)>>>                                   \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<                                                              \
           ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactorGradient<   \
               3, Frame::Inertial, DTYPE(data)>>> /*meta*/,                     \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
   template tuples::TaggedTuple<hydro::Tags::SpecificEnthalpy<DTYPE(data)>>     \
-  TovStar<STYPE(data)>::variables(                                             \
+  TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<hydro::Tags::SpecificEnthalpy<DTYPE(data)>> /*meta*/,         \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;
 
-#define INSTANTIATE(_, data)                                \
-  template class TovStar<STYPE(data)>;                      \
-  template bool operator!=(const TovStar<STYPE(data)>& lhs, \
-                           const TovStar<STYPE(data)>& rhs) noexcept;
-
-GENERATE_INSTANTIATIONS(INSTANTIATE_VARS, (gr::Solutions::TovSolution),
-                        (double, DataVector))
-GENERATE_INSTANTIATIONS(INSTANTIATE, (gr::Solutions::TovSolution))
+GENERATE_INSTANTIATIONS(INSTANTIATE_VARS, (double, DataVector))
 
 #undef DTYPE
 #undef STYPE

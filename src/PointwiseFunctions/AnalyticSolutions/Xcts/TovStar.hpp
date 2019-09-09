@@ -13,7 +13,7 @@
 #include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/RelativisticEuler/TovStar.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/TovIsotropic.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"  // IWYU pragma: keep
 #include "PointwiseFunctions/Hydro/EquationsOfState/EquationOfState.hpp"
@@ -45,19 +45,9 @@ namespace Solutions {
  * An analytic solution for a static, spherically-symmetric star found by
  * solving the Tolman-Oppenheimer-Volkoff (TOV) equations.  The equation of
  * state is assumed to be that of a polytropic fluid.
- *
- * \tparam RadialSolution selects not only how the TOV equations are solved, but
- * also the radial coordinate that the solution is given in (e.g. areal or
- * isotropic).  See the documentation of the specific `RadialSolution`s for
- * more details.
  */
-template <typename RadialSolution>
 class TovStar {
  public:
-  template <typename DataType>
-  using RadialVariables = typename RelativisticEuler::Solutions::TovStar<
-      RadialSolution>::template RadialVariables<DataType>;
-
   using equation_of_state_type = EquationsOfState::PolytropicFluid<true>;
 
   /// The central density of the star.
@@ -101,17 +91,22 @@ class TovStar {
   TovStar(double central_rest_mass_density, double polytropic_constant,
           double polytropic_exponent) noexcept;
 
+  const gr::Solutions::TovIsotropic& radial_solution() const noexcept {
+    return radial_solution_;
+  }
+
+  template <typename DataType>
+  using RadialVariables =
+      gr::Solutions::TovIsotropic::RadialVariables<DataType>;
+
   /// Retrieve a collection of variables at coordinates `x`
   template <typename DataType, typename... Tags>
   tuples::TaggedTuple<Tags...> variables(const tnsr::I<DataType, 3>& x,
                                          tmpl::list<Tags...> /*meta*/) const
       noexcept {
-    // auto radial_vars =
-    //     radial_tov_solution().radial_variables(equation_of_state_, x);
-    // return {get<Tags>(variables(x, tmpl::list<Tags>{}, radial_vars))...};
-    return {get<Tags>(variables(
-        x, tmpl::list<Tags>{},
-        RadialVariables<DataType>{make_with_value<DataType>(x, 0.)}))...};
+    auto radial_vars =
+        radial_solution().radial_variables(equation_of_state_, x);
+    return {get<Tags>(variables(x, tmpl::list<Tags>{}, radial_vars))...};
   }
 
   // clang-tidy: no runtime references
@@ -191,15 +186,7 @@ class TovStar {
   using compute_tags = tmpl::list<BackgroundFieldsCompute>;
 
  private:
-  friend bool operator==(const TovStar& lhs, const TovStar& rhs) noexcept {
-    // there is no comparison operator for the EoS, but should be okay as
-    // the `polytropic_exponent`s and `polytropic_constant`s are compared
-    return lhs.central_rest_mass_density_ == rhs.central_rest_mass_density_ and
-           lhs.polytropic_constant_ == rhs.polytropic_constant_ and
-           lhs.polytropic_exponent_ == rhs.polytropic_exponent_;
-  }
-
-  const RadialSolution& radial_tov_solution() const noexcept;
+  friend bool operator==(const TovStar& lhs, const TovStar& rhs) noexcept;
 
   template <typename DataType>
   using ConformalFactorGradient =
@@ -242,11 +229,10 @@ class TovStar {
   double polytropic_constant_ = std::numeric_limits<double>::signaling_NaN();
   double polytropic_exponent_ = std::numeric_limits<double>::signaling_NaN();
   EquationsOfState::PolytropicFluid<true> equation_of_state_{};
+  gr::Solutions::TovIsotropic radial_solution_{};
 };
 
-template <typename RadialSolution>
-bool operator!=(const TovStar<RadialSolution>& lhs,
-                const TovStar<RadialSolution>& rhs) noexcept;
+bool operator!=(const TovStar& lhs, const TovStar& rhs) noexcept;
 
 }  // namespace Solutions
 }  // namespace Xcts
