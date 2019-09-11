@@ -23,7 +23,9 @@ namespace {
 template <typename Tag>
 struct Step : db::SimpleTag, db::PrefixTag {
   using type = typename Tag::type;
-  static std::string name() noexcept { return "Step"; }
+  static std::string name() noexcept {
+    return "Step(" + db::tag_name<Tag>() + ")";
+  }
   using tag = Tag;
 };
 
@@ -35,7 +37,7 @@ struct SomeField : db::SimpleTag {
 template <size_t Dim>
 struct AnotherField : db::SimpleTag {
   using type = tnsr::I<DataVector, Dim>;
-  static std::string name() noexcept { return "SomeField"; }
+  static std::string name() noexcept { return "AnotherField"; }
 };
 
 template <size_t Dim>
