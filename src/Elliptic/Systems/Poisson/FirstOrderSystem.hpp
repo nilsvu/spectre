@@ -35,8 +35,8 @@ namespace Poisson {
  * \brief The Poisson equation formulated as a set of coupled first-order PDEs.
  *
  * \details This system formulates the Poisson equation \f$-\Delta_\gamma u(x) =
- * f(x)\f$ on a background metric \f$\gamma\f$ as the set of coupled first-order
- * PDEs
+ * f(x)\f$ on a background metric \f$\gamma_{ij}\f$ as the set of coupled
+ * first-order PDEs
  *
  * \f[
  * -\frac{1}{\sqrt{\gamma}} \partial_i \sqrt{\gamma}\gamma^{ij} v_j(x) = f(x) \\
@@ -53,12 +53,15 @@ namespace Poisson {
  * \f]
  *
  * by choosing the fluxes and sources in terms of the system variables
- * \f$u(x)\f$ and $v_i(x)}\f$ as
+ * \f$u(x)\f$ and \f$v_i(x)\f$ as
  *
- * \f{align}
- * F^i_u &= \sqrt{\gamma}\gamma^{ij} v_j(x) \quad F^i_{v_j} &= u \delta^i_j \\
- * S_u &= 0 \quad S_{v_i} &= v_j
- * f_u &= \sqrt{\gamma} f(x) \quad f_{v_i} &= 0 \text{.}
+ * \f{*align}
+ * F^i_u &= \sqrt{\gamma}\gamma^{ij} v_j(x) \\
+ * S_u &= 0 \\
+ * f_u &= \sqrt{\gamma} f(x) \\
+ * F^i_{v_j} &= u \delta^i_j \\
+ * S_{v_j} &= v_j \\
+ * f_{v_j} &= 0 \text{.}
  * \f}
  *
  * Note that we use the system variables to index the fluxes and sources, which
