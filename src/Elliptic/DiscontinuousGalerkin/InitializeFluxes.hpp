@@ -66,9 +66,9 @@ struct InitializeFluxes {
 
   using exterior_tags = tmpl::list<
       // On exterior (ghost) boundary faces we compute the fluxes from the
-      // data that is being set there to impose homogeneous Dirichlet boundary
-      // conditions. Then, we compute their normal-dot-fluxes. The flux
-      // divergences are sliced from the volume.
+      // data that is being set there to impose boundary conditions. Then, we
+      // compute their normal-dot-fluxes. The flux divergences are sliced from
+      // the volume.
       ::Tags::InterfaceComputeItem<
           ::Tags::BoundaryDirectionsExterior<volume_dim>, fluxes_compute_tag>,
       ::Tags::InterfaceComputeItem<
