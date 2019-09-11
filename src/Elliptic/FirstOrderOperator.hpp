@@ -38,7 +38,7 @@ namespace elliptic {
  * - `operator_tag` = `db::add_tag_prefix<StepPrefixTag, VarsTag>`
  * - `fluxes_tag` = `db::add_tag_prefix<::Tags::Flux, VarsTag,
  * tmpl::size_t<Dim>, Frame::Inertial>`
- * - `div_fluxes_tag` = `db::add_tag_prefix<::Tags::div, fluxes_tag>`
+ * - `div_fluxes_tag` = `db::add_tag_prefix<Tags::div, fluxes_tag>`
  * - `sources_tag` = `db::add_tag_prefix<::Tags::Source, VarsTag>`
  *
  * Uses:
