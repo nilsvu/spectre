@@ -103,7 +103,8 @@ struct EuclideanFluxes {
       const Scalar<DataVector>& field) noexcept {
     auxiliary_fluxes(flux_for_gradient, field);
   }
-  void pup(PUP::er& /*p*/) noexcept {}
+  // clang-tidy: no runtime references
+  void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
 };
 
 /*!

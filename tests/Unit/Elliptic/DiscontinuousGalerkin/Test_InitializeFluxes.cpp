@@ -75,7 +75,8 @@ struct Fluxes {
       flux_for_aux_field->get(d, d) = get(field);
     }
   }
-  void pup(PUP::er& /*p*/) noexcept {}
+  // clang-tidy: no runtime references
+  void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
 };
 
 template <size_t Dim, typename Metavariables>
