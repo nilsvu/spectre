@@ -30,7 +30,9 @@ namespace elliptic {
  * We generally build the operator $A(u)$ to perform elliptic solver iterations.
  * This action can be used to build operators for both the linear solver and the
  * nonlinear solver iterations by providing the appropriate `StepPrefixTag` and
- * `VarsTag`.
+ * `VarsTag`. For example, the `StepPrefixTag` for the linear solver would
+ * typically be `LinearSolver::Tags::OperatorAppliedTo`. It can be any prefix
+ * tag with a `type` that supports assignment of the `VarsTag::type`.
  *
  * With:
  * - `operator_tag` = `db::add_tag_prefix<StepPrefixTag, VarsTag>`
