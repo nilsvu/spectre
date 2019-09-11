@@ -24,7 +24,7 @@ struct FieldTag : db::SimpleTag {
 template <size_t Dim>
 struct AuxiliaryFieldTag : db::SimpleTag {
   using type = tnsr::i<DataVector, Dim>;
-  static std::string name() noexcept { return "FieldTag"; }
+  static std::string name() noexcept { return "AuxiliaryFieldTag"; }
 };
 
 struct AnArgument : db::SimpleTag {
@@ -57,7 +57,7 @@ struct Sources {
   static void apply(const gsl::not_null<Scalar<DataVector>*> source_for_field,
                     const double& an_argument,
                     const Scalar<DataVector>& field) {
-    get(*source_for_field) = get(field) * an_argument;
+    get(*source_for_field) = get(field) * square(an_argument);
   }
 };
 
@@ -107,11 +107,18 @@ void test_first_order_compute_tags() {
     CHECK(get<::Tags::Flux<AuxiliaryFieldTag<Dim>, tmpl::size_t<Dim>,
                            Frame::Inertial>>(box)
               .get(d, d) == DataVector{num_points, 6.});
+    for (size_t i0 = 0; i0 < Dim; i0++) {
+      if (i0 != d) {
+        CHECK(get<::Tags::Flux<AuxiliaryFieldTag<Dim>, tmpl::size_t<Dim>,
+                               Frame::Inertial>>(box)
+                  .get(d, i0) == DataVector{num_points, 0.});
+      }
+    }
   }
 
   // Check computed sources
   const auto& sources = get<db::add_tag_prefix<::Tags::Source, vars_tag>>(box);
-  CHECK(get(get<::Tags::Source<FieldTag>>(box)) == DataVector{num_points, 6.});
+  CHECK(get(get<::Tags::Source<FieldTag>>(box)) == DataVector{num_points, 18.});
   for (size_t d = 0; d < Dim; d++) {
     CHECK(get<::Tags::Source<AuxiliaryFieldTag<Dim>>>(box).get(d) ==
           get<AuxiliaryFieldTag<Dim>>(box).get(d));
