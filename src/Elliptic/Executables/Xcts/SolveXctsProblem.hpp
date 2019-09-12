@@ -52,6 +52,7 @@
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/ConstantDensityStar.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/TovStar.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarBinary.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -165,7 +166,7 @@ struct Metavariables {
   // The analytic solution and corresponding source to solve the XCTS
   // equation for
   using analytic_solution_tag =
-      OptionTags::AnalyticSolution<Xcts::Solutions::TovStar>;
+      OptionTags::AnalyticSolution<Xcts::AnalyticData::NeutronStarBinary>;
   using initial_guess_tag = analytic_solution_tag;
 
   using nonlinear_solver = NonlinearSolver::NewtonRaphson<

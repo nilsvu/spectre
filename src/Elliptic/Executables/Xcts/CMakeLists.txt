@@ -12,6 +12,7 @@ set(LIBS_TO_LINK
   MathFunctions
   Xcts
   XctsSolutions
+  XctsAnalyticData
   Utilities
   ${SPECTRE_LIBRARIES}
   )

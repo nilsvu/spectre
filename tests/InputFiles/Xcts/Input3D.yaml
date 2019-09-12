@@ -7,17 +7,24 @@
 #   Xcts3DReductions.h5
 #   Xcts3DVolume0.h5
 
+# AnalyticSolution:
+#   TovStar:
+#     CentralDensity: 0.0008087415253997405 # h = 1.2
+#     PolytropicConstant: 123.6489
+#     PolytropicExponent: 2.
+
 AnalyticSolution:
-  TovStar:
-    CentralDensity: 0.0008087415253997405 # h = 1.2
+  NeutronStarBinary:
+    CentralDensities: [0.0008087415253997405, 0.0008087415253997405] # h = 1.2
+    AngularVelocity: 0.
     PolytropicConstant: 123.6489
     PolytropicExponent: 2.
 
 DomainCreator:
   Sphere:
-    InnerRadius: 5.
-    OuterRadius: 15.
-    InitialRefinement: 1
+    InnerRadius: 50.
+    OuterRadius: 75.
+    InitialRefinement: 2
     InitialGridPoints: [4, 4]
     UseEquiangularMap: False
 
@@ -29,12 +36,12 @@ CorrectionNumFlux:
     PenaltyParameter: 5. # p^2 / h
 
 Observers:
-  VolumeFileName: "Xcts3DVolume"
-  ReductionFileName: "Xcts3DReductions"
+  VolumeFileName: "NeutronStarBinaryVolume"
+  ReductionFileName: "NeutronStarBinaryReductions"
 
 NonlinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 5
+    MaxIterations: 0
     RelativeResidual: 1e-3
     AbsoluteResidual: 1e-15
   Verbosity: Verbose
