@@ -220,7 +220,8 @@ struct Metavariables {
 
   // Construct the DgElementArray parallel component
   using apply_nonlinear_operator = tmpl::list<
-      Xcts::Actions::UpdateLapseAtOrigin,
+    //   Xcts::Actions::UpdateLapseAtOrigin,
+      Xcts::Actions::UpdateLapseAtStarCenters,
       dg::Actions::SendDataForFluxes<nonlinear_boundary_scheme>,
       elliptic::Actions::ComputeOperatorAction<
           Dim, NonlinearSolver::Tags::OperatorAppliedTo, nonlinear_fields_tag>,
@@ -242,7 +243,8 @@ struct Metavariables {
       dg::Actions::InitializeDomain<Dim>,
       elliptic::Actions::InitializeAnalyticSolution,
       //   elliptic::Actions::InitializeBackgroundFields,
-      Xcts::Actions::InitializeLapseAtOrigin,
+    //   Xcts::Actions::InitializeLapseAtOrigin,
+      Xcts::Actions::InitializeLapseAtStarCenters,
       elliptic::Actions::InitializeNonlinearSystem,
       dg::Actions::InitializeInterfaces<
           system, dg::Initialization::slice_tags_to_face<>,

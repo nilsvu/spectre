@@ -88,5 +88,10 @@ struct LapseAtOrigin : db::SimpleTag {
   static std::string name() noexcept { return "LapseAtOrigin"; }
 };
 
+struct LapseAtStarCenters : db::SimpleTag {
+  using type = std::array<double, 2>;
+  static std::string name() noexcept { return "LapseAtStarCenters"; }
+};
+
 }  // namespace Tags
 }  // namespace Xcts

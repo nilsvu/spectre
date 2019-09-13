@@ -43,11 +43,12 @@ tnsr::I<DataVector, 3, Frame::Inertial> make_origin_tensor() noexcept {
 
 template <size_t Dim>
 boost::optional<tnsr::I<DataVector, Dim, Frame::Logical>>
-origin_logical_coordinates(
+get_logical_coordinates(
+    const tnsr::I<DataVector, Dim, Frame::Inertial>& inertial_coords,
     const ElementId<Dim>& element_id,
     const Domain<Dim, Frame::Inertial>& domain) noexcept {
-  const auto origin = make_origin_tensor<Dim>();
-  auto block_logical_coords = block_logical_coordinates(domain, origin);
+  auto block_logical_coords =
+      block_logical_coordinates(domain, inertial_coords);
   const auto element_ids_and_logical_coords = element_logical_coordinates(
       std::vector<ElementId<Dim>>{element_id}, std::move(block_logical_coords));
   auto found_element = element_ids_and_logical_coords.find(element_id);
@@ -56,6 +57,28 @@ origin_logical_coordinates(
   } else {
     return boost::none;
   }
+}
+
+template <size_t Dim>
+boost::optional<tnsr::I<DataVector, Dim, Frame::Logical>>
+origin_logical_coordinates(
+    const ElementId<Dim>& element_id,
+    const Domain<Dim, Frame::Inertial>& domain) noexcept {
+  const auto origin = make_origin_tensor<Dim>();
+  return get_logical_coordinates(origin, element_id, domain);
+}
+
+template <size_t Dim>
+std::array<boost::optional<tnsr::I<DataVector, Dim, Frame::Logical>>, 2>
+star_centers_logical_coordinates(
+    const ElementId<Dim>& element_id,
+    const Domain<Dim, Frame::Inertial>& domain) noexcept {
+  auto left_center = make_origin_tensor<Dim>();
+  auto right_center = make_origin_tensor<Dim>();
+  get<0>(left_center) -= 50.;
+  get<0>(right_center) += 50.;
+  return {{get_logical_coordinates(left_center, element_id, domain),
+           get_logical_coordinates(right_center, element_id, domain)}};
 }
 
 namespace {
@@ -110,6 +133,11 @@ std::tuple<size_t, double> lapse_at_origin(
 #define INSTANTIATE(_, data)                                                 \
   template boost::optional<tnsr::I<DataVector, DIM(data), Frame::Logical>>   \
   origin_logical_coordinates(                                                \
+      const ElementId<DIM(data)>& element_id,                                \
+      const Domain<DIM(data), Frame::Inertial>& domain) noexcept;            \
+  template std::array<                                                       \
+      boost::optional<tnsr::I<DataVector, DIM(data), Frame::Logical>>, 2>    \
+  star_centers_logical_coordinates(                                          \
       const ElementId<DIM(data)>& element_id,                                \
       const Domain<DIM(data), Frame::Inertial>& domain) noexcept;            \
   template std::tuple<size_t, double> lapse_at_origin(                       \

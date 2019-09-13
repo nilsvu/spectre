@@ -20,13 +20,20 @@ AnalyticSolution:
     PolytropicConstant: 123.6489
     PolytropicExponent: 2.
 
+# DomainCreator:
+#   Sphere:
+#     InnerRadius: 50.
+#     OuterRadius: 75.
+#     InitialRefinement: 2
+#     InitialGridPoints: [4, 4]
+#     UseEquiangularMap: False
 DomainCreator:
-  Sphere:
-    InnerRadius: 50.
-    OuterRadius: 75.
-    InitialRefinement: 2
-    InitialGridPoints: [4, 4]
-    UseEquiangularMap: False
+  Brick:
+    LowerBound: [-100., -50., -50.]
+    UpperBound: [100., 50., 50.]
+    IsPeriodicIn: [false, false, false]
+    InitialRefinement: [3, 2, 2]
+    InitialGridPoints: [8, 8, 8]
 
 NumericalFlux:
   InternalPenalty:
@@ -43,12 +50,12 @@ NonlinearSolver:
   ConvergenceCriteria:
     MaxIterations: 0
     RelativeResidual: 1e-3
-    AbsoluteResidual: 1e-15
+    AbsoluteResidual: 1e-13
   Verbosity: Verbose
 
 LinearSolver:
   ConvergenceCriteria:
     MaxIterations: 500
     RelativeResidual: 1e-2
-    AbsoluteResidual: 1e-15
+    AbsoluteResidual: 1e-13
   Verbosity: Verbose

@@ -1,0 +1,228 @@
+// Distributed under the MIT License.
+// See LICENSE.txt for details.
+
+#include "PointwiseFunctions/AnalyticSolutions/Xcts/Vacuum.hpp"
+
+#include <cstddef>
+
+#include "DataStructures/DataVector.hpp"
+#include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "ErrorHandling/Error.hpp"
+#include "Utilities/ConstantExpressions.hpp"
+#include "Utilities/GenerateInstantiations.hpp"
+#include "Utilities/MakeWithValue.hpp"
+
+namespace Xcts {
+namespace Solutions {
+
+template <typename DataType>
+tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DataType>> Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<Xcts::Tags::ConformalFactor<DataType>> /*meta*/) const noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 1.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<::Tags::Initial<Xcts::Tags::ConformalFactor<DataType>>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<::Tags::Initial<Xcts::Tags::ConformalFactor<DataType>>> /*meta*/)
+    const noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 1.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<::Tags::FixedSource<Xcts::Tags::ConformalFactor<DataType>>>
+Vacuum::variables(const tnsr::I<DataType, 3>& x,
+                  tmpl::list<::Tags::FixedSource<
+                      Xcts::Tags::ConformalFactor<DataType>>> /*meta*/) const
+    noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<
+    Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>
+Vacuum::variables(const tnsr::I<DataType, 3>& x,
+                  tmpl::list<Xcts::Tags::ConformalFactorGradient<
+                      3, Frame::Inertial, DataType>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<::Tags::Initial<
+    Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<::Tags::Initial<Xcts::Tags::ConformalFactorGradient<
+        3, Frame::Inertial, DataType>>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<::Tags::FixedSource<
+    Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<::Tags::FixedSource<Xcts::Tags::ConformalFactorGradient<
+        3, Frame::Inertial, DataType>>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<Xcts::Tags::LapseTimesConformalFactor<DataType>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<Xcts::Tags::LapseTimesConformalFactor<DataType>> /*meta*/) const
+    noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 1.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::Initial<Xcts::Tags::LapseTimesConformalFactor<DataType>>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<::Tags::Initial<
+        Xcts::Tags::LapseTimesConformalFactor<DataType>>> /*meta*/) const
+    noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 1.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactor<DataType>>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<::Tags::FixedSource<
+        Xcts::Tags::LapseTimesConformalFactor<DataType>>> /*meta*/) const
+    noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<
+    Xcts::Tags::LapseTimesConformalFactorGradient<3, Frame::Inertial, DataType>>
+Vacuum::variables(const tnsr::I<DataType, 3>& x,
+                  tmpl::list<Xcts::Tags::LapseTimesConformalFactorGradient<
+                      3, Frame::Inertial, DataType>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::Initial<Xcts::Tags::LapseTimesConformalFactorGradient<
+        3, Frame::Inertial, DataType>>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<::Tags::Initial<Xcts::Tags::LapseTimesConformalFactorGradient<
+        3, Frame::Inertial, DataType>>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactorGradient<
+        3, Frame::Inertial, DataType>>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<
+        ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactorGradient<
+            3, Frame::Inertial, DataType>>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+bool operator==(const Vacuum& /*lhs*/, const Vacuum& /*rhs*/) { return true; }
+bool operator!=(const Vacuum& /*lhs*/, const Vacuum& /*rhs*/) { return false; }
+
+#define DTYPE(data) BOOST_PP_TUPLE_ELEM(0, data)
+#define INSTANTIATE_VARS(_, data)                                              \
+  template tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DTYPE(data)>>       \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<Xcts::Tags::ConformalFactor<DTYPE(data)>> /*meta*/)           \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::Initial<Xcts::Tags::ConformalFactor<DTYPE(data)>>>               \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<                                                              \
+          ::Tags::Initial<Xcts::Tags::ConformalFactor<DTYPE(data)>>> /*meta*/) \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::FixedSource<Xcts::Tags::ConformalFactor<DTYPE(data)>>>           \
+  Vacuum::variables(const tnsr::I<DTYPE(data), 3>& x,                          \
+                    tmpl::list<::Tags::FixedSource<                            \
+                        Xcts::Tags::ConformalFactor<DTYPE(data)>>> /*meta*/)   \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DTYPE(data)>>    \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial,       \
+                                                     DTYPE(data)>> /*meta*/)   \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<::Tags::Initial<                                \
+      Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DTYPE(data)>>>   \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::Initial<Xcts::Tags::ConformalFactorGradient<          \
+          3, Frame::Inertial, DTYPE(data)>>> /*meta*/) const noexcept;         \
+  template tuples::TaggedTuple<::Tags::FixedSource<                            \
+      Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DTYPE(data)>>>   \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::FixedSource<Xcts::Tags::ConformalFactorGradient<      \
+          3, Frame::Inertial, DTYPE(data)>>> /*meta*/) const noexcept;         \
+  template tuples::TaggedTuple<                                                \
+      Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>                      \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>> /*meta*/) \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::Initial<Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>>     \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::Initial<                                              \
+          Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>> /*meta*/)       \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>> \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::FixedSource<                                          \
+          Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>> /*meta*/)       \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<Xcts::Tags::LapseTimesConformalFactorGradient<  \
+      3, Frame::Inertial, DTYPE(data)>>                                        \
+  Vacuum::variables(const tnsr::I<DTYPE(data), 3>& x,                          \
+                    tmpl::list<Xcts::Tags::LapseTimesConformalFactorGradient<  \
+                        3, Frame::Inertial, DTYPE(data)>> /*meta*/)            \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::Initial<Xcts::Tags::LapseTimesConformalFactorGradient<           \
+          3, Frame::Inertial, DTYPE(data)>>>                                   \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<                                                              \
+          ::Tags::Initial<Xcts::Tags::LapseTimesConformalFactorGradient<       \
+              3, Frame::Inertial, DTYPE(data)>>> /*meta*/) const noexcept;     \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactorGradient<       \
+          3, Frame::Inertial, DTYPE(data)>>>                                   \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<                                                              \
+          ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactorGradient<   \
+              3, Frame::Inertial, DTYPE(data)>>> /*meta*/) const noexcept;
+
+GENERATE_INSTANTIATIONS(INSTANTIATE_VARS, (double, DataVector))
+
+#undef DTYPE
+#undef STYPE
+#undef INSTANTIATE
+#undef INSTANTIATE_VARS
+}  // namespace Solutions
+}  // namespace Xcts
+/// \endcond
