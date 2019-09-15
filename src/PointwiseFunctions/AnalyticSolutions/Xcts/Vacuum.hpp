@@ -63,6 +63,7 @@ class Vacuum {
       Xcts::Tags::LapseTimesConformalFactorGradient<3, Frame::Inertial,
                                                     DataType>;
 
+ public:
 #define FUNC_DECL(r, data, elem)                                     \
   template <typename DataType>                                       \
   tuples::TaggedTuple<elem> variables(const tnsr::I<DataType, 3>& x, \
@@ -77,11 +78,13 @@ class Vacuum {
       const tnsr::I<DataType, 3>& x,                                 \
       tmpl::list<::Tags::FixedSource<elem>> /*meta*/) const noexcept;
 
-#define MY_LIST                                                               \
-  BOOST_PP_TUPLE_TO_LIST(4, (Xcts::Tags::ConformalFactor<DataType>,           \
-                             ConformalFactorGradient<DataType>,               \
-                             Xcts::Tags::LapseTimesConformalFactor<DataType>, \
-                             LapseTimesConformalFactorGradient<DataType>))
+#define MY_LIST                                            \
+  BOOST_PP_TUPLE_TO_LIST(                                  \
+      6, (Xcts::Tags::ConformalFactor<DataType>,           \
+          ConformalFactorGradient<DataType>,               \
+          Xcts::Tags::LapseTimesConformalFactor<DataType>, \
+          LapseTimesConformalFactorGradient<DataType>,     \
+          gr::Tags::EnergyDensity<DataType>, gr::Tags::StressTrace<DataType>))
 
   BOOST_PP_LIST_FOR_EACH(FUNC_DECL, _, MY_LIST)
 #undef MY_LIST

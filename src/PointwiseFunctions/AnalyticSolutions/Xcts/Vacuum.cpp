@@ -132,6 +132,20 @@ Vacuum::variables(
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
+template <typename DataType>
+tuples::TaggedTuple<gr::Tags::EnergyDensity<DataType>> Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<gr::Tags::EnergyDensity<DataType>> /*meta*/) const noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<gr::Tags::StressTrace<DataType>> Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<gr::Tags::StressTrace<DataType>> /*meta*/) const noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 0.)};
+}
+
 bool operator==(const Vacuum& /*lhs*/, const Vacuum& /*rhs*/) { return true; }
 bool operator!=(const Vacuum& /*lhs*/, const Vacuum& /*rhs*/) { return false; }
 
@@ -215,7 +229,15 @@ bool operator!=(const Vacuum& /*lhs*/, const Vacuum& /*rhs*/) { return false; }
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<                                                              \
           ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactorGradient<   \
-              3, Frame::Inertial, DTYPE(data)>>> /*meta*/) const noexcept;
+              3, Frame::Inertial, DTYPE(data)>>> /*meta*/) const noexcept;     \
+  template tuples::TaggedTuple<gr::Tags::EnergyDensity<DTYPE(data)>>           \
+  Vacuum::variables(const tnsr::I<DTYPE(data), 3>& x,                          \
+                    tmpl::list<gr::Tags::EnergyDensity<DTYPE(data)>> /*meta*/) \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<gr::Tags::StressTrace<DTYPE(data)>>             \
+  Vacuum::variables(const tnsr::I<DTYPE(data), 3>& x,                          \
+                    tmpl::list<gr::Tags::StressTrace<DTYPE(data)>> /*meta*/)   \
+      const noexcept;
 
 GENERATE_INSTANTIATIONS(INSTANTIATE_VARS, (double, DataVector))
 

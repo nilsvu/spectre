@@ -14,11 +14,18 @@
 #     PolytropicExponent: 2.
 
 AnalyticSolution:
-  NeutronStarBinary:
+  HeadOnCollision:
     CentralDensities: [0.0008087415253997405, 0.0008087415253997405] # h = 1.2
-    AngularVelocity: 0.
+    Separation: 100.
     PolytropicConstant: 123.6489
     PolytropicExponent: 2.
+
+# AnalyticSolution:
+#   NeutronStarBinary:
+#     CentralDensities: [0.0008087415253997405, 0.0008087415253997405] # h = 1.2
+#     AngularVelocity: 0.
+#     PolytropicConstant: 123.6489
+#     PolytropicExponent: 2.
 
 # DomainCreator:
 #   Sphere:
@@ -42,13 +49,16 @@ CorrectionNumFlux:
   InternalPenalty:
     PenaltyParameter: 5. # p^2 / h
 
+# Observers:
+#   VolumeFileName: "NeutronStarBinaryVolume"
+#   ReductionFileName: "NeutronStarBinaryReductions"
 Observers:
-  VolumeFileName: "NeutronStarBinaryVolume"
-  ReductionFileName: "NeutronStarBinaryReductions"
+  VolumeFileName: "HeadOnCollisionVolume"
+  ReductionFileName: "HeadOnCollisionReductions"
 
 NonlinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 0
+    MaxIterations: 5
     RelativeResidual: 1e-3
     AbsoluteResidual: 1e-13
   Verbosity: Verbose

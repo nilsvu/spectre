@@ -213,12 +213,14 @@ class TovStar {
       tmpl::list<::Tags::FixedSource<elem>> /*meta*/,               \
       const RadialVariables<DataType>& radial_vars) const noexcept;
 
-#define MY_LIST                                                                \
-  BOOST_PP_TUPLE_TO_LIST(17, (Xcts::Tags::ConformalFactor<DataType>,           \
-                              ConformalFactorGradient<DataType>,               \
-                              Xcts::Tags::LapseTimesConformalFactor<DataType>, \
-                              LapseTimesConformalFactorGradient<DataType>,     \
-                              hydro::Tags::SpecificEnthalpy<DataType>))
+#define MY_LIST                                            \
+  BOOST_PP_TUPLE_TO_LIST(                                  \
+      7, (Xcts::Tags::ConformalFactor<DataType>,           \
+          ConformalFactorGradient<DataType>,               \
+          Xcts::Tags::LapseTimesConformalFactor<DataType>, \
+          LapseTimesConformalFactorGradient<DataType>,     \
+          hydro::Tags::SpecificEnthalpy<DataType>,         \
+          gr::Tags::EnergyDensity<DataType>, gr::Tags::StressTrace<DataType>))
 
   BOOST_PP_LIST_FOR_EACH(FUNC_DECL, _, MY_LIST)
 #undef MY_LIST

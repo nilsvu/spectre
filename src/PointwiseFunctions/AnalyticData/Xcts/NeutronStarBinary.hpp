@@ -39,15 +39,24 @@ class NeutronStarBinary {
  public:
   using equation_of_state_type = EquationsOfState::PolytropicFluid<true>;
 
+  struct Separation {
+    using type = double;
+    static constexpr OptionString help = {
+        "The coordinate separation of the binary at apoapsis."};
+    static type lower_bound() noexcept { return 0.; }
+  };
+
+  struct Eccentricity {
+    using type = double;
+    static constexpr OptionString help = {
+        "The Newtonian eccentricity of the binary."};
+    static type lower_bound() noexcept { return 0.; }
+    static type upper_bound() noexcept { return 1.; }
+  };
+
   struct CentralDensities {
     using type = std::array<double, 2>;
     static constexpr OptionString help = {"The central densities of the stars"};
-  };
-
-  struct AngularVelocity {
-    using type = double;
-    static constexpr OptionString help = {
-        "The angular velocity of the binary."};
   };
 
   struct PolytropicConstant {
@@ -64,7 +73,7 @@ class NeutronStarBinary {
     static type lower_bound() noexcept { return 1.; }
   };
 
-  using options = tmpl::list<CentralDensities, AngularVelocity,
+  using options = tmpl::list<Separation, Eccentricity, CentralDensities,
                              PolytropicConstant, PolytropicExponent>;
 
   static constexpr OptionString help = {
@@ -78,8 +87,9 @@ class NeutronStarBinary {
   NeutronStarBinary& operator=(NeutronStarBinary&& /*rhs*/) noexcept = default;
   ~NeutronStarBinary() = default;
 
-  NeutronStarBinary(std::array<double, 2> central_densities,
-                    double angular_velocity, double polytropic_constant,
+  NeutronStarBinary(double separation, double eccentricity,
+                    std::array<double, 2> central_densities,
+                    double polytropic_constant,
                     double polytropic_exponent) noexcept;
 
   template <typename DataType>
@@ -212,10 +222,11 @@ class NeutronStarBinary {
   friend bool operator==(const NeutronStarBinary& lhs,
                          const NeutronStarBinary& rhs) noexcept;
 
+  double separation_ = std::numeric_limits<double>::signaling_NaN();
+  double eccentricity_ = std::numeric_limits<double>::signaling_NaN();
   std::array<double, 2> central_rest_mass_densities_{
       {std::numeric_limits<double>::signaling_NaN(),
        std::numeric_limits<double>::signaling_NaN()}};
-  double angular_velocity_ = std::numeric_limits<double>::signaling_NaN();
   double polytropic_constant_ = std::numeric_limits<double>::signaling_NaN();
   double polytropic_exponent_ = std::numeric_limits<double>::signaling_NaN();
   EquationsOfState::PolytropicFluid<true> equation_of_state_{};

@@ -39,6 +39,8 @@ class TovIsotropic {
   /// constructing this TovSolution
   double outer_radius() const noexcept;
 
+  double total_mass() const noexcept { return total_mass_; }
+
   double conformal_factor(const double r) const noexcept {
     ASSERT(
         r >= 0.0 and r <= outer_radius_,

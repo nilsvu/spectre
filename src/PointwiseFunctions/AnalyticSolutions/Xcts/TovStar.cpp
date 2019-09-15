@@ -189,6 +189,34 @@ tuples::TaggedTuple<hydro::Tags::SpecificEnthalpy<DataType>> TovStar::variables(
   //   return radial_vars.specific_enthalpy;
 }
 
+template <typename DataType>
+tuples::TaggedTuple<gr::Tags::EnergyDensity<DataType>> TovStar::variables(
+    const tnsr::I<DataType, 3>& /*x*/,
+    tmpl::list<gr::Tags::EnergyDensity<DataType>> /*meta*/,
+    const RadialVariables<DataType>& radial_vars) const noexcept {
+  const auto rest_mass_density =
+      equation_of_state_.rest_mass_density_from_enthalpy(
+          radial_vars.specific_enthalpy);
+  const auto pressure =
+      equation_of_state_.pressure_from_density(rest_mass_density);
+  return {Scalar<DataType>{get(radial_vars.specific_enthalpy) *
+                               get(rest_mass_density) -
+                           get(pressure)}};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<gr::Tags::StressTrace<DataType>> TovStar::variables(
+    const tnsr::I<DataType, 3>& /*x*/,
+    tmpl::list<gr::Tags::StressTrace<DataType>> /*meta*/,
+    const RadialVariables<DataType>& radial_vars) const noexcept {
+  const auto rest_mass_density =
+      equation_of_state_.rest_mass_density_from_enthalpy(
+          radial_vars.specific_enthalpy);
+  const auto pressure =
+      equation_of_state_.pressure_from_density(rest_mass_density);
+  return {Scalar<DataType>{3. * get(pressure)}};
+}
+
 // template <typename DataType>
 // tuples::TaggedTuple<gr::Tags::Lapse<DataType>>
 // TovStar::variables(
@@ -302,7 +330,16 @@ bool operator!=(const TovStar& lhs, const TovStar& rhs) noexcept {
   TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<hydro::Tags::SpecificEnthalpy<DTYPE(data)>> /*meta*/,         \
-      const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;
+      const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
+  template tuples::TaggedTuple<gr::Tags::EnergyDensity<DTYPE(data)>>           \
+  TovStar::variables(                                                          \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<gr::Tags::EnergyDensity<DTYPE(data)>> /*meta*/)               \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<gr::Tags::StressTrace<DTYPE(data)>>             \
+  TovStar::variables(const tnsr::I<DTYPE(data), 3>& x,                         \
+                     tmpl::list<gr::Tags::StressTrace<DTYPE(data)>> /*meta*/)  \
+      const noexcept;
 
 GENERATE_INSTANTIATIONS(INSTANTIATE_VARS, (double, DataVector))
 

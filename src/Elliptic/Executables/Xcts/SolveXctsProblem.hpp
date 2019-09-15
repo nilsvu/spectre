@@ -18,6 +18,7 @@
 #include "Elliptic/Systems/Xcts/Actions/LapseAtOrigin.hpp"
 #include "Elliptic/Systems/Xcts/Actions/Observe.hpp"
 #include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
+#include "Elliptic/Systems/Xcts/InterpolationTargets/StarCenters.hpp"
 #include "Elliptic/Tags.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
 #include "IO/Observer/Actions.hpp"
@@ -48,11 +49,12 @@
 #include "ParallelAlgorithms/NonlinearSolver/Globalization/LineSearch/LineSearch.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarBinary.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarHeadOnCollision.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Tov.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/ConstantDensityStar.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/TovStar.hpp"
-#include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarBinary.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -146,6 +148,14 @@ struct RepeatNonlinearGlobalizationIfNotConverged {
   }
 };
 
+template <typename StarCentersTag>
+struct StarCentersInterpolationTargetTag {
+  using vars_to_interpolate_to_target =
+      tmpl::list<Xcts::Tags::ConformalFactor<DataVector>>;
+  using compute_target_points = Xcts::Actions::SendStarCentersToInterpolator<
+      StarCentersInterpolationTargetTag, StarCentersTag, 3>;
+};
+
 }  // namespace
 
 template <size_t Dim>
@@ -165,8 +175,8 @@ struct Metavariables {
 
   // The analytic solution and corresponding source to solve the XCTS
   // equation for
-  using analytic_solution_tag =
-      OptionTags::AnalyticSolution<Xcts::AnalyticData::NeutronStarBinary>;
+  using analytic_solution_tag = OptionTags::AnalyticSolution<
+      Xcts::AnalyticData::NeutronStarHeadOnCollision>;
   using initial_guess_tag = analytic_solution_tag;
 
   using nonlinear_solver = NonlinearSolver::NewtonRaphson<
@@ -200,6 +210,13 @@ struct Metavariables {
   // Set up the domain creator from the input file.
   using domain_creator_tag = OptionTags::DomainCreator<Dim, Frame::Inertial>;
 
+  using domain_frame = Frame::Inertial;
+  static constexpr size_t domain_dim = 3;
+  using interpolator_source_vars =
+      tmpl::list<Xcts::Tags::ConformalFactor<DataVector>>;
+  using interpolation_target_tags =
+      tmpl::list<StarCentersInterpolationTargetTag<analytic_solution_tag>>;
+
   // Collect all items to store in the cache.
   using const_global_cache_tag_list =
       tmpl::list<OptionTags::NumericalFlux<linear_numerical_flux>,
@@ -220,8 +237,8 @@ struct Metavariables {
 
   // Construct the DgElementArray parallel component
   using apply_nonlinear_operator = tmpl::list<
-    //   Xcts::Actions::UpdateLapseAtOrigin,
-      Xcts::Actions::UpdateLapseAtStarCenters,
+      //   Xcts::Actions::UpdateLapseAtOrigin,
+      //   Xcts::Actions::UpdateLapseAtStarCenters,
       dg::Actions::SendDataForFluxes<nonlinear_boundary_scheme>,
       elliptic::Actions::ComputeOperatorAction<
           Dim, NonlinearSolver::Tags::OperatorAppliedTo, nonlinear_fields_tag>,
@@ -243,8 +260,8 @@ struct Metavariables {
       dg::Actions::InitializeDomain<Dim>,
       elliptic::Actions::InitializeAnalyticSolution,
       //   elliptic::Actions::InitializeBackgroundFields,
-    //   Xcts::Actions::InitializeLapseAtOrigin,
-      Xcts::Actions::InitializeLapseAtStarCenters,
+      //   Xcts::Actions::InitializeLapseAtOrigin,
+      //   Xcts::Actions::InitializeLapseAtStarCenters,
       elliptic::Actions::InitializeNonlinearSystem,
       dg::Actions::InitializeInterfaces<
           system, dg::Initialization::slice_tags_to_face<>,

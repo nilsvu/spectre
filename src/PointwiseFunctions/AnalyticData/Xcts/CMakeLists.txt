@@ -5,6 +5,7 @@ set(LIBRARY XctsAnalyticData)
 
 set(LIBRARY_SOURCES
   NeutronStarBinary.cpp
+  NeutronStarHeadOnCollision.cpp
   )
 
 add_spectre_library(${LIBRARY} ${LIBRARY_SOURCES})
