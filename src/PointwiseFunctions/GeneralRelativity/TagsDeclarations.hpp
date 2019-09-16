@@ -79,5 +79,7 @@ template <typename DataType = DataVector>
 struct EnergyDensity;
 template <typename DataType = DataVector>
 struct StressTrace;
+template <size_t Dim, typename Frame, typename DataType>
+struct MomentumDensity;
 }  // namespace Tags
 }  // namespace gr
