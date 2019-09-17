@@ -118,12 +118,14 @@ class TovStar {
   }
 
   struct BackgroundFieldsCompute
-      : ::Tags::Variables<tmpl::list<gr::Tags::EnergyDensity<DataVector>,
-                                     gr::Tags::StressTrace<DataVector>>>,
+      : ::Tags::Variables<tmpl::list<
+            gr::Tags::EnergyDensity<DataVector>,
+            gr::Tags::StressTrace<DataVector>,
+            gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>>>,
         db::ComputeTag {
-    using base =
-        ::Tags::Variables<tmpl::list<gr::Tags::EnergyDensity<DataVector>,
-                                     gr::Tags::StressTrace<DataVector>>>;
+    using base = ::Tags::Variables<tmpl::list<
+        gr::Tags::EnergyDensity<DataVector>, gr::Tags::StressTrace<DataVector>,
+        gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>>>;
     using argument_tags =
         tmpl::list<::Tags::AnalyticSolutionComputer<TovStar>,
                    Xcts::Tags::LapseAtOrigin,
@@ -191,11 +193,17 @@ class TovStar {
   template <typename DataType>
   using ConformalFactorGradient =
       Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>;
-
   template <typename DataType>
   using LapseTimesConformalFactorGradient =
       Xcts::Tags::LapseTimesConformalFactorGradient<3, Frame::Inertial,
                                                     DataType>;
+  template <typename DataType>
+  using Shift = gr::Tags::Shift<3, Frame::Inertial, DataType>;
+  template <typename DataType>
+  using ShiftStrain = Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>;
+  template <typename DataType>
+  using MomentumDensity =
+      gr::Tags::MomentumDensity<3, Frame::Inertial, DataType>;
 
 #define FUNC_DECL(r, data, elem)                                    \
   template <typename DataType>                                      \
@@ -213,14 +221,15 @@ class TovStar {
       tmpl::list<::Tags::FixedSource<elem>> /*meta*/,               \
       const RadialVariables<DataType>& radial_vars) const noexcept;
 
-#define MY_LIST                                            \
-  BOOST_PP_TUPLE_TO_LIST(                                  \
-      7, (Xcts::Tags::ConformalFactor<DataType>,           \
-          ConformalFactorGradient<DataType>,               \
-          Xcts::Tags::LapseTimesConformalFactor<DataType>, \
-          LapseTimesConformalFactorGradient<DataType>,     \
-          hydro::Tags::SpecificEnthalpy<DataType>,         \
-          gr::Tags::EnergyDensity<DataType>, gr::Tags::StressTrace<DataType>))
+#define MY_LIST                                                                \
+  BOOST_PP_TUPLE_TO_LIST(                                                      \
+      10, (Xcts::Tags::ConformalFactor<DataType>,                              \
+           ConformalFactorGradient<DataType>,                                  \
+           Xcts::Tags::LapseTimesConformalFactor<DataType>,                    \
+           LapseTimesConformalFactorGradient<DataType>, Shift<DataType>,       \
+           ShiftStrain<DataType>, hydro::Tags::SpecificEnthalpy<DataType>,     \
+           gr::Tags::EnergyDensity<DataType>, gr::Tags::StressTrace<DataType>, \
+           MomentumDensity<DataType>))
 
   BOOST_PP_LIST_FOR_EACH(FUNC_DECL, _, MY_LIST)
 #undef MY_LIST

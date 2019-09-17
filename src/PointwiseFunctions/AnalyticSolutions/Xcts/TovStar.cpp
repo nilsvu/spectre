@@ -181,6 +181,68 @@ TovStar::variables(
 }
 
 template <typename DataType>
+tuples::TaggedTuple<gr::Tags::Shift<3, Frame::Inertial, DataType>>
+TovStar::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DataType>> /*meta*/,
+    const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::Initial<gr::Tags::Shift<3, Frame::Inertial, DataType>>>
+TovStar::variables(const tnsr::I<DataType, 3>& x,
+                   tmpl::list<::Tags::Initial<
+                       gr::Tags::Shift<3, Frame::Inertial, DataType>>> /*meta*/,
+                   const RadialVariables<DataType>& /*radial_vars*/) const
+    noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::FixedSource<gr::Tags::Shift<3, Frame::Inertial, DataType>>>
+TovStar::variables(const tnsr::I<DataType, 3>& x,
+                   tmpl::list<::Tags::FixedSource<
+                       gr::Tags::Shift<3, Frame::Inertial, DataType>>> /*meta*/,
+                   const RadialVariables<DataType>& /*radial_vars*/) const
+    noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>>
+TovStar::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>> /*meta*/,
+    const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
+  return {make_with_value<tnsr::II<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::Initial<Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>>>
+TovStar::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<::Tags::Initial<
+        Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>>> /*meta*/,
+    const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
+  return {make_with_value<tnsr::II<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::FixedSource<Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>>>
+TovStar::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<::Tags::FixedSource<
+        Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>>> /*meta*/,
+    const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
+  return {make_with_value<tnsr::II<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
 tuples::TaggedTuple<hydro::Tags::SpecificEnthalpy<DataType>> TovStar::variables(
     const tnsr::I<DataType, 3>& /*x*/,
     tmpl::list<hydro::Tags::SpecificEnthalpy<DataType>> /*meta*/,
@@ -215,6 +277,16 @@ tuples::TaggedTuple<gr::Tags::StressTrace<DataType>> TovStar::variables(
   const auto pressure =
       equation_of_state_.pressure_from_density(rest_mass_density);
   return {Scalar<DataType>{3. * get(pressure)}};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<gr::Tags::MomentumDensity<3, Frame::Inertial, DataType>>
+TovStar::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<
+        gr::Tags::MomentumDensity<3, Frame::Inertial, DataType>> /*meta*/,
+    const RadialVariables<DataType>& /*radial_vars*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
 // template <typename DataType>
@@ -326,6 +398,47 @@ bool operator!=(const TovStar& lhs, const TovStar& rhs) noexcept {
           ::Tags::FixedSource<Xcts::Tags::LapseTimesConformalFactorGradient<   \
               3, Frame::Inertial, DTYPE(data)>>> /*meta*/,                     \
       const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
+  template tuples::TaggedTuple<                                                \
+      gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>                        \
+  TovStar::variables(                                                          \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>> /*meta*/,   \
+      const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::Initial<gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>>       \
+  TovStar::variables(                                                          \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::Initial<                                              \
+          gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>> /*meta*/,         \
+      const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::FixedSource<gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>>   \
+  TovStar::variables(                                                          \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::FixedSource<                                          \
+          gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>> /*meta*/,         \
+      const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
+  template tuples::TaggedTuple<                                                \
+      Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>>                \
+  TovStar::variables(                                                          \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<                                                              \
+          Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>> /*meta*/,  \
+      const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
+  template tuples::TaggedTuple<::Tags::Initial<                                \
+      Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>>>               \
+  TovStar::variables(                                                          \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::Initial<                                              \
+          Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>>> /*meta*/, \
+      const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
+  template tuples::TaggedTuple<::Tags::FixedSource<                            \
+      Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>>>               \
+  TovStar::variables(                                                          \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::FixedSource<                                          \
+          Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>>> /*meta*/, \
+      const RadialVariables<DTYPE(data)>& radial_vars) const noexcept;         \
   template tuples::TaggedTuple<hydro::Tags::SpecificEnthalpy<DTYPE(data)>>     \
   TovStar::variables(                                                          \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
@@ -339,6 +452,13 @@ bool operator!=(const TovStar& lhs, const TovStar& rhs) noexcept {
   template tuples::TaggedTuple<gr::Tags::StressTrace<DTYPE(data)>>             \
   TovStar::variables(const tnsr::I<DTYPE(data), 3>& x,                         \
                      tmpl::list<gr::Tags::StressTrace<DTYPE(data)>> /*meta*/)  \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      gr::Tags::MomentumDensity<3, Frame::Inertial, DTYPE(data)>>              \
+  TovStar::variables(                                                          \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<gr::Tags::MomentumDensity<3, Frame::Inertial,                 \
+                                           DTYPE(data)>> /*meta*/)             \
       const noexcept;
 
 GENERATE_INSTANTIATIONS(INSTANTIATE_VARS, (double, DataVector))

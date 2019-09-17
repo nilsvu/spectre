@@ -136,12 +136,14 @@ class NeutronStarHeadOnCollision {
   }
 
   struct BackgroundFieldsCompute
-      : ::Tags::Variables<tmpl::list<gr::Tags::EnergyDensity<DataVector>,
-                                     gr::Tags::StressTrace<DataVector>>>,
+      : ::Tags::Variables<tmpl::list<
+            gr::Tags::EnergyDensity<DataVector>,
+            gr::Tags::StressTrace<DataVector>,
+            gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>>>,
         db::ComputeTag {
-    using base =
-        ::Tags::Variables<tmpl::list<gr::Tags::EnergyDensity<DataVector>,
-                                     gr::Tags::StressTrace<DataVector>>>;
+    using base = ::Tags::Variables<tmpl::list<
+        gr::Tags::EnergyDensity<DataVector>, gr::Tags::StressTrace<DataVector>,
+        gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>>>;
     using argument_tags =
         tmpl::list<::Tags::AnalyticSolutionComputer<NeutronStarHeadOnCollision>,
                    ::Tags::Coordinates<3, Frame::Inertial>>;

@@ -116,11 +116,14 @@ struct ComputeFirstOrderFluxes
     }
     auto& flux_for_shift =
         get<::Tags::Flux<ShiftTag, tmpl::size_t<Dim>, Frame::Inertial>>(fluxes);
-    flux_for_shift = shift_strain;
-    for (size_t d = 0; d < Dim; d++) {
-      flux_for_shift.get(d, d) -= shift_strain_trace / 3.;
+    for (size_t i = 0; i < Dim; i++) {
+      for (size_t j = 0; j < Dim; j++) {
+        flux_for_shift.get(i, j) = shift_strain.get(i, j);
+      }
+      flux_for_shift.get(i, i) -= shift_strain_trace / 3.;
     }
     // Flux for shift strain
+    const auto& shift = get<ShiftTag>(vars);
     auto& flux_for_shift_strain =
         get<::Tags::Flux<ShiftStrainTag, tmpl::size_t<Dim>, Frame::Inertial>>(
             fluxes);
@@ -236,7 +239,7 @@ struct ComputeFirstOrderSources : db::add_tag_prefix<::Tags::Source, VarsTag>,
       VarsTag, ::Tags::Flux<ShiftTag, tmpl::size_t<Dim>, Frame::Inertial>,
       gr::Tags::EnergyDensity<DataVector>, gr::Tags::StressTrace<DataVector>,
       gr::Tags::MomentumDensity<Dim, Frame::Inertial, DataVector>>;
-  static constexpr auto function(
+  static auto function(
       const db::item_type<VarsTag>& vars,
       const tnsr::IJ<DataVector, Dim, Frame::Inertial>& longitudinal_shift,
       const Scalar<DataVector>& energy_density,
@@ -261,6 +264,9 @@ struct ComputeFirstOrderSources : db::add_tag_prefix<::Tags::Source, VarsTag>,
         get<LapseTimesConformalFactorGradientTag>(vars),
         get<ConformalFactorTag>(vars), energy_density, stress_trace);
     // Add shift terms
+    const auto& conformal_factor = get<ConformalFactorTag>(vars);
+    const auto& lapse_times_conformal_factor =
+        get<LapseTimesConformalFactorTag>(vars);
     DataVector longitudinal_shift_square{vars.number_of_grid_points(), 0.};
     for (size_t i = 0; i < Dim; i++) {
       for (size_t j = 0; j < Dim; j++) {
@@ -276,31 +282,18 @@ struct ComputeFirstOrderSources : db::add_tag_prefix<::Tags::Source, VarsTag>,
         longitudinal_shift_square * 7. / 32.;
     // Compute shift source
     auto& shift_source = get<::Tags::Source<ShiftTag>>(sources);
-    auto longitudinal_shift_dot_grad_psi =
-        make_with_value<tnsr::I<DataVector, Dim, Frame::Inertial>>(
-            longitudinal_shift, 0.);
-    auto longitudinal_shift_dot_grad_alphapsi =
-        make_with_value<tnsr::I<DataVector, Dim, Frame::Inertial>>(
-            longitudinal_shift, 0.);
     for (size_t i = 0; i < Dim; i++) {
       for (size_t j = 0; j < Dim; j++) {
-        longitudinal_shift_dot_grad_psi.get(i) +=
+        shift_source.get(i) +=
             longitudinal_shift.get(i, j) *
-            get<ConformalFactorGradientTag>(vars).get(j);
-        longitudinal_shift_dot_grad_alphapsi.get(i) +=
-            longitudinal_shift.get(i, j) *
-            get<LapseTimesConformalFactorGradientTag>(vars).get(j);
+            (get<LapseTimesConformalFactorGradientTag>(vars).get(j) /
+                 get(get<LapseTimesConformalFactorTag>(vars)) -
+             7. * get<ConformalFactorGradientTag>(vars).get(j) /
+                 get(get<ConformalFactorTag>(vars)));
       }
-    }
-    for (size_t d = 0; d < Dim; d++) {
-      shift_source.get(d) = (longitudinal_shift_dot_grad_alphapsi.get(d) /
-                                 get(get<LapseTimesConformalFactorTag>(vars)) -
-                             7. * longitudinal_shift_dot_grad_psi.get(d) /
-                                 get(get<ConformalFactorTag>(vars))) +
-                            16. * M_PI *
-                                get(get<LapseTimesConformalFactorTag>(vars)) *
-                                pow<3>(get(get<ConformalFactorTag>(vars))) *
-                                momentum_density.get(d);
+      shift_source.get(i) +=
+          16. * M_PI * get(get<LapseTimesConformalFactorTag>(vars)) *
+          pow<3>(get(get<ConformalFactorTag>(vars))) * momentum_density.get(i);
     }
     // Compute shift strain source
     get<::Tags::Source<ShiftStrainTag>>(sources) = get<ShiftStrainTag>(vars);
@@ -425,24 +418,30 @@ template <size_t Dim, typename VarsTag, typename ConformalFactorCorrectionTag,
           typename LapseTimesConformalFactorCorrectionTag,
           typename LapseTimesConformalFactorGradientCorrectionTag,
           typename ShiftCorrectionTag, typename ShiftStrainCorrectionTag,
-          typename ConformalFactorTag, typename LapseTimesConformalFactorTag,
-          typename ShiftTag>
+          typename ConformalFactorTag, typename ConformalFactorGradientTag,
+          typename LapseTimesConformalFactorTag,
+          typename LapseTimesConformalFactorGradientTag, typename ShiftTag>
 struct ComputeFirstOrderLinearizedSources
     : db::add_tag_prefix<::Tags::Source, VarsTag>,
       db::ComputeTag {
   using argument_tags = tmpl::list<
       VarsTag,
       ::Tags::Flux<ShiftCorrectionTag, tmpl::size_t<Dim>, Frame::Inertial>,
-      ConformalFactorTag, LapseTimesConformalFactorTag,
+      ConformalFactorTag, ConformalFactorGradientTag,
+      LapseTimesConformalFactorTag, LapseTimesConformalFactorGradientTag,
       ::Tags::Flux<ShiftTag, tmpl::size_t<Dim>, Frame::Inertial>,
       gr::Tags::EnergyDensity<DataVector>, gr::Tags::StressTrace<DataVector>,
       gr::Tags::MomentumDensity<Dim, Frame::Inertial, DataVector>>;
-  static constexpr auto function(
+  static auto function(
       const db::item_type<VarsTag>& vars,
       const tnsr::IJ<DataVector, Dim, Frame::Inertial>&
           longitudinal_shift_correction,
       const Scalar<DataVector>& conformal_factor,
+      const tnsr::I<DataVector, Dim, Frame::Inertial>&
+          conformal_factor_gradient,
       const Scalar<DataVector>& lapse_times_conformal_factor,
+      const tnsr::I<DataVector, Dim, Frame::Inertial>&
+          lapse_times_conformal_factor_gradient,
       const tnsr::IJ<DataVector, Dim, Frame::Inertial>& longitudinal_shift,
       const Scalar<DataVector>& energy_density,
       const Scalar<DataVector>& stress_trace,
@@ -499,39 +498,54 @@ struct ComputeFirstOrderLinearizedSources
             get(get<LapseTimesConformalFactorCorrectionTag>(vars)) -
         1. / 16. * pow<7>(get(conformal_factor)) /
             square(get(lapse_times_conformal_factor)) *
-            longitudinal_shift_dot_correction);
-    // TODO
-    get(get<::Tags::Source<LapseTimesConformalFactorTag>>(sources)) +=
-        pow<6>(get(conformal_factor)) / get(lapse_times_conformal_factor) *
-        longitudinal_shift_square * 7. / 32.;
+            longitudinal_shift_dot_correction;
+    get(get<::Tags::Source<LapseTimesConformalFactorCorrectionTag>>(sources)) +=
+        21. / 16. * pow<5>(get(conformal_factor)) /
+            get(lapse_times_conformal_factor) * longitudinal_shift_square *
+            get(get<ConformalFactorCorrectionTag>(vars)) -
+        7. / 32. * pow<6>(get(conformal_factor)) /
+            square(get(lapse_times_conformal_factor)) *
+            longitudinal_shift_square *
+            get(get<LapseTimesConformalFactorCorrectionTag>(vars)) +
+        7. / 32. * pow<6>(get(conformal_factor)) /
+            get(lapse_times_conformal_factor) *
+            longitudinal_shift_dot_correction;
     // Compute shift source
-    auto& shift_source = get<::Tags::Source<ShiftTag>>(sources);
-    auto longitudinal_shift_dot_grad_psi =
-        make_with_value<tnsr::I<DataVector, Dim, Frame::Inertial>>(
-            longitudinal_shift, 0.);
-    auto longitudinal_shift_dot_grad_alphapsi =
-        make_with_value<tnsr::I<DataVector, Dim, Frame::Inertial>>(
-            longitudinal_shift, 0.);
+    auto& shift_correction_source =
+        get<::Tags::Source<ShiftCorrectionTag>>(sources);
     for (size_t i = 0; i < Dim; i++) {
       for (size_t j = 0; j < Dim; j++) {
-        longitudinal_shift_dot_grad_psi.get(i) +=
+        shift_correction_source.get(i) +=
+            longitudinal_shift_correction.get(i, j) *
+                (lapse_times_conformal_factor_gradient.get(j) /
+                     get(lapse_times_conformal_factor) -
+                 7. * conformal_factor_gradient.get(j) /
+                     get(conformal_factor)) +
             longitudinal_shift.get(i, j) *
-            get<ConformalFactorGradientTag>(vars).get(j);
-        longitudinal_shift_dot_grad_alphapsi.get(i) +=
-            longitudinal_shift.get(i, j) *
-            get<LapseTimesConformalFactorGradientTag>(vars).get(j);
+                (get<LapseTimesConformalFactorGradientCorrectionTag>(vars).get(
+                     j) /
+                     get(lapse_times_conformal_factor) -
+                 lapse_times_conformal_factor_gradient.get(j) /
+                     square(get(lapse_times_conformal_factor)) *
+                     get(get<LapseTimesConformalFactorCorrectionTag>(vars)) -
+                 7. * get<ConformalFactorGradientCorrectionTag>(vars).get(j) /
+                     get(conformal_factor) +
+                 7. * conformal_factor_gradient.get(j) /
+                     square(get(conformal_factor)) *
+                     get(get<ConformalFactorCorrectionTag>(vars)));
       }
+      shift_correction_source.get(i) +=
+          16. * M_PI *
+          (pow<3>(get(conformal_factor)) *
+               get(get<LapseTimesConformalFactorCorrectionTag>(vars)) +
+           3. * square(get(conformal_factor)) *
+               get(lapse_times_conformal_factor) *
+               get(get<ConformalFactorCorrectionTag>(vars))) *
+          momentum_density.get(i);
     }
-    for (size_t d = 0; d < Dim; d++) {
-      shift_source.get(d) = (longitudinal_shift_dot_grad_alphapsi.get(d) /
-                                 get(get<LapseTimesConformalFactorTag>(vars)) -
-                             7. * longitudinal_shift_dot_grad_psi.get(d) /
-                                 get(get<ConformalFactorTag>(vars))) +
-                            16. * M_PI *
-                                get(get<LapseTimesConformalFactorTag>(vars)) *
-                                pow<3>(get(get<ConformalFactorTag>(vars))) *
-                                momentum_density.get(d);
-    }
+    // Compute shift strain correction source
+    get<::Tags::Source<ShiftStrainCorrectionTag>>(sources) =
+        get<ShiftStrainCorrectionTag>(vars);
     return sources;
   }
 };

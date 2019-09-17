@@ -83,6 +83,12 @@ struct LapseTimesConformalFactorGradient : db::SimpleTag {
   }
 };
 
+template <size_t Dim, typename Frame, typename DataType>
+struct ShiftStrain : db::SimpleTag {
+  using type = tnsr::II<DataType, Dim, Frame>;
+  static std::string name() noexcept { return "ShiftStrain"; }
+};
+
 struct LapseAtOrigin : db::SimpleTag {
   using type = double;
   static std::string name() noexcept { return "LapseAtOrigin"; }

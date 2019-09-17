@@ -167,7 +167,7 @@ struct Metavariables {
       "Numerical flux: FirstOrderInternalPenaltyFlux"};
 
   // The system provides all equations specific to the problem.
-  using system = Xcts::FirstOrderHamiltonianAndLapseSystem<Dim>;
+  using system = Xcts::FirstOrderSystem<Dim>;
   using nonlinear_fields_tag = typename system::fields_tag;
 
   using linearized_system = typename system::linearized_system;
