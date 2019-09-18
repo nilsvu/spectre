@@ -145,41 +145,45 @@ struct Metavariables {
           Metavariables>,
       typename linear_solver::initialize_element,
       dg::Actions::InitializeMortars<boundary_scheme>,
-      // Initialization is done. Avoid introducing an extra phase by
-      // advancing the linear solver to the first step here.
-      typename linear_solver::prepare_step,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
+
+  using build_linear_operator_actions = tmpl::list<
+      dg::Actions::SendDataForFluxes<boundary_scheme>,
+      Actions::MutateApply<elliptic::FirstOrderOperator<
+          Dim, LinearSolver::Tags::OperatorAppliedTo,
+          typename system::variables_tag>>,
+      Actions::MutateApply<::dg::PopulateBoundaryMortars<boundary_scheme>>,
+      dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
+      Actions::MutateApply<boundary_scheme>>;
 
   // Specify all parallel components that will execute actions at some point.
   using component_list = tmpl::append<
       tmpl::list<elliptic::DgElementArray<
           Metavariables,
-          tmpl::list<
-              Parallel::PhaseActions<Phase, Phase::Initialization,
-                                     initialization_actions>,
+          tmpl::list<Parallel::PhaseActions<Phase, Phase::Initialization,
+                                            initialization_actions>,
 
-              Parallel::PhaseActions<
-                  Phase, Phase::RegisterWithObserver,
-                  tmpl::list<observers::Actions::RegisterWithObservers<
-                                 observers::RegisterObservers<
-                                     LinearSolver::Tags::IterationId,
-                                     element_observation_type>>,
-                             Parallel::Actions::TerminatePhase>>,
+                     Parallel::PhaseActions<
+                         Phase, Phase::RegisterWithObserver,
+                         tmpl::list<observers::Actions::RegisterWithObservers<
+                                        observers::RegisterObservers<
+                                            LinearSolver::Tags::IterationId,
+                                            element_observation_type>>,
+                                    // We prepare the linear solve here to avoid
+                                    // adding an extra phase. We can't do it
+                                    // before registration because it
+                                    // contributes to observers.
+                                    typename linear_solver::prepare_solve,
+                                    Parallel::Actions::TerminatePhase>>,
 
-              Parallel::PhaseActions<
-                  Phase, Phase::Solve,
-                  tmpl::list<Actions::RunEventsAndTriggers,
+                     Parallel::PhaseActions<
+                         Phase, Phase::Solve,
+                         tmpl::flatten<tmpl::list<
+                             typename linear_solver::prepare_step,
+                             Actions::RunEventsAndTriggers,
                              LinearSolver::Actions::TerminateIfConverged,
-                             dg::Actions::SendDataForFluxes<boundary_scheme>,
-                             Actions::MutateApply<elliptic::FirstOrderOperator<
-                                 Dim, LinearSolver::Tags::OperatorAppliedTo,
-                                 typename system::variables_tag>>,
-                             Actions::MutateApply<::dg::PopulateBoundaryMortars<
-                                 boundary_scheme>>,
-                             dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
-                             Actions::MutateApply<boundary_scheme>,
-                             typename linear_solver::perform_step,
-                             typename linear_solver::prepare_step>>>>>,
+                             build_linear_operator_actions,
+                             typename linear_solver::perform_step>>>>>>,
       typename linear_solver::component_list,
       tmpl::list<observers::Observer<Metavariables>,
                  observers::ObserverWriter<Metavariables>>>;
