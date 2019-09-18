@@ -81,4 +81,51 @@ struct Goto {
                                                            false, index);
   }
 };
+
+template <typename ConditionTag>
+struct WhileNotEnd;
+
+template <typename ConditionTag>
+struct WhileNotStart {
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
+      db::DataBox<DbTagsList>& box,
+      tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    return {
+        std::move(box), false,
+        db::get<ConditionTag>(box)
+            ? tmpl::index_of<ActionList, WhileNotEnd<ConditionTag>>::value + 1
+            : tmpl::index_of<ActionList, WhileNotStart>::value + 1};
+  }
+};
+
+template <typename ConditionTag>
+struct WhileNotEnd {
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
+      db::DataBox<DbTagsList>& box,
+      tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    return {
+        std::move(box), false,
+        db::get<ConditionTag>(box)
+            ? tmpl::index_of<ActionList, WhileNotEnd>::value + 1
+            : tmpl::index_of<ActionList, WhileNotStart<ConditionTag>>::value +
+                  1};
+  }
+};
+
+template <typename ConditionTag, typename ActionList>
+using WhileNot =
+    tmpl::flatten<tmpl::list<WhileNotStart<ConditionTag>, ActionList,
+                             WhileNotEnd<ConditionTag>>>;
 }  // namespace Actions
