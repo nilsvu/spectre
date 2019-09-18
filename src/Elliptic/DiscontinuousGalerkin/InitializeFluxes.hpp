@@ -57,7 +57,7 @@ struct InitializeFluxes {
                  ::Tags::Slice<Directions, div_fluxes_tag>,
                  // For the strong first-order DG scheme we also need the
                  // interface normal dotted into the fluxes
-                 ::Tags::InterfaceComputeItem<
+                 ::Tags::InterfaceCompute<
                      Directions, ::Tags::NormalDotFluxCompute<
                                      vars_tag, volume_dim, Frame::Inertial>>>;
 
@@ -69,9 +69,9 @@ struct InitializeFluxes {
       // data that is being set there to impose boundary conditions. Then, we
       // compute their normal-dot-fluxes. The flux divergences are sliced from
       // the volume.
-      ::Tags::InterfaceComputeItem<
-          ::Tags::BoundaryDirectionsExterior<volume_dim>, fluxes_compute_tag>,
-      ::Tags::InterfaceComputeItem<
+      ::Tags::InterfaceCompute<::Tags::BoundaryDirectionsExterior<volume_dim>,
+                               fluxes_compute_tag>,
+      ::Tags::InterfaceCompute<
           ::Tags::BoundaryDirectionsExterior<volume_dim>,
           ::Tags::NormalDotFluxCompute<vars_tag, volume_dim, Frame::Inertial>>,
       ::Tags::Slice<::Tags::BoundaryDirectionsExterior<volume_dim>,
