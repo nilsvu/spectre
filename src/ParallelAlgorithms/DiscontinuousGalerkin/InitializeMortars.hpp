@@ -74,7 +74,9 @@ namespace Actions {
  * - Removes: nothing
  * - Modifies: nothing
  */
-template <typename BoundaryScheme, bool AddFluxBoundaryConditionMortars = true>
+template <typename BoundaryScheme, bool AddFluxBoundaryConditionMortars = true,
+          ::Initialization::MergePolicy MergePolicy =
+              ::Initialization::MergePolicy::Error>
 struct InitializeMortars {
  private:
   static constexpr size_t dim = BoundaryScheme::volume_dim;
@@ -171,9 +173,10 @@ struct InitializeMortars {
                 ::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>,
                 ::Tags::Mortars<::Tags::Mesh<dim - 1>, dim>,
                 ::Tags::Mortars<::Tags::MortarSize<dim - 1>, dim>>,
-            compute_tags>(std::move(box), std::move(mortar_data),
-                          std::move(mortar_next_temporal_ids),
-                          std::move(mortar_meshes), std::move(mortar_sizes)));
+            compute_tags, MergePolicy>(std::move(box), std::move(mortar_data),
+                                       std::move(mortar_next_temporal_ids),
+                                       std::move(mortar_meshes),
+                                       std::move(mortar_sizes)));
   }
 
   template <typename DataBox, typename... InboxTags, typename Metavariables,
