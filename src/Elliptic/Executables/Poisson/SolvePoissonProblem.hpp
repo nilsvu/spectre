@@ -140,7 +140,7 @@ struct Metavariables {
                                       typename system::variables_tag,
                                       typename system::primal_variables>>,
           false>,
-      elliptic::dg::Actions::InitializeFluxes<Metavariables>,
+      elliptic::dg::Actions::InitializeFluxes<system>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           Metavariables>,
       typename linear_solver::initialize_element,

@@ -40,10 +40,10 @@ namespace Actions {
  *   - `variables_tag`
  *   - `fluxes`
  */
-template <typename Metavariables>
+template <typename System>
 struct InitializeFluxes {
  private:
-  using system = typename Metavariables::system;
+  using system = System;
   static constexpr size_t volume_dim = system::volume_dim;
   using vars_tag = typename system::variables_tag;
   using fluxes_tag =
@@ -78,8 +78,9 @@ struct InitializeFluxes {
                     div_fluxes_tag>>;
 
  public:
-  template <typename DbTagsList, typename... InboxTags, typename ArrayIndex,
-            typename ActionList, typename ParallelComponent>
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
   static auto apply(db::DataBox<DbTagsList>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
                     const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
