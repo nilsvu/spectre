@@ -160,6 +160,13 @@ struct StressTrace : db::SimpleTag {
   using type = Scalar<DataType>;
   static std::string name() noexcept { return "StressTrace"; }
 };
+
+template <size_t Dim, typename Frame, typename DataType>
+struct MomentumDensity : db::SimpleTag {
+  using type = tnsr::I<DataType, Dim, Frame>;
+  static std::string name() noexcept { return "MomentumDensity"; }
+};
+
 }  // namespace Tags
 
 /// GR Tags commonly needed for the evolution of hydro systems
