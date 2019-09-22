@@ -7,8 +7,10 @@
 
 #include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
 #include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
-#include "Elliptic/Systems/Xcts/Tags.hpp"       // IWYU pragma: keep
+#include "Domain/Tags.hpp"
+#include "Elliptic/Systems/Xcts/Tags.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
@@ -135,10 +137,12 @@ class ConstantDensityStar {
 
   template <typename DataType>
   auto variables(const tnsr::I<DataType, 3, Frame::Inertial>& x,
-                 tmpl::list<::Tags::Initial<Xcts::Tags::ConformalFactorGradient<
-                     3, Frame::Inertial, DataType>>> /*meta*/) const noexcept
-      -> tuples::TaggedTuple<::Tags::Initial<
-          Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>>;
+                 tmpl::list<::Tags::Initial<
+                     ::Tags::deriv<Xcts::Tags::ConformalFactor<DataType>,
+                                   tmpl::size_t<3>, Frame::Inertial>>> /*meta*/)
+      const noexcept -> tuples::TaggedTuple<
+          ::Tags::Initial<::Tags::deriv<Xcts::Tags::ConformalFactor<DataType>,
+                                        tmpl::size_t<3>, Frame::Inertial>>>;
 
   template <typename DataType>
   auto variables(const tnsr::I<DataType, 3, Frame::Inertial>& x,
@@ -163,6 +167,21 @@ class ConstantDensityStar {
                   "tag is being retrieved.");
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
   }
+
+  struct EnergyDensityCompute : db::ComputeTag,
+                                gr::Tags::EnergyDensity<DataVector> {
+    using argument_tags =
+        tmpl::list<::Tags::Coordinates<3, Frame::Inertial>,
+                   ::Tags::AnalyticSolution<ConstantDensityStar>>;
+    static Scalar<DataVector> function(
+        const tnsr::I<DataVector, 3, Frame::Inertial>& inertial_coords,
+        const ConstantDensityStar& solution) noexcept {
+      return get<gr::Tags::EnergyDensity<DataVector>>(solution.variables(
+          inertial_coords, tmpl::list<gr::Tags::EnergyDensity<DataVector>>{}));
+    }
+  };
+
+  using compute_tags = tmpl::list<EnergyDensityCompute>;
 
   // clang-tidy: no pass by reference
   void pup(PUP::er& p) noexcept;  // NOLINT
