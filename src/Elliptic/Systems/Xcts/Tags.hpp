@@ -7,6 +7,7 @@
 
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
+#include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 
 /*!
  * \ingroup EllipticSystemsGroup
@@ -27,15 +28,39 @@ struct ConformalFactor : db::SimpleTag {
 };
 
 /*!
- * \brief The gradient of the conformal factor \f$\psi(x)\f$
- *
- * \details This quantity can be used as an auxiliary variable in a first-order
- * formulation of the XCTS equations.
+ * \brief The `Tag` scaled by the specified `Power` of the conformal factor
+ * \f$\psi(x)\f$
  */
+// template <typename Tag, int Power>
+// struct Conformal : db::PrefixTag {
+//   using type = typename Tag::type;
+//   using tag = Tag;
+//   static std::string name() noexcept {
+//     return "Conformal(" + db::tag_name<Tag>() + ", " + std::to_string(Power)
+//     +
+//            ")";
+//   }
+// };
+
+/*!
+ * \brief The product of lapse \f$\alpha(x)\f$ and conformal factor
+ * \f$\psi(x)\f$
+ *
+ * \details This quantity is commonly used in formulations of the XCTS
+ * equations.
+ */
+// template <typename DataType>
+// using LapseTimesConformalFactor = Conformal<gr::Tags::Lapse<DataType>, 1>;
+template <typename DataType>
+struct LapseTimesConformalFactor : db::SimpleTag {
+  using type = Scalar<DataType>;
+  static std::string name() noexcept { return "LapseTimesConformalFactor"; }
+};
+
 template <size_t Dim, typename Frame, typename DataType>
-struct ConformalFactorGradient : db::SimpleTag {
-  using type = tnsr::I<DataType, Dim, Frame>;
-  static std::string name() noexcept { return "ConformalFactorGradient"; }
+struct ShiftStrain : db::SimpleTag {
+  using type = tnsr::ii<DataType, Dim, Frame>;
+  static std::string name() noexcept { return "ShiftStrain"; }
 };
 
 }  // namespace Tags
