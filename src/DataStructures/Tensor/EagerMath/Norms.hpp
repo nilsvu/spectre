@@ -12,7 +12,6 @@
 #include "Utilities/Numeric.hpp"
 #include "Utilities/TMPL.hpp"
 
-namespace L2Norm_detail {
 template <typename DataType, typename Symm, typename IndexList>
 Scalar<DataType> pointwise_l2_norm_square(
     const Tensor<DataType, Symm, IndexList>& tensor) noexcept {
@@ -26,7 +25,6 @@ Scalar<DataType> pointwise_l2_norm_square(
   }
   return pointwise_l2_normsq;
 }
-}  // namespace L2Norm_detail
 
 /*!
  * \ingroup TensorGroup
@@ -49,8 +47,7 @@ Scalar<DataType> pointwise_l2_norm_square(
 template <typename DataType, typename Symm, typename IndexList>
 Scalar<DataType> pointwise_l2_norm(
     const Tensor<DataType, Symm, IndexList>& tensor) noexcept {
-  return Scalar<DataType>{
-      sqrt(get(L2Norm_detail::pointwise_l2_norm_square(tensor)))};
+  return Scalar<DataType>{sqrt(get(pointwise_l2_norm_square(tensor)))};
 }
 
 // @{
@@ -82,8 +79,7 @@ Scalar<DataType> pointwise_l2_norm(
  */
 template <typename DataType, typename Symm, typename IndexList>
 double l2_norm(const Tensor<DataType, Symm, IndexList>& tensor) noexcept {
-  const auto pointwise_l2_normsq =
-      L2Norm_detail::pointwise_l2_norm_square(tensor);
+  const auto pointwise_l2_normsq = pointwise_l2_norm_square(tensor);
   using Plus = funcl::Plus<funcl::Identity>;
   return sqrt(alg::accumulate(get(pointwise_l2_normsq), 0., Plus{}) /
               tensor.begin()->size());
