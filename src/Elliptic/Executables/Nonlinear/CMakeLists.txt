@@ -54,3 +54,10 @@ add_nonlinear_elliptic_executable(
   Xcts::Solutions::ConstantDensityStar
   "Xcts;XctsSolutions"
   )
+
+add_nonlinear_elliptic_executable(
+  TovStar
+  "Xcts::FirstOrderSystem<3, Xcts::Equations::HamiltonianAndLapse>"
+  Xcts::Solutions::TovStar
+  "Xcts;XctsSolutions"
+  )

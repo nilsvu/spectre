@@ -21,7 +21,8 @@ template <size_t Dim, Equations EnabledEquations>
 struct FirstOrderSystem;
 namespace Solutions {
 struct ConstantDensityStar;
-}
+struct TovStar;
+}  // namespace Solutions
 }  // namespace Xcts
 
 template <typename System, typename InitialGuess>
