@@ -17,6 +17,7 @@
 #include "Elliptic/FirstOrderComputeTags.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderCorrectionSystem.hpp"
+#include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Elliptic/Triggers/EveryNIterations.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
@@ -53,6 +54,7 @@
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Xcts/ConstantDensityStar.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -192,6 +194,8 @@ struct Metavariables {
   // Construct the DgElementArray parallel component
   using initialization_actions = tmpl::list<
       dg::Actions::InitializeDomain<volume_dim>,
+      Initialization::Actions::AddComputeTags<
+          typename InitialGuess::compute_tags>,
       elliptic::Actions::InitializeNonlinearSystem,
       elliptic::Actions::InitializeAnalyticSolution<analytic_solution_tag,
                                                     analytic_solution_fields>,

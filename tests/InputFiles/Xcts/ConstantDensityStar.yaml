@@ -1,0 +1,52 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveConstantDensityStar
+# Check: execute
+# ExpectedOutput:
+#   ConstantDensityStarReductions.h5
+#   ConstantDensityStarVolume0.h5
+
+AnalyticSolution:
+  ConstantDensityStar:
+    Density: 0.01
+    Radius: 1.
+
+DomainCreator:
+  Sphere:
+    InnerRadius: 1.
+    OuterRadius: 3.
+    InitialRefinement: 1
+    InitialGridPoints: [4, 4]
+    UseEquiangularMap: False
+
+NumericalFlux:
+  InternalPenalty:
+    PenaltyParameter: 16. # p^2 / h
+  NonlinNumericalFlux:
+    InternalPenalty:
+      PenaltyParameter: 16. # p^2 / h
+
+Observers:
+  VolumeFileName: "ConstantDensityStarVolume"
+  ReductionFileName: "ConstantDensityStarReductions"
+
+NonlinearSolver:
+  ConvergenceCriteria:
+    MaxIterations: 10
+    RelativeResidual: 1e-5
+    AbsoluteResidual: 1e-15
+  Verbosity: Verbose
+
+LinearSolver:
+  ConvergenceCriteria:
+    MaxIterations: 500
+    RelativeResidual: 1e-5
+    AbsoluteResidual: 1e-15
+  Verbosity: Verbose
+
+EventsAndTriggers:
+  ? EveryNIterations:
+      N: 1
+  : - ObserveErrorNorms
+    - ObserveFields

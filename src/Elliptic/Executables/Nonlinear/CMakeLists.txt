@@ -47,3 +47,10 @@ add_nonlinear_elliptic_executable(
   Poisson::Solutions::ProductOfSinusoids<3>
   "Poisson;PoissonSolutions"
   )
+
+add_nonlinear_elliptic_executable(
+  ConstantDensityStar
+  "Xcts::FirstOrderSystem<3, Xcts::Equations::Hamiltonian>"
+  Xcts::Solutions::ConstantDensityStar
+  "Xcts;XctsSolutions"
+  )
