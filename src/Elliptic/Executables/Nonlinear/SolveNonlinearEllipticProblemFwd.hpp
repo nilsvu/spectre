@@ -23,6 +23,9 @@ namespace Solutions {
 struct ConstantDensityStar;
 struct TovStar;
 }  // namespace Solutions
+namespace AnalyticData {
+struct NeutronStarHeadOnCollision;
+}  // namespace AnalyticData
 }  // namespace Xcts
 
 template <typename System, typename InitialGuess>

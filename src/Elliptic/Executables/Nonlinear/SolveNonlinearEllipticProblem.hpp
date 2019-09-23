@@ -52,6 +52,7 @@
 #include "ParallelAlgorithms/NonlinearSolver/Globalization/LineSearch/LineSearch.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarHeadOnCollision.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/ConstantDensityStar.hpp"

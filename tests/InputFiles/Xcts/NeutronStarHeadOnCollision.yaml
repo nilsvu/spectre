@@ -1,0 +1,54 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveNeutronStarHeadOnCollision
+# Check: execute
+# ExpectedOutput:
+#   NeutronStarHeadOnCollisionReductions.h5
+#   NeutronStarHeadOnCollisionVolume0.h5
+
+AnalyticSolution:
+  HeadOnCollision:
+    CentralDensities: [0.0008087415253997405, 0.0005] # h = 1.2
+    Separation: 30.
+    PolytropicConstant: 123.6489
+    PolytropicExponent: 2.
+
+DomainCreator:
+  Brick:
+    LowerBound: [-30., -30., -30.]
+    UpperBound: [30., 30., 30.]
+    IsPeriodicIn: [false, false, false]
+    InitialRefinement: [2, 1, 1]
+    InitialGridPoints: [10, 10, 10]
+
+NumericalFlux:
+  InternalPenalty:
+    PenaltyParameter: 1.4 # p^2 / h
+  NonlinNumericalFlux:
+    InternalPenalty:
+      PenaltyParameter: 1.4 # p^2 / h
+
+Observers:
+  VolumeFileName: "NeutronStarHeadOnCollisionVolume"
+  ReductionFileName: "NeutronStarHeadOnCollisionReductions"
+
+NonlinearSolver:
+  ConvergenceCriteria:
+    MaxIterations: 1
+    RelativeResidual: 1e-5
+    AbsoluteResidual: 1e-15
+  Verbosity: Verbose
+
+LinearSolver:
+  ConvergenceCriteria:
+    MaxIterations: 500
+    RelativeResidual: 1e-3
+    AbsoluteResidual: 1e-15
+  Verbosity: Verbose
+
+EventsAndTriggers:
+  ? EveryNIterations:
+      N: 1
+  : - ObserveErrorNorms
+    - ObserveFields

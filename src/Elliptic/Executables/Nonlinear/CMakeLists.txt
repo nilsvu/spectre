@@ -61,3 +61,10 @@ add_nonlinear_elliptic_executable(
   Xcts::Solutions::TovStar
   "Xcts;XctsSolutions"
   )
+
+add_nonlinear_elliptic_executable(
+  NeutronStarHeadOnCollision
+  "Xcts::FirstOrderSystem<3, Xcts::Equations::HamiltonianAndLapse>"
+  Xcts::AnalyticData::NeutronStarHeadOnCollision
+  "Xcts;XctsAnalyticData"
+  )
