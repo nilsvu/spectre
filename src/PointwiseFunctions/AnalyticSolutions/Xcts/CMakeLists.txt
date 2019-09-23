@@ -10,6 +10,7 @@ spectre_target_sources(
   PRIVATE
   ConstantDensityStar.cpp
   Schwarzschild.cpp
+  Vacuum.cpp
   )
 
 spectre_target_headers(
@@ -17,6 +18,7 @@ spectre_target_headers(
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
   ConstantDensityStar.hpp
+  Vacuum.hpp
   )
 
 target_link_libraries(
