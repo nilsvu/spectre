@@ -187,12 +187,11 @@ class ObserveFields<VolumeDim, TemporalId, tmpl::list<Tensors...>,
     components.reserve(alg::accumulate(
         std::initializer_list<size_t>{
             inertial_coordinates.size(),
-            db::item_type<AnalyticSolutionTensors>::size()...,
-            db::item_type<::Tags::Analytic<AnalyticSolutionTensors>>::size()...,
+            3 * db::item_type<AnalyticSolutionTensors>::size()...,
             db::item_type<NonSolutionTensors>::size()...},
         0_st));
 
-    const auto record_tensor_components = [this, &components, &element_name](
+    const auto record_tensor_components = [ this, &components, &element_name ](
         const auto tensor_tag_v, const auto& tensor) noexcept {
       using tensor_tag = tmpl::type_from<decltype(tensor_tag_v)>;
       if (variables_to_observe_.count(tensor_tag::name()) == 1) {
@@ -220,6 +219,10 @@ class ObserveFields<VolumeDim, TemporalId, tmpl::list<Tensors...>,
           components.emplace_back(element_name + "Error(" + tensor_tag::name() +
                                       ")" + component_suffix(tensor, i),
                                   std::move(error));
+          components.emplace_back(
+              element_name + db::tag_name<::Tags::Analytic<tensor_tag>>() +
+                  component_suffix(tensor, i),
+              analytic_tensor[i]);
         }
       }
     };
