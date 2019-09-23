@@ -11,6 +11,7 @@ spectre_target_sources(
   ConstantDensityStar.cpp
   Kerr.cpp
   Schwarzschild.cpp
+  Vacuum.cpp
   )
 
 spectre_target_headers(
@@ -21,6 +22,7 @@ spectre_target_headers(
   Kerr.hpp
   Schwarzschild.hpp
   Solutions.hpp
+  Vacuum.hpp
   )
 
 target_link_libraries(
