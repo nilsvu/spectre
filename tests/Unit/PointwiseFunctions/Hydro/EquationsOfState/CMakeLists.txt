@@ -16,3 +16,5 @@ add_test_library(
   "${LIBRARY_SOURCES}"
   "EquationsOfState;DataStructures;Utilities"
   )
+
+add_subdirectory(Python)
