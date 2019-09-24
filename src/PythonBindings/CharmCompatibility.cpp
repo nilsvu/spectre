@@ -4,6 +4,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <pup.h>
 #include <string>
 #include <vector>
 
@@ -66,3 +67,24 @@ std::string get_library_versions() noexcept {
 
 std::string get_paths() noexcept { return "Not supported in python."; }
 }  // namespace formaline
+
+/*
+ * PUP::able support
+ *
+ * Here we provide dummy-implementations of functions in Charm++'s `pup.h` so
+ * that we can write Python wrappers for classes that derive from `PUP::able`.
+ * These functions are not intended to be called.
+ */
+
+PUP::able::~able() {}
+
+void PUP::able::pup(PUP::er& /*p*/) {}
+
+void PUP::able::PUP_ID::setName(const char* /*name*/) {}
+
+PUP::able::PUP_ID PUP::able::register_constructor(const char* /*className*/,
+                                                  constructor_function /*fn*/) {
+  return PUP::able::PUP_ID(0);
+}
+
+PUP::able* PUP::able::clone(void) const { return NULL; }
