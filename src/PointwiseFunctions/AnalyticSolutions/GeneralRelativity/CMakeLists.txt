@@ -21,3 +21,7 @@ target_link_libraries(
   INTERFACE Interpolation
   INTERFACE RelativisticEulerSolutions
   )
+
+if(BUILD_PYTHON_BINDINGS)
+  add_subdirectory(Python)
+endif()
