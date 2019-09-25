@@ -11,6 +11,7 @@ set(SPECTRE_LINK_PYBINDINGS
   -Wl,--whole-archive
   PUBLIC PyBindings
   PUBLIC ${HDF5_LIBRARIES}
+  PUBLIC ${GSL_LIBRARIES}
   -Wl,--no-whole-archive)
 
 set(SPECTRE_PYTHON_PREFIX "${CMAKE_BINARY_DIR}/bin/python/spectre/")
