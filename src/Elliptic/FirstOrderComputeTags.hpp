@@ -82,7 +82,7 @@ struct FirstOrderSourcesCompute<
     // Compute sources for primal fields
     SourcesComputer::apply(
         make_not_null(&get<::Tags::Source<PrimalVars>>(sources))...,
-        sources_args..., get<PrimalVars>(vars)...);
+        sources_args..., get<PrimalVars>(vars)..., get<AuxiliaryVars>(vars)...);
     // Compute sources for auxiliary fields. They are just the auxiliary field
     // values.
     tmpl::for_each<tmpl::list<AuxiliaryVars...>>(
