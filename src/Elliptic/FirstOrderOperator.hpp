@@ -61,7 +61,8 @@ struct FirstOrderSourcesImpl<tmpl::list<PrimalFields...>,
     // Compute sources for primal fields
     SourcesComputer::apply(
         make_not_null(&get<::Tags::Source<PrimalFields>>(*sources))...,
-        sources_args..., get<PrimalFields>(vars)...);
+        sources_args..., get<PrimalFields>(vars)...,
+        get<AuxiliaryFields>(vars)...);
     // Compute sources for auxiliary fields. They are just the auxiliary field
     // values.
     tmpl::for_each<tmpl::list<AuxiliaryFields...>>(
