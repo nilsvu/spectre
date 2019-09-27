@@ -109,6 +109,7 @@ struct InitializeNonlinearSystem {
         typename system::linearized_system>;
 
     using compute_tags = db::AddComputeTags<
+        typename Metavariables::initial_guess::compute_tags,
         nonlinear_fluxes_compute_tag, nonlinear_sources_compute_tag,
         linear_fluxes_compute_tag, linear_sources_compute_tag,
         ::Tags::DivCompute<linear_fluxes_tag, inv_jacobian_tag>,
