@@ -341,6 +341,15 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>> {
                           typename ReceiveTag::type::mapped_type>> = nullptr>
   constexpr void receive_data_impl(typename ReceiveTag::temporal_id& instance,
                                    ReceiveDataType&& t);
+
+  template <
+      typename ReceiveTag, typename ReceiveDataType,
+      Requires<not tt::is_maplike_v<typename ReceiveTag::type::mapped_type> and
+               not tt::is_a_v<std::unordered_multiset,
+                              typename ReceiveTag::type::mapped_type>> =
+          nullptr>
+  void receive_data_impl(typename ReceiveTag::temporal_id& instance,
+                         ReceiveDataType&& t);
   // @}
 
   size_t number_of_actions_in_phase(const PhaseType phase) const noexcept {
@@ -823,5 +832,17 @@ AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>::
                       ReceiveDataType&& t) {
   tuples::get<ReceiveTag>(inboxes_)[instance].insert(
       std::forward<ReceiveDataType>(t));
+}
+
+template <typename ParallelComponent, typename... PhaseDepActionListsPack>
+template <
+    typename ReceiveTag, typename ReceiveDataType,
+    Requires<not tt::is_maplike_v<typename ReceiveTag::type::mapped_type> and
+             not tt::is_a_v<std::unordered_multiset,
+                            typename ReceiveTag::type::mapped_type>>>
+void AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>::
+    receive_data_impl(typename ReceiveTag::temporal_id& instance,
+                      ReceiveDataType&& t) {
+  tuples::get<ReceiveTag>(inboxes_)[instance] = t;
 }
 }  // namespace Parallel
