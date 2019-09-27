@@ -37,4 +37,44 @@ struct Interpolator {
         .start_phase(next_phase);
   };
 };
+
+namespace detail {
+template <class InterpolationTargetTag, class = cpp17::void_t<>>
+struct get_vars_to_interpolate {
+  using type = tmpl::list<>;
+};
+
+template <class InterpolationTargetTag>
+struct get_vars_to_interpolate<
+    InterpolationTargetTag,
+    cpp17::void_t<
+        typename InterpolationTargetTag::vars_to_interpolate_to_target>> {
+  using type = typename InterpolationTargetTag::vars_to_interpolate_to_target;
+};
+}  // namespace detail
+
+template <typename InterpolationTargetTags>
+using collect_interpolator_source_vars =
+    tmpl::remove_duplicates<tmpl::flatten<tmpl::transform<
+        InterpolationTargetTags, detail::get_vars_to_interpolate<tmpl::_1>>>>;
+
+namespace detail {
+template <class InterpolationTargetTag, class = cpp17::void_t<>>
+struct get_broadcast_tags {
+  using type = tmpl::list<>;
+};
+
+template <class InterpolationTargetTag>
+struct get_broadcast_tags<
+    InterpolationTargetTag,
+    cpp17::void_t<
+        typename InterpolationTargetTag::broadcast_tags>> {
+  using type = typename InterpolationTargetTag::broadcast_tags;
+};
+}  // namespace detail
+
+template <typename InterpolationTargetTags>
+using collect_broadcast_tags =
+    tmpl::remove_duplicates<tmpl::flatten<tmpl::transform<
+        InterpolationTargetTags, detail::get_broadcast_tags<tmpl::_1>>>>;
 }  // namespace intrp

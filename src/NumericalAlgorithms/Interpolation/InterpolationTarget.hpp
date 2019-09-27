@@ -151,4 +151,10 @@ struct InterpolationTarget {
         .start_phase(next_phase);
   };
 };
+
+template <typename InterpolationTargetTags, typename Metavariables>
+using make_interpolation_targets = tmpl::transform<
+    InterpolationTargetTags,
+    tmpl::bind<InterpolationTarget, tmpl::pin<Metavariables>, tmpl::_1>>;
+
 }  // namespace intrp
