@@ -216,6 +216,12 @@ struct MassFlux : db::SimpleTag {
     return Frame::prefix<Fr>() + "MassFlux";
   }
 };
+
+struct InjectionEnergy : db::SimpleTag {
+  using type = double;
+  static std::string name() noexcept { return "InjectionEnergy"; }
+};
+
 }  // namespace Tags
 
 /// The tags for the primitive variables for GRMHD.
