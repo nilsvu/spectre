@@ -43,7 +43,7 @@ struct ResidualMonitor {
 
       Parallel::PhaseActions<
           typename Metavariables::Phase,
-          Metavariables::Phase::RegisterWithObserver,
+          Metavariables::Phase::Register,
           tmpl::list<observers::Actions::RegisterSingletonWithObserverWriter<
               NonlinearSolver::observe_detail::Registration>>>>;
 
