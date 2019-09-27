@@ -93,5 +93,12 @@ struct NumberOfElements : db::SimpleTag {
   using type = size_t;
 };
 
+template <typename Tag, typename TemporalIdTag>
+struct Broadcast : db::PrefixTag, db::SimpleTag {
+  using temporal_id = db::item_type<TemporalIdTag>;
+  using type = std::unordered_map<temporal_id, db::item_type<Tag>>;
+  using tag = Tag;
+};
+
 }  // namespace Tags
 }  // namespace intrp
