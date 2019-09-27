@@ -49,8 +49,9 @@ struct UpdateResidualMagnitude {
   static void apply(DataBox& box,
                     Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
-                    const double residual_magnitude,
-                    const size_t iteration_id) noexcept {
+                    const double residual_magnitude, const size_t iteration_id,
+                    const size_t globalization_iteration_id,
+                    const double step_length) noexcept {
     if (UNLIKELY(iteration_id == 0)) {
       db::mutate<initial_residual_magnitude_tag>(
           make_not_null(&box), [residual_magnitude](
@@ -65,7 +66,9 @@ struct UpdateResidualMagnitude {
       // The _sufficient decrease condition_ is the decrease predicted by the
       // Taylor approximation, i.e. ...
       // TODO: Add sufficient decrease condition
-      if (residual_magnitude - get<residual_magnitude_tag>(box) > 0.) {
+      if (residual_magnitude >
+          (1 - get<Tags::SufficientDecreaseParameter>(box) * step_length) *
+              get<residual_magnitude_tag>(box)) {
         // Do some logging
         if (UNLIKELY(static_cast<int>(get<NonlinearSolver::Tags::Verbosity>(
                          box)) >= static_cast<int>(::Verbosity::Verbose))) {
@@ -81,15 +84,18 @@ struct UpdateResidualMagnitude {
       }
     }
 
-    db::mutate<residual_magnitude_tag, NonlinearSolver::Tags::IterationId>(
+    db::mutate<residual_magnitude_tag, Tags::IterationId,
+               Tags::GlobalizationIterationId>(
         make_not_null(&box),
-        [ residual_magnitude,
-          iteration_id ](const gsl::not_null<double*> local_residual_magnitude,
-                         const gsl::not_null<
-                             db::item_type<NonlinearSolver::Tags::IterationId>*>
-                             local_iteration_id) noexcept {
+        [ residual_magnitude, iteration_id, globalization_iteration_id ](
+            const gsl::not_null<double*> local_residual_magnitude,
+            const gsl::not_null<db::item_type<Tags::IterationId>*>
+                local_iteration_id,
+            const gsl::not_null<db::item_type<Tags::GlobalizationIterationId>*>
+                local_globalization_iteration_id) noexcept {
           *local_residual_magnitude = residual_magnitude;
           *local_iteration_id = iteration_id;
+          *local_globalization_iteration_id = globalization_iteration_id;
         });
 
     // At this point, the iteration is complete. We proceed with observing,

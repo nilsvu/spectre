@@ -44,10 +44,14 @@ struct PrepareSolve {
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    db::mutate<NonlinearSolver::Tags::IterationId>(make_not_null(&box), [
-    ](const gsl::not_null<size_t*> iteration_id) noexcept {
-      *iteration_id = 0;
-    });
+    db::mutate<NonlinearSolver::Tags::IterationId,
+               NonlinearSolver::Tags::GlobalizationIterationId>(
+        make_not_null(&box), [](const gsl::not_null<size_t*> iteration_id,
+                                const gsl::not_null<size_t*>
+                                    globalization_iteration_id) noexcept {
+          *iteration_id = 0;
+          *globalization_iteration_id = 0;
+        });
     return {std::move(box)};
   }
 };
@@ -64,12 +68,12 @@ struct PrepareStep {
       const ParallelComponent* const /*meta*/) noexcept {
     db::mutate<NonlinearSolver::Tags::IterationId>(
         make_not_null(&box),
-        [
-        ](const gsl::not_null<
-              db::item_type<NonlinearSolver::Tags::IterationId>*>
-              iteration_id,
-          const db::item_type<::Tags::Next<NonlinearSolver::Tags::IterationId>>&
-              next_iteration_id) noexcept {
+        [](const gsl::not_null<
+               db::item_type<NonlinearSolver::Tags::IterationId>*>
+               iteration_id,
+           const db::item_type<
+               ::Tags::Next<NonlinearSolver::Tags::IterationId>>&
+               next_iteration_id) noexcept {
           *iteration_id = next_iteration_id;
         },
         get<::Tags::Next<NonlinearSolver::Tags::IterationId>>(box));
@@ -122,10 +126,14 @@ struct UpdateResidual {
         FieldsTag, GlobalizationStrategy, ParallelComponent>>(
         Parallel::ReductionData<
             Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>,
-            Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>>{
+            Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+            Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+            Parallel::ReductionDatum<double, funcl::AssertEqual<>>>{
             LinearSolver::inner_product(get<linear_source_tag>(box),
                                         get<linear_source_tag>(box)),
-            get<NonlinearSolver::Tags::IterationId>(box)},
+            get<Tags::IterationId>(box),
+            get<Tags::GlobalizationIterationId>(box),
+            get<Tags::StepLength>(box)},
         Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
         Parallel::get_parallel_component<
             ResidualMonitor<Metavariables, FieldsTag>>(cache));

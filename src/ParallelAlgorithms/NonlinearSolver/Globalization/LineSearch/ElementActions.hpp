@@ -36,13 +36,19 @@ struct Prepare {
            const gsl::not_null<std::vector<size_t>*>
                globalization_iterations_history,
            const gsl::not_null<double*> step_length,
-           const gsl::not_null<bool*> globalization_has_converged) noexcept {
-          globalization_iterations_history->push_back(
-              (*globalization_iteration_id) + 1);
+           const gsl::not_null<bool*> globalization_has_converged,
+           const size_t& iteration_id) noexcept {
+          // Record number of globalization steps needed for previous nonlinear
+          // solver iteration.
+          if (iteration_id > 0) {
+            globalization_iterations_history->push_back(
+                (*globalization_iteration_id) + 1);
+          }
           *globalization_iteration_id = 0;
           *step_length = 1.;
           *globalization_has_converged = false;
-        });
+        },
+        get<NonlinearSolver::Tags::IterationId>(box));
     return {std::move(box)};
   }
 };
@@ -60,9 +66,9 @@ struct PerformStep {
                     const ArrayIndex& array_index) noexcept {
     db::mutate<NonlinearSolver::Tags::StepLength,
                NonlinearSolver::Tags::GlobalizationIterationId>(
-        make_not_null(&box),
-        [](const gsl::not_null<double*> step_length,
-           const gsl::not_null<size_t*> globalization_iteration_id) noexcept {
+        make_not_null(&box), [](const gsl::not_null<double*> step_length,
+                                const gsl::not_null<size_t*>
+                                    globalization_iteration_id) noexcept {
           if (*step_length == 1.) {
             *step_length = -0.5;
           } else {

@@ -20,7 +20,9 @@ using reduction_data = Parallel::ReductionData<
     // Iteration
     Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
     // Residual
-    Parallel::ReductionDatum<double, funcl::AssertEqual<>>>;
+    Parallel::ReductionDatum<double, funcl::AssertEqual<>>,
+    // Globalization steps
+    Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>>;
 
 struct ObservationType {};
 
@@ -74,9 +76,10 @@ void contribute_to_reduction_observer(
       // to write into separate subgroups, e.g.:
       // `/nonlinear_residuals/<amr_iteration_id>`
       std::string{"/nonlinear_residuals"},
-      std::vector<std::string>{"Iteration", "Residual"},
-      reduction_data{get<NonlinearSolver::Tags::IterationId>(box),
-                     get<residual_magnitude_tag>(box)});
+      std::vector<std::string>{"Iteration", "Residual", "GlobalizationSteps"},
+      reduction_data{get<Tags::IterationId>(box),
+                     get<residual_magnitude_tag>(box),
+                     get<Tags::GlobalizationIterationId>(box)});
 }
 
 }  // namespace observe_detail

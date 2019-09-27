@@ -33,7 +33,8 @@ struct ResidualMonitor {
   using chare_type = Parallel::Algorithms::Singleton;
   using const_global_cache_tags =
       tmpl::list<NonlinearSolver::Tags::Verbosity,
-                 NonlinearSolver::Tags::ConvergenceCriteria>;
+                 NonlinearSolver::Tags::ConvergenceCriteria,
+                 NonlinearSolver::Tags::SufficientDecreaseParameter>;
   using metavariables = Metavariables;
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
@@ -65,14 +66,13 @@ template <typename Metavariables, typename FieldsTag>
 struct InitializeResidualMonitor {
  private:
   using fields_tag = FieldsTag;
-  using residual_magnitude_tag = db::add_tag_prefix<
-      LinearSolver::Tags::Magnitude,
-      db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>>;
+  using residual_magnitude_tag =
+      db::add_tag_prefix<LinearSolver::Tags::Magnitude,
+                         db::add_tag_prefix<Tags::Residual, fields_tag>>;
   using initial_residual_magnitude_tag = db::add_tag_prefix<
       ::Tags::Initial,
-      db::add_tag_prefix<
-          LinearSolver::Tags::Magnitude,
-          db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>>>;
+      db::add_tag_prefix<LinearSolver::Tags::Magnitude,
+                         db::add_tag_prefix<Tags::Residual, fields_tag>>>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename ArrayIndex,
@@ -83,21 +83,21 @@ struct InitializeResidualMonitor {
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using simple_tags = db::AddSimpleTags<NonlinearSolver::Tags::IterationId,
-                                          residual_magnitude_tag,
-                                          initial_residual_magnitude_tag>;
-    using compute_tags = db::AddComputeTags<
-        NonlinearSolver::Tags::HasConvergedCompute<fields_tag>>;
-
+    using compute_tags =
+        db::AddComputeTags<Tags::HasConvergedCompute<fields_tag>>;
     return std::make_tuple(
-        ::Initialization::merge_into_databox<InitializeResidualMonitor,
-                                             simple_tags, compute_tags>(
-            std::move(box),
-            // The `UpdateResidual` action populates these tags with initial
-            // values
-            std::numeric_limits<size_t>::max(),
-            std::numeric_limits<double>::signaling_NaN(),
-            std::numeric_limits<double>::signaling_NaN()),
+        ::Initialization::merge_into_databox<
+            InitializeResidualMonitor,
+            db::AddSimpleTags<Tags::IterationId, residual_magnitude_tag,
+                              initial_residual_magnitude_tag,
+                              Tags::GlobalizationIterationId>,
+            compute_tags>(std::move(box),
+                          // The `UpdateResidualMagnitude` action populates
+                          // these tags with initial values
+                          std::numeric_limits<size_t>::max(),
+                          std::numeric_limits<double>::signaling_NaN(),
+                          std::numeric_limits<double>::signaling_NaN(),
+                          std::numeric_limits<size_t>::max()),
         true);
   }
 };

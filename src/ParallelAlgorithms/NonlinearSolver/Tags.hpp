@@ -51,6 +51,21 @@ struct Verbosity {
   using group = Group;
 };
 
+/// Set to values near unity when the nonlinear solver overshoots, e.g. when
+/// the initial guess is particularly bad. Larger values mean the nonlinear
+/// solver is stricter with accepting steps, preferring to apply the
+/// globalization strategy.
+struct SufficientDecreaseParameter {
+  using type = double;
+  static std::string name() noexcept { return "SufficientDecrease"; }
+  static constexpr OptionString help = {
+      "Fraction of decrease predicted by linearization"};
+  static type lower_bound() noexcept { return 0.; }
+  static type upper_bound() noexcept { return 1.; }
+  static type default_value() noexcept { return 1.e-4; }
+  using group = Group;
+};
+
 }  // namespace OptionTags
 
 namespace Tags {
@@ -234,6 +249,13 @@ struct Verbosity : db::SimpleTag {
   using type = ::Verbosity;
   static std::string name() noexcept { return "NonlinearSolverVerbosity"; }
   using option_tags = tmpl::list<OptionTags::Verbosity>;
+  static type create_from_options(const type& option) { return option; }
+};
+
+struct SufficientDecreaseParameter : db::SimpleTag {
+  using type = double;
+  static std::string name() noexcept { return "SufficientDecreaseParameter"; }
+  using option_tags = tmpl::list<OptionTags::SufficientDecreaseParameter>;
   static type create_from_options(const type& option) { return option; }
 };
 
