@@ -18,6 +18,7 @@
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderCorrectionSystem.hpp"
 #include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
+#include "Elliptic/Systems/Xcts/InterpolationTargetTags/StarCenter.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Elliptic/Triggers/EveryNIterations.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
@@ -29,6 +30,17 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/PopulateBoundaryMortars.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
+#include "NumericalAlgorithms/Interpolation/CleanUpInterpolator.hpp"
+#include "NumericalAlgorithms/Interpolation/InitializeInterpolationTarget.hpp"
+#include "NumericalAlgorithms/Interpolation/InterpolateAction.hpp"
+#include "NumericalAlgorithms/Interpolation/InterpolationTarget.hpp"
+#include "NumericalAlgorithms/Interpolation/InterpolationTargetReceiveVars.hpp"
+#include "NumericalAlgorithms/Interpolation/Interpolator.hpp"
+#include "NumericalAlgorithms/Interpolation/InterpolatorReceivePoints.hpp"
+#include "NumericalAlgorithms/Interpolation/InterpolatorReceiveVolumeData.hpp"
+#include "NumericalAlgorithms/Interpolation/InterpolatorRegisterElement.hpp"
+#include "NumericalAlgorithms/Interpolation/Tags.hpp"
+#include "NumericalAlgorithms/Interpolation/TryToInterpolate.hpp"
 #include "NumericalAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "NumericalAlgorithms/LinearSolver/Tags.hpp"
 #include "Options/Options.hpp"
@@ -95,9 +107,11 @@ struct NonlinearNumericalFluxTag : db::SimpleTag {
 
 }  // namespace
 
-template <typename System, typename InitialGuess>
+template <typename System, typename InitialGuess,
+          typename... InterpolationTargetTags>
 struct Metavariables {
   static constexpr size_t volume_dim = System::volume_dim;
+  using initial_guess = InitialGuess;
 
   static constexpr OptionString help{
       "Find the solution to a nonlinear elliptic problem in Dim spatial "
@@ -149,7 +163,7 @@ struct Metavariables {
   using nonlinear_boundary_scheme =
       dg::BoundarySchemes::StrongFirstOrder<volume_dim, nonlinear_fields_tag,
                                             nonlinear_numerical_flux_tag,
-                                            NonlinearSolver::Tags::IterationId>;
+                                            NonlinearSolver::Tags::TemporalId>;
   using linear_numerical_flux_tag = Tags::NumericalFlux<
       elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
           volume_dim, linear_fluxes_computer_tag,
@@ -178,6 +192,16 @@ struct Metavariables {
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       NonlinearSolver::Tags::IterationId>>;
 
+  // Interface for interpolations
+  using domain_frame = Frame::Inertial;
+  static constexpr size_t domain_dim = 3;
+  using temporal_id = NonlinearSolver::Tags::TemporalId;
+  using interpolation_target_tags = tmpl::list<InterpolationTargetTags...>;
+  using interpolator_source_vars =
+      intrp::collect_interpolator_source_vars<interpolation_target_tags>;
+  using interpolator_broadcast_tags =
+      intrp::collect_broadcast_tags<interpolation_target_tags>;
+
   // Collect all items to store in the cache.
   using const_global_cache_tags =
       tmpl::list<nonlinear_fluxes_computer_tag, linear_fluxes_computer_tag,
@@ -191,13 +215,13 @@ struct Metavariables {
                                linear_solver, nonlinear_solver>>>;
 
   // Specify all global synchronization points.
-  enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
+  enum class Phase { Initialization, Register, Solve, Exit };
 
   // Construct the DgElementArray parallel component
   using initialization_actions = tmpl::list<
       dg::Actions::InitializeDomain<volume_dim>,
-      Initialization::Actions::AddComputeTags<
-          typename InitialGuess::compute_tags>,
+      intrp::Actions::make_initialize_broadcast_actions<
+          interpolation_target_tags>,
       elliptic::Actions::InitializeNonlinearSystem,
       elliptic::Actions::InitializeAnalyticSolution<analytic_solution_tag,
                                                     analytic_solution_fields>,
@@ -230,15 +254,19 @@ struct Metavariables {
       dg::Actions::InitializeMortars<nonlinear_boundary_scheme>,
       Parallel::Actions::TerminatePhase>;
 
-  using build_nonlinear_operator =
-      tmpl::list<dg::Actions::SendDataForFluxes<nonlinear_boundary_scheme>,
-                 Actions::MutateApply<elliptic::FirstOrderOperator<
-                     volume_dim, NonlinearSolver::Tags::OperatorAppliedTo,
-                     nonlinear_fields_tag>>,
-                 Actions::MutateApply<
-                     ::dg::PopulateBoundaryMortars<nonlinear_boundary_scheme>>,
-                 dg::Actions::ReceiveDataForFluxes<nonlinear_boundary_scheme>,
-                 Actions::MutateApply<nonlinear_boundary_scheme>>;
+  using build_nonlinear_operator = tmpl::list<
+      intrp::Actions::Interpolate<NonlinearSolver::Tags::TemporalId,
+                                  interpolator_source_vars>,
+      intrp::Actions::ReceiveBroadcast<NonlinearSolver::Tags::TemporalId,
+                                       interpolator_broadcast_tags>,
+      dg::Actions::SendDataForFluxes<nonlinear_boundary_scheme>,
+      Actions::MutateApply<elliptic::FirstOrderOperator<
+          volume_dim, NonlinearSolver::Tags::OperatorAppliedTo,
+          nonlinear_fields_tag>>,
+      Actions::MutateApply<
+          ::dg::PopulateBoundaryMortars<nonlinear_boundary_scheme>>,
+      dg::Actions::ReceiveDataForFluxes<nonlinear_boundary_scheme>,
+      Actions::MutateApply<nonlinear_boundary_scheme>>;
 
   using build_linear_operator =
       tmpl::list<dg::Actions::SendDataForFluxes<linear_boundary_scheme>,
@@ -266,8 +294,9 @@ struct Metavariables {
                                  initialization_actions>,
 
           Parallel::PhaseActions<
-              Phase, Phase::RegisterWithObserver,
-              tmpl::list<observers::Actions::RegisterWithObservers<
+              Phase, Phase::Register,
+              tmpl::list<intrp::Actions::RegisterElementWithInterpolator,
+                         observers::Actions::RegisterWithObservers<
                              observers::RegisterObservers<
                                  NonlinearSolver::Tags::IterationId,
                                  element_observation_type>>,
@@ -294,12 +323,14 @@ struct Metavariables {
 
   // Specify all parallel components that will execute actions at some
   // point.
-  using component_list =
-      tmpl::flatten<tmpl::list<element_array_component,
-                               typename linear_solver::component_list,
-                               typename nonlinear_solver::component_list,
-                               observers::Observer<Metavariables>,
-                               observers::ObserverWriter<Metavariables>>>;
+  using component_list = tmpl::flatten<tmpl::list<
+      element_array_component, typename linear_solver::component_list,
+      typename nonlinear_solver::component_list,
+      observers::Observer<Metavariables>,
+      observers::ObserverWriter<Metavariables>,
+      intrp::Interpolator<Metavariables>,
+      intrp::make_interpolation_targets<interpolation_target_tags,
+                                        Metavariables>>>;
 
   // Specify the transitions between phases.
   static Phase determine_next_phase(
@@ -308,8 +339,8 @@ struct Metavariables {
           Metavariables>& /*cache_proxy*/) noexcept {
     switch (current_phase) {
       case Phase::Initialization:
-        return Phase::RegisterWithObserver;
-      case Phase::RegisterWithObserver:
+        return Phase::Register;
+      case Phase::Register:
         return Phase::Solve;
       case Phase::Solve:
         return Phase::Exit;

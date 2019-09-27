@@ -22,7 +22,7 @@ function(add_nonlinear_elliptic_executable
     "Solve${EXECUTABLE_NAME}"
     SolveNonlinearEllipticProblem
     Elliptic/Executables/Nonlinear
-    "Metavariables<${ELLIPTIC_SYSTEM}, ${INITIAL_GUESS}>"
+    "Metavariables<${ELLIPTIC_SYSTEM}, ${INITIAL_GUESS}, Xcts::InterpolationTargetTags::StarCenter>"
     "${LIBS_TO_LINK};${EXTRA_LIBS_TO_LINK}"
     )
 endfunction(add_nonlinear_elliptic_executable)
@@ -59,7 +59,7 @@ add_nonlinear_elliptic_executable(
   TovStar
   "Xcts::FirstOrderSystem<3, Xcts::Equations::HamiltonianAndLapse>"
   Xcts::Solutions::TovStar
-  "Xcts;XctsSolutions"
+  "Interpolation;Xcts;XctsSolutions"
   )
 
 add_nonlinear_elliptic_executable(

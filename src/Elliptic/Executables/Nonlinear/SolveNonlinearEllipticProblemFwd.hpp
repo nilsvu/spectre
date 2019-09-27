@@ -26,7 +26,11 @@ struct TovStar;
 namespace AnalyticData {
 struct NeutronStarHeadOnCollision;
 }  // namespace AnalyticData
+namespace InterpolationTargetTags {
+struct StarCenter;
+}  // namespace InterpolationTargetTags
 }  // namespace Xcts
 
-template <typename System, typename InitialGuess>
+template <typename System, typename InitialGuess,
+          typename... InterpolationTargetTags>
 struct Metavariables;
