@@ -61,6 +61,7 @@ struct SpecificInternalEnergy;
 template <typename DataType, size_t Dim, typename Fr = Frame::Inertial>
 struct MassFlux;
 struct InjectionEnergy;
+struct BinaryInjectionEnergy;
 }  // namespace Tags
 }  // namespace hydro
 /// \endcond

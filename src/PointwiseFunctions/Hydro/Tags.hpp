@@ -63,8 +63,9 @@ struct EquationOfState : EquationOfStateBase, db::SimpleTag {
   static std::string name() noexcept { return "EquationOfState"; }
 };
 
-/// The Lorentz factor \f$W = (1-v^iv_i)^{-1/2}\f$, where \f$v^i\f$ is
-/// the spatial velocity of the fluid.
+/// The Lorentz factor \f$W = (1-v^iv_i)^{-1/2} = \alpha u^t\f$, where \f$v^i\f$
+/// is the spatial velocity of the fluid, \f$\alpha\f$ is the lapse and
+/// \f$u^t\f$ is the time component of the 4-velocity.
 template <typename DataType>
 struct LorentzFactor : db::SimpleTag {
   using type = Scalar<DataType>;
@@ -220,6 +221,11 @@ struct MassFlux : db::SimpleTag {
 struct InjectionEnergy : db::SimpleTag {
   using type = double;
   static std::string name() noexcept { return "InjectionEnergy"; }
+};
+
+struct BinaryInjectionEnergy : db::SimpleTag {
+  using type = std::array<double, 2>;
+  static std::string name() noexcept { return "BinaryInjectionEnergy"; }
 };
 
 }  // namespace Tags
