@@ -128,6 +128,15 @@ auto partial_derivatives(
         inverse_jacobian) noexcept
     -> Variables<db::wrap_tags_in<Tags::deriv, DerivativeTags,
                                   tmpl::size_t<Dim>, DerivativeFrame>>;
+
+template <
+    size_t Dim, typename Symm, typename IndexList, typename DerivativeFrame,
+    typename ResultTensor = TensorMetafunctions::prepend_spatial_index<
+        Tensor<DataVector, Symm, IndexList>, Dim, UpLo::Lo, DerivativeFrame>>
+ResultTensor partial_derivatives(
+    const Tensor<DataVector, Symm, IndexList>& tensor, const Mesh<Dim>& mesh,
+    const InverseJacobian<DataVector, Dim, Frame::Logical, DerivativeFrame>&
+        inverse_jacobian) noexcept;
 // @}
 
 namespace Tags {
@@ -172,6 +181,22 @@ struct DerivCompute
                           deriv_frame>;
   using argument_tags =
       tmpl::list<VariablesTag, Tags::Mesh<Dim>, InverseJacobianTag>;
+};
+
+template <
+    typename TensorTag, typename InverseJacobianTag,
+    typename Index =
+        tmpl::back<typename db::item_type<InverseJacobianTag>::index_list>,
+    size_t Dim = Index::dim, typename DerivativeFrame = typename Index::Frame,
+    typename DerivTensorTag = db::add_tag_prefix<
+        deriv, TensorTag, tmpl::size_t<Dim>, DerivativeFrame>>
+struct DerivTensorCompute : DerivTensorTag, db::ComputeTag {
+  using argument_tags =
+      tmpl::list<TensorTag, ::Tags::Mesh<Dim>, InverseJacobianTag>;
+  static constexpr db::item_type<DerivTensorTag> (*function)(
+      const db::item_type<TensorTag>&, const ::Mesh<Dim>&,
+      const ::InverseJacobian<DataVector, Dim, Frame::Logical,
+                              DerivativeFrame>&) = partial_derivatives;
 };
 
 }  // namespace Tags

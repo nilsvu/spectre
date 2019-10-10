@@ -10,6 +10,7 @@ set(LIBRARY_SOURCES
   IndefiniteIntegral.cpp
   Linearize.cpp
   MeanValue.cpp
+  PartialDerivatives.cpp
   )
 
 add_spectre_library(${LIBRARY} ${LIBRARY_SOURCES})
