@@ -4,6 +4,7 @@
 set(LIBRARY Xcts)
 
 set(LIBRARY_SOURCES
+  InterpolationTargetTags/StarBinaryCenters.cpp
   Equations.cpp
   )
 
@@ -14,5 +15,7 @@ target_link_libraries(
   INTERFACE DataStructures
   INTERFACE Domain
   INTERFACE ErrorHandling
+  INTERFACE OrbitalDynamics
   INTERFACE Poisson
+  INTERFACE RootFinding
   )
