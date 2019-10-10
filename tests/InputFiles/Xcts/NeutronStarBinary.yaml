@@ -1,0 +1,57 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveNeutronStarBinary
+# Check: execute
+# ExpectedOutput:
+#   NeutronStarBinaryeductions.h5
+#   NeutronStarBinaryVolume0.h5
+
+AnalyticSolution:
+  NeutronStarBinary:
+    CentralDensities: [0.0008087415253997405, 0.0008087415253997405] # h = 1.2
+    Separation: 60.
+    Eccentricity: 0.
+    PolytropicConstant: 123.6489
+    PolytropicExponent: 2.
+
+DomainCreator:
+  Brick:
+    LowerBound: [-60., -30., -30.]
+    UpperBound: [60., 30., 30.]
+    IsPeriodicIn: [false, false, false]
+    InitialRefinement: [3, 2, 2]
+    InitialGridPoints: [10, 10, 10]
+
+NumericalFlux:
+  InternalPenalty:
+    PenaltyParameter: 8. # p^2 / h
+  NonlinNumericalFlux:
+    InternalPenalty:
+      PenaltyParameter: 8. # p^2 / h
+
+
+Observers:
+  VolumeFileName: "NeutronStarBinaryVolume"
+  ReductionFileName: "NeutronStarBinaryReductions"
+
+NonlinearSolver:
+  ConvergenceCriteria:
+    MaxIterations: 5
+    RelativeResidual: 1e-10
+    AbsoluteResidual: 1e-15
+  SufficientDecrease: 0.5
+  Verbosity: Verbose
+
+LinearSolver:
+  ConvergenceCriteria:
+    MaxIterations: 300
+    RelativeResidual: 1e-3
+    AbsoluteResidual: 1e-15
+  Verbosity: Verbose
+
+EventsAndTriggers:
+  ? EveryNIterations:
+      N: 1
+  : - ObserveErrorNorms
+    - ObserveFields
