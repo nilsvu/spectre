@@ -24,13 +24,15 @@ struct ConstantDensityStar;
 struct TovStar;
 }  // namespace Solutions
 namespace AnalyticData {
+struct NeutronStarBinary;
 struct NeutronStarHeadOnCollision;
 }  // namespace AnalyticData
 namespace InterpolationTargetTags {
 struct StarCenter;
+struct StarBinaryCenters;
 }  // namespace InterpolationTargetTags
 }  // namespace Xcts
 
 template <typename System, typename InitialGuess,
-          typename... InterpolationTargetTags>
+          typename InterpolationTargetTags>
 struct Metavariables;

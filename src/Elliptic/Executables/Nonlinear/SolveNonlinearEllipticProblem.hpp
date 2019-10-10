@@ -18,6 +18,7 @@
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderCorrectionSystem.hpp"
 #include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
+#include "Elliptic/Systems/Xcts/InterpolationTargetTags/StarBinaryCenters.hpp"
 #include "Elliptic/Systems/Xcts/InterpolationTargetTags/StarCenter.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Elliptic/Triggers/EveryNIterations.hpp"
@@ -64,6 +65,7 @@
 #include "ParallelAlgorithms/NonlinearSolver/Globalization/LineSearch/LineSearch.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarBinary.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarHeadOnCollision.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
@@ -108,7 +110,7 @@ struct NonlinearNumericalFluxTag : db::SimpleTag {
 }  // namespace
 
 template <typename System, typename InitialGuess,
-          typename... InterpolationTargetTags>
+          typename InterpolationTargetTags>
 struct Metavariables {
   static constexpr size_t volume_dim = System::volume_dim;
   using initial_guess = InitialGuess;
@@ -196,7 +198,7 @@ struct Metavariables {
   using domain_frame = Frame::Inertial;
   static constexpr size_t domain_dim = 3;
   using temporal_id = NonlinearSolver::Tags::TemporalId;
-  using interpolation_target_tags = tmpl::list<InterpolationTargetTags...>;
+  using interpolation_target_tags = InterpolationTargetTags;
   using interpolator_source_vars =
       intrp::collect_interpolator_source_vars<interpolation_target_tags>;
   using interpolator_broadcast_tags =
@@ -210,9 +212,10 @@ struct Metavariables {
 
   // Collect all reduction tags for observers
   struct element_observation_type {};
-  using observed_reduction_data_tags = observers::collect_reduction_data_tags<
-      tmpl::flatten<tmpl::list<typename Event<events>::creatable_classes,
-                               linear_solver, nonlinear_solver>>>;
+  using observed_reduction_data_tags =
+      observers::collect_reduction_data_tags<tmpl::flatten<
+          tmpl::list<typename Event<events>::creatable_classes, linear_solver,
+                     nonlinear_solver, interpolation_target_tags>>>;
 
   // Specify all global synchronization points.
   enum class Phase { Initialization, Register, Solve, Exit };
