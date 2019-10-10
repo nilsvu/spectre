@@ -4,6 +4,7 @@
 set(LIBRARY XctsAnalyticData)
 
 set(LIBRARY_SOURCES
+  NeutronStarBinary.cpp
   NeutronStarHeadOnCollision.cpp
   )
 
@@ -14,5 +15,6 @@ target_link_libraries(
   INTERFACE DataStructures
   INTERFACE ErrorHandling
   INTERFACE Hydro
+  INTERFACE OrbitalDynamics
   INTERFACE XctsSolutions
   )
