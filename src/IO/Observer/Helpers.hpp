@@ -27,6 +27,18 @@ struct make_reduction_data_tag_impl {
   using type = tmpl::wrap<typename ReductionDataType::datum_list,
                           ::observers::Tags::ReductionData>;
 };
+
+template <class Component, class = cpp17::void_t<>>
+struct get_observe_fields {
+  using type = tmpl::list<>;
+};
+
+template <class Component>
+struct get_observe_fields<Component,
+                          cpp17::void_t<typename Component::observe_fields>> {
+  using type = typename Component::observe_fields;
+};
+
 }  // namespace detail
 
 /// Each Action that sends data to the reduction Observer must specify
@@ -46,4 +58,8 @@ using collect_reduction_data_tags =
 template <typename ReductionDataList>
 using make_reduction_data_tags = tmpl::remove_duplicates<tmpl::transform<
     ReductionDataList, detail::make_reduction_data_tag_impl<tmpl::_1>>>;
+
+template <class ComponentList>
+using collect_observe_fields = tmpl::remove_duplicates<tmpl::flatten<
+    tmpl::transform<ComponentList, detail::get_observe_fields<tmpl::_1>>>>;
 }  // namespace observers
