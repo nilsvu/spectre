@@ -209,11 +209,7 @@ struct UpwindFlux {
   // clang-tidy: non-const reference
   void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
 
-  // This is the data needed to compute the numerical flux.
-  // `dg::SendBoundaryFluxes` calls `package_data` to store these tags in a
-  // Variables. Local and remote values of this data are then combined in the
-  // `()` operator.
-  using package_tags = tmpl::list<
+  using package_field_tags = tmpl::list<
       gr::Tags::SpacetimeMetric<Dim, Frame::Inertial, DataVector>,
       Tags::Pi<Dim, Frame::Inertial>, Tags::Phi<Dim, Frame::Inertial>,
       gr::Tags::Lapse<DataVector>,
@@ -221,24 +217,25 @@ struct UpwindFlux {
       gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataVector>,
       Tags::ConstraintGamma1, Tags::ConstraintGamma2,
       ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<Dim, Frame::Inertial>>>;
+  using package_extra_tags = tmpl::list<>;
 
-  // These tags on the interface of the element are passed to
-  // `package_data` to provide the data needed to compute the numerical fluxes.
-  using argument_tags = tmpl::list<
-      gr::Tags::SpacetimeMetric<Dim, Frame::Inertial, DataVector>,
-      Tags::Pi<Dim, Frame::Inertial>, Tags::Phi<Dim, Frame::Inertial>,
-      gr::Tags::Lapse<DataVector>,
-      gr::Tags::Shift<Dim, Frame::Inertial, DataVector>,
-      gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataVector>,
-      Tags::ConstraintGamma1, Tags::ConstraintGamma2,
-      ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<Dim, Frame::Inertial>>>;
+  // We forward the arguments and perform all computations in the call operator
+  // below.
+  using argument_tags = package_field_tags;
 
-  // pseudo-interface: used internally by Algorithm infrastructure, not
-  // user-level code
-  // Following the not-null pointer to packaged_data, this function expects as
-  // arguments the databox types of the `argument_tags`.
   void package_data(
-      gsl::not_null<Variables<package_tags>*> packaged_data,
+      gsl::not_null<tnsr::aa<DataVector, Dim, Frame::Inertial>*>
+          packaged_spacetime_metric,
+      gsl::not_null<tnsr::aa<DataVector, Dim, Frame::Inertial>*> packaged_pi,
+      gsl::not_null<tnsr::iaa<DataVector, Dim, Frame::Inertial>*> packaged_phi,
+      gsl::not_null<Scalar<DataVector>*> packaged_lapse,
+      gsl::not_null<tnsr::I<DataVector, Dim, Frame::Inertial>*> packaged_shift,
+      gsl::not_null<tnsr::II<DataVector, Dim, Frame::Inertial>*>
+          packaged_inverse_spatial_metric,
+      gsl::not_null<Scalar<DataVector>*> packaged_gamma1,
+      gsl::not_null<Scalar<DataVector>*> packaged_gamma2,
+      gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*>
+          packaged_interface_unit_normal,
       const tnsr::aa<DataVector, Dim, Frame::Inertial>& spacetime_metric,
       const tnsr::aa<DataVector, Dim, Frame::Inertial>& pi,
       const tnsr::iaa<DataVector, Dim, Frame::Inertial>& phi,

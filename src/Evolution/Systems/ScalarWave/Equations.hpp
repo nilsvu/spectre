@@ -239,9 +239,10 @@ struct UpwindFlux {
   // `dg::SendBoundaryFluxes` calls `package_data` to store these tags in a
   // Variables. Local and remote values of this data are then combined in the
   // `()` operator.
-  using package_tags =
+  using package_field_tags =
       tmpl::list<::Tags::NormalDotFlux<Pi>, ::Tags::NormalDotFlux<Phi<Dim>>, Pi,
                  NormalTimesFluxPi>;
+  using package_extra_tags = tmpl::list<>;
 
   // These tags on the interface of the element are passed to
   // `package_data` to provide the data needed to compute the numerical fluxes.
@@ -254,7 +255,12 @@ struct UpwindFlux {
   // Following the not-null pointer to packaged_data, this function expects as
   // arguments the databox types of the `argument_tags`.
   void package_data(
-      gsl::not_null<Variables<package_tags>*> packaged_data,
+      gsl::not_null<Scalar<DataVector>*> packaged_n_dot_flux_pi,
+      gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*>
+          packaged_n_dot_flux_phi,
+      gsl::not_null<Scalar<DataVector>*> packaged_pi,
+      gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*>
+          packaged_n_times_flux_pi,
       const Scalar<DataVector>& normal_dot_flux_pi,
       const tnsr::i<DataVector, Dim, Frame::Inertial>& normal_dot_flux_phi,
       const Scalar<DataVector>& pi,

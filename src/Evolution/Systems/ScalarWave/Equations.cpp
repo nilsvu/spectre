@@ -136,7 +136,12 @@ void PenaltyFlux<Dim>::operator()(
 
 template <size_t Dim>
 void UpwindFlux<Dim>::package_data(
-    const gsl::not_null<Variables<package_tags>*> packaged_data,
+    const gsl::not_null<Scalar<DataVector>*> packaged_n_dot_flux_pi,
+    const gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*>
+        packaged_n_dot_flux_phi,
+    const gsl::not_null<Scalar<DataVector>*> packaged_pi,
+    const gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*>
+        packaged_n_times_flux_pi,
     const Scalar<DataVector>& normal_dot_flux_pi,
     const tnsr::i<DataVector, Dim, Frame::Inertial>& normal_dot_flux_phi,
     const Scalar<DataVector>& pi,
@@ -145,22 +150,15 @@ void UpwindFlux<Dim>::package_data(
   // Computes the contribution to the numerical flux from one side of the
   // interface.
   //
-  // The packaged_data stores:
-  // <Pi> = pi
-  // <NormalDotFlux<Pi>> = normal_dot_flux_pi
-  // <NormalTimesFluxPi_i> = normal_dot_flux_pi * n_i
-  // <NormalDotFlux<Phi>_i> = normal_dot_flux_phi_i
-  //
   // Note: when Upwind::operator() is called, an Element passes in its own
   // packaged data to fill the interior fields, and its neighbors packaged data
   // to fill the exterior fields. This introduces a sign flip for each normal
   // used in computing the exterior fields.
-  get<Pi>(*packaged_data) = pi;
-  get<::Tags::NormalDotFlux<Pi>>(*packaged_data) = normal_dot_flux_pi;
-  get<::Tags::NormalDotFlux<Phi<Dim>>>(*packaged_data) = normal_dot_flux_phi;
-  auto& normal_times_flux_pi = get<NormalTimesFluxPi>(*packaged_data);
+  *packaged_pi = pi;
+  *packaged_n_dot_flux_pi = normal_dot_flux_pi;
+  *packaged_n_dot_flux_phi = normal_dot_flux_phi;
   for (size_t d = 0; d < Dim; ++d) {
-    normal_times_flux_pi.get(d) =
+    packaged_n_times_flux_pi->get(d) =
         interface_unit_normal.get(d) * get(normal_dot_flux_pi);
   }
 }

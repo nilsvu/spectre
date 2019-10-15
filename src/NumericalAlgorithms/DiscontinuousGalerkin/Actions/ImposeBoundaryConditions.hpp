@@ -13,10 +13,6 @@
 #include "Domain/FaceNormal.hpp"
 #include "Domain/Tags.hpp"
 #include "ErrorHandling/Assert.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InterfaceActionHelpers.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/FluxCommunicationTypes.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "Parallel/Invoke.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
@@ -69,7 +65,6 @@ namespace Actions {
 /// - Adds: nothing
 /// - Removes: nothing
 /// - Modifies:
-///      - Tags::VariablesBoundaryData
 ///      - External<typename system::variables_tag>
 ///
 /// \see ReceiveDataForFluxes
@@ -113,46 +108,6 @@ struct ImposeDirichletBoundaryConditions {
   }
 
  private:
-  template <typename DbTags>
-  static void contribute_data_to_mortar(
-      const gsl::not_null<db::DataBox<DbTags>*> box,
-      const Parallel::ConstGlobalCache<Metavariables>& cache) noexcept {
-    using system = typename Metavariables::system;
-    constexpr size_t volume_dim = system::volume_dim;
-
-    const auto& element = db::get<Tags::Element<volume_dim>>(*box);
-    const auto& temporal_id =
-        db::get<typename Metavariables::temporal_id>(*box);
-    const auto& normal_dot_numerical_flux_computer =
-        get<typename Metavariables::normal_dot_numerical_flux>(cache);
-
-    auto interior_data = DgActions_detail::compute_local_mortar_data(
-        *box, normal_dot_numerical_flux_computer,
-        Tags::BoundaryDirectionsInterior<volume_dim>{}, Metavariables{});
-
-    auto exterior_data = DgActions_detail::compute_packaged_data(
-        *box, normal_dot_numerical_flux_computer,
-        Tags::BoundaryDirectionsExterior<volume_dim>{}, Metavariables{});
-
-    for (const auto& direction : element.external_boundaries()) {
-      const auto mortar_id = std::make_pair(
-          direction, ElementId<volume_dim>::external_boundary_id());
-
-      db::mutate<Tags::VariablesBoundaryData>(
-          box,
-          [
-            &mortar_id, &temporal_id, &direction, &interior_data, &exterior_data
-          ](const gsl::not_null<
-              db::item_type<Tags::VariablesBoundaryData, DbTags>*>
-                mortar_data) noexcept {
-            mortar_data->at(mortar_id).local_insert(
-                temporal_id, std::move(interior_data.at(direction)));
-            mortar_data->at(mortar_id).remote_insert(
-                temporal_id, std::move(exterior_data.at(direction)));
-          });
-    }
-  }
-
   template <size_t VolumeDim, typename DbTags>
   static std::tuple<db::DataBox<DbTags>&&> apply_impl(
       db::DataBox<DbTags>& box,
@@ -194,7 +149,6 @@ struct ImposeDirichletBoundaryConditions {
                                 Tags::Coordinates<VolumeDim, Frame::Inertial>>>(
             box));
 
-    contribute_data_to_mortar(make_not_null(&box), cache);
     return std::forward_as_tuple(std::move(box));
   }
 
@@ -259,7 +213,6 @@ struct ImposeDirichletBoundaryConditions {
                                 Tags::Coordinates<VolumeDim, Frame::Inertial>>>(
             box));
 
-    contribute_data_to_mortar(make_not_null(&box), cache);
     return std::forward_as_tuple(std::move(box));
   }
 };
