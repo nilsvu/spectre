@@ -10,23 +10,11 @@
 
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "Domain/Tags.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InterfaceActionHelpers.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/FluxCommunicationTypes.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/LinearSolver/Tags.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
-
-/// \cond
-namespace Tags {
-template <typename Tag>
-struct Magnitude;
-}  // namespace Tags
-// IWYU pragma: no_forward_declare db::DataBox
-/// \endcond
 
 namespace elliptic {
 namespace dg {
@@ -55,40 +43,24 @@ namespace Actions {
  *   Tags::Interface<Tags::BoundaryDirectionsExterior<volume_dim>, Tag>`
  *
  * Uses:
- * - Metavariables:
- *   - `normal_dot_numerical_flux`
- *   - `temporal_id`
  * - System:
  *   - `volume_dim`
  *   - `variables_tag`
  *   - `primal_fields`
- * - ConstGlobalCache:
- *   - `normal_dot_numerical_flux`
  * - DataBox:
- *   - `Tags::Element<volume_dim>`
- *   - `temporal_id`
- *   - `Tags::BoundaryDirectionsInterior<volume_dim>`
- *   - `Tags::BoundaryDirectionsExterior<volume_dim>`
  *   - `interior<variables_tag>`
- *   - `exterior<variables_tag>`
- *   - `interior<normal_dot_numerical_flux::type::argument_tags>`
- *   - `exterior<normal_dot_numerical_flux::type::argument_tags>`
  *
  * DataBox changes:
  * - Modifies:
  *   - `exterior<variables_tag>`
- *   - `Tags::VariablesBoundaryData`
  */
 template <typename Metavariables>
 struct ImposeHomogeneousDirichletBoundaryConditions {
-  using const_global_cache_tags =
-      tmpl::list<typename Metavariables::normal_dot_numerical_flux>;
-
   template <typename DbTags, typename... InboxTags, typename ArrayIndex,
             typename ActionList, typename ParallelComponent>
   static auto apply(db::DataBox<DbTags>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::ConstGlobalCache<Metavariables>& cache,
+                    const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
@@ -139,38 +111,6 @@ struct ImposeHomogeneousDirichletBoundaryConditions {
         get<::Tags::Interface<::Tags::BoundaryDirectionsInterior<volume_dim>,
                               typename system::variables_tag>>(box));
 
-    const auto& element = db::get<::Tags::Element<volume_dim>>(box);
-    const auto& temporal_id = db::get<typename Metavariables::temporal_id>(box);
-
-    const auto& normal_dot_numerical_flux_computer =
-        get<typename Metavariables::normal_dot_numerical_flux>(cache);
-
-    auto interior_data = DgActions_detail::compute_local_mortar_data(
-        box, normal_dot_numerical_flux_computer,
-        ::Tags::BoundaryDirectionsInterior<volume_dim>{}, Metavariables{});
-
-    auto exterior_data = DgActions_detail::compute_packaged_data(
-        box, normal_dot_numerical_flux_computer,
-        ::Tags::BoundaryDirectionsExterior<volume_dim>{}, Metavariables{});
-
-    // Store local and packaged data on the mortars
-    for (const auto& direction : element.external_boundaries()) {
-      const auto mortar_id = std::make_pair(
-          direction, ElementId<volume_dim>::external_boundary_id());
-
-      db::mutate<::Tags::VariablesBoundaryData>(
-          make_not_null(&box),
-          [
-            &mortar_id, &temporal_id, &direction, &interior_data, &exterior_data
-          ](const gsl::not_null<
-              db::item_type<::Tags::VariablesBoundaryData, DbTags>*>
-                mortar_data) noexcept {
-            mortar_data->at(mortar_id).local_insert(
-                temporal_id, std::move(interior_data.at(direction)));
-            mortar_data->at(mortar_id).remote_insert(
-                temporal_id, std::move(exterior_data.at(direction)));
-          });
-    }
     return std::forward_as_tuple(std::move(box));
   }
 };

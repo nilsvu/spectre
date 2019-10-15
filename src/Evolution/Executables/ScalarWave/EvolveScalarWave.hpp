@@ -22,11 +22,11 @@
 #include "IO/Observer/Helpers.hpp"            // IWYU pragma: keep
 #include "IO/Observer/ObserverComponent.hpp"  // IWYU pragma: keep
 #include "IO/Observer/RegisterObservers.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyBoundaryFluxesLocalTimeStepping.hpp"  // IWYU pragma: keep
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ComputeNonconservativeBoundaryFluxes.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"  // IWYU pragma: keep
+#include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder/StrongFirstOrder.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder/StrongFirstOrderLocalTimeStepping.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
@@ -34,6 +34,7 @@
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
+#include "ParallelAlgorithms/Actions/MutateApply.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeInterfaces.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeMortars.hpp"
@@ -87,6 +88,16 @@ struct EvolutionMetavars {
   using boundary_condition_tag = initial_data_tag;
   using normal_dot_numerical_flux =
       Tags::NumericalFlux<ScalarWave::UpwindFlux<Dim>>;
+  using time_stepper_tag = Tags::TimeStepper<
+      tmpl::conditional_t<local_time_stepping, LtsTimeStepper, TimeStepper>>;
+  using boundary_scheme = tmpl::conditional_t<
+      local_time_stepping,
+      dg::BoundarySchemes::StrongFirstOrderLocalTimeStepping<
+          Dim, typename system::variables_tag, normal_dot_numerical_flux,
+          Tags::TimeStepId, time_stepper_tag>,
+      dg::BoundarySchemes::StrongFirstOrder<Dim, typename system::variables_tag,
+                                            normal_dot_numerical_flux,
+                                            Tags::TimeStepId>>;
 
   // public for use by the Charm++ registration code
   using events = tmpl::list<
@@ -100,9 +111,7 @@ struct EvolutionMetavars {
   // A tmpl::list of tags to be added to the ConstGlobalCache by the
   // metavariables
   using const_global_cache_tags =
-      tmpl::list<initial_data_tag,
-                 Tags::TimeStepper<tmpl::conditional_t<
-                     local_time_stepping, LtsTimeStepper, TimeStepper>>,
+      tmpl::list<initial_data_tag, normal_dot_numerical_flux, time_stepper_tag,
                  Tags::EventsAndTriggers<events, triggers>>;
 
   struct ObservationType {};
@@ -120,18 +129,17 @@ struct EvolutionMetavars {
   using step_actions = tmpl::flatten<tmpl::list<
       dg::Actions::ComputeNonconservativeBoundaryFluxes<
           Tags::InternalDirections<Dim>>,
-      dg::Actions::SendDataForFluxes<EvolutionMetavars>,
+      dg::Actions::SendDataForFluxes<boundary_scheme>,
       Actions::ComputeTimeDerivative,
       dg::Actions::ComputeNonconservativeBoundaryFluxes<
           Tags::BoundaryDirectionsInterior<Dim>>,
       dg::Actions::ImposeDirichletBoundaryConditions<EvolutionMetavars>,
-      dg::Actions::ReceiveDataForFluxes<EvolutionMetavars>,
-      tmpl::conditional_t<local_time_stepping, tmpl::list<>,
-                          dg::Actions::ApplyFluxes>,
-      Actions::RecordTimeStepperData,
+      dg::Actions::ReceiveDataForFluxes<boundary_scheme, true>,
       tmpl::conditional_t<local_time_stepping,
-                          dg::Actions::ApplyBoundaryFluxesLocalTimeStepping,
-                          tmpl::list<>>,
+                          tmpl::list<Actions::RecordTimeStepperData,
+                                     Actions::MutateApply<boundary_scheme>>,
+                          tmpl::list<Actions::MutateApply<boundary_scheme>,
+                                     Actions::RecordTimeStepperData>>,
       Actions::UpdateU
       // To add filtering to the executable add the action:
       //
@@ -158,7 +166,7 @@ struct EvolutionMetavars {
               typename system::variables_tag>,
           dg::Initialization::slice_tags_to_exterior<>>,
       Initialization::Actions::Evolution<EvolutionMetavars>,
-      dg::Actions::InitializeMortars<EvolutionMetavars>,
+      dg::Actions::InitializeMortars<boundary_scheme>,
       Initialization::Actions::DiscontinuousGalerkin<EvolutionMetavars>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
