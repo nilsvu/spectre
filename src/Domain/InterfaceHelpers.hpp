@@ -127,3 +127,15 @@ SPECTRE_ALWAYS_INLINE constexpr auto interface_apply(
       std::forward<InterfaceInvokable>(interface_invokable), box,
       ArgumentTags{}, std::forward<ExtraArgs>(extra_args)...);
 }
+
+template <typename InterfaceInvokable, typename DirectionsTag,
+          typename DbTagsList, typename... ExtraArgs,
+          typename ArgumentTags = typename InterfaceInvokable::argument_tags,
+          typename VolumeTags = get_volume_tags<InterfaceInvokable>>
+SPECTRE_ALWAYS_INLINE constexpr auto interface_apply(
+    const db::DataBox<DbTagsList>& box, ExtraArgs&&... extra_args) noexcept {
+  return InterfaceHelpers_detail::interface_apply_impl<DirectionsTag,
+                                                       VolumeTags>(
+      &InterfaceInvokable::apply, box, ArgumentTags{},
+      std::forward<ExtraArgs>(extra_args)...);
+}
