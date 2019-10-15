@@ -42,7 +42,7 @@ void test_hll_flux_tags() noexcept {
                                  expected_type_argument_tags>,
                 "Failed testing dg::NumericalFluxes::Hll::argument_tags");
 
-  using expected_type_package_tags = tmpl::list<
+  using expected_type_package_field_tags = tmpl::list<
       Tags::NormalDotFlux<TestHelpers::NumericalFluxes::Tags::Variable1>,
       Tags::NormalDotFlux<TestHelpers::NumericalFluxes::Tags::Variable2<Dim>>,
       Tags::NormalDotFlux<TestHelpers::NumericalFluxes::Tags::Variable3<Dim>>,
@@ -56,9 +56,9 @@ void test_hll_flux_tags() noexcept {
       typename dg::NumericalFluxes::Hll<
           TestHelpers::NumericalFluxes::System<Dim>>::MaxSignalSpeed>;
 
-  static_assert(cpp17::is_same_v<typename hll_flux::package_tags,
-                                 expected_type_package_tags>,
-                "Failed testing dg::NumericalFluxes::Hll::package_tags");
+  static_assert(cpp17::is_same_v<typename hll_flux::package_field_tags,
+                                 expected_type_package_field_tags>,
+                "Failed testing dg::NumericalFluxes::Hll::package_field_tags");
 }
 
 template <size_t Dim>
@@ -85,29 +85,23 @@ void apply_hll_flux(
     const tnsr::Ij<DataVector, Dim>& var_4_ext) noexcept {
   using hll_flux =
       dg::NumericalFluxes::Hll<TestHelpers::NumericalFluxes::System<Dim>>;
+  const DataVector& used_for_size = *(n_dot_f_1_int.begin());
 
   hll_flux flux_computer{};
 
-  Variables<typename hll_flux::package_tags> packaged_data_interior(
-      n_dot_f_1_int.begin()->size(),
-      std::numeric_limits<double>::signaling_NaN());
-  flux_computer.package_data(
-      make_not_null(&packaged_data_interior), n_dot_f_1_int, n_dot_f_2_int,
-      n_dot_f_3_int, n_dot_f_4_int, var_1_int, var_2_int, var_3_int, var_4_int,
+  auto packaged_data_interior = TestHelpers::NumericalFluxes::get_packaged_data(
+      flux_computer, used_for_size, n_dot_f_1_int, n_dot_f_2_int, n_dot_f_3_int,
+      n_dot_f_4_int, var_1_int, var_2_int, var_3_int, var_4_int,
       TestHelpers::NumericalFluxes::characteristic_speeds(var_1_int, var_2_int,
                                                           var_3_int));
-
-  Variables<typename hll_flux::package_tags> packaged_data_exterior(
-      n_dot_f_1_int.begin()->size(),
-      std::numeric_limits<double>::signaling_NaN());
-  flux_computer.package_data(
-      make_not_null(&packaged_data_exterior), minus_n_dot_f_1_ext,
-      minus_n_dot_f_2_ext, minus_n_dot_f_3_ext, minus_n_dot_f_4_ext, var_1_ext,
-      var_2_ext, var_3_ext, var_4_ext,
+  auto packaged_data_exterior = TestHelpers::NumericalFluxes::get_packaged_data(
+      flux_computer, used_for_size, minus_n_dot_f_1_ext, minus_n_dot_f_2_ext,
+      minus_n_dot_f_3_ext, minus_n_dot_f_4_ext, var_1_ext, var_2_ext, var_3_ext,
+      var_4_ext,
       TestHelpers::NumericalFluxes::characteristic_speeds(var_1_ext, var_2_ext,
                                                           var_3_ext));
 
-  TestHelpers::NumericalFluxes::apply_numerical_flux(
+  dg::NumericalFluxes::normal_dot_numerical_fluxes(
       flux_computer, packaged_data_interior, packaged_data_exterior,
       n_dot_num_f_1, n_dot_num_f_2, n_dot_num_f_3, n_dot_num_f_4);
 }

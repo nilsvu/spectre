@@ -23,9 +23,9 @@
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
 #include "IO/Observer/RegisterObservers.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ComputeNonconservativeBoundaryFluxes.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/CollectDataForFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder/StrongFirstOrder.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
@@ -80,14 +80,17 @@ struct Metavariables {
       LinearSolver::Gmres<Metavariables, typename system::fields_tag>;
   using temporal_id = LinearSolver::Tags::IterationId;
 
-  // This is needed for InitializeMortars and will be removed ASAP.
-  static constexpr bool local_time_stepping = false;
-
   // Parse numerical flux parameters from the input file to store in the cache.
   using normal_dot_numerical_flux = Tags::NumericalFlux<
       elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
           volume_dim, fluxes_computer_tag, typename system::primal_variables,
           typename system::auxiliary_variables>>;
+  // Specify the DG boundary scheme. We use the strong first-order scheme here
+  // that only requires us to compute normals dotted into the first-order
+  // fluxes.
+  using boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
+      volume_dim, typename system::variables_tag, normal_dot_numerical_flux,
+      LinearSolver::Tags::IterationId>;
 
   // Collect events and triggers
   // (public for use by the Charm++ registration code)
@@ -106,6 +109,7 @@ struct Metavariables {
   // Collect all items to store in the cache.
   using const_global_cache_tags =
       tmpl::list<analytic_solution_tag, fluxes_computer_tag,
+                 normal_dot_numerical_flux,
                  Tags::EventsAndTriggers<events, triggers>>;
 
   // Collect all reduction tags for observers
@@ -130,7 +134,7 @@ struct Metavariables {
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           Metavariables>,
       typename linear_solver::initialize_element,
-      dg::Actions::InitializeMortars<Metavariables>,
+      dg::Actions::InitializeMortars<boundary_scheme>,
       elliptic::dg::Actions::InitializeFluxes<Metavariables>,
       // Initialization is done. Avoid introducing an extra phase by
       // advancing the linear solver to the first step here.
@@ -158,15 +162,21 @@ struct Metavariables {
                   tmpl::list<
                       Actions::RunEventsAndTriggers,
                       LinearSolver::Actions::TerminateIfConverged,
-                      dg::Actions::SendDataForFluxes<Metavariables>,
+                      dg::Actions::CollectDataForFluxes<
+                          boundary_scheme,
+                          ::Tags::InternalDirections<volume_dim>>,
+                      dg::Actions::SendDataForFluxes<boundary_scheme>,
                       Actions::MutateApply<elliptic::FirstOrderOperator<
                           volume_dim, LinearSolver::Tags::OperatorAppliedTo,
                           typename system::variables_tag>>,
                       elliptic::dg::Actions::
                           ImposeHomogeneousDirichletBoundaryConditions<
                               Metavariables>,
-                      dg::Actions::ReceiveDataForFluxes<Metavariables>,
-                      dg::Actions::ApplyFluxes,
+                      dg::Actions::CollectDataForFluxes<
+                          boundary_scheme,
+                          ::Tags::BoundaryDirectionsInterior<volume_dim>>,
+                      dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
+                      Actions::MutateApply<boundary_scheme>,
                       typename linear_solver::perform_step,
                       typename linear_solver::prepare_step>>>>>,
       typename linear_solver::component_list,

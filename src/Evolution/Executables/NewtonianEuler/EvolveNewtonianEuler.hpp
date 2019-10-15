@@ -30,10 +30,11 @@
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
 #include "IO/Observer/RegisterObservers.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyBoundaryFluxesLocalTimeStepping.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ApplyFluxes.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/CollectDataForFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder/StrongFirstOrder.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder/StrongFirstOrderLocalTimeStepping.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/Hll.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
@@ -149,6 +150,17 @@ struct EvolutionMetavars {
       tmpl::append<step_choosers_common, step_choosers_for_step_only,
                    step_choosers_for_slab_only>>;
 
+  using time_stepper_tag = Tags::TimeStepper<
+      tmpl::conditional_t<local_time_stepping, LtsTimeStepper, TimeStepper>>;
+  using boundary_scheme = tmpl::conditional_t<
+      local_time_stepping,
+      dg::BoundarySchemes::StrongFirstOrderLocalTimeStepping<
+          Dim, typename system::variables_tag, normal_dot_numerical_flux,
+          Tags::TimeStepId, time_stepper_tag>,
+      dg::BoundarySchemes::StrongFirstOrder<Dim, typename system::variables_tag,
+                                            normal_dot_numerical_flux,
+                                            Tags::TimeStepId>>;
+
   using events = tmpl::flatten<tmpl::list<
       tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
                           dg::Events::Registrars::ObserveErrorNorms<
@@ -173,7 +185,9 @@ struct EvolutionMetavars {
 
   using step_actions = tmpl::flatten<tmpl::list<
       Actions::ComputeVolumeFluxes,
-      dg::Actions::SendDataForFluxes<EvolutionMetavars>,
+      dg::Actions::CollectDataForFluxes<boundary_scheme,
+                                        ::Tags::InternalDirections<volume_dim>>,
+      dg::Actions::SendDataForFluxes<boundary_scheme>,
       tmpl::conditional_t<has_source_terms, Actions::ComputeVolumeSources,
                           tmpl::list<>>,
       Actions::ComputeTimeDerivative,
@@ -181,13 +195,14 @@ struct EvolutionMetavars {
           evolution::is_analytic_solution_v<initial_data>,
           dg::Actions::ImposeDirichletBoundaryConditions<EvolutionMetavars>,
           tmpl::list<>>,
-      dg::Actions::ReceiveDataForFluxes<EvolutionMetavars>,
-      tmpl::conditional_t<local_time_stepping, tmpl::list<>,
-                          dg::Actions::ApplyFluxes>,
-      Actions::RecordTimeStepperData<>,
+      dg::Actions::CollectDataForFluxes<
+          boundary_scheme, ::Tags::BoundaryDirectionsInterior<volume_dim>>,
+      dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
       tmpl::conditional_t<local_time_stepping,
-                          dg::Actions::ApplyBoundaryFluxesLocalTimeStepping,
-                          tmpl::list<>>,
+                          tmpl::list<Actions::RecordTimeStepperData<>,
+                                     Actions::MutateApply<boundary_scheme>>,
+                          tmpl::list<Actions::MutateApply<boundary_scheme>,
+                                     Actions::RecordTimeStepperData<>>>,
       Actions::UpdateU<>, Limiters::Actions::SendData<EvolutionMetavars>,
       Limiters::Actions::Limit<EvolutionMetavars>,
       // Conservative `UpdatePrimitives` expects system to possess
@@ -225,7 +240,7 @@ struct EvolutionMetavars {
               tmpl::list<evolution::Tags::AnalyticCompute<
                   Dim, initial_data_tag, analytic_variables_tags>>>,
           tmpl::list<>>,
-      dg::Actions::InitializeMortars<EvolutionMetavars>,
+      dg::Actions::InitializeMortars<boundary_scheme>,
       Initialization::Actions::DiscontinuousGalerkin<EvolutionMetavars>,
       Initialization::Actions::Minmod<Dim>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
@@ -264,8 +279,7 @@ struct EvolutionMetavars {
   using const_global_cache_tags = tmpl::list<
       initial_data_tag,
       tmpl::conditional_t<has_source_terms, source_term_tag, tmpl::list<>>,
-      Tags::TimeStepper<tmpl::conditional_t<local_time_stepping, LtsTimeStepper,
-                                            TimeStepper>>,
+      normal_dot_numerical_flux, time_stepper_tag,
       Tags::EventsAndTriggers<events, triggers>>;
 
   static constexpr OptionString help{

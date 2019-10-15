@@ -84,10 +84,11 @@ struct Hll {
     static std::string name() noexcept { return "MaxSignalSpeed"; }
   };
 
-  using package_tags = tmpl::append<
+  using package_field_tags = tmpl::append<
       db::split_tag<db::add_tag_prefix<::Tags::NormalDotFlux, variables_tag>>,
       db::split_tag<variables_tag>,
       tmpl::list<MinSignalSpeed, MaxSignalSpeed>>;
+  using package_extra_tags = tmpl::list<>;
 
   using argument_tags =
       tmpl::push_back<tmpl::append<db::split_tag<db::add_tag_prefix<
@@ -96,26 +97,29 @@ struct Hll {
                       char_speeds_tag>;
 
  private:
-  template <typename VariablesTagList, typename NormalDoFluxTagList>
+  template <typename VariablesTagList, typename NormalDotFluxTagList>
   struct package_data_helper;
 
   template <typename... VariablesTags, typename... NormalDotFluxTags>
   struct package_data_helper<tmpl::list<VariablesTags...>,
                              tmpl::list<NormalDotFluxTags...>> {
     static void function(
-        const gsl::not_null<Variables<package_tags>*> packaged_data,
+        const gsl::not_null<
+            db::item_type<NormalDotFluxTags>*>... packaged_n_dot_f,
+        const gsl::not_null<db::item_type<VariablesTags>*>... packaged_u,
+        const gsl::not_null<Scalar<DataVector>*> packaged_min_signal_speed,
+        const gsl::not_null<Scalar<DataVector>*> packaged_max_signal_speed,
         const db::const_item_type<NormalDotFluxTags>&... n_dot_f_to_package,
         const db::const_item_type<VariablesTags>&... u_to_package,
         const db::const_item_type<char_speeds_tag>&
             characteristic_speeds) noexcept {
-      expand_pack((get<VariablesTags>(*packaged_data) = u_to_package)...);
-      expand_pack(
-          (get<NormalDotFluxTags>(*packaged_data) = n_dot_f_to_package)...);
+      expand_pack((*packaged_u = u_to_package)...);
+      expand_pack((*packaged_n_dot_f = n_dot_f_to_package)...);
 
-      get<MinSignalSpeed>(*packaged_data) = make_with_value<Scalar<DataVector>>(
+      *packaged_min_signal_speed = make_with_value<Scalar<DataVector>>(
           characteristic_speeds[0],
           std::numeric_limits<double>::signaling_NaN());
-      get<MaxSignalSpeed>(*packaged_data) = make_with_value<Scalar<DataVector>>(
+      *packaged_max_signal_speed = make_with_value<Scalar<DataVector>>(
           characteristic_speeds[0],
           std::numeric_limits<double>::signaling_NaN());
 
@@ -126,14 +130,14 @@ struct Hll {
         const double local_min_signal_speed = (*std::min_element(
             characteristic_speeds.begin(), characteristic_speeds.end(),
             [&s](const auto& a, const auto& b) { return a[s] < b[s]; }))[s];
-        get(get<MinSignalSpeed>(*packaged_data))[s] =
+        get(*packaged_min_signal_speed)[s] =
             std::min(local_min_signal_speed, 0.0);
 
         // Likewise, local_max_signal_speed >= 0.0
         const double local_max_signal_speed = (*std::max_element(
             characteristic_speeds.begin(), characteristic_speeds.end(),
             [&s](const auto& a, const auto& b) { return a[s] < b[s]; }))[s];
-        get(get<MaxSignalSpeed>(*packaged_data))[s] =
+        get(*packaged_max_signal_speed)[s] =
             std::max(local_max_signal_speed, 0.0);
       }
     }
