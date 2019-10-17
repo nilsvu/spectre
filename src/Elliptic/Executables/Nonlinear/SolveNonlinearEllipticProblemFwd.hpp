@@ -16,6 +16,13 @@ struct ProductOfSinusoids;
 }  // namespace Solutions
 }  // namespace Poisson
 
+namespace Punctures {
+struct FirstOrderSystem;
+namespace AnalyticData {
+struct MultiplePunctures;
+}  // namespace Solutions
+}  // namespace Poisson
+
 namespace Xcts {
 template <size_t Dim, Equations EnabledEquations>
 struct FirstOrderSystem;

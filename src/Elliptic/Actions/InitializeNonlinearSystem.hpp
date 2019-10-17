@@ -22,8 +22,15 @@
 namespace elliptic {
 namespace Actions {
 
+template <typename Metavariables>
 struct InitializeNonlinearSystem {
-  template <typename DataBox, typename... InboxTags, typename Metavariables,
+ private:
+  using initial_guess_tag = typename Metavariables::initial_guess_tag;
+
+ public:
+  using const_global_cache_tags = tmpl::list<initial_guess_tag>;
+
+  template <typename DataBox, typename... InboxTags,
             size_t Dim, typename ActionList, typename ParallelComponent>
   static auto apply(DataBox& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
@@ -65,10 +72,9 @@ struct InitializeNonlinearSystem {
 
     // Retrieve initial guess for the fields
     auto nonlinear_fields = variables_from_tagged_tuple(
-        Parallel::get<typename Metavariables::initial_guess_tag>(cache)
-            .variables(
-                inertial_coords,
-                db::get_variables_tags_list<initial_nonlinear_fields_tag>{}));
+        Parallel::get<initial_guess_tag>(cache).variables(
+            inertial_coords,
+            db::get_variables_tags_list<initial_nonlinear_fields_tag>{}));
 
     // Retrieve the sources of the elliptic system from the analytic solution,
     // which defines the problem we want to solve.
@@ -77,10 +83,10 @@ struct InitializeNonlinearSystem {
     db::item_type<nonlinear_fixed_sources_tag> nonlinear_fixed_sources{
         num_grid_points, 0.};
     nonlinear_fixed_sources.assign_subset(
-        Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
-            .variables(inertial_coords,
-                       db::wrap_tags_in<::Tags::FixedSource,
-                                        typename system::primal_fields>{}));
+        Parallel::get<initial_guess_tag>(cache).variables(
+            inertial_coords,
+            db::wrap_tags_in<::Tags::FixedSource,
+                             typename system::primal_fields>{}));
 
     // The nonlinear solver computes this in each step
     db::item_type<operator_applied_to_nonlinear_fields_tag>

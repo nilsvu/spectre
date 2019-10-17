@@ -17,6 +17,7 @@
 #include "Elliptic/FirstOrderComputeTags.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderCorrectionSystem.hpp"
+#include "Elliptic/Systems/Punctures/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Xcts/InterpolationTargetTags/StarBinaryCenters.hpp"
 #include "Elliptic/Systems/Xcts/InterpolationTargetTags/StarCenter.hpp"
@@ -65,6 +66,7 @@
 #include "ParallelAlgorithms/NonlinearSolver/Globalization/LineSearch/LineSearch.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
+#include "PointwiseFunctions/AnalyticData/Punctures/MultiplePunctures.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarBinary.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarHeadOnCollision.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
@@ -185,13 +187,17 @@ struct Metavariables {
   using observe_fields = tmpl::append<
       all_fields, db::wrap_tags_in<::Tags::Source, all_fields>,
       observers::collect_observe_fields<tmpl::list<initial_guess>>>;
-  using analytic_solution_fields = all_fields;
-  using events = tmpl::list<
+  using analytic_solution_fields =
+      tmpl::conditional_t<is_analytic_data_v<InitialGuess>, tmpl::list<>,
+                          all_fields>;
+  using events = tmpl::flatten<tmpl::list<
       dg::Events::Registrars::ObserveFields<
           volume_dim, NonlinearSolver::Tags::IterationId, observe_fields,
           analytic_solution_fields>,
-      dg::Events::Registrars::ObserveErrorNorms<
-          NonlinearSolver::Tags::IterationId, analytic_solution_fields>>;
+      tmpl::conditional_t<
+          is_analytic_data_v<InitialGuess>, tmpl::list<>,
+          dg::Events::Registrars::ObserveErrorNorms<
+              NonlinearSolver::Tags::IterationId, analytic_solution_fields>>>>;
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       NonlinearSolver::Tags::IterationId>>;
 
@@ -200,6 +206,8 @@ struct Metavariables {
   static constexpr size_t domain_dim = 3;
   using temporal_id = NonlinearSolver::Tags::TemporalId;
   using interpolation_target_tags = InterpolationTargetTags;
+  static constexpr bool enable_interpolation =
+      tmpl::size<interpolation_target_tags>::value > 0;
   using interpolator_source_vars =
       intrp::collect_interpolator_source_vars<interpolation_target_tags>;
   using interpolator_broadcast_tags =
@@ -226,9 +234,10 @@ struct Metavariables {
       dg::Actions::InitializeDomain<volume_dim>,
       intrp::Actions::make_initialize_broadcast_actions<
           interpolation_target_tags>,
-      elliptic::Actions::InitializeNonlinearSystem,
-      elliptic::Actions::InitializeAnalyticSolution<analytic_solution_tag,
-                                                    analytic_solution_fields>,
+      elliptic::Actions::InitializeNonlinearSystem<Metavariables>,
+      tmpl::conditional_t<is_analytic_data_v<InitialGuess>, tmpl::list<>,
+                          elliptic::Actions::InitializeAnalyticSolution<
+                              analytic_solution_tag, analytic_solution_fields>>,
       dg::Actions::InitializeInterfaces<
           system,
           dg::Initialization::slice_tags_to_face<nonlinear_fields_tag,
@@ -259,10 +268,14 @@ struct Metavariables {
       Parallel::Actions::TerminatePhase>;
 
   using build_nonlinear_operator = tmpl::list<
-      intrp::Actions::Interpolate<NonlinearSolver::Tags::TemporalId,
-                                  interpolator_source_vars>,
-      intrp::Actions::ReceiveBroadcast<NonlinearSolver::Tags::TemporalId,
-                                       interpolator_broadcast_tags>,
+      tmpl::conditional_t<enable_interpolation,
+                          tmpl::list<intrp::Actions::Interpolate<
+                                         NonlinearSolver::Tags::TemporalId,
+                                         interpolator_source_vars>,
+                                     intrp::Actions::ReceiveBroadcast<
+                                         NonlinearSolver::Tags::TemporalId,
+                                         interpolator_broadcast_tags>>,
+                          tmpl::list<>>,
       dg::Actions::SendDataForFluxes<nonlinear_boundary_scheme>,
       Actions::MutateApply<elliptic::FirstOrderOperator<
           volume_dim, NonlinearSolver::Tags::OperatorAppliedTo,
@@ -299,7 +312,10 @@ struct Metavariables {
 
           Parallel::PhaseActions<
               Phase, Phase::Register,
-              tmpl::list<intrp::Actions::RegisterElementWithInterpolator,
+              tmpl::list<tmpl::conditional_t<
+                             enable_interpolation,
+                             intrp::Actions::RegisterElementWithInterpolator,
+                             tmpl::list<>>,
                          observers::Actions::RegisterWithObservers<
                              observers::RegisterObservers<
                                  NonlinearSolver::Tags::IterationId,
@@ -332,9 +348,12 @@ struct Metavariables {
       typename nonlinear_solver::component_list,
       observers::Observer<Metavariables>,
       observers::ObserverWriter<Metavariables>,
-      intrp::Interpolator<Metavariables>,
-      intrp::make_interpolation_targets<interpolation_target_tags,
-                                        Metavariables>>>;
+      tmpl::conditional_t<
+          enable_interpolation,
+          tmpl::list<intrp::Interpolator<Metavariables>,
+                     intrp::make_interpolation_targets<
+                         interpolation_target_tags, Metavariables>>,
+          tmpl::list<>>>>;
 
   // Specify the transitions between phases.
   static Phase determine_next_phase(
