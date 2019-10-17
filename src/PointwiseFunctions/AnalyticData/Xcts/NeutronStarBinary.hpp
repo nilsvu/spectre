@@ -14,6 +14,7 @@
 #include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/TovStar.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Vacuum.hpp"
@@ -36,7 +37,7 @@ class er;  // IWYU pragma: keep
 namespace Xcts {
 namespace AnalyticData {
 
-class NeutronStarBinary {
+class NeutronStarBinary : public MarkAsAnalyticData {
  public:
   using equation_of_state_type = EquationsOfState::PolytropicFluid<true>;
 
