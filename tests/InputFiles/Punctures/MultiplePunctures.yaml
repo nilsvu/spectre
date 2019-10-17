@@ -1,0 +1,72 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveMultiplePunctures
+# Check: execute
+# ExpectedOutput:
+#   Punctures3DReductions.h5
+#   Punctures3DVolume0.h5
+
+AnalyticSolution:
+  MultiplePunctures:
+    # Punctures:
+    #   - Mass: 0.5
+    #     Center: [-3, 0, 0]
+    #     Momentum: [0, -0.2, 0]
+    #     Spin: [0, 0, 0]
+    #   - Mass: 0.5
+    #     Center: [3, 0, 0]
+    #     Momentum: [0, 0.2, 0]
+    #     Spin: [0, 0, 0]
+    Punctures:
+      - Mass: 0.2691
+        Center: [0.0152, -0.6933, 0]
+        Momentum: [0.0585, 0.0082, 0]
+        Spin: [0, 0, -0.0134]
+      - Mass: 0.4063
+        Center: [-2.316, 1.8274, 0]
+        Momentum: [-0.0284, -0.1497, 0]
+        Spin: [0, 0, -0.0332]
+      - Mass: 0.3245
+        Center: [-1.0279, -2.2711, 0]
+        Momentum: [0.1640, 0.0515, 0]
+        Spin: [0, 0, -0.0708]
+
+DomainCreator:
+  Sphere:
+    InnerRadius: 10
+    OuterRadius: 20
+    InitialRefinement: 2
+    InitialGridPoints: [5, 5]
+    UseEquiangularMap: False
+
+NumericalFlux:
+  InternalPenalty:
+    PenaltyParameter: 10 # p^2 / h
+  NonlinNumericalFlux:
+    InternalPenalty:
+      PenaltyParameter: 10 # p^2 / h
+
+Observers:
+  VolumeFileName: "MultiplePuncturesVolume"
+  ReductionFileName: "MultiplePuncturesReductions"
+
+NonlinearSolver:
+  ConvergenceCriteria:
+    MaxIterations: 1
+    RelativeResidual: 1e-8
+    AbsoluteResidual: 1e-15
+  SufficientDecrease: 0.5
+  Verbosity: Verbose
+
+LinearSolver:
+  ConvergenceCriteria:
+    MaxIterations: 300
+    RelativeResidual: 1e-2
+    AbsoluteResidual: 1e-15
+  Verbosity: Verbose
+
+EventsAndTriggers:
+  ? EveryNIterations:
+      N: 1
+  : - ObserveFields

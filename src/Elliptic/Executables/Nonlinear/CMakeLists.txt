@@ -52,6 +52,14 @@ add_nonlinear_elliptic_executable(
   )
 
 add_nonlinear_elliptic_executable(
+  MultiplePunctures
+  Punctures::FirstOrderSystem
+  Punctures::AnalyticData::MultiplePunctures
+  ""
+  "Punctures;PuncturesAnalyticData"
+  )
+
+add_nonlinear_elliptic_executable(
   ConstantDensityStar
   "Xcts::FirstOrderSystem<3, Xcts::Equations::Hamiltonian>"
   Xcts::Solutions::ConstantDensityStar
