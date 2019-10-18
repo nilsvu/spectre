@@ -44,6 +44,7 @@
 #include "ParallelAlgorithms/Events/ObserveFields.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/Actions/RunEventsAndTriggers.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Poisson/Lorentzian.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Utilities/Functional.hpp"
@@ -66,7 +67,7 @@ struct Metavariables {
   // The analytic solution and corresponding source to solve the Poisson
   // equation for
   using analytic_solution_tag =
-      Tags::AnalyticSolution<Poisson::Solutions::ProductOfSinusoids<Dim>>;
+      Tags::AnalyticSolution<Poisson::Solutions::Lorentzian<Dim>>;
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
