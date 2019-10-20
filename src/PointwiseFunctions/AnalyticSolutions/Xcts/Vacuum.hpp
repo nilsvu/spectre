@@ -13,6 +13,7 @@
 #include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"  // IWYU pragma: keep
 #include "Utilities/ContainerHelpers.hpp"
@@ -29,7 +30,7 @@ class er;  // IWYU pragma: keep
 namespace Xcts {
 namespace Solutions {
 
-class Vacuum {
+class Vacuum : public MarkAsAnalyticSolution {
  public:
   using options = tmpl::list<>;
 

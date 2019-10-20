@@ -13,6 +13,7 @@
 #include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/TovIsotropic.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
@@ -40,7 +41,7 @@ namespace Solutions {
  * solving the Tolman-Oppenheimer-Volkoff (TOV) equations.  The equation of
  * state is assumed to be that of a polytropic fluid.
  */
-class TovStar {
+class TovStar : public MarkAsAnalyticSolution {
  public:
   using equation_of_state_type = EquationsOfState::PolytropicFluid<true>;
 

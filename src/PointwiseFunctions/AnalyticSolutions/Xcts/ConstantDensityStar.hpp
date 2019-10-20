@@ -10,6 +10,7 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/TMPL.hpp"
@@ -89,7 +90,7 @@ namespace Solutions {
  * \f$\psi_\mathrm{init}=1\f$ so that a nonlinear iterative numerical solver
  * will converge to the same weak-field solution.
  */
-class ConstantDensityStar {
+class ConstantDensityStar : public MarkAsAnalyticSolution {
  private:
   struct Density {
     using type = double;
