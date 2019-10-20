@@ -19,10 +19,12 @@ namespace observe_detail {
 using reduction_data = Parallel::ReductionData<
     // Iteration
     Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-    // Residual
+    // Globalization iteration
+    Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+    // Step length
     Parallel::ReductionDatum<double, funcl::AssertEqual<>>,
-    // Globalization steps
-    Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>>;
+    // Residual
+    Parallel::ReductionDatum<double, funcl::AssertEqual<>>>;
 
 struct ObservationType {};
 
@@ -55,17 +57,13 @@ struct Registration {
  *   - `NonlinearSolver::Tags::IterationId`
  *   - `residual_magnitude_tag`
  */
-template <typename FieldsTag, typename DbTagsList, typename Metavariables>
+template <typename Metavariables>
 void contribute_to_reduction_observer(
-    db::DataBox<DbTagsList>& box,
-    Parallel::ConstGlobalCache<Metavariables>& cache) noexcept {
-  using fields_tag = FieldsTag;
-  using residual_magnitude_tag = db::add_tag_prefix<
-      LinearSolver::Tags::Magnitude,
-      db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>>;
-
-  const auto observation_id = observers::ObservationId(
-      get<NonlinearSolver::Tags::IterationId>(box), ObservationType{});
+    Parallel::ConstGlobalCache<Metavariables>& cache, const size_t temporal_id,
+    const size_t iteration_id, const size_t globalization_iteration_id,
+    const double step_length, const double residual_magnitude) noexcept {
+  const auto observation_id =
+      observers::ObservationId(temporal_id, ObservationType{});
   auto& reduction_writer = Parallel::get_parallel_component<
       observers::ObserverWriter<Metavariables>>(cache);
   Parallel::threaded_action<observers::ThreadedActions::WriteReductionData>(
@@ -76,10 +74,10 @@ void contribute_to_reduction_observer(
       // to write into separate subgroups, e.g.:
       // `/nonlinear_residuals/<amr_iteration_id>`
       std::string{"/nonlinear_residuals"},
-      std::vector<std::string>{"Iteration", "Residual", "GlobalizationSteps"},
-      reduction_data{get<Tags::IterationId>(box),
-                     get<residual_magnitude_tag>(box),
-                     get<Tags::GlobalizationIterationId>(box)});
+      std::vector<std::string>{"Iteration", "GlobalizationIteration",
+                               "StepLength", "Residual"},
+      reduction_data{iteration_id, globalization_iteration_id, step_length,
+                     residual_magnitude});
 }
 
 }  // namespace observe_detail

@@ -89,15 +89,13 @@ struct InitializeResidualMonitor {
         ::Initialization::merge_into_databox<
             InitializeResidualMonitor,
             db::AddSimpleTags<Tags::IterationId, residual_magnitude_tag,
-                              initial_residual_magnitude_tag,
-                              Tags::GlobalizationIterationId>,
+                              initial_residual_magnitude_tag>,
             compute_tags>(std::move(box),
                           // The `UpdateResidualMagnitude` action populates
                           // these tags with initial values
                           std::numeric_limits<size_t>::max(),
                           std::numeric_limits<double>::signaling_NaN(),
-                          std::numeric_limits<double>::signaling_NaN(),
-                          std::numeric_limits<size_t>::max()),
+                          std::numeric_limits<double>::signaling_NaN()),
         true);
   }
 };

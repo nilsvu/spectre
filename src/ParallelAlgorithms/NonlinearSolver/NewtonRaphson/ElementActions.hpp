@@ -125,15 +125,16 @@ struct UpdateResidual {
     Parallel::contribute_to_reduction<UpdateResidualMagnitude<
         FieldsTag, GlobalizationStrategy, ParallelComponent>>(
         Parallel::ReductionData<
-            Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>,
             Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
             Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-            Parallel::ReductionDatum<double, funcl::AssertEqual<>>>{
-            LinearSolver::inner_product(get<linear_source_tag>(box),
-                                        get<linear_source_tag>(box)),
-            get<Tags::IterationId>(box),
+            Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+            Parallel::ReductionDatum<double, funcl::AssertEqual<>>,
+            Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>{
+            get<Tags::TemporalId>(box), get<Tags::IterationId>(box),
             get<Tags::GlobalizationIterationId>(box),
-            get<Tags::StepLength>(box)},
+            get<Tags::StepLength>(box),
+            LinearSolver::inner_product(get<linear_source_tag>(box),
+                                        get<linear_source_tag>(box))},
         Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
         Parallel::get_parallel_component<
             ResidualMonitor<Metavariables, FieldsTag>>(cache));

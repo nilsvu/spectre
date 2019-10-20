@@ -48,10 +48,15 @@ struct UpdateResidualMagnitude {
                                               DataBox>> = nullptr>
   static void apply(DataBox& box,
                     Parallel::ConstGlobalCache<Metavariables>& cache,
-                    const ArrayIndex& /*array_index*/,
-                    const double residual_magnitude, const size_t iteration_id,
+                    const ArrayIndex& /*array_index*/, const size_t temporal_id,
+                    const size_t iteration_id,
                     const size_t globalization_iteration_id,
-                    const double step_length) noexcept {
+                    const double step_length,
+                    const double residual_magnitude) noexcept {
+    NonlinearSolver::observe_detail::contribute_to_reduction_observer(
+        cache, temporal_id, iteration_id, globalization_iteration_id,
+        step_length, residual_magnitude);
+
     if (UNLIKELY(iteration_id == 0)) {
       db::mutate<initial_residual_magnitude_tag>(
           make_not_null(&box), [residual_magnitude](
@@ -75,7 +80,7 @@ struct UpdateResidualMagnitude {
           Parallel::printf(
               "Apply globalization to decrease nonlinear solver iteration %zu "
               "residual: %e\n",
-              get<NonlinearSolver::Tags::IterationId>(box), residual_magnitude);
+              iteration_id, residual_magnitude);
         }
 
         Parallel::simple_action<typename GlobalizationStrategy::perform_step>(
@@ -84,26 +89,18 @@ struct UpdateResidualMagnitude {
       }
     }
 
-    db::mutate<residual_magnitude_tag, Tags::IterationId,
-               Tags::GlobalizationIterationId>(
+    db::mutate<residual_magnitude_tag, Tags::IterationId>(
         make_not_null(&box),
-        [ residual_magnitude, iteration_id, globalization_iteration_id ](
+        [ residual_magnitude, iteration_id ](
             const gsl::not_null<double*> local_residual_magnitude,
             const gsl::not_null<db::item_type<Tags::IterationId>*>
-                local_iteration_id,
-            const gsl::not_null<db::item_type<Tags::GlobalizationIterationId>*>
-                local_globalization_iteration_id) noexcept {
+                local_iteration_id) noexcept {
           *local_residual_magnitude = residual_magnitude;
           *local_iteration_id = iteration_id;
-          *local_globalization_iteration_id = globalization_iteration_id;
         });
 
-    // At this point, the iteration is complete. We proceed with observing,
-    // logging and checking convergence before broadcasting back to the
-    // elements.
-
-    NonlinearSolver::observe_detail::contribute_to_reduction_observer<
-        FieldsTag>(box, cache);
+    // At this point, the iteration is complete. We proceed withlogging and
+    // checking convergence before broadcasting back to the elements.
 
     // Determine whether the nonlinear solver has converged. This invokes the
     // compute item.
