@@ -69,6 +69,7 @@
 #include "PointwiseFunctions/AnalyticData/Punctures/MultiplePunctures.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarBinary.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/NeutronStarHeadOnCollision.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/ConstantDensityStar.hpp"
@@ -188,16 +189,17 @@ struct Metavariables {
       all_fields, db::wrap_tags_in<::Tags::Source, all_fields>,
       observers::collect_observe_fields<tmpl::list<initial_guess>>>;
   using analytic_solution_fields =
-      tmpl::conditional_t<is_analytic_data_v<InitialGuess>, tmpl::list<>,
-                          all_fields>;
-  using events = tmpl::flatten<tmpl::list<
-      dg::Events::Registrars::ObserveFields<
-          volume_dim, NonlinearSolver::Tags::IterationId, observe_fields,
-          analytic_solution_fields>,
-      tmpl::conditional_t<
-          is_analytic_data_v<InitialGuess>, tmpl::list<>,
-          dg::Events::Registrars::ObserveErrorNorms<
-              NonlinearSolver::Tags::IterationId, analytic_solution_fields>>>>;
+      tmpl::conditional_t<is_analytic_solution_v<initial_guess>, all_fields,
+                          tmpl::list<>>;
+  using events = tmpl::flatten<
+      tmpl::list<dg::Events::Registrars::ObserveFields<
+                     volume_dim, NonlinearSolver::Tags::IterationId,
+                     observe_fields, analytic_solution_fields>,
+                 tmpl::conditional_t<is_analytic_solution_v<initial_guess>,
+                                     dg::Events::Registrars::ObserveErrorNorms<
+                                         NonlinearSolver::Tags::IterationId,
+                                         analytic_solution_fields>,
+                                     tmpl::list<>>>>;
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       NonlinearSolver::Tags::IterationId>>;
 
@@ -235,9 +237,10 @@ struct Metavariables {
       intrp::Actions::make_initialize_broadcast_actions<
           interpolation_target_tags>,
       elliptic::Actions::InitializeNonlinearSystem<Metavariables>,
-      tmpl::conditional_t<is_analytic_data_v<InitialGuess>, tmpl::list<>,
+      tmpl::conditional_t<is_analytic_solution_v<initial_guess>,
                           elliptic::Actions::InitializeAnalyticSolution<
-                              analytic_solution_tag, analytic_solution_fields>>,
+                              analytic_solution_tag, analytic_solution_fields>,
+                          tmpl::list<>>,
       dg::Actions::InitializeInterfaces<
           system,
           dg::Initialization::slice_tags_to_face<nonlinear_fields_tag,
