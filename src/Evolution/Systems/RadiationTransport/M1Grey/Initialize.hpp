@@ -18,16 +18,17 @@
 #include "Evolution/Initialization/Tags.hpp"
 #include "Evolution/Systems/RadiationTransport/M1Grey/Tags.hpp"
 #include "Evolution/Systems/RadiationTransport/Tags.hpp"
-#include "Evolution/TypeTraits.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "PointwiseFunctions/AnalyticData/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/GeneralRelativity/IndexManipulation.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeWithValue.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace RadiationTransport {
@@ -87,7 +88,8 @@ struct InitializeM1Tags {
                       .variables(inertial_coords,
                                  typename evolved_variables_tag::tags_list{}));
             }),
-        evolution::is_analytic_solution<typename Metavariables::initial_data>{},
+        conforms_to<typename Metavariables::initial_data,
+                    evolution::protocols::AnalyticSolution>{},
         cache);
 
     // Get hydro variables
@@ -111,9 +113,9 @@ struct InitializeM1Tags {
               Parallel::get<analytic_data_tag>(local_cache)
                   .variables(inertial_coords,
                              typename hydro_variables_tag::tags_list{}));
-        })(
-        evolution::is_analytic_solution<typename Metavariables::initial_data>{},
-        make_not_null(&hydro_variables), cache);
+        })(conforms_to<typename Metavariables::initial_data,
+                       evolution::protocols::AnalyticSolution>{},
+           make_not_null(&hydro_variables), cache);
 
     M1Vars m1_variables{num_grid_points, -1.};
 

@@ -9,7 +9,7 @@
 
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Minkowski.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/RelativisticEuler/SmoothFlow.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/EquationOfState.hpp"
@@ -39,7 +39,7 @@ namespace Solutions {
  * \vec{B}(\vec{x},t) &= [0, 0, 0]^{T}
  * \f}
  */
-class SmoothFlow : virtual public MarkAsAnalyticSolution,
+class SmoothFlow : public evolution::protocols::AnalyticSolution,
                    private RelativisticEuler::Solutions::SmoothFlow<3> {
   using smooth_flow = RelativisticEuler::Solutions::SmoothFlow<3>;
 

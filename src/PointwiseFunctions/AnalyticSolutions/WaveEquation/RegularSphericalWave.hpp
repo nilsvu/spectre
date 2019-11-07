@@ -11,7 +11,7 @@
 
 #include "DataStructures/Tensor/TypeAliases.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/MathFunctions/MathFunction.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
@@ -63,7 +63,7 @@ namespace Solutions {
  * because of the scale invariance of the wave equation. The profile could be a
  * Gausssian centered at 0 with width 1, for instance.
  */
-class RegularSphericalWave : public MarkAsAnalyticSolution {
+class RegularSphericalWave : public evolution::protocols::AnalyticSolution {
  public:
   struct Profile {
     using type = std::unique_ptr<MathFunction<1>>;

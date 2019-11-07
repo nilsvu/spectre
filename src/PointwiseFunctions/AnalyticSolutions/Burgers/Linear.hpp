@@ -9,7 +9,7 @@
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Evolution/Systems/Burgers/Tags.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -26,7 +26,7 @@ namespace Solutions {
 /// A solution that is linear in space at all times.
 ///
 /// \f$u(x, t) = x / (t - t_0)\f$ where \f$t_0\f$ is the shock time.
-class Linear : public MarkAsAnalyticSolution {
+class Linear : public evolution::protocols::AnalyticSolution {
  public:
   struct ShockTime {
     using type = double;

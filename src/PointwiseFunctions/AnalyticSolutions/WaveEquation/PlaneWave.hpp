@@ -12,7 +12,7 @@
 
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/MathFunctions/MathFunction.hpp"
 #include "Utilities/MakeArray.hpp"
 #include "Utilities/TMPL.hpp"
@@ -52,7 +52,7 @@ namespace Solutions {
  * \tparam Dim the spatial dimension of the solution
  */
 template <size_t Dim>
-class PlaneWave : public MarkAsAnalyticSolution {
+class PlaneWave : public evolution::protocols::AnalyticSolution {
  public:
   struct WaveVector {
     using type = std::array<double, Dim>;

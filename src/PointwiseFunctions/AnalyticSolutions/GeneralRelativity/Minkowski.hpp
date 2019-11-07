@@ -8,7 +8,7 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"  // for tags
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
@@ -35,7 +35,7 @@ namespace Solutions {
  * and the identity as the spatial metric: \f$g_{ii} = 1 \f$
  */
 template <size_t Dim>
-class Minkowski : public MarkAsAnalyticSolution {
+class Minkowski : public evolution::protocols::AnalyticSolution {
  public:
   using options = tmpl::list<>;
   static constexpr OptionString help{

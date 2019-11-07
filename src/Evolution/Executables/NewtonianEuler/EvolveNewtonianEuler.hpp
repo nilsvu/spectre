@@ -53,8 +53,10 @@
 #include "ParallelAlgorithms/EventsAndTriggers/Tags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
+#include "PointwiseFunctions/AnalyticData/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/NewtonianEuler/IsentropicVortex.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/NewtonianEuler/RiemannProblem.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
 #include "Time/Actions/AdvanceTime.hpp"
@@ -71,6 +73,7 @@
 #include "Time/TimeSteppers/TimeStepper.hpp"
 #include "Time/Triggers/TimeTriggers.hpp"
 #include "Utilities/Functional.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
 /// \cond
@@ -87,10 +90,12 @@ template <size_t Dim, typename InitialData>
 struct EvolutionMetavars {
   static constexpr size_t volume_dim = Dim;
   using initial_data = InitialData;
+  static constexpr bool has_analytic_solution =
+      conforms_to_v<initial_data, evolution::protocols::AnalyticSolution>;
   static_assert(
-      evolution::is_analytic_data_v<initial_data> xor
-          evolution::is_analytic_solution_v<initial_data>,
-      "initial_data must be either an analytic_data or an analytic_solution");
+      has_analytic_solution xor
+          conforms_to_v<initial_data, evolution::protocols::AnalyticData>,
+      "initial_data must be either an AnalyticSolution or an AnalyticData");
 
   using equation_of_state_type = typename initial_data::equation_of_state_type;
 
@@ -103,7 +108,7 @@ struct EvolutionMetavars {
   static constexpr bool local_time_stepping = false;
 
   using initial_data_tag =
-      tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
+      tmpl::conditional_t<has_analytic_solution,
                           Tags::AnalyticSolution<initial_data>,
                           Tags::AnalyticData<initial_data>>;
 
@@ -128,7 +133,7 @@ struct EvolutionMetavars {
                       NewtonianEuler::Tags::EnergyDensity<DataVector>>>>;
 
   using events = tmpl::flatten<tmpl::list<
-      tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
+      tmpl::conditional_t<has_analytic_solution,
                           dg::Events::Registrars::ObserveErrorNorms<
                               Tags::Time, analytic_variables_tags>,
                           tmpl::list<>>,
@@ -138,8 +143,8 @@ struct EvolutionMetavars {
               db::get_variables_tags_list<typename system::variables_tag>,
               db::get_variables_tags_list<
                   typename system::primitive_variables_tag>>,
-          tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
-                              analytic_variables_tags, tmpl::list<>>>>>;
+          tmpl::conditional_t<has_analytic_solution, analytic_variables_tags,
+                              tmpl::list<>>>>>;
   using triggers = Triggers::time_triggers;
 
   using step_choosers =
@@ -160,7 +165,7 @@ struct EvolutionMetavars {
                           tmpl::list<>>,
       Actions::ComputeTimeDerivative,
       tmpl::conditional_t<
-          evolution::is_analytic_solution_v<initial_data>,
+          has_analytic_solution,
           dg::Actions::ImposeDirichletBoundaryConditions<EvolutionMetavars>,
           tmpl::list<>>,
       dg::Actions::ReceiveDataForFluxes<EvolutionMetavars>,
@@ -202,7 +207,7 @@ struct EvolutionMetavars {
               NewtonianEuler::Tags::SoundSpeed<DataVector>>>,
       Initialization::Actions::Evolution<EvolutionMetavars>,
       tmpl::conditional_t<
-          evolution::is_analytic_solution_v<initial_data>,
+          has_analytic_solution,
           Initialization::Actions::AddComputeTags<
               tmpl::list<evolution::Tags::AnalyticCompute<
                   Dim, initial_data_tag, analytic_variables_tags>>>,

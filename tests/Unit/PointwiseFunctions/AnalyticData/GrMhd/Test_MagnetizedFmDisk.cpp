@@ -12,7 +12,6 @@
 #include "DataStructures/DataVector.hpp"        // IWYU pragma: keep
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "ErrorHandling/Error.hpp"
-#include "Evolution/TypeTraits.hpp"
 #include "Options/Options.hpp"
 #include "Options/ParseOptions.hpp"
 #include "PointwiseFunctions/AnalyticData/GrMhd/MagnetizedFmDisk.hpp"
@@ -29,13 +28,6 @@
 
 namespace {
 
-static_assert(
-    not evolution::is_analytic_solution_v<
-        grmhd::AnalyticData::MagnetizedFmDisk>,
-    "MagnetizedFmDisk should be analytic_data, and not an analytic_solution");
-static_assert(
-    evolution::is_analytic_data_v<grmhd::AnalyticData::MagnetizedFmDisk>,
-    "MagnetizedFmDisk should be analytic_data, and not an analytic_solution");
 struct MagnetizedFmDiskProxy : grmhd::AnalyticData::MagnetizedFmDisk {
   using grmhd::AnalyticData::MagnetizedFmDisk::MagnetizedFmDisk;
 

@@ -10,7 +10,7 @@
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"  // IWYU pragma: keep
 #include "PointwiseFunctions/Hydro/EquationsOfState/EquationOfState.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/PolytropicFluid.hpp"  // IWYU pragma: keep
@@ -45,7 +45,7 @@ namespace Solutions {
  * more details.
  */
 template <typename RadialSolution>
-class TovStar : public MarkAsAnalyticSolution {
+class TovStar : public evolution::protocols::AnalyticSolution {
  public:
   /*!
    * \brief The radial variables needed to compute the full `TOVStar` solution

@@ -16,12 +16,13 @@
 #include "Domain/Mesh.hpp"
 #include "Domain/Tags.hpp"
 #include "Evolution/Initialization/Tags.hpp"
-#include "Evolution/TypeTraits.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "PointwiseFunctions/AnalyticData/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Utilities/Gsl.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TypeTraits.hpp"
 
@@ -86,9 +87,9 @@ struct GrTagsForHydro {
           local_gr_vars->assign_subset(
               Parallel::get<analytic_data_tag>(local_cache)
                   .variables(inertial_coords, typename GrVars::tags_list{}));
-        })(
-        evolution::is_analytic_solution<typename Metavariables::initial_data>{},
-        make_not_null(&gr_vars), cache);
+        })(conforms_to<typename Metavariables::initial_data,
+                       evolution::protocols::AnalyticSolution>{},
+           make_not_null(&gr_vars), cache);
 
     return std::make_tuple(
         Initialization::merge_into_databox<GrTagsForHydro, simple_tags,

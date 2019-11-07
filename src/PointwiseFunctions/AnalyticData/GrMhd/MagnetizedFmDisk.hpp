@@ -8,7 +8,7 @@
 
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
+#include "PointwiseFunctions/AnalyticData/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/RelativisticEuler/FishboneMoncriefDisk.hpp"
 #include "PointwiseFunctions/GeneralRelativity/KerrSchildCoords.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/PolytropicFluid.hpp"  // IWYU pragma: keep
@@ -70,7 +70,7 @@ namespace AnalyticData {
  * the spatial velocity, and \f$W\f$ the Lorentz factor.
  */
 class MagnetizedFmDisk
-    : public MarkAsAnalyticData,
+    : public evolution::protocols::AnalyticData,
       private RelativisticEuler::Solutions::FishboneMoncriefDisk {
  private:
   using fm_disk = RelativisticEuler::Solutions::FishboneMoncriefDisk;

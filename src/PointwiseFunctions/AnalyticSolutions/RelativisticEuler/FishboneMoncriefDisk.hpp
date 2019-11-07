@@ -9,7 +9,7 @@
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/EquationOfState.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/PolytropicFluid.hpp"  // IWYU pragma: keep
@@ -149,7 +149,7 @@ namespace Solutions {
  * \f$l_* = u_\phi u^t\f$ in order to
  * distinguish this quantity from their own definition \f$l = - u_\phi/u_t\f$.
  */
-class FishboneMoncriefDisk : public MarkAsAnalyticSolution {
+class FishboneMoncriefDisk : public evolution::protocols::AnalyticSolution {
  protected:
   template <typename DataType, bool NeedSpacetime>
   struct IntermediateVariables;

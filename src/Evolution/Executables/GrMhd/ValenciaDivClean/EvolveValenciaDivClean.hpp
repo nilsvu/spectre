@@ -28,7 +28,6 @@
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/PalenzuelaEtAl.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/System.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/Tags.hpp"
-#include "Evolution/TypeTraits.hpp"
 #include "Evolution/VariableFixing/Actions.hpp"
 #include "Evolution/VariableFixing/FixToAtmosphere.hpp"
 #include "Evolution/VariableFixing/Tags.hpp"
@@ -64,12 +63,14 @@
 #include "PointwiseFunctions/AnalyticData/GrMhd/MagneticRotor.hpp"
 #include "PointwiseFunctions/AnalyticData/GrMhd/MagnetizedFmDisk.hpp"
 #include "PointwiseFunctions/AnalyticData/GrMhd/OrszagTangVortex.hpp"
+#include "PointwiseFunctions/AnalyticData/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticData/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Tov.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GrMhd/AlfvenWave.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GrMhd/BondiMichel.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GrMhd/KomissarovShock.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GrMhd/SmoothFlow.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/RelativisticEuler/FishboneMoncriefDisk.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/RelativisticEuler/TovStar.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
@@ -88,6 +89,7 @@
 #include "Time/TimeSteppers/TimeStepper.hpp"
 #include "Time/Triggers/TimeTriggers.hpp"
 #include "Utilities/Functional.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
 /// \cond
@@ -104,17 +106,19 @@ template <typename InitialData>
 struct EvolutionMetavars {
   static constexpr size_t volume_dim = 3;
   using initial_data = InitialData;
+  static constexpr bool has_analytic_solution =
+      conforms_to_v<initial_data, evolution::protocols::AnalyticSolution>;
   static_assert(
-      evolution::is_analytic_data_v<initial_data> xor
-          evolution::is_analytic_solution_v<initial_data>,
-      "initial_data must be either an analytic_data or an analytic_solution");
+      has_analytic_solution xor
+          conforms_to_v<initial_data, evolution::protocols::AnalyticData>,
+      "initial_data must be either an AnalyticSolution or an AnalyticData");
   using equation_of_state_type = typename initial_data::equation_of_state_type;
   using system = grmhd::ValenciaDivClean::System<equation_of_state_type>;
   static constexpr size_t thermodynamic_dim = system::thermodynamic_dim;
   using temporal_id = Tags::TimeStepId;
   static constexpr bool local_time_stepping = false;
   using initial_data_tag =
-      tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
+      tmpl::conditional_t<has_analytic_solution,
                           Tags::AnalyticSolution<initial_data>,
                           Tags::AnalyticData<initial_data>>;
   using boundary_condition_tag = initial_data_tag;
@@ -133,7 +137,7 @@ struct EvolutionMetavars {
 
   // public for use by the Charm++ registration code
   using events = tmpl::flatten<tmpl::list<
-      tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
+      tmpl::conditional_t<has_analytic_solution,
                           dg::Events::Registrars::ObserveErrorNorms<
                               Tags::Time, analytic_variables_tags>,
                           tmpl::list<>>,
@@ -143,8 +147,8 @@ struct EvolutionMetavars {
               db::get_variables_tags_list<typename system::variables_tag>,
               db::get_variables_tags_list<
                   typename system::primitive_variables_tag>>,
-          tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
-                              analytic_variables_tags, tmpl::list<>>>>>;
+          tmpl::conditional_t<has_analytic_solution, analytic_variables_tags,
+                              tmpl::list<>>>>>;
   using triggers = Triggers::time_triggers;
 
   using step_choosers =
@@ -166,7 +170,7 @@ struct EvolutionMetavars {
       dg::Actions::SendDataForFluxes<EvolutionMetavars>,
       Actions::ComputeVolumeSources, Actions::ComputeTimeDerivative,
       tmpl::conditional_t<
-          evolution::is_analytic_solution_v<initial_data>,
+          has_analytic_solution,
           dg::Actions::ImposeDirichletBoundaryConditions<EvolutionMetavars>,
           tmpl::list<>>,
       dg::Actions::ReceiveDataForFluxes<EvolutionMetavars>,
@@ -206,7 +210,7 @@ struct EvolutionMetavars {
               typename system::primitive_variables_tag>>,
       Initialization::Actions::Evolution<EvolutionMetavars>,
       tmpl::conditional_t<
-          evolution::is_analytic_solution_v<initial_data>,
+          has_analytic_solution,
           Initialization::Actions::AddComputeTags<
               tmpl::list<evolution::Tags::AnalyticCompute<
                   3, initial_data_tag, analytic_variables_tags>>>,
