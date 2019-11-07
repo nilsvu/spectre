@@ -13,6 +13,7 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Evolution/ComputeTags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Time/Tags.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -22,7 +23,8 @@ struct FieldTag : db::SimpleTag {
   using type = Scalar<DataVector>;
 };
 
-struct AnalyticSolution {
+struct AnalyticSolution : evolution::protocols::AnalyticSolution {
+  static constexpr size_t volume_dim = 1;
   tuples::TaggedTuple<FieldTag> variables(
       const tnsr::I<DataVector, 1>& x, const double t,
       const tmpl::list<FieldTag> /*meta*/) const noexcept {

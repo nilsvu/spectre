@@ -17,6 +17,8 @@
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 
 /// \cond
 namespace Frame {
@@ -41,6 +43,11 @@ namespace Actions {
  */
 template <typename AnalyticSolutionTag, typename AnalyticSolutionFields>
 struct InitializeAnalyticSolution {
+  static_assert(
+      conforms_to_v<db::const_item_type<AnalyticSolutionTag>,
+                    elliptic::protocols::AnalyticSolution>,
+      "The AnalyticSolutionTag must hold an elliptic analytic solution.");
+
   using const_global_cache_tags = tmpl::list<AnalyticSolutionTag>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,

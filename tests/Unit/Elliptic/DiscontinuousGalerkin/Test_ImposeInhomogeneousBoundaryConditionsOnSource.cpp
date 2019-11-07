@@ -35,6 +35,7 @@
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeInterfaces.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
@@ -62,7 +63,8 @@ struct System {
 };
 
 template <size_t Dim>
-struct AnalyticSolution {
+struct AnalyticSolution : elliptic::protocols::AnalyticSolution {
+  static constexpr size_t volume_dim = Dim;
   tuples::TaggedTuple<ScalarFieldTag> variables(
       const tnsr::I<DataVector, Dim>& x,
       tmpl::list<ScalarFieldTag> /*meta*/) const noexcept {

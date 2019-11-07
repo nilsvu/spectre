@@ -5,6 +5,8 @@
 
 #include "Options/Options.hpp"
 #include "Parallel/Serialize.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 
 namespace OptionTags {
 /// \ingroup OptionGroupsGroup
@@ -47,7 +49,10 @@ struct BoundaryConditionBase : db::BaseTag {};
 /// template parameter
 template <typename SolutionType>
 struct AnalyticSolution : AnalyticSolutionBase, db::SimpleTag {
-  static std::string name() noexcept { return "AnalyticSolution"; }
+  static_assert(
+      conforms_to_v<SolutionType, elliptic::protocols::AnalyticSolution> or
+          conforms_to_v<SolutionType, evolution::protocols::AnalyticSolution>,
+      "The SolutionType must be an analytic solution.");
   using type = SolutionType;
   using option_tags = tmpl::list<::OptionTags::AnalyticSolution<SolutionType>>;
   static SolutionType create_from_options(

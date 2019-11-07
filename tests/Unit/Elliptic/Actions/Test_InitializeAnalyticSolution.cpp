@@ -15,6 +15,7 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Parallel/ParallelComponentHelpers.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 #include "tests/Unit/ActionTesting.hpp"
@@ -26,7 +27,8 @@ struct ScalarFieldTag : db::SimpleTag {
 };
 
 template <size_t Dim>
-struct AnalyticSolution {
+struct AnalyticSolution : elliptic::protocols::AnalyticSolution {
+  static constexpr size_t volume_dim = Dim;
   tuples::TaggedTuple<ScalarFieldTag> variables(
       const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
       tmpl::list<ScalarFieldTag> /*meta*/) const noexcept {

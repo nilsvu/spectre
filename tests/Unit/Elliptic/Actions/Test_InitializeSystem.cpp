@@ -26,6 +26,7 @@
 #include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Utilities/TMPL.hpp"
 #include "tests/Unit/ActionTesting.hpp"
@@ -90,7 +91,8 @@ struct System {
 };
 
 template <size_t Dim>
-struct AnalyticSolution {
+struct AnalyticSolution : elliptic::protocols::AnalyticSolution {
+  static constexpr size_t volume_dim = Dim;
   tuples::TaggedTuple<Tags::FixedSource<ScalarFieldTag>> variables(
       const tnsr::I<DataVector, Dim>& x,
       tmpl::list<Tags::FixedSource<ScalarFieldTag>> /*meta*/) const noexcept {
