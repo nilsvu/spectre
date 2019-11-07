@@ -7,7 +7,9 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Domain/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Time/Tags.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace evolution {
@@ -22,6 +24,10 @@ struct AnalyticCompute
     : db::add_tag_prefix<::Tags::Analytic,
                          ::Tags::Variables<AnalyticFieldsTagList>>,
       db::ComputeTag {
+  static_assert(
+      conforms_to_v<db::const_item_type<AnalyticSolutionTag>,
+                    evolution::protocols::AnalyticSolution>,
+      "The AnalyticSolutionTag must hold an evolution analytic solution.");
   using base = db::add_tag_prefix<::Tags::Analytic,
                                   ::Tags::Variables<AnalyticFieldsTagList>>;
   using argument_tags =

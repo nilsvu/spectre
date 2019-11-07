@@ -5,6 +5,8 @@
 
 #include "Options/Options.hpp"
 #include "Parallel/Serialize.hpp"
+#include "PointwiseFunctions/AnalyticData/Protocols.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 
 namespace OptionTags {
 /// \ingroup OptionGroupsGroup
@@ -36,7 +38,10 @@ struct AnalyticDataBase : db::BaseTag {};
 /// template parameter
 template <typename DataType>
 struct AnalyticData : AnalyticDataBase, db::SimpleTag {
-  static std::string name() noexcept { return "AnalyticData"; }
+  static_assert(
+      conforms_to_v<DataType, elliptic::protocols::AnalyticData> or
+          conforms_to_v<DataType, evolution::protocols::AnalyticData>,
+      "The SolutionType must be an analytic solution.");
   using type = DataType;
   using option_tags = tmpl::list<::OptionTags::AnalyticData<DataType>>;
 

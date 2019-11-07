@@ -136,8 +136,6 @@ struct Metavariables {
   using system = System;
   using component_list = tmpl::list<ElementComponent<Metavariables>,
                                     MockObserverComponent<Metavariables>>;
-  using const_global_cache_tags =
-      tmpl::list<Tags::AnalyticSolution<typename System::solution_for_test>>;
   enum class Phase { Initialization, Testing, Exit };
 
   struct ObservationType {};
@@ -314,10 +312,7 @@ void test_observe(const std::unique_ptr<ObserveEvent> observe) noexcept {
 
   using MockRuntimeSystem =
       ActionTesting::MockRuntimeSystem<Metavariables<System>>;
-  MockRuntimeSystem runner(
-      tuples::TaggedTuple<
-          Tags::AnalyticSolution<typename System::solution_for_test>>{
-          std::move(analytic_solution)});
+  MockRuntimeSystem runner({});
   ActionTesting::emplace_component<element_component>(make_not_null(&runner),
                                                       element_id);
   ActionTesting::emplace_component<observer_component>(&runner, 0);
