@@ -14,12 +14,13 @@
 #include "Domain/Mesh.hpp"
 #include "Domain/Tags.hpp"
 #include "Evolution/Initialization/Tags.hpp"
-#include "Evolution/TypeTraits.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "PointwiseFunctions/AnalyticData/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
@@ -133,10 +134,10 @@ struct ConservativeSystem {
     // Set initial data from analytic solution
     PrimitiveVars primitive_vars{num_grid_points};
     auto equation_of_state = make_overloader(
-        [ initial_time, &
-          inertial_coords ](std::true_type /*is_analytic_solution*/,
-                            const gsl::not_null<PrimitiveVars*> prim_vars,
-                            const auto& local_cache) noexcept {
+        [ initial_time, &inertial_coords ](
+            std::true_type /*is_analytic_solution*/,
+            const gsl::not_null<PrimitiveVars*> prim_vars,
+            const auto& local_cache) noexcept {
           using solution_tag = ::Tags::AnalyticSolutionBase;
           prim_vars->assign_subset(
               Parallel::get<solution_tag>(local_cache)
@@ -156,9 +157,9 @@ struct ConservativeSystem {
                       typename Metavariables::analytic_variables_tags{}));
           return Parallel::get<analytic_data_tag>(local_cache)
               .equation_of_state();
-        })(
-        evolution::is_analytic_solution<typename Metavariables::initial_data>{},
-        make_not_null(&primitive_vars), cache);
+        })(conforms_to<typename Metavariables::initial_data,
+                       evolution::protocols::AnalyticSolution>{},
+           make_not_null(&primitive_vars), cache);
 
     return Initialization::merge_into_databox<ConservativeSystem, simple_tags,
                                               compute_tags>(

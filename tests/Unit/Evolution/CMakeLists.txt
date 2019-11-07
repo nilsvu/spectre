@@ -11,7 +11,6 @@ set(LIBRARY "Test_Evolution")
 
 set(LIBRARY_SOURCES
   Test_ComputeTags.cpp
-  Test_TypeTraits.cpp
   )
 
 add_test_library(

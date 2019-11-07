@@ -9,7 +9,7 @@
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Evolution/Systems/Burgers/Tags.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -36,7 +36,7 @@ namespace Solutions {
 /// (This is inherited from the Heaviside implementation `step_function`.)
 /// Additionally, the time derivative \f$\partial_t u0\f$ is zero, rather than
 /// the correct delta function.
-class Step : public MarkAsAnalyticSolution {
+class Step : public evolution::protocols::AnalyticSolution {
  public:
   struct LeftValue {
     using type = double;

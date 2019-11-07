@@ -26,7 +26,6 @@
 #include "Evolution/Systems/RadiationTransport/M1Grey/Tags.hpp"
 #include "Evolution/Systems/RadiationTransport/M1Grey/UpdateM1Closure.hpp"
 #include "Evolution/Systems/RadiationTransport/Tags.hpp"
-#include "Evolution/TypeTraits.hpp"
 #include "IO/Observer/Actions.hpp"
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
@@ -53,7 +52,9 @@
 #include "ParallelAlgorithms/EventsAndTriggers/Tags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
+#include "PointwiseFunctions/AnalyticData/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticData/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/RadiationTransport/M1Grey/ConstantM1.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
@@ -71,6 +72,7 @@
 #include "Time/TimeSteppers/TimeStepper.hpp"
 #include "Time/Triggers/TimeTriggers.hpp"
 #include "Utilities/Functional.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
 /// \cond
@@ -89,10 +91,12 @@ struct EvolutionMetavars {
   // line `using initial_data = ...;` and include the header file for the
   // solution.
   using initial_data = RadiationTransport::M1Grey::Solutions::ConstantM1;
+  static constexpr bool has_analytic_solution =
+      conforms_to_v<initial_data, evolution::protocols::AnalyticSolution>;
   static_assert(
-      evolution::is_analytic_data_v<initial_data> xor
-          evolution::is_analytic_solution_v<initial_data>,
-      "initial_data must be either an analytic_data or an analytic_solution");
+      has_analytic_solution xor
+          conforms_to_v<initial_data, evolution::protocols::AnalyticData>,
+      "initial_data must be either an AnalyticSolution or an AnalyticData");
 
   // Set list of neutrino species to be used by M1 code
   using neutrino_species = tmpl::list<neutrinos::ElectronNeutrinos<1>>;
@@ -101,7 +105,7 @@ struct EvolutionMetavars {
   using temporal_id = Tags::TimeStepId;
   static constexpr bool local_time_stepping = false;
   using initial_data_tag =
-      tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
+      tmpl::conditional_t<has_analytic_solution,
                           Tags::AnalyticSolution<initial_data>,
                           Tags::AnalyticData<initial_data>>;
   using boundary_condition_tag = initial_data_tag;
@@ -113,7 +117,7 @@ struct EvolutionMetavars {
 
   // public for use by the Charm++ registration code
   using events = tmpl::flatten<tmpl::list<
-      tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
+      tmpl::conditional_t<has_analytic_solution,
                           dg::Events::Registrars::ObserveErrorNorms<
                               Tags::Time, analytic_variables_tags>,
                           tmpl::list<>>,
@@ -123,7 +127,7 @@ struct EvolutionMetavars {
               db::get_variables_tags_list<typename system::variables_tag>,
               db::get_variables_tags_list<
                   typename system::primitive_variables_tag>>,
-          tmpl::conditional_t<evolution::is_analytic_solution_v<initial_data>,
+          tmpl::conditional_t<has_analytic_solution,
                               analytic_variables_tags, tmpl::list<>>>>>;
   using triggers = Triggers::time_triggers;
 
@@ -143,7 +147,7 @@ struct EvolutionMetavars {
       dg::Actions::SendDataForFluxes<EvolutionMetavars>,
       Actions::ComputeVolumeSources, Actions::ComputeTimeDerivative,
       tmpl::conditional_t<
-          evolution::is_analytic_solution_v<initial_data>,
+          has_analytic_solution,
           dg::Actions::ImposeDirichletBoundaryConditions<EvolutionMetavars>,
           tmpl::list<>>,
       dg::Actions::ReceiveDataForFluxes<EvolutionMetavars>,
@@ -180,7 +184,7 @@ struct EvolutionMetavars {
               typename system::primitive_variables_tag>>,
       Initialization::Actions::Evolution<EvolutionMetavars>,
       tmpl::conditional_t<
-          evolution::is_analytic_solution_v<initial_data>,
+          has_analytic_solution,
           Initialization::Actions::AddComputeTags<
               tmpl::list<evolution::Tags::AnalyticCompute<
                   3, initial_data_tag, analytic_variables_tags>>>,

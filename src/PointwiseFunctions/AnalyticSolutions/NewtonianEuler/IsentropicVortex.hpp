@@ -12,7 +12,7 @@
 #include "Evolution/Systems/NewtonianEuler/Sources/VortexPerturbation.hpp"
 #include "Evolution/Systems/NewtonianEuler/Tags.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/EquationOfState.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/PolytropicFluid.hpp"  // IWYU pragma: keep
 #include "Utilities/MakeArray.hpp"  // IWYU pragma: keep
@@ -88,7 +88,7 @@ namespace Solutions {
  * \f$\epsilon \cos{z}\f$.
  */
 template <size_t Dim>
-class IsentropicVortex : public MarkAsAnalyticSolution {
+class IsentropicVortex : public evolution::protocols::AnalyticSolution {
   static_assert(Dim == 2 or Dim == 3,
                 "IsentropicVortex solution works in 2 and 3 dimensions");
 

@@ -8,7 +8,7 @@
 
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
+#include "PointwiseFunctions/AnalyticData/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Minkowski.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/EquationOfState.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/IdealFluid.hpp"  // IWYU pragma: keep
@@ -55,7 +55,7 @@ namespace AnalyticData {
  * the final time is 4.0, a good domain extends from `(x,y)=(-6.0, -6.0)` to
  * `(x,y)=(6.0, 6.0)`.
  */
-class CylindricalBlastWave : public MarkAsAnalyticData {
+class CylindricalBlastWave : public evolution::protocols::AnalyticData {
  public:
   using equation_of_state_type = EquationsOfState::IdealFluid<true>;
 

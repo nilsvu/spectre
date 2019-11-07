@@ -9,9 +9,10 @@
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Evolution/Systems/NewtonianEuler/TagsDeclarations.hpp"
-#include "Evolution/TypeTraits.hpp"
 #include "PointwiseFunctions/AnalyticData/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 
 namespace NewtonianEuler {
 /// %Tags for the conservative formulation of the Newtonian Euler system
@@ -104,10 +105,10 @@ struct SourceTermBase {};
 template <typename InitialDataType>
 struct SourceTerm : SourceTermBase, db::SimpleTag {
   using type = typename InitialDataType::source_term_type;
-  using option_tags = tmpl::list<
-      tmpl::conditional_t<evolution::is_analytic_solution_v<InitialDataType>,
-                          ::OptionTags::AnalyticSolution<InitialDataType>,
-                          ::OptionTags::AnalyticData<InitialDataType>>>;
+  using option_tags = tmpl::list<tmpl::conditional_t<
+      conforms_to_v<InitialDataType, evolution::protocols::AnalyticSolution>,
+      ::OptionTags::AnalyticSolution<InitialDataType>,
+      ::OptionTags::AnalyticData<InitialDataType>>>;
   static std::string name() noexcept { return "SourceTerm"; }
 
   template <typename Metavariables>
