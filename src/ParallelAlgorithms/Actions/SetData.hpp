@@ -21,6 +21,9 @@ namespace Actions {
  * \ingroup ActionsGroup
  * \brief Mutate the DataBox tags in `TagsList` according to the `data`.
  *
+ * An example use case for this action is as the callback for the
+ * `importer::ThreadedActions::ReadElementData`.
+ *
  * DataBox changes:
  * - Modifies:
  *   - All tags in `TagsList`
@@ -28,6 +31,7 @@ namespace Actions {
 template <typename TagsList>
 struct SetData;
 
+/// \cond
 template <typename... Tags>
 struct SetData<tmpl::list<Tags...>> {
   template <
@@ -49,5 +53,6 @@ struct SetData<tmpl::list<Tags...>> {
     });
   }
 };
+/// \endcond
 
 }  // namespace Actions
