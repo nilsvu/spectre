@@ -18,7 +18,9 @@
 namespace importer {
 namespace Actions {
 
+/// \cond
 struct RegisterElementWithSelf;
+/// \endcond
 
 /*!
  * \brief Register an element with the data importer.

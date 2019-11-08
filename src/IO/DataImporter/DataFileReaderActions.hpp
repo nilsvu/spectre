@@ -93,28 +93,6 @@ namespace ThreadedActions {
 template <typename ImporterOptionsGroup, typename FieldTagsList,
           typename CallbackAction, typename CallbackComponent>
 struct ReadElementData {
- private:
-  template <typename T>
-  static std::string component_suffix(const T& tensor,
-                                      size_t component_index) noexcept {
-    return tensor.rank() == 0
-               ? ""
-               : "_" + tensor.component_name(
-                           tensor.get_tensor_index(component_index));
-  }
-  static size_t get_observation_id(const h5::VolumeData& volume_file,
-                                   const double observation_value) noexcept {
-    for (auto& observation_id : volume_file.list_observation_ids()) {
-      if (volume_file.get_observation_value(observation_id) ==
-          observation_value) {
-        return observation_id;
-      }
-    }
-    ERROR("No observation with value " << observation_value
-                                       << " found in volume file.");
-  }
-
- public:
   using const_global_cache_tags =
       tmpl::list<Tags::DataFileName<ImporterOptionsGroup>,
                  Tags::VolumeDataSubgroup<ImporterOptionsGroup>,
@@ -138,8 +116,7 @@ struct ReadElementData {
           "/" + Parallel::get<Tags::VolumeDataSubgroup<ImporterOptionsGroup>>(
                     cache),
           version_number);
-      const auto observation_id = get_observation_id(
-          volume_file,
+      const auto observation_id = volume_file.find_observation_id(
           Parallel::get<Tags::ObservationValue<ImporterOptionsGroup>>(cache));
       // Read the tensor data for all elements at once, since that's how it's
       // stored in the file
@@ -152,7 +129,8 @@ struct ReadElementData {
         for (size_t i = 0; i < tensor_data.size(); i++) {
           tensor_data[i] = volume_file.get_tensor_component(
               observation_id,
-              db::tag_name<field_tag>() + component_suffix(tensor_data, i));
+              db::tag_name<field_tag>() + tensor_data.component_suffix(
+                                              tensor_data.get_tensor_index(i)));
         }
       });
       // Retrieve the information needed to reconstruct which element the data
