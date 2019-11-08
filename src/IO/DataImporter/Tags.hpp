@@ -83,6 +83,9 @@ namespace Tags {
  */
 template <typename ImporterOptionsGroup>
 struct DataFileName : db::SimpleTag {
+  static std::string name() noexcept {
+    return "DataFileName(" + option_name<ImporterOptionsGroup>() + ")";
+  }
   using type = std::string;
   using option_tags =
       tmpl::list<OptionTags::DataFileName<ImporterOptionsGroup>>;
@@ -100,6 +103,9 @@ struct DataFileName : db::SimpleTag {
  */
 template <typename ImporterOptionsGroup>
 struct VolumeDataSubgroup : db::SimpleTag {
+  static std::string name() noexcept {
+    return "VolumeDataSubgroup(" + option_name<ImporterOptionsGroup>() + ")";
+  }
   using type = std::string;
   using option_tags =
       tmpl::list<OptionTags::VolumeDataSubgroup<ImporterOptionsGroup>>;
@@ -115,6 +121,9 @@ struct VolumeDataSubgroup : db::SimpleTag {
  */
 template <typename ImporterOptionsGroup>
 struct ObservationValue : db::SimpleTag {
+  static std::string name() noexcept {
+    return "ObservationValue(" + option_name<ImporterOptionsGroup>() + ")";
+  }
   using type = double;
   using option_tags =
       tmpl::list<OptionTags::ObservationValue<ImporterOptionsGroup>>;
