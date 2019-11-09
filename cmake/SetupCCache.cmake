@@ -7,6 +7,7 @@ if(USE_CCACHE)
   if(CCACHE_FOUND)
     # CCache offers no benefit for linking
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE
+      "CCACHE_COMPRESSLEVEL=6 CCACHE_COMPRESS=1 "
       "CCACHE_SLOPPINESS=pch_defines,time_macros ccache")
     message(STATUS "Using ccache for compilation")
   else()
