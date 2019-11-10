@@ -76,6 +76,8 @@ class MagnetizedFmDisk
   using fm_disk = RelativisticEuler::Solutions::FishboneMoncriefDisk;
 
  public:
+  static constexpr size_t volume_dim = 3;
+
   /// The rest mass density (in units of the maximum rest mass density in the
   /// disk) below which the matter in the disk is initially unmagetized.
   struct ThresholdDensity {

@@ -18,6 +18,7 @@
 #include "Options/Options.hpp"
 #include "Options/ParseOptions.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/MakeWithValue.hpp"
@@ -25,6 +26,7 @@
 #include "Utilities/TaggedTuple.hpp"
 #include "tests/Unit/PointwiseFunctions/AnalyticSolutions/GeneralRelativity/VerifyGrSolution.hpp"
 #include "tests/Unit/PointwiseFunctions/GeneralRelativity/TestHelpers.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/TestHelpers.hpp"
 
 // IWYU pragma: no_forward_declare Tags::deriv
@@ -209,6 +211,10 @@ void test_construct_from_options() {
 }
 
 }  // namespace
+
+static_assert(test_protocol_conformance<gr::Solutions::KerrSchild,
+                                        evolution::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.KerrSchild",
                   "[PointwiseFunctions][Unit]") {

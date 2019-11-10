@@ -13,9 +13,11 @@
 #include "DataStructures/Tensor/TypeAliases.hpp"  // IWYU pragma: keep
 #include "ErrorHandling/Error.hpp"
 #include "PointwiseFunctions/AnalyticData/GrMhd/MagneticFieldLoop.hpp"
+#include "PointwiseFunctions/AnalyticData/Protocols.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestCreation.hpp"
@@ -131,6 +133,10 @@ void test_variables(const DataType& used_for_size) noexcept {
       {{{-1.0, 1.0}}}, member_variables, used_for_size);
 }
 }  // namespace
+
+static_assert(test_protocol_conformance<grmhd::AnalyticData::MagneticFieldLoop,
+                                        evolution::protocols::AnalyticData>,
+              "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE(
     "Unit.PointwiseFunctions.AnalyticData.GrMhd.MagneticFieldLoop",

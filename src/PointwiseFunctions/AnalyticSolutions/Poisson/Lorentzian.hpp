@@ -9,6 +9,7 @@
 #include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
 #include "Elliptic/Systems/Poisson/Tags.hpp"    // IWYU pragma: keep
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -35,12 +36,14 @@ namespace Solutions {
  * \note Corresponding 1D and 2D solutions are not implemented yet.
  */
 template <size_t Dim>
-class Lorentzian {
+class Lorentzian : public elliptic::protocols::AnalyticSolution {
   static_assert(
       Dim == 3,
       "This solution is currently implemented in 3 spatial dimensions only");
 
  public:
+  static constexpr size_t volume_dim = Dim;
+
   using options = tmpl::list<>;
   static constexpr OptionString help{
       "A Lorentzian solution to the Poisson equation."};
@@ -69,9 +72,6 @@ class Lorentzian {
   static tuples::TaggedTuple<Tags...> variables(
       const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
       tmpl::list<Tags...> /*meta*/) noexcept {
-    static_assert(sizeof...(Tags) > 1,
-                  "The generic template will recurse infinitely if only one "
-                  "tag is being retrieved.");
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
   }
 

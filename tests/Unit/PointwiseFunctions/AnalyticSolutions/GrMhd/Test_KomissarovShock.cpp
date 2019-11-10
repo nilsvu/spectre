@@ -17,11 +17,13 @@
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Options/Options.hpp"  // IWYU pragma: keep
 #include "PointwiseFunctions/AnalyticSolutions/GrMhd/KomissarovShock.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
 #include "Utilities/StdArrayHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 #include "tests/Unit/PointwiseFunctions/AnalyticSolutions/GrMhd/VerifyGrMhdSolution.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestCreation.hpp"
@@ -210,6 +212,10 @@ void test_solution() noexcept {
                         1.e-1);
 }
 }  // namespace
+
+static_assert(test_protocol_conformance<grmhd::Solutions::KomissarovShock,
+                                        evolution::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.Solutions.GrMhd.KomissarovShock",
                   "[Unit][PointwiseFunctions]") {

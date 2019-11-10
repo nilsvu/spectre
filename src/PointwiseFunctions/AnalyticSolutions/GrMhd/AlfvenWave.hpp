@@ -89,6 +89,7 @@ namespace Solutions {
  */
 class AlfvenWave : public evolution::protocols::AnalyticSolution {
  public:
+  static constexpr size_t volume_dim = 3;
   using equation_of_state_type = EquationsOfState::IdealFluid<true>;
 
   /// The wave number of the profile.

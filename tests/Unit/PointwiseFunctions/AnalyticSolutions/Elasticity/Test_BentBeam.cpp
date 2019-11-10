@@ -13,9 +13,11 @@
 #include "DataStructures/Variables.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"  // IWYU pragma: keep
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/BentBeam.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/IsotropicHomogeneous.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestCreation.hpp"
@@ -45,6 +47,10 @@ struct BentBeamProxy : Elasticity::Solutions::BentBeam {
 };
 
 }  // namespace
+
+static_assert(test_protocol_conformance<Elasticity::Solutions::BentBeam,
+                                        elliptic::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE(
     "Unit.PointwiseFunctions.AnalyticSolutions.Elasticity.BentBeam",

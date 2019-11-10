@@ -37,6 +37,8 @@ namespace Solutions {
  */
 class Bump : public evolution::protocols::AnalyticSolution {
  public:
+  static constexpr size_t volume_dim = 1;
+
   struct HalfWidth {
     using type = double;
     static constexpr OptionString help{
@@ -80,6 +82,14 @@ class Bump : public evolution::protocols::AnalyticSolution {
   tuples::TaggedTuple<::Tags::dt<Burgers::Tags::U>> variables(
       const tnsr::I<DataVector, 1>& x, double t,
       tmpl::list<::Tags::dt<Tags::U>> /*meta*/) const noexcept;
+
+  template <typename... Tags>
+  tuples::TaggedTuple<Tags...> variables(const tnsr::I<DataVector, 1>& x,
+                                         double t,
+                                         tmpl::list<Tags...> /*meta*/) const
+      noexcept {
+    return {tuples::get<Tags>(variables(x, t, tmpl::list<Tags>{}))...};
+  }
 
   // clang-tidy: no pass by reference
   void pup(PUP::er& p) noexcept;  // NOLINT

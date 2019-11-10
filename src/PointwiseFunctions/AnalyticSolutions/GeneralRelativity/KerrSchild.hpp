@@ -9,7 +9,7 @@
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
-#include "PointwiseFunctions/GeneralRelativity/TagsDeclarations.hpp"
+#include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/ForceInline.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
@@ -272,6 +272,16 @@ class KerrSchild : public evolution::protocols::AnalyticSolution {
   tuples::tagged_tuple_from_typelist<tags<DataType>> variables(
       const tnsr::I<DataType, volume_dim>& x, double t,
       tags<DataType> /*meta*/) const noexcept;
+
+  template <typename... Tags,
+            Requires<not cpp17::is_same_v<tmpl::list<Tags...>,
+                                          tags<DataVector>>> = nullptr>
+  tuples::TaggedTuple<Tags...> variables(
+      const tnsr::I<DataVector, volume_dim>& x, double t,
+      tmpl::list<Tags...> /*meta*/) const noexcept {
+    auto all_variables = variables(x, t, tags<DataVector>{});
+    return {std::move(get<Tags>(all_variables))...};
+  }
 
   // clang-tidy: no runtime references
   void pup(PUP::er& p) noexcept;  // NOLINT

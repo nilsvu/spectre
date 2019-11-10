@@ -170,6 +170,7 @@ class BondiMichel : public evolution::protocols::AnalyticSolution {
   struct IntermediateVars;
 
  public:
+  static constexpr size_t volume_dim = 3;
   using equation_of_state_type = EquationsOfState::PolytropicFluid<true>;
 
   /// The mass of the black hole.

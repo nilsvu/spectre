@@ -13,8 +13,10 @@
 #include "Elliptic/Systems/Poisson/Tags.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Moustache.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestCreation.hpp"
@@ -64,6 +66,13 @@ void test_solution() {
 }
 
 }  // namespace
+
+static_assert(test_protocol_conformance<Poisson::Solutions::Moustache<1>,
+                                        elliptic::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
+static_assert(test_protocol_conformance<Poisson::Solutions::Moustache<2>,
+                                        elliptic::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Poisson.Moustache",
                   "[PointwiseFunctions][Unit]") {

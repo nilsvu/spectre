@@ -18,8 +18,10 @@
 #include "Options/Options.hpp"
 #include "Options/ParseOptions.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/NewtonianEuler/IsentropicVortex.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestCreation.hpp"
@@ -90,6 +92,15 @@ void test_solution(
 }
 
 }  // namespace
+
+static_assert(
+    test_protocol_conformance<NewtonianEuler::Solutions::IsentropicVortex<2>,
+                              evolution::protocols::AnalyticSolution>,
+    "Failed testing protocol conformance");
+static_assert(
+    test_protocol_conformance<NewtonianEuler::Solutions::IsentropicVortex<3>,
+                              evolution::protocols::AnalyticSolution>,
+    "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.NewtEuler.Vortex",
                   "[Unit][PointwiseFunctions]") {

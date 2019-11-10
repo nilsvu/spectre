@@ -15,10 +15,12 @@
 #include "ErrorHandling/Error.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/AnalyticData/GrMhd/CylindricalBlastWave.hpp"
+#include "PointwiseFunctions/AnalyticData/Protocols.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestCreation.hpp"
@@ -184,6 +186,11 @@ void test_density_on_and_near_boundaries() {
                                approx);
 }
 }  // namespace
+
+static_assert(
+    test_protocol_conformance<grmhd::AnalyticData::CylindricalBlastWave,
+                              evolution::protocols::AnalyticData>,
+    "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE(
     "Unit.PointwiseFunctions.AnalyticData.GrMhd.CylindricalBlastWave",

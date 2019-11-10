@@ -39,6 +39,7 @@ namespace Solutions {
  */
 class ConstantM1 : public evolution::protocols::AnalyticSolution {
  public:
+  static constexpr size_t volume_dim = 3;
 
   /// The mean flow velocity.
   struct MeanVelocity {

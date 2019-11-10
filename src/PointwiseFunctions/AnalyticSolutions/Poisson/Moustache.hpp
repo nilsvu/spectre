@@ -10,6 +10,7 @@
 #include "Elliptic/Systems/Poisson/Tags.hpp"    // IWYU pragma: keep
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -45,8 +46,10 @@ namespace Solutions {
  * This solution is taken from \cite Stamm2010.
  */
 template <size_t Dim>
-class Moustache {
+class Moustache : public elliptic::protocols::AnalyticSolution {
  public:
+  static constexpr size_t volume_dim = Dim;
+
   using options = tmpl::list<>;
   static constexpr OptionString help{
       "A solution with a discontinuous first derivative of its source at 1/2 "
@@ -82,9 +85,6 @@ class Moustache {
   tuples::TaggedTuple<Tags...> variables(
       const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
       tmpl::list<Tags...> /*meta*/) const noexcept {
-    static_assert(sizeof...(Tags) > 1,
-                  "The generic template will recurse infinitely if only one "
-                  "tag is being retrieved.");
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
   }
 
