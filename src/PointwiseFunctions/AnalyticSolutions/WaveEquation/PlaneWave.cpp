@@ -88,29 +88,45 @@ tnsr::ii<T, Dim> PlaneWave<Dim>::d2psi_dxdx(const tnsr::I<T, Dim>& x,
 }
 
 template <size_t Dim>
-tuples::TaggedTuple<ScalarWave::Pi, ScalarWave::Phi<Dim>, ScalarWave::Psi>
-PlaneWave<Dim>::variables(const tnsr::I<DataVector, Dim>& x, double t,
-                          const tmpl::list<ScalarWave::Pi, ScalarWave::Phi<Dim>,
-                                           ScalarWave::Psi> /*meta*/) const
-    noexcept {
-  tuples::TaggedTuple<ScalarWave::Pi, ScalarWave::Phi<Dim>, ScalarWave::Psi>
-      variables{dpsi_dt(x, t), dpsi_dx(x, t), psi(x, t)};
-  get<ScalarWave::Pi>(variables).get() *= -1.0;
-  return variables;
+tuples::TaggedTuple<ScalarWave::Psi> PlaneWave<Dim>::variables(
+    const tnsr::I<DataVector, Dim>& x, double t,
+    tmpl::list<ScalarWave::Psi> /*meta*/) const noexcept {
+  return {psi(x, t)};
 }
 
 template <size_t Dim>
-tuples::TaggedTuple<Tags::dt<ScalarWave::Pi>, Tags::dt<ScalarWave::Phi<Dim>>,
-                    Tags::dt<ScalarWave::Psi>>
-PlaneWave<Dim>::variables(
+tuples::TaggedTuple<::Tags::dt<ScalarWave::Psi>> PlaneWave<Dim>::variables(
     const tnsr::I<DataVector, Dim>& x, double t,
-    const tmpl::list<Tags::dt<ScalarWave::Pi>, Tags::dt<ScalarWave::Phi<Dim>>,
-                     Tags::dt<ScalarWave::Psi>> /*meta*/) const noexcept {
-  tuples::TaggedTuple<Tags::dt<ScalarWave::Pi>, Tags::dt<ScalarWave::Phi<Dim>>,
-                      Tags::dt<ScalarWave::Psi>>
-      dt_variables{d2psi_dt2(x, t), d2psi_dtdx(x, t), dpsi_dt(x, t)};
-  get<Tags::dt<ScalarWave::Pi>>(dt_variables).get() *= -1.0;
-  return dt_variables;
+    tmpl::list<::Tags::dt<ScalarWave::Psi>> /*meta*/) const noexcept {
+  return {dpsi_dt(x, t)};
+}
+
+template <size_t Dim>
+tuples::TaggedTuple<ScalarWave::Pi> PlaneWave<Dim>::variables(
+    const tnsr::I<DataVector, Dim>& x, double t,
+    tmpl::list<ScalarWave::Pi> /*meta*/) const noexcept {
+  return {Scalar<DataVector>{-get(dpsi_dt(x, t))}};
+}
+
+template <size_t Dim>
+tuples::TaggedTuple<::Tags::dt<ScalarWave::Pi>> PlaneWave<Dim>::variables(
+    const tnsr::I<DataVector, Dim>& x, double t,
+    tmpl::list<::Tags::dt<ScalarWave::Pi>> /*meta*/) const noexcept {
+  return {Scalar<DataVector>(-get(d2psi_dt2(x, t)))};
+}
+
+template <size_t Dim>
+tuples::TaggedTuple<ScalarWave::Phi<Dim>> PlaneWave<Dim>::variables(
+    const tnsr::I<DataVector, Dim>& x, double t,
+    tmpl::list<ScalarWave::Phi<Dim>> /*meta*/) const noexcept {
+  return {dpsi_dx(x, t)};
+}
+
+template <size_t Dim>
+tuples::TaggedTuple<::Tags::dt<ScalarWave::Phi<Dim>>> PlaneWave<Dim>::variables(
+    const tnsr::I<DataVector, Dim>& x, double t,
+    tmpl::list<::Tags::dt<ScalarWave::Phi<Dim>>> /*meta*/) const noexcept {
+  return {d2psi_dtdx(x, t)};
 }
 
 template <size_t Dim>
