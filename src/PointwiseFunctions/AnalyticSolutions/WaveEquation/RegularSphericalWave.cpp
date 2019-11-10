@@ -3,114 +3,190 @@
 
 #include "PointwiseFunctions/AnalyticSolutions/WaveEquation/RegularSphericalWave.hpp"
 
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <limits>
+#include <cstddef>
+#include <memory>
 #include <pup.h>
 
-#include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
+#include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
-#include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
-#include "DataStructures/Variables.hpp"           // IWYU pragma: keep
-#include "Evolution/Systems/ScalarWave/Tags.hpp"  // IWYU pragma: keep
-#include "Parallel/PupStlCpp11.hpp"               // IWYU pragma: keep
+#include "Evolution/Systems/ScalarWave/Tags.hpp"
+#include "PointwiseFunctions/MathFunctions/MathFunction.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/EqualWithinRoundoff.hpp"
-// IWYU pragma: no_forward_declare Tensor
+#include "Utilities/GenerateInstantiations.hpp"
 
 namespace ScalarWave {
 namespace Solutions {
+
+// Psi
+
+template <typename DataType>
+Scalar<DataType> RegularSphericalWave::variable_at_origin(
+    ScalarWave::Psi /* meta */, const double /* t */,
+    const PrecomputedDataAtOrigin<DataType>& precomputed_data) const noexcept {
+  return Scalar<DataType>{2. * precomputed_data.profile_deriv};
+}
+
+template <typename DataType>
+Scalar<DataType> RegularSphericalWave::variable(
+    ScalarWave::Psi /* meta */, const tnsr::I<DataType, 3>& /* x */,
+    const double /* t */,
+    const PrecomputedData<DataType>& precomputed_data) const noexcept {
+  return Scalar<DataType>{
+      (precomputed_data.profile_out - precomputed_data.profile_in) /
+      precomputed_data.radial_distance};
+}
+
+template <typename DataType>
+Scalar<DataType> RegularSphericalWave::variable_at_origin(
+    ::Tags::dt<ScalarWave::Psi> /* meta */, const double /* t */,
+    const PrecomputedDataAtOrigin<DataType>& precomputed_data) const noexcept {
+  return Scalar<DataType>{-2. * precomputed_data.profile_second_deriv};
+}
+
+template <typename DataType>
+Scalar<DataType> RegularSphericalWave::variable(
+    ::Tags::dt<ScalarWave::Psi> /* meta */, const tnsr::I<DataType, 3>& /* x
+                                                                         */
+    ,
+    const double /* t */,
+    const PrecomputedData<DataType>& precomputed_data) const noexcept {
+  return Scalar<DataType>{
+      (precomputed_data.profile_deriv_in - precomputed_data.profile_deriv_out) /
+      precomputed_data.radial_distance};
+}
+
+// Pi
+
+template <typename DataType>
+Scalar<DataType> RegularSphericalWave::variable_at_origin(
+    ScalarWave::Pi /* meta */, const double /* t */,
+    const PrecomputedDataAtOrigin<DataType>& precomputed_data) const noexcept {
+  return Scalar<DataType>{2. * precomputed_data.profile_second_deriv};
+}
+
+template <typename DataType>
+Scalar<DataType> RegularSphericalWave::variable(
+    ScalarWave::Pi /* meta */, const tnsr::I<DataType, 3>& /* x */,
+    const double /* t */,
+    const PrecomputedData<DataType>& precomputed_data) const noexcept {
+  return Scalar<DataType>{
+      (precomputed_data.profile_deriv_out - precomputed_data.profile_deriv_in) /
+      precomputed_data.radial_distance};
+}
+
+template <typename DataType>
+Scalar<DataType> RegularSphericalWave::variable_at_origin(
+    ::Tags::dt<ScalarWave::Pi> /* meta */, const double /* t */,
+    const PrecomputedDataAtOrigin<DataType>& precomputed_data) const noexcept {
+  return Scalar<DataType>{-2. * precomputed_data.profile_third_deriv};
+}
+
+template <typename DataType>
+Scalar<DataType> RegularSphericalWave::variable(
+    ::Tags::dt<ScalarWave::Pi> /* meta */, const tnsr::I<DataType, 3>& /* x
+                                                                        */
+    ,
+    const double /* t */,
+    const PrecomputedData<DataType>& precomputed_data) const noexcept {
+  return Scalar<DataType>{(precomputed_data.profile_second_deriv_in -
+                           precomputed_data.profile_second_deriv_out) /
+                          precomputed_data.radial_distance};
+}
+
+// Phi
+
+template <typename DataType>
+tnsr::i<DataType, 3> RegularSphericalWave::variable_at_origin(
+    ScalarWave::Phi<3> /* meta */, const double /* t */,
+    const PrecomputedDataAtOrigin<DataType>& precomputed_data) const noexcept {
+  const auto zero =
+      make_with_value<DataType>(precomputed_data.used_for_size, 0.);
+  return tnsr::i<DataType, 3>{{{zero, zero, zero}}};
+}
+
+template <typename DataType>
+tnsr::i<DataType, 3> RegularSphericalWave::variable(
+    ScalarWave::Phi<3> /* meta */, const tnsr::I<DataType, 3>& x,
+    const double /* t */,
+    const PrecomputedData<DataType>& precomputed_data) const noexcept {
+  const DataType phi_isotropic =
+      (precomputed_data.profile_deriv_out + precomputed_data.profile_deriv_in -
+       (precomputed_data.profile_out - precomputed_data.profile_deriv_in) /
+           precomputed_data.radial_distance) /
+      square(precomputed_data.radial_distance);
+  return tnsr::i<DataType, 3>{
+      {{phi_isotropic * get<0>(x), phi_isotropic * get<1>(x),
+        phi_isotropic * get<2>(x)}}};
+}
+
+template <typename DataType>
+tnsr::i<DataType, 3> RegularSphericalWave::variable_at_origin(
+    ::Tags::dt<ScalarWave::Phi<3>> /* meta */, const double /* t */,
+    const PrecomputedDataAtOrigin<DataType>& precomputed_data) const noexcept {
+  const auto zero =
+      make_with_value<DataType>(precomputed_data.used_for_size, 0.);
+  return tnsr::i<DataType, 3>{{{zero, zero, zero}}};
+}
+
+template <typename DataType>
+tnsr::i<DataType, 3> RegularSphericalWave::variable(
+    ::Tags::dt<ScalarWave::Phi<3>> /* meta */, const tnsr::I<DataType, 3>& x,
+    const double /* t */,
+    const PrecomputedData<DataType>& precomputed_data) const noexcept {
+  const DataType dphi_dt_isotropic =
+      -(precomputed_data.profile_second_deriv_out +
+        precomputed_data.profile_second_deriv_in +
+        (-precomputed_data.profile_deriv_out +
+         precomputed_data.profile_deriv_in) /
+            precomputed_data.radial_distance) /
+      square(precomputed_data.radial_distance);
+  return tnsr::i<DataType, 3>{
+      {{dphi_dt_isotropic * get<0>(x), dphi_dt_isotropic * get<1>(x),
+        dphi_dt_isotropic * get<2>(x)}}};
+}
 
 RegularSphericalWave::RegularSphericalWave(
     std::unique_ptr<MathFunction<1>> profile) noexcept
     : profile_(std::move(profile)) {}
 
-tuples::TaggedTuple<ScalarWave::Pi, ScalarWave::Phi<3>, ScalarWave::Psi>
-RegularSphericalWave::variables(
-    const tnsr::I<DataVector, 3>& x, double t,
-    const tmpl::list<ScalarWave::Pi, ScalarWave::Phi<3>,
-                     ScalarWave::Psi> /*meta*/) const noexcept {
-  const DataVector r = get(magnitude(x));
-  // See class documentation for choice of cutoff
-  const double r_cutoff = cbrt(std::numeric_limits<double>::epsilon());
-  Scalar<DataVector> psi{r.size()};
-  Scalar<DataVector> dpsi_dt{r.size()};
-  tnsr::i<DataVector, 3> dpsi_dx{r.size()};
-  for (size_t i = 0; i < r.size(); i++) {
-    // Testing for r=0 here assumes a scale of order unity
-    if (equal_within_roundoff(r[i], 0., r_cutoff, 1.)) {
-      get(psi)[i] = 2. * profile_->first_deriv(-t);
-      get(dpsi_dt)[i] = -2. * profile_->second_deriv(-t);
-      for (size_t d = 0; d < 3; d++) {
-        dpsi_dx.get(d)[i] = 0.;
-      }
-    } else {
-      const auto F_out = profile_->operator()(r[i] - t);
-      const auto F_in = profile_->operator()(-r[i] - t);
-      const auto dF_out = profile_->first_deriv(r[i] - t);
-      const auto dF_in = profile_->first_deriv(-r[i] - t);
-      get(psi)[i] = (F_out - F_in) / r[i];
-      get(dpsi_dt)[i] = (-dF_out + dF_in) / r[i];
-      const double dpsi_dx_isotropic =
-          (dF_out + dF_in - get(psi)[i]) / square(r[i]);
-      for (size_t d = 0; d < 3; d++) {
-        dpsi_dx.get(d)[i] = dpsi_dx_isotropic * x.get(d)[i];
-      }
-    }
-  }
-  tuples::TaggedTuple<ScalarWave::Pi, ScalarWave::Phi<3>, ScalarWave::Psi>
-      variables{std::move(dpsi_dt), std::move(dpsi_dx), std::move(psi)};
-  get<ScalarWave::Pi>(variables).get() *= -1.0;
-  return variables;
-}
+void RegularSphericalWave::pup(PUP::er& p) noexcept { p | profile_; }
 
-tuples::TaggedTuple<Tags::dt<ScalarWave::Pi>, Tags::dt<ScalarWave::Phi<3>>,
-                    Tags::dt<ScalarWave::Psi>>
-RegularSphericalWave::variables(
-    const tnsr::I<DataVector, 3>& x, double t,
-    const tmpl::list<Tags::dt<ScalarWave::Pi>, Tags::dt<ScalarWave::Phi<3>>,
-                     Tags::dt<ScalarWave::Psi>> /*meta*/) const noexcept {
-  const DataVector r = get(magnitude(x));
-  // See class documentation for choice of cutoff
-  const double r_cutoff = cbrt(std::numeric_limits<double>::epsilon());
-  Scalar<DataVector> dpsi_dt{r.size()};
-  Scalar<DataVector> d2psi_dt2{r.size()};
-  tnsr::i<DataVector, 3> d2psi_dtdx{r.size()};
-  for (size_t i = 0; i < r.size(); i++) {
-    // Testing for r=0 here assumes a scale of order unity
-    if (equal_within_roundoff(r[i], 0., r_cutoff, 1.)) {
-      get(dpsi_dt)[i] = -2. * profile_->second_deriv(-t);
-      get(d2psi_dt2)[i] = 2. * profile_->third_deriv(-t);
-      for (size_t d = 0; d < 3; d++) {
-        d2psi_dtdx.get(d)[i] = 0.;
-      }
-    } else {
-      const auto dF_out = profile_->first_deriv(r[i] - t);
-      const auto dF_in = profile_->first_deriv(-r[i] - t);
-      const auto d2F_out = profile_->second_deriv(r[i] - t);
-      const auto d2F_in = profile_->second_deriv(-r[i] - t);
-      get(dpsi_dt)[i] = (-dF_out + dF_in) / r[i];
-      get(d2psi_dt2)[i] = (d2F_out - d2F_in) / r[i];
-      const double d2psi_dtdx_isotropic =
-          -(d2F_out + d2F_in + get(dpsi_dt)[i]) / square(r[i]);
-      for (size_t d = 0; d < 3; d++) {
-        d2psi_dtdx.get(d)[i] = d2psi_dtdx_isotropic * x.get(d)[i];
-      }
-    }
-  }
-  tuples::TaggedTuple<Tags::dt<ScalarWave::Pi>, Tags::dt<ScalarWave::Phi<3>>,
-                      Tags::dt<ScalarWave::Psi>>
-      dt_variables{std::move(d2psi_dt2), std::move(d2psi_dtdx),
-                   std::move(dpsi_dt)};
-  get<Tags::dt<ScalarWave::Pi>>(dt_variables).get() *= -1.0;
-  return dt_variables;
-}
+#define DTYPE(data) BOOST_PP_TUPLE_ELEM(0, data)
+#define TAG(data) BOOST_PP_TUPLE_ELEM(1, data)
 
-void RegularSphericalWave::pup(PUP::er& p) noexcept {
-  p | profile_;
-}
+#define INSTANTIATE_SCALARS(_, data)                                     \
+  template Scalar<DTYPE(data)> RegularSphericalWave::variable_at_origin( \
+      TAG(data) /* meta */, double t,                                    \
+      const PrecomputedDataAtOrigin<DTYPE(data)>& precomputed_data)      \
+      const noexcept;                                                    \
+                                                                         \
+  template Scalar<DTYPE(data)> RegularSphericalWave::variable(           \
+      TAG(data) /* meta */, const tnsr::I<DTYPE(data), 3>& x, double t,  \
+      const PrecomputedData<DTYPE(data)>& precomputed_data) const noexcept;
+
+#define INSTANTIATE_COVECTORS(_, data)                                       \
+  template tnsr::i<DTYPE(data), 3> RegularSphericalWave::variable_at_origin( \
+      TAG(data) /* meta */, double t,                                        \
+      const PrecomputedDataAtOrigin<DTYPE(data)>& precomputed_data)          \
+      const noexcept;                                                        \
+                                                                             \
+  template tnsr::i<DTYPE(data), 3> RegularSphericalWave::variable(           \
+      TAG(data) /* meta */, const tnsr::I<DTYPE(data), 3>& x, double t,      \
+      const PrecomputedData<DTYPE(data)>& precomputed_data) const noexcept;
+
+GENERATE_INSTANTIATIONS(INSTANTIATE_SCALARS, (double, DataVector),
+                        (ScalarWave::Psi, ScalarWave::Pi,
+                         ::Tags::dt<ScalarWave::Psi>,
+                         ::Tags::dt<ScalarWave::Pi>))
+GENERATE_INSTANTIATIONS(INSTANTIATE_COVECTORS, (double, DataVector),
+                        (ScalarWave::Phi<3>, ::Tags::dt<ScalarWave::Phi<3>>))
+
+#undef DTYPE
+#undef TAG
+#undef INSTANTIATE_SCALARS
+#undef INSTANTIATE_COVECTORS
 
 }  // namespace Solutions
 }  // namespace ScalarWave
