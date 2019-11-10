@@ -96,6 +96,7 @@ class IsentropicVortex : public evolution::protocols::AnalyticSolution {
   struct IntermediateVariables;
 
  public:
+  static constexpr size_t volume_dim = Dim;
   using equation_of_state_type = EquationsOfState::PolytropicFluid<false>;
   using source_term_type = Sources::VortexPerturbation<Dim>;
 

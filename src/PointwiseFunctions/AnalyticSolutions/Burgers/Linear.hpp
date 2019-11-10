@@ -28,6 +28,8 @@ namespace Solutions {
 /// \f$u(x, t) = x / (t - t_0)\f$ where \f$t_0\f$ is the shock time.
 class Linear : public evolution::protocols::AnalyticSolution {
  public:
+  static constexpr size_t volume_dim = 1;
+
   struct ShockTime {
     using type = double;
     static constexpr OptionString help{"The time at which a shock forms"};
@@ -58,6 +60,14 @@ class Linear : public evolution::protocols::AnalyticSolution {
   tuples::TaggedTuple<::Tags::dt<Tags::U>> variables(
       const tnsr::I<DataVector, 1>& x, double t,
       tmpl::list<::Tags::dt<Tags::U>> /*meta*/) const noexcept;
+
+  template <typename... Tags>
+  tuples::TaggedTuple<Tags...> variables(const tnsr::I<DataVector, 1>& x,
+                                         double t,
+                                         tmpl::list<Tags...> /*meta*/) const
+      noexcept {
+    return {tuples::get<Tags>(variables(x, t, tmpl::list<Tags>{}))...};
+  }
 
   // clang-tidy: no pass by reference
   void pup(PUP::er& p) noexcept;  // NOLINT

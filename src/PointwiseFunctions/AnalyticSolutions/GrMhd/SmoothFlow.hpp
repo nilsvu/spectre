@@ -44,6 +44,7 @@ class SmoothFlow : public evolution::protocols::AnalyticSolution,
   using smooth_flow = RelativisticEuler::Solutions::SmoothFlow<3>;
 
  public:
+  static constexpr size_t volume_dim = 3;
   using options = smooth_flow::options;
 
   static constexpr OptionString help = {

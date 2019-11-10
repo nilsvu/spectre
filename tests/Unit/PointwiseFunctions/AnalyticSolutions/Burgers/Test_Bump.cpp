@@ -9,14 +9,20 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Evolution/Systems/Burgers/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Burgers/Bump.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 #include "tests/Unit/PointwiseFunctions/AnalyticSolutions/Burgers/CheckBurgersSolution.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/TestCreation.hpp"
 #include "tests/Unit/TestHelpers.hpp"
 
 // IWYU pragma: no_forward_declare Tensor
+
+static_assert(test_protocol_conformance<Burgers::Solutions::Bump,
+                                        evolution::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Burgers.Bump",
                   "[PointwiseFunctions][Unit]") {

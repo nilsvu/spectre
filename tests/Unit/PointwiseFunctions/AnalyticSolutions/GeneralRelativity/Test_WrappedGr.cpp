@@ -17,10 +17,12 @@
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Minkowski.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/WrappedGr.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/GeneralRelativity/ComputeGhQuantities.hpp"
 #include "PointwiseFunctions/GeneralRelativity/ComputeSpacetimeQuantities.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/TMPL.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/TestHelpers.hpp"
 
 // IWYU pragma: no_forward_declare Tags::deriv
@@ -151,6 +153,27 @@ void test_construct_from_options() {
             mass, spin, center));
 }
 }  // namespace
+
+static_assert(
+    test_protocol_conformance<
+        GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::Minkowski<1>>,
+        evolution::protocols::AnalyticSolution>,
+    "Failed testing protocol conformance");
+static_assert(
+    test_protocol_conformance<
+        GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::Minkowski<2>>,
+        evolution::protocols::AnalyticSolution>,
+    "Failed testing protocol conformance");
+static_assert(
+    test_protocol_conformance<
+        GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::Minkowski<3>>,
+        evolution::protocols::AnalyticSolution>,
+    "Failed testing protocol conformance");
+static_assert(
+    test_protocol_conformance<
+        GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::KerrSchild>,
+        evolution::protocols::AnalyticSolution>,
+    "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.WrappedGr",
                   "[PointwiseFunctions][Unit]") {

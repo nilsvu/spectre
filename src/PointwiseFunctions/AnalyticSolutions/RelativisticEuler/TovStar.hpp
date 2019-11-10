@@ -47,6 +47,8 @@ namespace Solutions {
 template <typename RadialSolution>
 class TovStar : public evolution::protocols::AnalyticSolution {
  public:
+  static constexpr size_t volume_dim = 3;
+
   /*!
    * \brief The radial variables needed to compute the full `TOVStar` solution
    *

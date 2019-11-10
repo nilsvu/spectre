@@ -10,11 +10,13 @@
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "PointwiseFunctions/AnalyticData/GrMhd/OrszagTangVortex.hpp"
+#include "PointwiseFunctions/AnalyticData/Protocols.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
 #include "Utilities/MakeArray.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestCreation.hpp"
@@ -62,6 +64,10 @@ void test_variables(const DataType& used_for_size) noexcept {
         make_with_value<LapseType>(used_for_size, 1.));
 }
 }  // namespace
+
+static_assert(test_protocol_conformance<grmhd::AnalyticData::OrszagTangVortex,
+                                        evolution::protocols::AnalyticData>,
+              "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticData.GrMhd.OrszagTangVortex",
                   "[Unit][PointwiseFunctions]") {

@@ -10,10 +10,12 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Minkowski.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/TestCreation.hpp"
 #include "tests/Unit/TestHelpers.hpp"
 
@@ -119,6 +121,16 @@ void test_option_creation() {
   test_creation<gr::Solutions::Minkowski<Dim>>("");
 }
 }  // namespace
+
+static_assert(test_protocol_conformance<gr::Solutions::Minkowski<1>,
+                                        evolution::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
+static_assert(test_protocol_conformance<gr::Solutions::Minkowski<2>,
+                                        evolution::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
+static_assert(test_protocol_conformance<gr::Solutions::Minkowski<3>,
+                                        evolution::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.Minkowski",
                   "[PointwiseFunctions][Unit]") {

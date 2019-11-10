@@ -11,8 +11,10 @@
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Elliptic/Systems/Poisson/Tags.hpp"  // IWYU pragma: keep
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Lorentzian.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestCreation.hpp"
@@ -57,6 +59,10 @@ void test_solution() {
 }
 
 }  // namespace
+
+static_assert(test_protocol_conformance<Poisson::Solutions::Lorentzian<3>,
+                                        elliptic::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE(
     "Unit.PointwiseFunctions.AnalyticSolutions.Poisson.Lorentzian",

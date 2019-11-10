@@ -59,6 +59,7 @@ namespace AnalyticData {
  */
 class MagneticRotor : public evolution::protocols::AnalyticData {
  public:
+  static constexpr size_t volume_dim = 3;
   using equation_of_state_type = EquationsOfState::IdealFluid<true>;
 
   /// Radius of the rotor.
@@ -185,9 +186,6 @@ class MagneticRotor : public evolution::protocols::AnalyticData {
   tuples::TaggedTuple<Tags...> variables(
       const tnsr::I<DataType, 3, Frame::Inertial>& x,
       tmpl::list<Tags...> /*meta*/) const noexcept {
-    static_assert(sizeof...(Tags) > 1,
-                  "The generic template will recurse infinitely if only one "
-                  "tag is being retrieved.");
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
   }
 

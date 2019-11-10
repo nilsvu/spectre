@@ -9,6 +9,7 @@
 #include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
 #include "Elliptic/Systems/Xcts/Tags.hpp"       // IWYU pragma: keep
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
@@ -87,7 +88,7 @@ namespace Solutions {
  * \f$\psi_\mathrm{init}=1\f$ so that a nonlinear iterative numerical solver
  * will converge to the same weak-field solution.
  */
-class ConstantDensityStar {
+class ConstantDensityStar : public elliptic::protocols::AnalyticSolution {
  private:
   struct Density {
     using type = double;
@@ -101,6 +102,8 @@ class ConstantDensityStar {
   };
 
  public:
+  static constexpr size_t volume_dim = 3;
+
   using options = tmpl::list<Density, Radius>;
   static constexpr OptionString help{
       "A constant density star in general relativity"};

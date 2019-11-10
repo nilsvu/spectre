@@ -9,6 +9,7 @@
 #include "DataStructures/Tensor/Tensor.hpp"      // IWYU pragma: keep
 #include "Elliptic/Systems/Elasticity/Tags.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/IsotropicHomogeneous.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/Tags.hpp"  // IWYU pragma: keep
 #include "Utilities/TMPL.hpp"
@@ -60,8 +61,10 @@ namespace Solutions {
  * in terms of the Young's modulus \f$E\f$ and the Poisson ration \f$\nu\f$ of
  * the material.
  */
-class BentBeam {
+class BentBeam : public elliptic::protocols::AnalyticSolution {
  public:
+  static constexpr size_t volume_dim = 2;
+
   using constitutive_relation_type =
       Elasticity::ConstitutiveRelations::IsotropicHomogeneous<2>;
 

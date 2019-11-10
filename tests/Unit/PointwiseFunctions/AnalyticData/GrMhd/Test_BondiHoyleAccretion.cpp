@@ -14,9 +14,11 @@
 #include "Options/Options.hpp"
 #include "Options/ParseOptions.hpp"
 #include "PointwiseFunctions/AnalyticData/GrMhd/BondiHoyleAccretion.hpp"
+#include "PointwiseFunctions/AnalyticData/Protocols.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestCreation.hpp"
@@ -121,6 +123,11 @@ void test_variables(const DataType& used_for_size) {
 }
 
 }  // namespace
+
+static_assert(
+    test_protocol_conformance<grmhd::AnalyticData::BondiHoyleAccretion,
+                              evolution::protocols::AnalyticData>,
+    "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticData.GrMhd.BondiHoyle",
                   "[Unit][PointwiseFunctions]") {
