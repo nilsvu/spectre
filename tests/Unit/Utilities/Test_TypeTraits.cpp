@@ -411,6 +411,22 @@ static_assert(not is_foo_callable_r_v<int, bar, int, double>,
 static_assert(not is_foobar_callable_v<bar, int, double>,
               "Failed testing CREATE_IS_CALLABLE");
 /// [CREATE_IS_CALLABLE_EXAMPLE]
+
+/// [CREATE_HAS_EXAMPLE]
+CREATE_HAS(foo)
+CREATE_HAS(foobar)
+struct testing_create_has {
+  static constexpr size_t foo = 1;
+};
+
+static_assert(has_foo_v<testing_create_has>, "Failed testing CREATE_HAS");
+static_assert(has_foo_v<testing_create_has, size_t>,
+              "Failed testing CREATE_HAS");
+static_assert(not has_foo_v<testing_create_has, int>,
+              "Failed testing CREATE_HAS");
+static_assert(not has_foobar_v<testing_create_has, size_t>,
+              "Failed testing CREATE_HAS");
+/// [CREATE_HAS_EXAMPLE]
 }  // namespace
 
 /// [is_hashable_example]
