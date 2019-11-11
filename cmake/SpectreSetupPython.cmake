@@ -204,6 +204,34 @@ function(SPECTRE_PYTHON_ADD_MODULE MODULE_NAME)
   endwhile(NOT ${CURRENT_MODULE} STREQUAL ${SPECTRE_PYTHON_PREFIX})
 endfunction()
 
+# We want to run unit tests with both Python2 and Python3 if both are available.
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.12")
+  find_package(Python2)
+  find_package(Python3)
+else()
+  # FindPython{2,3} is not available, so emuluate it by setting (a subset of)
+  # the same variables.
+  # We just use any version of Python that's available. To find both, we could
+  # try to unset all variables that FindPythonInterp has set and repeat the find
+  # with the other version, but since we need both versions only to run unit
+  # tests we can just make sure to use a modern cmake version for that.
+  if (PYTHONINTERP_FOUND)
+    if (PYTHON_VERSION_MAJOR STREQUAL "2")
+      set(Python2_FOUND TRUE)
+      set(Python2_EXECUTABLE ${PYTHON_EXECUTABLE})
+      set(Python2_VERSION ${PYTHON_VERSION_STRING})
+    elseif (PYTHON_VERSION_MAJOR STREQUAL "3")
+      set(Python3_FOUND TRUE)
+      set(Python3_EXECUTABLE ${PYTHON_EXECUTABLE})
+      set(Python3_VERSION ${PYTHON_VERSION_STRING})
+    endif()
+  endif(PYTHONINTERP_FOUND)
+endif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.12")
+if (NOT (Python2_FOUND OR Python3_FOUND))
+  message(FATAL_ERROR
+    "Either Python 2 or Python 3 (or both) must be installed.")
+endif()
+
 # Register a python test file with ctest.
 # - TEST_NAME    The name of the test,
 #                e.g. "Unit.DataStructures.Python.DataVector"
@@ -219,21 +247,43 @@ function(SPECTRE_ADD_PYTHON_TEST TEST_NAME FILE TAGS)
   get_filename_component(FILE "${FILE}" ABSOLUTE)
   string(TOLOWER "${TAGS}" TAGS)
 
-  add_test(
-    NAME "\"${TEST_NAME}\""
-    COMMAND
-    ${PYTHON_EXECUTABLE}
-    ${FILE}
-    )
+  if (Python2_FOUND)
+    set(FULL_TEST_NAME "\"${TEST_NAME}.Py2\"")
+    add_test(
+      NAME ${FULL_TEST_NAME}
+      COMMAND
+      ${Python2_EXECUTABLE}
+      ${FILE}
+      )
+    # The fail regular expression is what Python.unittest returns when no
+    # tests are found to be run. We treat this as a test failure.
+    set_tests_properties(
+      ${FULL_TEST_NAME}
+      PROPERTIES
+      FAIL_REGULAR_EXPRESSION "Ran 0 test"
+      TIMEOUT 2
+      LABELS "${TAGS};Python2"
+      ENVIRONMENT "PYTHONPATH=${SPECTRE_PYTHON_PREFIX_PARENT}:\$PYTHONPATH"
+      )
+  endif()
 
-  # The fail regular expression is what Python.unittest returns when no
-  # tests are found to be run. We treat this as a test failure.
-  set_tests_properties(
-    "\"${TEST_NAME}\""
-    PROPERTIES
-    FAIL_REGULAR_EXPRESSION "Ran 0 test"
-    TIMEOUT 2
-    LABELS "${TAGS}"
-    ENVIRONMENT "PYTHONPATH=${SPECTRE_PYTHON_PREFIX_PARENT}:\$PYTHONPATH"
-    )
+  if (Python3_FOUND)
+    set(FULL_TEST_NAME "\"${TEST_NAME}.Py3\"")
+    add_test(
+      NAME ${FULL_TEST_NAME}
+      COMMAND
+      ${Python3_EXECUTABLE}
+      ${FILE}
+      )
+    # The fail regular expression is what Python.unittest returns when no
+    # tests are found to be run. We treat this as a test failure.
+    set_tests_properties(
+      ${FULL_TEST_NAME}
+      PROPERTIES
+      FAIL_REGULAR_EXPRESSION "Ran 0 test"
+      TIMEOUT 2
+      LABELS "${TAGS};Python3"
+      ENVIRONMENT "PYTHONPATH=${SPECTRE_PYTHON_PREFIX_PARENT}:\$PYTHONPATH"
+      )
+  endif()
 endfunction()

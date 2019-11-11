@@ -12,6 +12,16 @@ site_name(HOSTNAME)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
+# First search for Python3 then fall back to Python2, since specifying
+# `Python_ADDITIONAL_VERSIONS` can lead to inconsistencies between
+# FindPythonInterp and FindPythonLibs.
+find_package(PythonInterp 3)
+find_package(PythonLibs 3)
+if (NOT PYTHONINTERP_FOUND)
+  find_package(PythonInterp 2.7)
+  find_package(PythonLibs 2.7)
+endif()
+
 option(
   DOCS_ONLY
   "Skip all initialization not required for rendering documentation"
