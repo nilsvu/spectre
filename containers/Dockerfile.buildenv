@@ -23,6 +23,12 @@ RUN apt-get update -y \
     && apt-get install -y software-properties-common \
     && add-apt-repository ppa:ubuntu-toolchain-r/test
 
+# Add Kitware repo for cmake
+# In particular, make available cmake >= 3.12 for Python utility
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc \
+    2>/dev/null | apt-key add -
+RUN add-apt-repository 'deb https://apt.kitware.com/ubuntu/ bionic main'
+
 # Install required packages for SpECTRE
 RUN apt-get update -y \
     && apt-get install -y gcc-6 g++-6 gfortran-6 \
@@ -54,10 +60,13 @@ RUN apt-get update -y \
 RUN apt-get install -y ccache doxygen
 
 # Install Python packages
-RUN apt-get install -y python-pip \
-    && pip install autopep8 flake8 \
-    && pip install numpy scipy matplotlib pandas h5py jupyterlab \
-    && pip install coverxygen beautifulsoup4 pybtex
+RUN apt-get install -y python-pip python3-pip \
+    && pip2 install autopep8 flake8 \
+    && pip3 install autopep8 flake8 \
+    && pip2 install numpy scipy matplotlib pandas h5py jupyterlab \
+    && pip3 install numpy scipy matplotlib pandas h5py jupyterlab \
+    && pip2 install coverxygen beautifulsoup4 pybtex \
+    && pip3 install coverxygen beautifulsoup4 pybtex
 
 # Add ruby gems and install coveralls using gem
 RUN apt-get update -y \
