@@ -35,11 +35,21 @@ namespace {
 template <typename F>
 void dr_conformal_factor_potential(
     gsl::not_null<double*> dr_conformal_factor_potential,
-    const double areal_radius, const F& mass_at_areal_radius) noexcept {
-  const double sqrt_one_minus_two_m_over_r =
-      sqrt(1. - 2. * mass_at_areal_radius(areal_radius) / areal_radius);
-  *dr_conformal_factor_potential = (sqrt_one_minus_two_m_over_r - 1.) /
-                                   (areal_radius * sqrt_one_minus_two_m_over_r);
+    const double areal_radius, const F& mass_over_areal_radius_at_areal_radius,
+    const double central_mass_density) noexcept {
+  // See class documentation for choice of cutoff
+  const double radial_expansion_cutoff =
+      cbrt(std::numeric_limits<double>::epsilon());
+  if (UNLIKELY(areal_radius < radial_expansion_cutoff)) {
+    *dr_conformal_factor_potential =
+        -4. / 3. * M_PI * central_mass_density * areal_radius;
+  } else {
+    const double sqrt_one_minus_two_m_over_r =
+        sqrt(1. - 2. * mass_over_areal_radius_at_areal_radius(areal_radius));
+    *dr_conformal_factor_potential =
+        (sqrt_one_minus_two_m_over_r - 1.) /
+        (areal_radius * sqrt_one_minus_two_m_over_r);
+  }
 }
 
 class IntegralObserver {
@@ -125,15 +135,17 @@ TovIsotropic::TovIsotropic(
              sqrt(square(areal_outer_radius) -
                   2. * total_mass_ * areal_outer_radius));
   // Is it possible to just reference the member function?
-  const auto mass_at_areal_radius = [this](const double areal_radius) noexcept {
-    return this->areal_solution_.mass(areal_radius);
+  const auto mass_over_areal_radius_at_areal_radius = [this](
+      const double areal_radius) noexcept {
+    return this->areal_solution_.mass_over_radius(areal_radius);
   };
 
-  double current_areal_radius = 1.e-30 * areal_outer_radius;  // ?
-  double current_conformal_factor_potential = 0.;             // ?
+  double current_areal_radius = 0.;
+  double current_conformal_factor_potential = 0.;  // ?
   double current_dr_conformal_factor_potential{};
-  dr_conformal_factor_potential(&current_dr_conformal_factor_potential,
-                                current_areal_radius, mass_at_areal_radius);
+  dr_conformal_factor_potential(
+      &current_dr_conformal_factor_potential, current_areal_radius,
+      mass_over_areal_radius_at_areal_radius, central_mass_density);
 
   const double initial_step = areal_outer_radius / 100.;  // ?
   using StateDopri5 = boost::numeric::odeint::runge_kutta_dopri5<double>;
@@ -144,12 +156,13 @@ TovIsotropic::TovIsotropic(
   IntegralObserver integral_observer{};
   boost::numeric::odeint::integrate_adaptive(
       dopri5,
-      [&mass_at_areal_radius](const double /*local_conformal_factor_potential*/,
-                              double& local_dr_conformal_factor_potential,
-                              const double local_areal_radius) noexcept {
+      [&mass_over_areal_radius_at_areal_radius, &central_mass_density ](
+          const double /*local_conformal_factor_potential*/,
+          double& local_dr_conformal_factor_potential,
+          const double local_areal_radius) noexcept {
         return dr_conformal_factor_potential(
             &local_dr_conformal_factor_potential, local_areal_radius,
-            mass_at_areal_radius);
+            mass_over_areal_radius_at_areal_radius, central_mass_density);
       },
       current_conformal_factor_potential, current_areal_radius,
       areal_outer_radius, initial_step, std::ref(integral_observer));
@@ -170,7 +183,7 @@ TovIsotropic::TovIsotropic(
         integral_observer.areal_radius[i] / conformal_factor_square;
   }
   conformal_factor_interpolant_ =
-      intrp::CubicSpline(isotropic_radius, conformal_factor);
+      intrp::BarycentricRational(isotropic_radius, conformal_factor, 5);
   // This should be equal to the outer_radius calculated before, but differs
   // by a numerical error. We need it to be exact for checking bounds of the
   // interpolation.

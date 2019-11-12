@@ -6,7 +6,7 @@
 #include <limits>
 
 #include "DataStructures/Tensor/Tensor.hpp"
-#include "NumericalAlgorithms/Interpolation/CubicSpline.hpp"
+#include "NumericalAlgorithms/Interpolation/BarycentricRational.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Tov.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/EquationOfState.hpp"
 
@@ -112,7 +112,7 @@ class TovIsotropic {
   double total_mass_{std::numeric_limits<double>::signaling_NaN()};
   double log_lapse_at_outer_radius_{
       std::numeric_limits<double>::signaling_NaN()};
-  intrp::CubicSpline conformal_factor_interpolant_;
+  intrp::BarycentricRational conformal_factor_interpolant_;
 };
 
 }  // namespace Solutions
