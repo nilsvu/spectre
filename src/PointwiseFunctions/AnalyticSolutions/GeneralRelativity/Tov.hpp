@@ -60,7 +60,17 @@ class TovSolution {
   /// constructing this TovSolution
   double outer_radius() const noexcept;
 
+  /// \brief The mass inside the given radius over the radius
+  /// \f$\frac{m(r)}{r}\f$
+  ///
+  /// \note `r` should be non-negative and not greater than outer_radius
+  /// \f$m(R)\f$.
+  double mass_over_radius(double r) const noexcept;
+
   /// \brief The mass inside the given radius \f$m(r)\f$
+  ///
+  /// \warning When computing \f$\frac{m(r)}{r}\f$, use the `mass_over_radius`
+  /// function instead for greater accuracy.
   ///
   /// \note `r` should be non-negative and not greater than outer_radius
   /// \f$m(R)\f$.
@@ -92,7 +102,7 @@ class TovSolution {
   double total_mass_{std::numeric_limits<double>::signaling_NaN()};
   double log_lapse_at_outer_radius_{
       std::numeric_limits<double>::signaling_NaN()};
-  intrp::BarycentricRational mass_interpolant_;
+  intrp::BarycentricRational mass_over_radius_interpolant_;
   intrp::BarycentricRational log_enthalpy_interpolant_;
 };
 
