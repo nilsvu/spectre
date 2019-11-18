@@ -1,0 +1,144 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+name: Run test suite
+
+on: [push, pull_request]
+
+jobs:
+  check_commits:
+    name: Check commits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Check commits
+        run: |
+          cd $GITHUB_WORKSPACE
+          git fetch origin develop:develop
+          ./tools/CheckCommits.sh
+
+  check_files:
+    name: Check files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Check files
+        run: |
+          cd $GITHUB_WORKSPACE
+          ./tools/CheckFiles.sh
+
+  clang_tidy:
+    name: Check clang-tidy
+    runs-on: ubuntu-latest
+    container:
+      image: sxscollaboration/spectrebuildenv:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Fetch upstream/develop
+        run: >
+          cd $GITHUB_WORKSPACE
+
+          git remote add upstream
+          https://github.com/sxs-collaboration/spectre.git
+
+          git fetch upstream develop
+      - name: Configure with cmake
+        working-directory: /work
+        run: >
+          mkdir build && cd build
+
+          cmake
+          -D CMAKE_C_COMPILER=clang
+          -D CMAKE_CXX_COMPILER=clang++
+          -D CMAKE_Fortran_COMPILER=gfortran-8
+          -D CHARM_ROOT=/work/charm/multicore-linux64-clang
+          -D CMAKE_BUILD_TYPE=Debug
+          -D DEBUG_SYMBOLS=OFF
+          -D BUILD_PYTHON_BINDINGS=ON
+          $GITHUB_WORKSPACE
+      - name: Check clang-tidy
+        working-directory: /work/build
+        run: |
+          make clang-tidy-hash HASH=upstream/develop
+
+  doc_check:
+    name: Check documentation
+    runs-on: ubuntu-latest
+    container:
+      image: sxscollaboration/spectrebuildenv:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Configure with cmake
+        working-directory: /work
+        run: >
+          mkdir build && cd build
+
+          cmake
+          -D CMAKE_C_COMPILER=clang
+          -D CMAKE_CXX_COMPILER=clang++
+          -D CMAKE_Fortran_COMPILER=gfortran-8
+          -D CHARM_ROOT=/work/charm/multicore-linux64-clang
+          -D CMAKE_BUILD_TYPE=Debug
+          -D DEBUG_SYMBOLS=OFF
+          -D BUILD_PYTHON_BINDINGS=ON
+          $GITHUB_WORKSPACE
+      - name: Check documentation
+        working-directory: /work/build
+        run: |
+          PATH=$PATH:/work/texlive/bin/x86_64-linux make doc-check
+
+  unit_tests:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    container:
+      image: sxscollaboration/spectrebuildenv:latest
+      env:
+        CCACHE_COMPRESS: 1
+        CCACHE_MAXSIZE: 400M
+        CCACHE_DIR: /work/ccache
+        CCACHE_COMPILERCHECK: content
+        CCACHE_COMPRESSLEVEL: 6
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Restore ccache
+        uses: actions/cache@v1
+        with:
+          path: /work/ccache
+          key: ccache-clang-Debug
+      - name: Configure with cmake
+        working-directory: /work
+        run: >
+          mkdir build && cd build
+
+          cmake
+          -D CMAKE_C_COMPILER=clang
+          -D CMAKE_CXX_COMPILER=clang++
+          -D CMAKE_Fortran_COMPILER=gfortran-8
+          -D CHARM_ROOT=/work/charm/multicore-linux64-gcc
+          -D CMAKE_BUILD_TYPE=Debug
+          -D DEBUG_SYMBOLS=OFF
+          -D USE_CCACHE=ON
+          -D BUILD_PYTHON_BINDINGS=ON
+          $GITHUB_WORKSPACE
+
+          ccache -pz
+      - name: Build tests
+        working-directory: /work/build
+        run: |
+          make -j2 RunTests
+      - name: Build executables
+        working-directory: /work/build
+        run: |
+          make test-executables
+      - name: Diagnose ccache
+        run: |
+          ccache -s
+      - name: Run unit tests
+        working-directory: /work/build
+        run: |
+          ctest -j2 --output-on-failure
