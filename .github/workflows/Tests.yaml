@@ -1,0 +1,219 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  # Make sure no commits are prefixed with `fixup` or similar keywords. See
+  # `tools/CheckCommits.sh` for details.
+  check_commits:
+    name: Commits
+    # Only run on pull requests since we don't check _all_ commits, but only
+    # those that came after the PR's base ref.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Check commits
+        # `CheckCommits.sh` tests against the local `develop` branch, so that's
+        # where we fetch the pull-request's base-branch to. Typically, it is
+        # the upstream `sxs-collaboration/spectre/develop` branch.
+        run: >
+          cd $GITHUB_WORKSPACE
+
+          git remote add upstream
+          https://github.com/${{ github.repository }}.git
+
+          git remote -v
+
+          git fetch upstream ${{ github.base_ref }}:develop
+
+          ./tools/CheckCommits.sh
+
+  # Run simple textual checks over files in the repository, e.g. checking for
+  # a license, line length limits etc. See `tools/CheckFiles.sh` for details.
+  check_files:
+    name: Files
+    # No need to do this again when opening a PR, so only check on `push`
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Check files
+        run: |
+          cd $GITHUB_WORKSPACE
+          ./tools/CheckFiles.sh
+
+  # Lint the code that changed in a pull request with clang-tidy.
+  clang_tidy:
+    name: Clang-tidy
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    container:
+      image: sxscollaboration/spectrebuildenv:latest
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Fetch upstream/develop
+        # We only want to check files that have changed in this pull request,
+        # so we fetch its base branch and pass it to `clang-tidy-hash`.
+        # Typically, it is the `sxs-collaboration/spectre/develop` branch.
+        run: >
+          cd $GITHUB_WORKSPACE
+
+          git remote add upstream
+          https://github.com/${{ github.repository }}.git
+
+          git remote -v
+
+          git fetch upstream ${{ github.base_ref }}
+      - name: Configure with cmake
+        working-directory: /work
+        run: >
+          mkdir build && cd build
+
+          cmake
+          -D CMAKE_C_COMPILER=clang
+          -D CMAKE_CXX_COMPILER=clang++
+          -D CMAKE_Fortran_COMPILER=gfortran-8
+          -D CHARM_ROOT=/work/charm/multicore-linux64-clang
+          -D CMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -D DEBUG_SYMBOLS=OFF
+          -D BUILD_PYTHON_BINDINGS=ON
+          $GITHUB_WORKSPACE
+      - name: Check clang-tidy
+        working-directory: /work/build
+        run: |
+          make clang-tidy-hash HASH=upstream/${{ github.base_ref }}
+
+  # Build the documentation and check for problems.
+  doc_check:
+    name: Documentation
+    # No need to do this again when opening a PR, so only check on `push`
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    container:
+      image: sxscollaboration/spectrebuildenv:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Configure with cmake
+        working-directory: /work
+        run: >
+          mkdir build && cd build
+
+          cmake
+          -D CMAKE_C_COMPILER=clang
+          -D CMAKE_CXX_COMPILER=clang++
+          -D CMAKE_Fortran_COMPILER=gfortran-8
+          -D CHARM_ROOT=/work/charm/multicore-linux64-clang
+          -D CMAKE_BUILD_TYPE=Debug
+          -D DEBUG_SYMBOLS=OFF
+          -D BUILD_PYTHON_BINDINGS=ON
+          $GITHUB_WORKSPACE
+      - name: Check documentation
+        working-directory: /work/build
+        # Append `texlive` to the `PATH` so bibliography generation works.
+        # Can be removed once this is done in the container.
+        run: |
+          PATH=$PATH:/work/texlive/bin/x86_64-linux make doc-check
+
+  # Build all test executables and run unit tests on a variety of compiler
+  # configurations.
+  unit_tests:
+    name: Unit tests
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc-6, gcc-7, gcc-8, gcc-9, clang-4.0, clang-5.0, clang-8]
+        build_type: [Debug, Release]
+    container:
+      image: sxscollaboration/spectrebuildenv:latest
+      env:
+        # We make sure to use a fixed absolute path for the ccache directory
+        CCACHE_DIR: /work/ccache
+        # GitHub Actions currently limits the size of individual caches
+        # to 400 MB.
+        CCACHE_MAXSIZE: 400M
+        CCACHE_COMPRESS: 1
+        CCACHE_COMPRESSLEVEL: 6
+        # In order to have ccache work with precompiled headers we need to:
+        # - Hash the content of the compiler rather than the location and mtime
+        # - Hash the header file in the repo that will generate the precompiled
+        #   header
+        # - Ignore the precompiled header in the build directory
+        CCACHE_COMPILERCHECK: content
+        CCACHE_EXTRAFILES: ${GITHUB_WORKSPACE}/tools/SpectrePch.hpp
+        CCACHE_IGNOREHEADERS:
+          /work/build/SpectrePch.hpp:/work/build/SpectrePch.hpp.gch
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Restore ccache
+        uses: actions/cache@v1
+        with:
+          path: /work/ccache
+          key: ccache3-${{ matrix.compiler }}-${{ matrix.build_type }}
+          restore-keys: |
+            ccache3-${{ matrix.compiler }}
+            ccache3
+      - name: Configure ccache
+        # Print the ccache configuration and reset statistics
+        run: |
+          ccache -pz
+      - name: Configure build with cmake
+        working-directory: /work
+        # Notes on the build configuration:
+        # - We don't need debug symbols during CI, so we turn them off to reduce
+        #   memory usage.
+        run: >
+          mkdir build && cd build
+
+          if [[ ${{ matrix.compiler }} =~ (gcc|clang)-([0-9\.]+) ]]; then
+            CC=${BASH_REMATCH[1]}-${BASH_REMATCH[2]};
+            CHARM_CC=${BASH_REMATCH[1]};
+            if [[ ${BASH_REMATCH[1]} = gcc ]]; then
+              CXX=g++-${BASH_REMATCH[2]};
+              FC=gfortran-${BASH_REMATCH[2]};
+            else
+              CXX=clang++-${BASH_REMATCH[2]};
+              FC=gfortran-8;
+            fi
+          fi
+
+          cmake
+          -D CMAKE_C_COMPILER=${CC}
+          -D CMAKE_CXX_COMPILER=${CXX}
+          -D CMAKE_Fortran_COMPILER=${FC}
+          -D CHARM_ROOT=/work/charm/multicore-linux64-${CHARM_CC}
+          -D CMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -D DEBUG_SYMBOLS=OFF
+          -D USE_CCACHE=ON
+          -D BUILD_PYTHON_BINDINGS=ON
+          $GITHUB_WORKSPACE
+        # Make sure this runs in bash so the regex matching works
+        shell: bash
+      - name: Build tests
+        working-directory: /work/build
+        run: |
+          make -j2 RunTests
+      # Build the executables in a single thread to reduce memory usage
+      - name: Build executables
+        working-directory: /work/build
+        run: |
+          make test-executables
+      - name: Diagnose ccache
+        run: |
+          ccache -s
+      - name: Run unit tests
+        working-directory: /work/build
+        run: |
+          ctest -j2 --output-on-failure
