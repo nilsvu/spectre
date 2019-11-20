@@ -136,93 +136,15 @@ jobs:
         # Can be removed once this is done in the container.
         run: |
           PATH=$PATH:/work/texlive/bin/x86_64-linux make doc-check
-
-  # Build all test executables and run unit tests on a variety of compiler
-  # configurations.
-  unit_tests:
-    name: Unit tests
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        compiler: [gcc-6, gcc-7, gcc-8, gcc-9, clang-4.0, clang-5.0, clang-8]
-        build_type: [Debug, Release]
-    container:
-      image: sxscollaboration/spectrebuildenv:latest
-      env:
-        # We make sure to use a fixed absolute path for the ccache directory
-        CCACHE_DIR: /work/ccache
-        # GitHub Actions currently limits the size of individual caches
-        # to 400 MB.
-        CCACHE_MAXSIZE: 400M
-        CCACHE_COMPRESS: 1
-        CCACHE_COMPRESSLEVEL: 6
-        # In order to make ccache work with precompiled headers we need to:
-        # - Hash the content of the compiler rather than the location and mtime
-        # - Hash the header file in the repo that will generate the precompiled
-        #   header
-        # - Ignore the precompiled header in the build directory
-        CCACHE_COMPILERCHECK: content
-        CCACHE_EXTRAFILES: ${GITHUB_WORKSPACE}/tools/SpectrePch.hpp
-        CCACHE_IGNOREHEADERS:
-          /work/build/SpectrePch.hpp:/work/build/SpectrePch.hpp.gch
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v1
-      - name: Restore ccache
-        uses: actions/cache@v1
+      # The `upload-artifact` action doesn't run in the container, so we move
+      # the data to the shared workspace.
+      # Relevant issue: https://github.com/actions/upload-artifact/issues/13
+      - name: Prepare for upload
+        run: |
+          mv /work/build/docs/html $GITHUB_WORKSPACE/docs-html
+      - name: Upload documentation
+        uses: actions/upload-artifact@v1
         with:
-          path: /work/ccache
-          key: ccache-${{ matrix.compiler }}-${{ matrix.build_type }}
-      - name: Configure ccache
-        # Print the ccache configuration and reset statistics
-        run: |
-          ccache -pz
-      - name: Configure build with cmake
-        working-directory: /work
-        # Notes on the build configuration:
-        # - We don't need debug symbols during CI, so we turn them off to reduce
-        #   memory usage.
-        run: >
-          mkdir build && cd build
-
-          if [[ ${{ matrix.compiler }} =~ (gcc|clang)-([0-9\.]+) ]]; then
-            CC=${BASH_REMATCH[1]}-${BASH_REMATCH[2]};
-            CHARM_CC=${BASH_REMATCH[1]};
-            if [[ ${BASH_REMATCH[1]} = gcc ]]; then
-              CXX=g++-${BASH_REMATCH[2]};
-              FC=gfortran-${BASH_REMATCH[2]};
-            else
-              CXX=clang++-${BASH_REMATCH[2]};
-              FC=gfortran-8;
-            fi
-          fi
-
-          cmake
-          -D CMAKE_C_COMPILER=${CC}
-          -D CMAKE_CXX_COMPILER=${CXX}
-          -D CMAKE_Fortran_COMPILER=${FC}
-          -D CHARM_ROOT=/work/charm/multicore-linux64-${CHARM_CC}
-          -D CMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -D DEBUG_SYMBOLS=OFF
-          -D USE_CCACHE=ON
-          -D BUILD_PYTHON_BINDINGS=ON
-          $GITHUB_WORKSPACE
-        # Make sure this runs in bash so the regex matching works
-        shell: bash
-      - name: Build tests
-        working-directory: /work/build
-        run: |
-          make -j2 RunTests
-      # Build the executables in a single thread to reduce memory usage
-      # sufficiently so they compile on the GitHub-hosted runners
-      - name: Build executables
-        working-directory: /work/build
-        run: |
-          make test-executables
-      - name: Diagnose ccache
-        run: |
-          ccache -s
-      - name: Run unit tests
-        working-directory: /work/build
-        run: |
-          ctest -j2 --output-on-failure
+          name: docs-html
+          # The `path` is relative to the $GITHUB_WORKSPACE on the host machine
+          path: docs-html
