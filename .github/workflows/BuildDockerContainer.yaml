@@ -1,0 +1,30 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+name: Build Docker container
+
+on:
+  push:
+    branches:
+      - build_docker_container
+
+jobs:
+  build_docker_container:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+      - name: Build and push Docker image
+        working-directory: $GITHUB_WORKSPACE/containers
+        run: >
+          docker login docker.pkg.github.com
+          -u nilsleiffischer
+          -p ${{ secrets.GITHUB_TOKEN }}
+
+          docker build
+          -t docker.pkg.github.com/nilsleiffischer/spectre/spectrebuildenv:0.0.0
+          -f Dockerfile.buildenv .
+
+          docker push
+          docker.pkg.github.com/nilsleiffischer/spectre/spectrebuildenv:0.0.0
