@@ -6,6 +6,11 @@
 #include <cstddef>
 
 /// \cond
+namespace Poisson {
 template <size_t Dim>
+struct FirstOrderSystem;
+}  // namespace Poisson
+
+template <typename System>
 struct Metavariables;
 /// \endcond

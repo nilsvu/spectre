@@ -10,30 +10,29 @@ set(LIBS_TO_LINK
   IO
   LinearOperators
   MathFunctions
-  Poisson
-  PoissonSolutions
   Utilities
   ${SPECTRE_LIBRARIES}
   )
 
-add_spectre_parallel_executable(
-  SolvePoissonProblem1D
-  SolveLinearEllipticProblem
-  Elliptic/Executables/Linear
-  Metavariables<1>
-  "${LIBS_TO_LINK}"
-  )
-add_spectre_parallel_executable(
-  SolvePoissonProblem2D
-  SolveLinearEllipticProblem
-  Elliptic/Executables/Linear
-  Metavariables<2>
-  "${LIBS_TO_LINK}"
-  )
-add_spectre_parallel_executable(
-  SolvePoissonProblem3D
-  SolveLinearEllipticProblem
-  Elliptic/Executables/Linear
-  Metavariables<3>
-  "${LIBS_TO_LINK}"
-  )
+function(add_linear_eliptic_executable
+  EXECUTABLE_NAME ELLIPTIC_SYSTEM EXTRA_LIBS_TO_LINK)
+  add_spectre_parallel_executable(
+    "Solve${EXECUTABLE_NAME}"
+    SolveLinearEllipticProblem
+    Elliptic/Executables/Linear
+    "Metavariables<${ELLIPTIC_SYSTEM}>"
+    "${LIBS_TO_LINK};${EXTRA_LIBS_TO_LINK}"
+    )
+endfunction(add_linear_eliptic_executable)
+
+# Poisson system
+function(add_poisson_executable DIM)
+  add_linear_eliptic_executable(
+    PoissonProblem${DIM}D
+    Poisson::FirstOrderSystem<${DIM}>
+    "Poisson;PoissonSolutions"
+    )
+endfunction(add_poisson_executable)
+add_poisson_executable(1)
+add_poisson_executable(2)
+add_poisson_executable(3)

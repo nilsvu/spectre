@@ -4,8 +4,8 @@
 # Executable: SolvePoissonProblem3D
 # Check: execute
 # ExpectedOutput:
-#   Poisson3DReductions.h5
-#   Poisson3DVolume0.h5
+#   PoissonProductOfSinusoids3DReductions.h5
+#   PoissonProductOfSinusoids3DVolume0.h5
 
 AnalyticSolution:
   ProductOfSinusoids:
@@ -24,8 +24,8 @@ NumericalFlux:
     PenaltyParameter: 2.5464790894703255 # p^2 / h
 
 Observers:
-  VolumeFileName: "Poisson3DVolume"
-  ReductionFileName: "Poisson3DReductions"
+  VolumeFileName: "PoissonProductOfSinusoids3DVolume"
+  ReductionFileName: "PoissonProductOfSinusoids3DReductions"
 
 LinearSolver:
   ConvergenceCriteria:
