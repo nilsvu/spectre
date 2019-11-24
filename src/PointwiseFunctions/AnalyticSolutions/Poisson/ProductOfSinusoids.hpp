@@ -12,6 +12,7 @@
 #include "Elliptic/Systems/Poisson/Tags.hpp"    // IWYU pragma: keep
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -31,8 +32,14 @@ namespace Solutions {
  * \f$f(x)=\boldsymbol{k}^2\prod_i \sin(k_i x_i)\f$.
  */
 template <size_t Dim>
-class ProductOfSinusoids {
+class ProductOfSinusoids : public elliptic::protocols::AnalyticSolution {
  public:
+  static constexpr size_t volume_dim = Dim;
+  using supported_tags = tmpl::list<
+      Tags::Field,
+      ::Tags::deriv<Tags::Field, tmpl::size_t<volume_dim>, Frame::Inertial>,
+      ::Tags::FixedSource<Tags::Field>>;
+
   struct WaveNumbers {
     using type = std::array<double, Dim>;
     static constexpr OptionString help{"The wave numbers of the sinusoids"};
@@ -75,9 +82,10 @@ class ProductOfSinusoids {
   tuples::TaggedTuple<Tags...> variables(
       const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
       tmpl::list<Tags...> /*meta*/) const noexcept {
-    static_assert(sizeof...(Tags) > 1,
-                  "The generic template will recurse infinitely if only one "
-                  "tag is being retrieved.");
+    static_assert(
+        tmpl2::flat_all_v<tmpl::list_contains_v<supported_tags, Tags>...>,
+        "At least one of the requested tags is not supported. The requested "
+        "tags are listed as template parameters of the `variables` function.");
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
   }
 

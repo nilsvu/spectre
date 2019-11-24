@@ -24,9 +24,11 @@
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 #include "tests/Unit/PointwiseFunctions/AnalyticSolutions/FirstOrderEllipticSolutionsTestHelpers.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestCreation.hpp"
@@ -36,41 +38,24 @@ namespace {
 
 template <size_t Dim>
 struct ProductOfSinusoidsProxy : Poisson::Solutions::ProductOfSinusoids<Dim> {
-  using Poisson::Solutions::ProductOfSinusoids<Dim>::ProductOfSinusoids;
+  using base = Poisson::Solutions::ProductOfSinusoids<Dim>;
+  using base::ProductOfSinusoids;
+  using supported_tags = typename base::supported_tags;
 
-  using field_tags = tmpl::list<
-      Poisson::Tags::Field,
-      ::Tags::deriv<Poisson::Tags::Field, tmpl::size_t<Dim>, Frame::Inertial>>;
-  using source_tags = tmpl::list<Tags::FixedSource<Poisson::Tags::Field>>;
-
-  tuples::tagged_tuple_from_typelist<field_tags> field_variables(
+  tuples::tagged_tuple_from_typelist<supported_tags> variables(
       const tnsr::I<DataVector, Dim, Frame::Inertial>& x) const noexcept {
-    return Poisson::Solutions::ProductOfSinusoids<Dim>::variables(x,
-                                                                  field_tags{});
-  }
-
-  tuples::tagged_tuple_from_typelist<source_tags> source_variables(
-      const tnsr::I<DataVector, Dim, Frame::Inertial>& x) const noexcept {
-    return Poisson::Solutions::ProductOfSinusoids<Dim>::variables(
-        x, source_tags{});
+    return base::variables(x, supported_tags{});
   }
 };
 
 template <size_t Dim>
 void test_solution(const std::array<double, Dim>& wave_numbers,
                    const std::string& options) {
-  const ProductOfSinusoidsProxy<Dim> solution(wave_numbers);
+  const ProductOfSinusoidsProxy<Dim> solution{wave_numbers};
   pypp::check_with_random_values<
-      1, tmpl::list<Poisson::Tags::Field,
-                    ::Tags::deriv<Poisson::Tags::Field, tmpl::size_t<Dim>,
-                                  Frame::Inertial>>>(
-      &ProductOfSinusoidsProxy<Dim>::field_variables, solution,
-      "ProductOfSinusoids", {"field", "field_gradient"}, {{{0., 2. * M_PI}}},
-      std::make_tuple(wave_numbers), DataVector(5));
-  pypp::check_with_random_values<
-      1, tmpl::list<Tags::FixedSource<Poisson::Tags::Field>>>(
-      &ProductOfSinusoidsProxy<Dim>::source_variables, solution,
-      "ProductOfSinusoids", {"source"}, {{{0., 2. * M_PI}}},
+      1, typename Poisson::Solutions::ProductOfSinusoids<Dim>::supported_tags>(
+      &ProductOfSinusoidsProxy<Dim>::variables, solution, "ProductOfSinusoids",
+      {"field", "field_gradient", "source"}, {{{0., 2. * M_PI}}},
       std::make_tuple(wave_numbers), DataVector(5));
 
   Poisson::Solutions::ProductOfSinusoids<Dim> created_solution =
@@ -81,6 +66,13 @@ void test_solution(const std::array<double, Dim>& wave_numbers,
 }
 
 }  // namespace
+
+test_protocol_conformance<Poisson::Solutions::ProductOfSinusoids<1>,
+                          elliptic::protocols::AnalyticSolution>;
+test_protocol_conformance<Poisson::Solutions::ProductOfSinusoids<2>,
+                          elliptic::protocols::AnalyticSolution>;
+test_protocol_conformance<Poisson::Solutions::ProductOfSinusoids<3>,
+                          elliptic::protocols::AnalyticSolution>;
 
 SPECTRE_TEST_CASE(
     "Unit.PointwiseFunctions.AnalyticSolutions.Poisson.ProductOfSinusoids",
