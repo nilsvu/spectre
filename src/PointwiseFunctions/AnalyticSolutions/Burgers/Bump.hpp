@@ -10,6 +10,7 @@
 #include "Evolution/Systems/Burgers/Tags.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -35,8 +36,14 @@ namespace Solutions {
  * from infinity and reaches one of the zeros at \f$t = \frac{w}{2
  * h}\f$.
  */
-class Bump : public MarkAsAnalyticSolution {
+class Bump : public evolution::protocols::AnalyticSolution,
+             public MarkAsAnalyticSolution {
  public:
+  static constexpr size_t volume_dim = 1;
+  // No need to indicate that this class also supports time derivatives, since
+  // they are unused in an evolution.
+  using supported_tags = tmpl::list<Tags::U>;
+
   struct HalfWidth {
     using type = double;
     static constexpr OptionString help{

@@ -13,7 +13,9 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Evolution/Systems/Burgers/Fluxes.hpp"
 #include "Evolution/TypeTraits.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/TestHelpers.hpp"
 
 /// \cond
@@ -32,6 +34,7 @@ template <typename Solution>
 void check_burgers_solution(const Solution& solution,
                             const DataVector& positions,
                             const std::vector<double>& times) noexcept {
+  test_protocol_conformance<Solution, evolution::protocols::AnalyticSolution>;
   static_assert(evolution::is_analytic_solution_v<Solution>,
                 "Solution was not derived from AnalyticSolution");
   // Check that different functions are consistent.

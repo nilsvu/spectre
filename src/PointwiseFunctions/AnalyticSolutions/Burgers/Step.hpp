@@ -10,6 +10,7 @@
 #include "Evolution/Systems/Burgers/Tags.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -36,8 +37,14 @@ namespace Solutions {
 /// (This is inherited from the Heaviside implementation `step_function`.)
 /// Additionally, the time derivative \f$\partial_t u0\f$ is zero, rather than
 /// the correct delta function.
-class Step : public MarkAsAnalyticSolution {
+class Step : public evolution::protocols::AnalyticSolution,
+             public MarkAsAnalyticSolution {
  public:
+  static constexpr size_t volume_dim = 1;
+  // No need to indicate that this class also supports time derivatives, since
+  // they are unused in an evolution.
+  using supported_tags = tmpl::list<Tags::U>;
+
   struct LeftValue {
     using type = double;
     static type lower_bound() noexcept { return 0.0; }
