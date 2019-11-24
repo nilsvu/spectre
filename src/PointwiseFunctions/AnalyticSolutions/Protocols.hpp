@@ -13,6 +13,54 @@
 struct DataVector;
 /// \endcond
 
+namespace analytic_solution_protocols_detail {
+
+CREATE_HAS_STATIC_MEMBER_VARIABLE(volume_dim)
+CREATE_HAS_TYPE_ALIAS(supported_tags)
+CREATE_IS_CALLABLE(variables)
+
+template <typename ConformingType, bool WithTime, typename TagsList>
+struct IsVariablesCallable;
+template <typename ConformingType, typename TagsList>
+struct IsVariablesCallable<ConformingType, true, TagsList>
+    : is_variables_callable_r_t<
+          tuples::tagged_tuple_from_typelist<TagsList>, ConformingType,
+          tnsr::I<DataVector, ConformingType::volume_dim>, double, TagsList> {};
+template <typename ConformingType, typename TagsList>
+struct IsVariablesCallable<ConformingType, false, TagsList>
+    : is_variables_callable_r_t<
+          tuples::tagged_tuple_from_typelist<TagsList>, ConformingType,
+          tnsr::I<DataVector, ConformingType::volume_dim>, TagsList> {};
+// All tags
+template <typename ConformingType, bool WithTime>
+struct IsVariablesCallableWithAllTags
+    : IsVariablesCallable<ConformingType, WithTime,
+                          typename ConformingType::supported_tags> {};
+// Any single tag
+template <typename ConformingType, bool WithTime, typename TagsList>
+struct IsVariablesCallableWithAnySingleTagImpl;
+template <typename ConformingType, bool WithTime, typename... Tags>
+struct IsVariablesCallableWithAnySingleTagImpl<ConformingType, WithTime,
+                                               tmpl::list<Tags...>>
+    : cpp17::conjunction<
+          IsVariablesCallable<ConformingType, WithTime, tmpl::list<Tags>>...> {
+};
+template <typename ConformingType, bool WithTime>
+struct IsVariablesCallableWithAnySingleTag
+    : IsVariablesCallableWithAnySingleTagImpl<
+          ConformingType, WithTime, typename ConformingType::supported_tags> {};
+
+template <typename ConformingType, bool WithTime>
+static constexpr bool is_conforming_v = std::conditional_t<
+    has_volume_dim_v<ConformingType, size_t> and
+        has_supported_tags_v<ConformingType>,
+    cpp17::conjunction<
+        IsVariablesCallableWithAllTags<ConformingType, WithTime>,
+        IsVariablesCallableWithAnySingleTag<ConformingType, WithTime>>,
+    std::false_type>::value;
+
+}  // namespace analytic_solution_protocols_detail
+
 namespace evolution {
 namespace protocols {
 
@@ -37,23 +85,9 @@ namespace protocols {
  * \snippet AnalyticSolutions/Test_Protocols.cpp evolution_analytic_sol_example
  */
 struct AnalyticSolution {
- private:
-  CREATE_HAS(volume_dim)
-  CREATE_IS_CALLABLE(variables)
-
-  template <typename ConformingType>
-  struct IsVariablesCallable
-      : is_variables_callable_r_t<
-            tuples::TaggedTuple<>, ConformingType,
-            tnsr::I<DataVector, ConformingType::volume_dim>, double,
-            tmpl::list<>> {};
-
- public:
   template <typename ConformingType>
   static constexpr bool is_conforming_v =
-      std::conditional_t<has_volume_dim_v<ConformingType, size_t>,
-                         IsVariablesCallable<ConformingType>,
-                         std::false_type>::value;
+      analytic_solution_protocols_detail::is_conforming_v<ConformingType, true>;
 };
 
 }  // namespace protocols
@@ -82,23 +116,10 @@ namespace protocols {
  * \snippet AnalyticSolutions/Test_Protocols.cpp elliptic_analytic_sol_example
  */
 struct AnalyticSolution {
- private:
-  CREATE_HAS(volume_dim)
-  CREATE_IS_CALLABLE(variables)
-
-  template <typename ConformingType>
-  struct IsVariablesCallable
-      : is_variables_callable_r_t<
-            tuples::TaggedTuple<>, ConformingType,
-            tnsr::I<DataVector, ConformingType::volume_dim>,
-            tmpl::list<>> {};
-
- public:
   template <typename ConformingType>
   static constexpr bool is_conforming_v =
-      std::conditional_t<has_volume_dim_v<ConformingType, size_t>,
-                         IsVariablesCallable<ConformingType>,
-                         std::false_type>::value;
+      analytic_solution_protocols_detail::is_conforming_v<ConformingType,
+                                                          false>;
 };
 
 }  // namespace protocols

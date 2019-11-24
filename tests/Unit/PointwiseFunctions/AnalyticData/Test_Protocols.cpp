@@ -49,6 +49,7 @@ struct EvolutionAnalyticData : evolution::protocols::AnalyticData {
 
  public:
   static constexpr size_t volume_dim = Dim;
+  using supported_tags = tmpl::list<SomeField, AnotherField>;
 
   // Function returning a collection of variables to conform to the protocol
   template <typename... Tags>
@@ -72,11 +73,72 @@ static_assert(not evolution::protocols::AnalyticData::template is_conforming_v<
                   NoVolumeDim>,
               "Failed testing is_conforming_v");
 
-struct NoVariables {
+struct NoSupportedTags {
   static constexpr size_t volume_dim = 3;
 };
 static_assert(not evolution::protocols::AnalyticData::template is_conforming_v<
+                  NoSupportedTags>,
+              "Failed testing is_conforming_v");
+
+struct NoVariables {
+  static constexpr size_t volume_dim = 3;
+  using supported_tags = tmpl::list<SomeField>;
+};
+static_assert(not evolution::protocols::AnalyticData::template is_conforming_v<
                   NoVariables>,
+              "Failed testing is_conforming_v");
+
+struct MismatchingVolumeDim {
+  static constexpr size_t volume_dim = 2;
+  using supported_tags = tmpl::list<SomeField, AnotherField>;
+  tuples::TaggedTuple<SomeField, AnotherField> variables(
+      const tnsr::I<DataVector, 3>& x,
+      tmpl::list<SomeField, AnotherField> /*meta*/) const noexcept;
+};
+static_assert(not evolution::protocols::AnalyticData::template is_conforming_v<
+                  MismatchingVolumeDim>,
+              "Failed testing is_conforming_v");
+
+struct NotAllSupportedTags {
+  static constexpr size_t volume_dim = 3;
+  using supported_tags = tmpl::list<SomeField, AnotherField>;
+  tuples::TaggedTuple<SomeField> variables(
+      const tnsr::I<DataVector, volume_dim>& x,
+      tmpl::list<SomeField> /*meta*/) const noexcept;
+};
+static_assert(not evolution::protocols::AnalyticData::template is_conforming_v<
+                  NotAllSupportedTags>,
+              "Failed testing is_conforming_v");
+
+struct AllSingleTags {
+  static constexpr size_t volume_dim = 3;
+  using supported_tags = tmpl::list<SomeField, AnotherField>;
+  tuples::TaggedTuple<SomeField, AnotherField> variables(
+      const tnsr::I<DataVector, volume_dim>& x,
+      tmpl::list<SomeField, AnotherField> /*meta*/) const noexcept;
+  tuples::TaggedTuple<SomeField> variables(
+      const tnsr::I<DataVector, volume_dim>& x,
+      tmpl::list<SomeField> /*meta*/) const noexcept;
+  tuples::TaggedTuple<AnotherField> variables(
+      const tnsr::I<DataVector, volume_dim>& x,
+      tmpl::list<AnotherField> /*meta*/) const noexcept;
+};
+static_assert(
+    evolution::protocols::AnalyticData::template is_conforming_v<AllSingleTags>,
+    "Failed testing is_conforming_v");
+
+struct NotAllSingleTags {
+  static constexpr size_t volume_dim = 3;
+  using supported_tags = tmpl::list<SomeField, AnotherField>;
+  tuples::TaggedTuple<SomeField, AnotherField> variables(
+      const tnsr::I<DataVector, volume_dim>& x,
+      tmpl::list<SomeField, AnotherField> /*meta*/) const noexcept;
+  tuples::TaggedTuple<SomeField> variables(
+      const tnsr::I<DataVector, volume_dim>& x,
+      tmpl::list<SomeField> /*meta*/) const noexcept;
+};
+static_assert(not evolution::protocols::AnalyticData::template is_conforming_v<
+                  NotAllSingleTags>,
               "Failed testing is_conforming_v");
 
 }  // namespace test_evolution_protocols_analytic_data
@@ -106,6 +168,7 @@ struct EllipticAnalyticData : elliptic::protocols::AnalyticData {
 
  public:
   static constexpr size_t volume_dim = Dim;
+  using supported_tags = tmpl::list<SomeField, AnotherField>;
 
   // Function returning a collection of variables to conform to the protocol
   template <typename... Tags>

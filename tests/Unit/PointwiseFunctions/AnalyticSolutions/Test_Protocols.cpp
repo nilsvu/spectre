@@ -49,6 +49,7 @@ struct EvolutionAnalyticSolution : evolution::protocols::AnalyticSolution {
 
  public:
   static constexpr size_t volume_dim = Dim;
+  using supported_tags = tmpl::list<SomeField, AnotherField>;
 
   // Function returning a collection of variables to conform to the protocol
   template <typename... Tags>
@@ -110,6 +111,7 @@ struct EllipticAnalyticSolution : elliptic::protocols::AnalyticSolution {
 
  public:
   static constexpr size_t volume_dim = Dim;
+  using supported_tags = tmpl::list<SomeField, AnotherField>;
 
   // Function returning a collection of variables to conform to the protocol
   template <typename... Tags>
