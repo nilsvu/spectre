@@ -187,23 +187,27 @@ struct WeylElectric : db::SimpleTag {
   using type = tnsr::ii<DataType, Dim, Frame>;
   static std::string name() noexcept { return "WeylElectric"; }
 };
-}  // namespace Tags
 
-/// The tags for the variables returned by GR analytic solutions.
-template <size_t Dim, typename DataType>
-using analytic_solution_tags = tmpl::list<
+/// All tags for spacetime quantities in the 3+1 decomposition
+template <typename DataType, size_t Dim, typename Frame = Frame::Inertial>
+using all_spacetime_three_plus_one = tmpl::list<
     gr::Tags::Lapse<DataType>, ::Tags::dt<gr::Tags::Lapse<DataType>>,
-    ::Tags::deriv<gr::Tags::Lapse<DataType>, tmpl::size_t<Dim>,
-                  Frame::Inertial>,
-    gr::Tags::Shift<Dim, Frame::Inertial, DataType>,
-    ::Tags::dt<gr::Tags::Shift<Dim, Frame::Inertial, DataType>>,
-    ::Tags::deriv<gr::Tags::Shift<Dim, Frame::Inertial, DataType>,
-                  tmpl::size_t<Dim>, Frame::Inertial>,
-    gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataType>,
-    ::Tags::dt<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataType>>,
-    ::Tags::deriv<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataType>,
-                  tmpl::size_t<Dim>, Frame::Inertial>,
+    ::Tags::deriv<gr::Tags::Lapse<DataType>, tmpl::size_t<Dim>, Frame>,
+    gr::Tags::Shift<Dim, Frame, DataType>,
+    ::Tags::dt<gr::Tags::Shift<Dim, Frame, DataType>>,
+    ::Tags::deriv<gr::Tags::Shift<Dim, Frame, DataType>, tmpl::size_t<Dim>,
+                  Frame>,
+    gr::Tags::SpatialMetric<Dim, Frame, DataType>,
+    ::Tags::dt<gr::Tags::SpatialMetric<Dim, Frame, DataType>>,
+    ::Tags::deriv<gr::Tags::SpatialMetric<Dim, Frame, DataType>,
+                  tmpl::size_t<Dim>, Frame>,
     gr::Tags::SqrtDetSpatialMetric<DataType>,
-    gr::Tags::ExtrinsicCurvature<Dim, Frame::Inertial, DataType>,
-    gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataType>>;
+    gr::Tags::ExtrinsicCurvature<Dim, Frame, DataType>,
+    gr::Tags::InverseSpatialMetric<Dim, Frame, DataType>>;
+
+/// All tags for source quantities in the 3+1 decomposition
+template <typename DataType, size_t Dim, typename Frame = Frame::Inertial>
+using all_source_three_plus_one = tmpl::list<EnergyDensity<DataType>>;
+
+}  // namespace Tags
 }  // namespace gr

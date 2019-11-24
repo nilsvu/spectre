@@ -216,17 +216,25 @@ struct MassFlux : db::SimpleTag {
     return Frame::prefix<Fr>() + "MassFlux";
   }
 };
+
+// All tags for primitive relativistic fluid quantities
+template <typename DataType, size_t Dim, typename Frame = Frame::Inertial>
+using all_relativistic_primitive =
+    tmpl::list<RestMassDensity<DataType>, SpecificInternalEnergy<DataType>,
+               SpatialVelocity<DataType, Dim, Frame>, LorentzFactor<DataType>,
+               Pressure<DataType>, SpecificEnthalpy<DataType>>;
+
+// All tags for primitive relativistic magneto-hydrodynamic quantities
+template <typename DataType, size_t Dim, typename Frame = Frame::Inertial>
+using all_mhd_primitive =
+    tmpl::append<all_relativistic_primitive<DataType, Dim, Frame>,
+                 tmpl::list<MagneticField<DataType, Dim, Frame>,
+                            DivergenceCleaningField<DataType>>>;
 }  // namespace Tags
 
 /// The tags for the primitive variables for GRMHD.
+///
+/// Depecrated. Please use `hydro::Tags::all_mhd_primitive`
 template <typename DataType>
-using grmhd_tags =
-    tmpl::list<hydro::Tags::RestMassDensity<DataType>,
-               hydro::Tags::SpecificInternalEnergy<DataType>,
-               hydro::Tags::SpatialVelocity<DataType, 3, Frame::Inertial>,
-               hydro::Tags::MagneticField<DataType, 3, Frame::Inertial>,
-               hydro::Tags::DivergenceCleaningField<DataType>,
-               hydro::Tags::LorentzFactor<DataType>,
-               hydro::Tags::Pressure<DataType>,
-               hydro::Tags::SpecificEnthalpy<DataType>>;
+using grmhd_tags = Tags::all_mhd_primitive<DataType, 3>;
 }  // namespace hydro

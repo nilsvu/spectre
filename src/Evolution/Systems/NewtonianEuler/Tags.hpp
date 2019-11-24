@@ -91,6 +91,12 @@ struct SoundSpeedSquared : db::SimpleTag {
   static std::string name() noexcept { return "SoundSpeedSquared"; }
 };
 
+/// All primitive NewtonianEuler tags
+template <typename DataType, size_t Dim, typename Frame = Frame::Inertial>
+using all_primitive =
+    tmpl::list<MassDensity<DataType>, SpecificInternalEnergy<DataType>,
+               Velocity<DataType, Dim, Frame>, Pressure<DataType>>;
+
 /// Base tag for the source term
 struct SourceTermBase {};
 
