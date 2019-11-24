@@ -42,6 +42,13 @@ class WrappedGr : public SolutionType {
   using SolutionType::SolutionType;
 
   static constexpr size_t volume_dim = SolutionType::volume_dim;
+  using supported_tags = tmpl::append<
+      typename SolutionType::supported_tags,
+      tmpl::list<
+          gr::Tags::SpacetimeMetric<volume_dim, Frame::Inertial, DataVector>,
+          GeneralizedHarmonic::Tags::Pi<volume_dim, Frame::Inertial>,
+          GeneralizedHarmonic::Tags::Phi<volume_dim, Frame::Inertial>>>;
+
   using options = typename SolutionType::options;
   static constexpr OptionString help = SolutionType::help;
   static std::string name() noexcept { return option_name<SolutionType>(); }

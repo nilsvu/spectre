@@ -101,8 +101,17 @@ class ConstantDensityStar : public elliptic::protocols::AnalyticSolution {
     static double lower_bound() noexcept { return 0.; }
   };
 
+  using xcts_tags = Tags::all<DataVector, 3>;
+  using xcts_deriv_tags = db::wrap_tags_in<::Tags::deriv, xcts_tags,
+                                           tmpl::size_t<3>, Frame::Inertial>;
+
  public:
   static constexpr size_t volume_dim = 3;
+  using supported_tags = tmpl::append<
+      xcts_tags, xcts_deriv_tags, db::wrap_tags_in<::Tags::Initial, xcts_tags>,
+      db::wrap_tags_in<::Tags::Initial, xcts_deriv_tags>,
+      db::wrap_tags_in<::Tags::FixedSource, xcts_tags>,
+      gr::Tags::all_source_three_plus_one<DataVector, volume_dim>>;
 
   using options = tmpl::list<Density, Radius>;
   static constexpr OptionString help{

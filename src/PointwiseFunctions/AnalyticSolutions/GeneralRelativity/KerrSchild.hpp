@@ -255,24 +255,17 @@ class KerrSchild : public evolution::protocols::AnalyticSolution {
       gr::Tags::SpatialMetric<volume_dim, Frame::Inertial, DataType>,
       tmpl::size_t<volume_dim>, Frame::Inertial>;
   template <typename DataType>
-  using tags = tmpl::list<
-      gr::Tags::Lapse<DataType>, ::Tags::dt<gr::Tags::Lapse<DataType>>,
-      DerivLapse<DataType>,
-      gr::Tags::Shift<volume_dim, Frame::Inertial, DataType>,
-      ::Tags::dt<gr::Tags::Shift<volume_dim, Frame::Inertial, DataType>>,
-      DerivShift<DataType>,
-      gr::Tags::SpatialMetric<volume_dim, Frame::Inertial, DataType>,
-      ::Tags::dt<
-          gr::Tags::SpatialMetric<volume_dim, Frame::Inertial, DataType>>,
-      DerivSpatialMetric<DataType>, gr::Tags::SqrtDetSpatialMetric<DataType>,
-      gr::Tags::ExtrinsicCurvature<volume_dim, Frame::Inertial, DataType>,
-      gr::Tags::InverseSpatialMetric<volume_dim, Frame::Inertial, DataType>>;
+  using tags = gr::Tags::all_spacetime_three_plus_one<DataType, volume_dim>;
+  using supported_tags = tags<DataVector>;
 
   template <typename DataType>
   tuples::tagged_tuple_from_typelist<tags<DataType>> variables(
       const tnsr::I<DataType, volume_dim>& x, double t,
       tags<DataType> /*meta*/) const noexcept;
 
+  // Conform to `evolution::protocols::AnalyticSolution` by calling the
+  // `variables` function above and pick the requested tags. This can probably
+  // be optimized a lot if necessary.
   template <typename... Tags,
             Requires<not cpp17::is_same_v<tmpl::list<Tags...>,
                                           tags<DataVector>>> = nullptr>

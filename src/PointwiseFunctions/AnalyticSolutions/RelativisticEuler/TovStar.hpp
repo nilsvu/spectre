@@ -48,6 +48,9 @@ template <typename RadialSolution>
 class TovStar : public evolution::protocols::AnalyticSolution {
  public:
   static constexpr size_t volume_dim = 3;
+  using supported_tags = tmpl::append<
+      gr::Tags::all_spacetime_three_plus_one<DataVector, volume_dim>,
+      hydro::Tags::all_mhd_primitive<DataVector, volume_dim>>;
 
   /*!
    * \brief The radial variables needed to compute the full `TOVStar` solution

@@ -45,6 +45,10 @@ namespace Solutions {
 class KomissarovShock : public evolution::protocols::AnalyticSolution {
  public:
   static constexpr size_t volume_dim = 3;
+  using BackgroundSpacetime = gr::Solutions::Minkowski<3>;
+  using supported_tags =
+      tmpl::append<typename BackgroundSpacetime::supported_tags,
+                   hydro::grmhd_tags<DataVector>>;
   using equation_of_state_type = EquationsOfState::IdealFluid<true>;
 
   struct AdiabaticIndex {
@@ -217,7 +221,7 @@ class KomissarovShock : public evolution::protocols::AnalyticSolution {
 
  private:
   EquationsOfState::IdealFluid<true> equation_of_state_{};
-  gr::Solutions::Minkowski<3> background_spacetime_{};
+  BackgroundSpacetime background_spacetime_{};
 
   AdiabaticIndex::type adiabatic_index_ =
       std::numeric_limits<double>::signaling_NaN();

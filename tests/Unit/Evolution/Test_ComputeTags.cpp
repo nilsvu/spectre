@@ -25,6 +25,7 @@ struct FieldTag : db::SimpleTag {
 
 struct AnalyticSolution : evolution::protocols::AnalyticSolution {
   static constexpr size_t volume_dim = 1;
+  using supported_tags = tmpl::list<FieldTag>;
   tuples::TaggedTuple<FieldTag> variables(
       const tnsr::I<DataVector, 1>& x, const double t,
       const tmpl::list<FieldTag> /*meta*/) const noexcept {

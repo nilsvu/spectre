@@ -74,6 +74,7 @@ struct System {
 template <size_t Dim>
 struct AnalyticSolution : elliptic::protocols::AnalyticSolution {
   static constexpr size_t volume_dim = Dim;
+  using supported_tags = tmpl::list<ScalarFieldTag>;
   tuples::TaggedTuple<ScalarFieldTag> variables(
       const tnsr::I<DataVector, Dim>& x,
       tmpl::list<ScalarFieldTag> /*meta*/) const noexcept {

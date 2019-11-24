@@ -90,6 +90,10 @@ namespace Solutions {
 class AlfvenWave : public evolution::protocols::AnalyticSolution {
  public:
   static constexpr size_t volume_dim = 3;
+  using BackgroundSpacetime = gr::Solutions::Minkowski<3>;
+  using supported_tags =
+      tmpl::append<typename BackgroundSpacetime::supported_tags,
+                   hydro::grmhd_tags<DataVector>>;
   using equation_of_state_type = EquationsOfState::IdealFluid<true>;
 
   /// The wave number of the profile.
@@ -267,7 +271,7 @@ class AlfvenWave : public evolution::protocols::AnalyticSolution {
   double magnitude_E_ = std::numeric_limits<double>::signaling_NaN();
   double alfven_speed_ = std::numeric_limits<double>::signaling_NaN();
   double fluid_speed_ = std::numeric_limits<double>::signaling_NaN();
-  gr::Solutions::Minkowski<3> background_spacetime_{};
+  BackgroundSpacetime background_spacetime_{};
 };
 
 bool operator!=(const AlfvenWave& lhs, const AlfvenWave& rhs) noexcept;

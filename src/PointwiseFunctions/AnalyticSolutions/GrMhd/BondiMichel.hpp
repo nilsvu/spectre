@@ -171,6 +171,10 @@ class BondiMichel : public evolution::protocols::AnalyticSolution {
 
  public:
   static constexpr size_t volume_dim = 3;
+  using BackgroundSpacetime = gr::Solutions::KerrSchild;
+  using supported_tags =
+      tmpl::append<typename BackgroundSpacetime::supported_tags,
+                   hydro::grmhd_tags<DataVector>>;
   using equation_of_state_type = EquationsOfState::PolytropicFluid<true>;
 
   /// The mass of the black hole.
@@ -357,7 +361,7 @@ class BondiMichel : public evolution::protocols::AnalyticSolution {
         double in_bernoulli_constant_squared_minus_one, double in_sonic_radius,
         double in_sonic_density, const tnsr::I<DataType, 3>& x,
         bool need_spacetime,
-        const gr::Solutions::KerrSchild& background_spacetime) noexcept;
+        const BackgroundSpacetime& background_spacetime) noexcept;
     DataType radius{};
     DataType rest_mass_density{};
     double mass_accretion_rate_over_four_pi{};
@@ -370,7 +374,7 @@ class BondiMichel : public evolution::protocols::AnalyticSolution {
     double bernoulli_root_function(double rest_mass_density_guess,
                                    double current_radius) const noexcept;
     tuples::tagged_tuple_from_typelist<
-        typename gr::Solutions::KerrSchild::tags<DataType>>
+        typename BackgroundSpacetime::tags<DataType>>
         kerr_schild_soln{};
   };
 
@@ -395,7 +399,7 @@ class BondiMichel : public evolution::protocols::AnalyticSolution {
   double rest_mass_density_at_infinity_ =
       std::numeric_limits<double>::signaling_NaN();
   EquationsOfState::PolytropicFluid<true> equation_of_state_{};
-  gr::Solutions::KerrSchild background_spacetime_{};
+  BackgroundSpacetime background_spacetime_{};
 };
 
 bool operator!=(const BondiMichel& lhs, const BondiMichel& rhs) noexcept;

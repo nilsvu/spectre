@@ -14,6 +14,7 @@
 #include "DataStructures/Variables.hpp"           // IWYU pragma: keep
 #include "Evolution/Systems/ScalarWave/Tags.hpp"  // IWYU pragma: keep
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/WaveEquation/PlaneWave.hpp"
 #include "PointwiseFunctions/MathFunctions/MathFunction.hpp"
 #include "PointwiseFunctions/MathFunctions/PowX.hpp"
@@ -21,6 +22,7 @@
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+#include "tests/Unit/ProtocolTestHelpers.hpp"
 #include "tests/Unit/TestCreation.hpp"
 #include "tests/Unit/TestHelpers.hpp"
 
@@ -311,6 +313,16 @@ void test_3d() {
           tmpl::list<ScalarWave::Pi, ScalarWave::Phi<3>, ScalarWave::Psi>{}));
 }
 }  // namespace
+
+static_assert(test_protocol_conformance<ScalarWave::Solutions::PlaneWave<1>,
+                                        evolution::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
+static_assert(test_protocol_conformance<ScalarWave::Solutions::PlaneWave<2>,
+                                        evolution::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
+static_assert(test_protocol_conformance<ScalarWave::Solutions::PlaneWave<3>,
+                                        evolution::protocols::AnalyticSolution>,
+              "Failed testing protocol conformance");
 
 SPECTRE_TEST_CASE(
     "Unit.PointwiseFunctions.AnalyticSolutions.WaveEquation.PlaneWave",

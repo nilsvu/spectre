@@ -39,12 +39,16 @@ namespace Solutions {
  * \vec{B}(\vec{x},t) &= [0, 0, 0]^{T}
  * \f}
  */
-class SmoothFlow : public evolution::protocols::AnalyticSolution,
+class SmoothFlow : virtual public evolution::protocols::AnalyticSolution,
                    private RelativisticEuler::Solutions::SmoothFlow<3> {
   using smooth_flow = RelativisticEuler::Solutions::SmoothFlow<3>;
 
  public:
   static constexpr size_t volume_dim = 3;
+  using BackgroundSpacetime = gr::Solutions::Minkowski<3>;
+  using supported_tags =
+      tmpl::append<typename BackgroundSpacetime::supported_tags,
+                   hydro::grmhd_tags<DataVector>>;
   using options = smooth_flow::options;
 
   static constexpr OptionString help = {

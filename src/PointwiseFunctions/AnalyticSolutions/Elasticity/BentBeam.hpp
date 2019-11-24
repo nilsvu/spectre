@@ -64,6 +64,8 @@ namespace Solutions {
 class BentBeam : public elliptic::protocols::AnalyticSolution {
  public:
   static constexpr size_t volume_dim = 2;
+  using supported_tags = tmpl::list<Tags::Displacement<2>, Tags::Stress<2>,
+                                    ::Tags::FixedSource<Tags::Displacement<2>>>;
 
   using constitutive_relation_type =
       Elasticity::ConstitutiveRelations::IsotropicHomogeneous<2>;

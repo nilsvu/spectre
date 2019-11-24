@@ -77,6 +77,7 @@ class MagnetizedFmDisk
 
  public:
   static constexpr size_t volume_dim = 3;
+  using supported_tags = hydro::grmhd_tags<DataVector>;
 
   /// The rest mass density (in units of the maximum rest mass density in the
   /// disk) below which the matter in the disk is initially unmagetized.

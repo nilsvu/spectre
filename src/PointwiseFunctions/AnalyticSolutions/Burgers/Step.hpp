@@ -39,6 +39,7 @@ namespace Solutions {
 class Step : public evolution::protocols::AnalyticSolution {
  public:
   static constexpr size_t volume_dim = 1;
+  using supported_tags = tmpl::list<Tags::U, ::Tags::dt<Tags::U>>;
 
   struct LeftValue {
     using type = double;

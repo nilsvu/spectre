@@ -35,6 +35,8 @@ template <size_t Dim>
 class ProductOfSinusoids : public elliptic::protocols::AnalyticSolution {
  public:
   static constexpr size_t volume_dim = Dim;
+  using supported_tags =
+      tmpl::list<Tags::Field, ::Tags::FixedSource<Tags::Field>>;
 
   struct WaveNumbers {
     using type = std::array<double, Dim>;

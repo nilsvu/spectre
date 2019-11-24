@@ -9,8 +9,8 @@
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/EquationOfState.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/PolytropicFluid.hpp"  // IWYU pragma: keep
 #include "PointwiseFunctions/Hydro/Tags.hpp"
@@ -156,6 +156,10 @@ class FishboneMoncriefDisk : public evolution::protocols::AnalyticSolution {
 
  public:
   static constexpr size_t volume_dim = 3;
+  using BackgroundSpacetime = gr::Solutions::KerrSchild;
+  using supported_tags =
+      tmpl::append<typename BackgroundSpacetime::supported_tags,
+                   hydro::Tags::all_mhd_primitive<DataVector, volume_dim>>;
   using equation_of_state_type = EquationsOfState::PolytropicFluid<true>;
 
   /// The mass of the black hole, \f$M\f$.
@@ -402,7 +406,7 @@ class FishboneMoncriefDisk : public evolution::protocols::AnalyticSolution {
   template <typename DataType, bool NeedSpacetime>
   struct IntermediateVariables {
     IntermediateVariables(double bh_spin_a,
-                          const gr::Solutions::KerrSchild& background_spacetime,
+                          const BackgroundSpacetime& background_spacetime,
                           const tnsr::I<DataType, 3>& x, double t,
                           size_t in_spatial_velocity_index,
                           size_t in_lorentz_factor_index) noexcept;
@@ -410,7 +414,7 @@ class FishboneMoncriefDisk : public evolution::protocols::AnalyticSolution {
     DataType r_squared{};
     DataType sin_theta_squared{};
     tuples::tagged_tuple_from_typelist<
-        typename gr::Solutions::KerrSchild::tags<DataType>>
+        typename BackgroundSpacetime::tags<DataType>>
         kerr_schild_soln{};
     size_t spatial_velocity_index;
     size_t lorentz_factor_index;
@@ -427,7 +431,7 @@ class FishboneMoncriefDisk : public evolution::protocols::AnalyticSolution {
   double polytropic_exponent_ = std::numeric_limits<double>::signaling_NaN();
   double angular_momentum_ = std::numeric_limits<double>::signaling_NaN();
   EquationsOfState::PolytropicFluid<true> equation_of_state_{};
-  gr::Solutions::KerrSchild background_spacetime_{};
+  BackgroundSpacetime background_spacetime_{};
 };
 
 bool operator!=(const FishboneMoncriefDisk& lhs,

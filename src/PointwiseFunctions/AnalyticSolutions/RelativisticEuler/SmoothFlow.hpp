@@ -11,6 +11,7 @@
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Minkowski.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/Hydro/EquationsOfState/EquationOfState.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
 #include "Utilities/MakeArray.hpp"
@@ -51,8 +52,13 @@ namespace Solutions {
  * where the pressure is held constant.
  */
 template <size_t Dim>
-class SmoothFlow : virtual public MarkAsAnalyticSolution {
+class SmoothFlow : virtual public evolution::protocols::AnalyticSolution {
  public:
+  static constexpr size_t volume_dim = Dim;
+  using BackgroundSpacetime = gr::Solutions::Minkowski<volume_dim>;
+  using supported_tags = tmpl::append<
+      typename BackgroundSpacetime::supported_tags,
+      hydro::Tags::all_relativistic_primitive<DataVector, volume_dim>>;
   using equation_of_state_type = EquationsOfState::IdealFluid<true>;
 
   /// The mean flow velocity.
@@ -197,7 +203,7 @@ class SmoothFlow : virtual public MarkAsAnalyticSolution {
   // The angular frequency.
   double k_dot_v_ = std::numeric_limits<double>::signaling_NaN();
   EquationsOfState::IdealFluid<true> equation_of_state_{};
-  gr::Solutions::Minkowski<Dim> background_spacetime_{};
+  BackgroundSpacetime background_spacetime_{};
 };
 
 template <size_t Dim>

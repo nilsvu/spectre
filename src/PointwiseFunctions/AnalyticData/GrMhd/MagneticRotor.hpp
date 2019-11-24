@@ -60,6 +60,7 @@ namespace AnalyticData {
 class MagneticRotor : public evolution::protocols::AnalyticData {
  public:
   static constexpr size_t volume_dim = 3;
+  using supported_tags = hydro::grmhd_tags<DataVector>;
   using equation_of_state_type = EquationsOfState::IdealFluid<true>;
 
   /// Radius of the rotor.

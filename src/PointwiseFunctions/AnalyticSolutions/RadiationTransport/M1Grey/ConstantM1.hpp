@@ -10,8 +10,8 @@
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Evolution/Systems/RadiationTransport/M1Grey/Tags.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Minkowski.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"  // IWYU pragma: keep
 #include "Utilities/MakeArray.hpp"            // IWYU pragma: keep
 #include "Utilities/TMPL.hpp"
@@ -40,6 +40,15 @@ namespace Solutions {
 class ConstantM1 : public evolution::protocols::AnalyticSolution {
  public:
   static constexpr size_t volume_dim = 3;
+  using BackgroundSpacetime = gr::Solutions::Minkowski<3>;
+  // For the compile-time interface to be well-defined, the analytic solutioon
+  // class should be templated on the `NeutrinoSpecies`. Then we can include
+  // M1 tags in `supported_tags`.
+  using supported_tags =
+      tmpl::append<typename BackgroundSpacetime::supported_tags,
+                   tmpl::list<hydro::Tags::LorentzFactor<DataVector>,
+                              hydro::Tags::SpatialVelocity<
+                                  DataVector, volume_dim, Frame::Inertial>>>;
 
   /// The mean flow velocity.
   struct MeanVelocity {
@@ -131,7 +140,7 @@ class ConstantM1 : public evolution::protocols::AnalyticSolution {
       make_array<3>(std::numeric_limits<double>::signaling_NaN());
   ComovingEnergyDensity::type comoving_energy_density_ =
       std::numeric_limits<double>::signaling_NaN();
-  gr::Solutions::Minkowski<3> background_spacetime_{};
+  BackgroundSpacetime background_spacetime_{};
 };
 
 bool operator!=(const ConstantM1& lhs, const ConstantM1& rhs) noexcept;

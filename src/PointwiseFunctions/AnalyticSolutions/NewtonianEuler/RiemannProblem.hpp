@@ -136,6 +136,7 @@ class RiemannProblem : public evolution::protocols::AnalyticSolution {
 
  public:
   static constexpr size_t volume_dim = Dim;
+  using supported_tags = Tags::all_primitive<DataVector, volume_dim>;
   using equation_of_state_type = EquationsOfState::IdealFluid<false>;
   using source_term_type = Sources::NoSource;
 

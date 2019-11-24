@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "DataStructures/Tensor/TypeAliases.hpp"  // IWYU pragma: keep
+#include "Evolution/Systems/ScalarWave/Tags.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Protocols.hpp"
 #include "PointwiseFunctions/MathFunctions/MathFunction.hpp"
@@ -19,12 +20,6 @@
 
 /// \cond
 class DataVector;
-namespace ScalarWave {
-struct Pi;
-struct Psi;
-template <size_t Dim>
-struct Phi;
-}  // namespace ScalarWave
 namespace Tags {
 template <typename Tag>
 struct dt;
@@ -65,6 +60,10 @@ namespace Solutions {
  */
 class RegularSphericalWave : public evolution::protocols::AnalyticSolution {
  public:
+  static constexpr size_t volume_dim = 3;
+  using supported_tags =
+      tmpl::list<ScalarWave::Pi, ScalarWave::Phi<volume_dim>, ScalarWave::Psi>;
+
   struct Profile {
     using type = std::unique_ptr<MathFunction<1>>;
     static constexpr OptionString help = {
@@ -91,6 +90,24 @@ class RegularSphericalWave : public evolution::protocols::AnalyticSolution {
   variables(const tnsr::I<DataVector, 3>& x, double t,
             tmpl::list<ScalarWave::Pi, ScalarWave::Phi<3>,
                        ScalarWave::Psi> /*meta*/) const noexcept;
+
+  // Conform to `evolution::protocols::AnalyticSolution` by calling the
+  // `variables` function above and pick the requested tags. This can be
+  // optimized if necessary.
+  template <typename... Tags,
+            Requires<not cpp17::is_same_v<
+                tmpl::list<Tags...>,
+                tmpl::list<ScalarWave::Pi, ScalarWave::Phi<volume_dim>,
+                           ScalarWave::Psi>>> = nullptr>
+  tuples::TaggedTuple<Tags...> variables(
+      const tnsr::I<DataVector, volume_dim>& x, double t,
+      tmpl::list<Tags...> /*meta*/) const noexcept {
+    auto all_variables =
+        variables(x, t,
+                  tmpl::list<ScalarWave::Pi, ScalarWave::Phi<volume_dim>,
+                             ScalarWave::Psi>{});
+    return {std::move(get<Tags>(all_variables))...};
+  }
 
   tuples::TaggedTuple<Tags::dt<ScalarWave::Pi>, Tags::dt<ScalarWave::Phi<3>>,
                       Tags::dt<ScalarWave::Psi>>

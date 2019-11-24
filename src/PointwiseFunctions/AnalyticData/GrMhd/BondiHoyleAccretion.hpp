@@ -88,6 +88,9 @@ namespace AnalyticData {
 class BondiHoyleAccretion : public evolution::protocols::AnalyticData {
  public:
   static constexpr size_t volume_dim = 3;
+  using supported_tags =
+      tmpl::append<hydro::grmhd_tags<DataVector>,
+                   gr::Solutions::KerrSchild::tags<DataVector>>;
   using equation_of_state_type = EquationsOfState::PolytropicFluid<true>;
 
   /// The mass of the black hole, \f$M\f$.
