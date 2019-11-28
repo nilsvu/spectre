@@ -72,7 +72,7 @@ include(SetupLibsharp)
 include(SetupYamlCpp)
 
 include(SetupLIBCXXCharm)
-include(SpectreSetupPython)
+include(SetupSpectrePythonPackage)
 # The precompiled header must be setup after all libraries have been found
 include(SetupPch)
 
