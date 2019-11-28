@@ -38,6 +38,7 @@ allowed_tags = [
                 "ParallelAlgorithms",
                 "PointwiseFunctions",
                 "Pypp",
+                "Python",
                 "RelativisticEuler",
                 "RootFinding",
                 "Serialization",
