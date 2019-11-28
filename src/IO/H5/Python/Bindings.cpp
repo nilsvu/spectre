@@ -4,7 +4,7 @@
 #include <boost/python.hpp>
 
 #define SPECTRE_NUMPY_IMPORT_ARRAY
-#include "DataStructures/Python/Numpy.hpp"
+#include "IO/H5/Python/Numpy.hpp"
 
 namespace py_bindings {
 void bind_h5file();
