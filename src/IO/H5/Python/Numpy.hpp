@@ -8,7 +8,7 @@
 // https://docs.scipy.org/doc/numpy/reference/c-api.array.html#importing-the-api
 #ifdef PY_ARRAY_UNIQUE_SYMBOL
 static_assert(false, "Already have a PY_ARRAY_UNIQUE_SYMBOL defined.");
-#endif
+#endif  // PY_ARRAY_UNIQUE_SYMBOL
 #define PY_ARRAY_UNIQUE_SYMBOL SPECTRE_IO_H5_PYTHON_BINDINGS
 // Code is clean against Numpy 1.7.  See
 // https://docs.scipy.org/doc/numpy-1.15.1/reference/c-api.deprecations.html
@@ -19,7 +19,7 @@ static_assert(false, "Already have a PY_ARRAY_UNIQUE_SYMBOL defined.");
 #ifdef SPECTRE_NUMPY_IMPORT_ARRAY
 #include <numpy/arrayobject.h>
 #include "PythonBindings/NumpyImportArrayWrapper.hpp"
-#else
+#else  // SPECTRE_NUMPY_IMPORT_ARRAY
 #define NO_IMPORT_ARRAY
 #include <numpy/arrayobject.h>
-#endif
+#endif  // SPECTRE_NUMPY_IMPORT_ARRAY

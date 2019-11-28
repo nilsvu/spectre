@@ -8,18 +8,16 @@
 
 #ifndef PY_ARRAY_UNIQUE_SYMBOL
 #define PY_ARRAY_UNIQUE_SYMBOL SPECTRE_PY_API
-#endif
+#endif  // PY_ARRAY_UNIQUE_SYMBOL
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <Python.h>
 #include <numpy/arrayobject.h>  // IWYU pragma: keep
 #include <pydebug.h>
 
-// Must include this after `numpy/arrayobject.h`
-#include "PythonBindings/NumpyImportArrayWrapper.hpp"
-
 #include "ErrorHandling/FloatingPointExceptions.hpp"
 #include "Informer/InfoFromBuild.hpp"
+#include "PythonBindings/NumpyImportArrayWrapper.hpp"  // Must include this after `numpy/arrayobject.h`
 #include "tests/Unit/Pypp/PyppFundamentals.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 
