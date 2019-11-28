@@ -55,10 +55,13 @@ RUN apt-get update -y \
 RUN apt-get install -y ccache doxygen
 
 # Install Python packages
-RUN apt-get install -y python-pip \
-    && pip install autopep8 flake8 \
-    && pip install numpy scipy matplotlib pandas h5py jupyterlab \
-    && pip install coverxygen beautifulsoup4 pybtex
+RUN apt-get install -y python-pip python3-pip \
+    && pip2 install autopep8 flake8 \
+    && pip3 install autopep8 flake8 \
+    && pip2 install numpy scipy matplotlib pandas h5py jupyterlab \
+    && pip3 install numpy scipy matplotlib pandas h5py jupyterlab \
+    && pip2 install coverxygen beautifulsoup4 pybtex \
+    && pip3 install coverxygen beautifulsoup4 pybtex
 
 # Add ruby gems and install coveralls using gem
 RUN apt-get update -y \
