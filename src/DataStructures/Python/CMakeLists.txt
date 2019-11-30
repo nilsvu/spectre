@@ -9,7 +9,7 @@ spectre_python_add_module(
   SOURCES
   Bindings.cpp
   DataVector.cpp
-  Matrix.cpp
+  # Matrix.cpp
   )
 
 spectre_python_link_libraries(

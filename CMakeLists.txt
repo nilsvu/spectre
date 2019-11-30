@@ -54,6 +54,8 @@ include(CheckBrokenArray0)
 # Need to load python libs before boost.python.
 include(SetupPythonLibs)
 
+include(SetupPybind11)
+
 include(SetupBlas)
 include(SetupBlaze)
 include(SetupBoost)

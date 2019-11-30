@@ -4,11 +4,11 @@
 #include "DataStructures/Python/Matrix.hpp"
 
 #include <array>
-#include <boost/python.hpp>
-#include <boost/python/reference_existing_object.hpp>
-#include <boost/python/return_value_policy.hpp>
-#include <boost/python/tuple.hpp>
+// #include <boost/python/reference_existing_object.hpp>
+// #include <boost/python/return_value_policy.hpp>
+// #include <boost/python/tuple.hpp>
 #include <cstddef>
+#include <pybind11/pybind11.h>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -18,11 +18,11 @@
 #include "PythonBindings/BoundChecks.hpp"
 #include "Utilities/MakeString.hpp"
 
-namespace bp = boost::python;
+namespace py = pybind11;
 
 namespace py_bindings {
 
-void bind_matrix() {
+void bind_matrix(py::module& m) {
   // Wrapper for basic Matrix operations
   bp::class_<Matrix>("Matrix", bp::init<size_t, size_t>())
       .add_property("shape",
