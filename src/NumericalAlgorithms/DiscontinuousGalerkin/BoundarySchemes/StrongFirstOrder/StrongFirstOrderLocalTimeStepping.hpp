@@ -14,6 +14,15 @@
 namespace dg {
 namespace BoundarySchemes {
 
+/*!
+ * \ingroup DiscontinuousGalerkinGroup
+ * \brief Boundary contributions for a strong first-order DG scheme with local
+ * time stepping.
+ *
+ * See `dg::BoundarySchemes::StrongFirstOrder`. The lifted boundary
+ * contributions are determined by the time stepper's `compute_boundary_delta`
+ * function and added to the data in `VariablesTag`.
+ */
 template <size_t Dim, typename VariablesTag, typename NumericalFluxComputerTag,
           typename TemporalIdTag, typename TimeStepperTag>
 struct StrongFirstOrderLocalTimeStepping {
@@ -25,8 +34,6 @@ struct StrongFirstOrderLocalTimeStepping {
   static constexpr size_t volume_dim = Dim;
   using temporal_id_tag = TemporalIdTag;
   using variables_tag = VariablesTag;
-  using dt_variables_tag =
-      db::add_tag_prefix<TemporalIdTag::template step_prefix, variables_tag>;
   using normal_dot_numerical_fluxes_tag =
       db::add_tag_prefix<::Tags::NormalDotNumericalFlux, VariablesTag>;
   using normal_dot_fluxes_tag =

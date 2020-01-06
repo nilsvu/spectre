@@ -9,6 +9,8 @@
 #include "Domain/InterfaceHelpers.hpp"
 #include "Domain/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
+#include "NumericalAlgorithms/Spectral/Projection.hpp"
+#include "Utilities/Algorithm.hpp"
 #include "Utilities/Gsl.hpp"
 
 /// \cond
@@ -103,20 +105,26 @@ struct CollectDataForFluxes<
     const auto& temporal_id = get<temporal_id_tag>(box);
     for (const auto& direction_and_neighbors : element.neighbors()) {
       const auto& direction = direction_and_neighbors.first;
+      const auto& face_mesh = face_meshes.at(direction);
       for (const auto& neighbor : direction_and_neighbors.second) {
         const auto mortar_id = std::make_pair(direction, neighbor);
+        const auto& mortar_mesh = mortar_meshes.at(mortar_id);
+        const auto& mortar_size = mortar_sizes.at(mortar_id);
 
         // Project the data from the face to the mortar.
         // Where no projection is necessary we `std::move` the data directly to
         // avoid a copy. We can't move the data or modify it in-place when
-        // projecting, because in that case the face touches two mortars so we
+        // projecting, because in that case the face may touch two mortars so we
         // need to keep the data around.
         auto boundary_data_on_mortar =
-            mortar_meshes.at(mortar_id) == face_meshes.at(direction)
+            mortar_mesh == face_mesh and
+                    alg::all_of(mortar_size,
+                                [](const Spectral::MortarSize& size) noexcept {
+                                  return size == Spectral::MortarSize::Full;
+                                })
                 ? std::move(boundary_data_on_interfaces.at(direction))
                 : boundary_data_on_interfaces.at(direction).project_to_mortar(
-                      face_meshes.at(direction), mortar_meshes.at(mortar_id),
-                      mortar_sizes.at(mortar_id));
+                      face_mesh, mortar_mesh, mortar_size);
 
         // Store the boundary data on this side of the mortar
         db::mutate<all_mortar_data_tag>(

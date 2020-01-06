@@ -245,9 +245,8 @@ struct SendDataForFluxes {
 
         // Make a copy of the local boundary data on the mortar to send to the
         // neighbor
-        const auto& local_boundary_data_on_mortar =
+        auto remote_boundary_data_on_mortar =
             all_mortar_data.at(mortar_id).local_data(temporal_id);
-        auto remote_boundary_data_on_mortar = local_boundary_data_on_mortar;
 
         // Reorient the data to the neighbor orientation if necessary
         if (not orientation.is_aligned()) {

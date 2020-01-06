@@ -59,7 +59,7 @@ struct boundary_data_computer_impl<
           numerical_flux_computer,
       const Mesh<Dim - 1>& face_mesh,
       const db::const_item_type<NormalDotFluxesTag>& normal_dot_fluxes,
-      const db::item_type<
+      const db::const_item_type<
           ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<Dim>>>&
           magnitude_of_face_normal,
       const db::const_item_type<ArgsTags>&... args) noexcept {
@@ -131,7 +131,7 @@ db::const_item_type<VariablesTag> compute_boundary_flux_contribution(
   // Compute the Tags::NormalDotNumericalFlux from local and remote data
   db::const_item_type<
       db::add_tag_prefix<::Tags::NormalDotNumericalFlux, VariablesTag>>
-      normal_dot_numerical_fluxes(mortar_mesh.number_of_grid_points(), 0.0);
+      normal_dot_numerical_fluxes{mortar_mesh.number_of_grid_points()};
   ApplyNormalDotNumericalFluxImpl<NormalDotNumericalFluxComputer>::apply(
       make_not_null(&normal_dot_numerical_fluxes),
       normal_dot_numerical_flux_computer, local_boundary_data,
@@ -176,8 +176,10 @@ db::const_item_type<VariablesTag> compute_boundary_flux_contribution(
  * \ingroup DiscontinuousGalerkinGroup
  * \brief Boundary contributions for a strong first-order DG scheme.
  *
- * \details Computes n.(F^*-F), lifts it to the volume and adds the contribution
- * to the DG operator.
+ * \details Computes Eq. 2.20 in \cite Teukolsky2015ega and lifts it to the
+ * volume (see `dg::lift_flux`) on all mortars that touch an element. The
+ * resulting boundary contributions are added to the DG operator data in
+ * `db::add_tag_prefix<TemporalIdTag::template step_prefix, VariablesTag>`.
  */
 template <size_t Dim, typename VariablesTag, typename NumericalFluxComputerTag,
           typename TemporalIdTag>
