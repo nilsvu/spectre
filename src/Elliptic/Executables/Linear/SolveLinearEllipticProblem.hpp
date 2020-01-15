@@ -52,6 +52,8 @@
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
 
+#include "PointwiseFunctions/Elasticity/ConstitutiveRelations/Tags.hpp"
+
 /// \cond
 template <typename System, typename InitialGuess, typename BoundaryConditions>
 struct Metavariables {
@@ -104,9 +106,11 @@ struct Metavariables {
       LinearSolver::Tags::IterationId>>;
 
   // Collect all items to store in the cache.
-  using const_global_cache_tags =
-      tmpl::list<analytic_solution_tag, fluxes_computer_tag,
-                 Tags::EventsAndTriggers<events, triggers>>;
+  using const_global_cache_tags = tmpl::list<
+      analytic_solution_tag, fluxes_computer_tag,
+      Tags::EventsAndTriggers<events, triggers>,
+      Elasticity::Tags::ConstitutiveRelationFrom<::OptionTags::AnalyticSolution<
+          typename analytic_solution_tag::type>>>;
 
   // Collect all reduction tags for observers
   struct element_observation_type {};
@@ -202,7 +206,10 @@ static const std::vector<void (*)()> charm_init_node_funcs{
     &Parallel::register_derived_classes_with_charm<
         Event<metavariables::events>>,
     &Parallel::register_derived_classes_with_charm<
-        Trigger<metavariables::triggers>>};
+        Trigger<metavariables::triggers>>,
+    &Parallel::register_derived_classes_with_charm<
+        Elasticity::ConstitutiveRelations::ConstitutiveRelation<
+            metavariables::volume_dim>>};
 static const std::vector<void (*)()> charm_init_proc_funcs{
     &enable_floating_point_exceptions};
 /// \endcond

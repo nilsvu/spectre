@@ -13,6 +13,8 @@
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
+#include "PointwiseFunctions/Elasticity/ConstitutiveRelations/IsotropicHomogeneous.hpp"
+
 /// \cond
 class DataVector;
 namespace PUP {
@@ -45,6 +47,14 @@ class Lorentzian {
   using options = tmpl::list<>;
   static constexpr OptionString help{
       "A Lorentzian solution to the Poisson equation."};
+
+  static constexpr size_t volume_dim = 3;
+  using constitutive_relation_type =
+      Elasticity::ConstitutiveRelations::IsotropicHomogeneous<Dim>;
+
+  constitutive_relation_type constitutive_relation() const noexcept {
+    return constitutive_relation_type{1., 1.};
+  }
 
   Lorentzian() = default;
   Lorentzian(const Lorentzian&) noexcept = delete;

@@ -10,6 +10,8 @@
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
 
+#include "PointwiseFunctions/Elasticity/ConstitutiveRelations/Tags.hpp"
+
 /// \cond
 class DataVector;
 namespace PUP {
@@ -58,10 +60,16 @@ void auxiliary_fluxes(gsl::not_null<tnsr::Ij<DataVector, Dim, Frame::Inertial>*>
  */
 template <size_t Dim>
 struct EuclideanFluxes {
-  using argument_tags = tmpl::list<>;
+  using argument_tags = tmpl::list<Elasticity::Tags::ConstitutiveRelation<Dim>>;
+  // Doesn't work yet since elliptic::Tags::FirstOrderFluxesCompute doesn't
+  // support `volume_tags`.
+  using volume_tags = tmpl::list<Elasticity::Tags::ConstitutiveRelation<Dim>>;
+
   static void apply(
       const gsl::not_null<tnsr::I<DataVector, Dim, Frame::Inertial>*>
           flux_for_field,
+      const Elasticity::ConstitutiveRelations::ConstitutiveRelation<
+          Dim>& /*meta*/,
       const tnsr::i<DataVector, Dim, Frame::Inertial>&
           field_gradient) noexcept {
     euclidean_fluxes(flux_for_field, field_gradient);
@@ -69,6 +77,8 @@ struct EuclideanFluxes {
   static void apply(
       const gsl::not_null<tnsr::Ij<DataVector, Dim, Frame::Inertial>*>
           flux_for_gradient,
+      const Elasticity::ConstitutiveRelations::ConstitutiveRelation<
+          Dim>& /*meta*/,
       const Scalar<DataVector>& field) noexcept {
     auxiliary_fluxes(flux_for_gradient, field);
   }

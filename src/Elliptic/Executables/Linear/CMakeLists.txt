@@ -32,7 +32,7 @@ add_linear_elliptic_executable(
   Poisson::FirstOrderSystem<3>
   Poisson::Solutions::Lorentzian<3>
   Poisson::Solutions::Lorentzian<3>
-  "Poisson;PoissonSolutions"
+  "Poisson;PoissonSolutions;ConstitutiveRelations"
   )
 
 # Poisson system with Moustache solution
