@@ -60,7 +60,7 @@ void auxiliary_fluxes(
 template <size_t Dim>
 struct Fluxes {
   using argument_tags =
-      tmpl::list<Tags::ConstitutiveRelationBase,
+      tmpl::list<Tags::ConstitutiveRelationBase<Dim>,
                  domain::Tags::Coordinates<Dim, Frame::Inertial>>;
   static void apply(
       const gsl::not_null<tnsr::IJ<DataVector, Dim>*> flux_for_displacement,

@@ -3,37 +3,61 @@
 
 #pragma once
 
+#include <cstddef>
+#include <memory>
 #include <string>
 
 #include "DataStructures/DataBox/Tag.hpp"
-#include "DataStructures/Tensor/TypeAliases.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/ConstitutiveRelation.hpp"
-
-/// \cond
-namespace Elasticity {
-namespace Tags {
-template <size_t Dim>
-struct Stress;
-}  // namespace Tags
-}  // namespace Elasticity
-namespace Tags {
-template <size_t Dim, typename Frame>
-struct Coordinates;
-}  // namespace Tags
-/// \endcond
+#include "Utilities/TMPL.hpp"
 
 namespace Elasticity {
 namespace Tags {
 
 /// Base tag for the constitutive relation
-struct ConstitutiveRelationBase : db::BaseTag {};
+template <size_t Dim>
+struct ConstitutiveRelationBase : db::SimpleTag {
+  using type = std::unique_ptr<
+      Elasticity::ConstitutiveRelations::ConstitutiveRelation<Dim>>;
+};
 
+/*!
+ * \brief The elastic material's constitutive relation.
+ *
+ * \see `Elasticity::ConstitutiveRelations::ConstitutiveRelation`
+ */
 template <typename ConstitutiveRelationType>
-struct ConstitutiveRelation : ConstitutiveRelationBase, db::SimpleTag {
-  static constexpr OptionString help = {
-      "The constitutive relation of the elastic material"};
+struct ConstitutiveRelation
+    : ConstitutiveRelationBase<ConstitutiveRelationType::volume_dim> {
   using type = ConstitutiveRelationType;
-  static std::string name() noexcept { return "Material"; }
+};
+
+/*!
+ * \brief The elastic material's constitutive relation, loaded from options in
+ * the `ProviderOptionTag`.
+ *
+ * Retrieves the constitutive relation from the object constructed from the
+ * `ProviderOptionTag` by calling its `constitutive_relation()` member function.
+ * Also requires the `ProviderOptionTag::type` to provide a
+ * `constitutive_relation_type` type alias.
+ *
+ * The constitutive relation can be retrieved from the DataBox using its base
+ * `Elasticity::Tags::ConstitutiveRelation` tag.
+ */
+template <typename ProviderOptionTag>
+struct ConstitutiveRelationFrom
+    : ConstitutiveRelation<typename tmpl::type_from<
+          ProviderOptionTag>::constitutive_relation_type> {
+  using ProviderType = tmpl::type_from<ProviderOptionTag>;
+  using base =
+      ConstitutiveRelation<typename ProviderType::constitutive_relation_type>;
+  using type = tmpl::type_from<base>;
+  using option_tags = tmpl::list<ProviderOptionTag>;
+
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const ProviderType& provider) {
+    return provider.constitutive_relation();
+  }
 };
 
 }  // namespace Tags
