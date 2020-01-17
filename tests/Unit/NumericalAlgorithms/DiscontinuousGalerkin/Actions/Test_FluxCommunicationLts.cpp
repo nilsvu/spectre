@@ -17,7 +17,7 @@
 
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/DataBoxTag.hpp"
-#include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
+#include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
@@ -29,7 +29,7 @@
 #include "Domain/DirectionMap.hpp"
 #include "Domain/Element.hpp"
 #include "Domain/ElementId.hpp"
-#include "Domain/ElementIndex.hpp"  // IWYU pragma: keep
+#include "Domain/ElementIndex.hpp"
 #include "Domain/ElementMap.hpp"
 #include "Domain/FaceNormal.hpp"
 #include "Domain/InterfaceComputeTags.hpp"
@@ -37,187 +37,152 @@
 #include "Domain/Neighbors.hpp"
 #include "Domain/OrientationMapHelpers.hpp"
 #include "Domain/Tags.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"  // IWYU pragma: keep
-#include "NumericalAlgorithms/DiscontinuousGalerkin/FluxCommunicationTypes.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/CollectDataForFluxes.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/SimpleMortarData.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/Spectral/Projection.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
-#include "Parallel/PhaseDependentActionList.hpp"  // IWYU pragma: keep
+#include "Parallel/PhaseDependentActionList.hpp"
+#include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeMortars.hpp"
+#include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
+#include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/StdHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "tests/Unit/ActionTesting.hpp"
 
-// IWYU pragma: no_include <boost/functional/hash/extensions.hpp>
-// IWYU pragma: no_include <boost/variant/get.hpp>
-
-// IWYU pragma: no_include "DataStructures/VariablesHelpers.hpp"  // for Variables
-// IWYU pragma: no_include "NumericalAlgorithms/DiscontinuousGalerkin/SimpleMortarData.hpp"
-// IWYU pragma: no_include "Parallel/PupStlCpp11.hpp"
-
-// IWYU pragma: no_forward_declare ActionTesting::InitializeDataBox
-// IWYU pragma: no_forward_declare Tensor
-// IWYU pragma: no_forward_declare Variables
-
 namespace {
-struct TemporalId : db::SimpleTag {
-  static std::string name() noexcept { return "TemporalId"; }
-  using type = int;
-};
+using TemporalId = int;
 
-struct Var : db::SimpleTag {
-  static std::string name() noexcept { return "Var"; }
-  using type = Scalar<DataVector>;
-};
-
-struct OtherData : db::SimpleTag {
-  static std::string name() noexcept { return "OtherData"; }
-  using type = Scalar<DataVector>;
+struct TemporalIdTag : db::SimpleTag {
+  using type = TemporalId;
 };
 
 template <size_t Dim>
-class NumericalFlux {
- public:
-  struct ExtraData : db::SimpleTag {
-    static std::string name() noexcept { return "ExtraTag"; }
-    using type = tnsr::I<DataVector, 1>;
-  };
+struct TestBoundaryData {
+  ElementId<Dim> element_id;
+  bool is_projected;
+  bool is_oriented;
+  TestBoundaryData project_to_mortar(
+      const Mesh<Dim - 1>& /*face_mesh*/, const Mesh<Dim - 1>& /*mortar_mesh*/,
+      const std::array<Spectral::MortarSize, Dim - 1>& /*mortar_size*/) const
+      noexcept {
+    return {element_id, true, is_oriented};
+  }
+  void orient_on_slice(
+      const Index<Dim - 1>& /*slice_extents*/, const size_t /*sliced_dim*/,
+      const OrientationMap<Dim>& /*orientation_of_neighbor*/) noexcept {
+    this->is_oriented = true;
+  }
+  // NOLINTNEXTLINE(google-runtime-references)
+  void pup(PUP::er& p) noexcept {
+    p | element_id;
+    p | is_projected;
+    p | is_oriented;
+  }
+};
 
-  using package_tags = tmpl::list<ExtraData, Var>;
-  // This is a silly set of things to request, but it tests not
-  // requesting the evolved variables and requesting multiple other
-  // things.
-  using argument_tags =
-      tmpl::list<Tags::NormalDotFlux<Var>, OtherData,
-                 Tags::Normalized<Tags::UnnormalizedFaceNormal<Dim>>>;
-  void package_data(const gsl::not_null<Variables<package_tags>*> packaged_data,
-                    const Scalar<DataVector>& var_flux,
-                    const Scalar<DataVector>& other_data,
-                    const tnsr::i<DataVector, Dim, Frame::Inertial>&
-                        interface_unit_normal) const noexcept {
-    get(get<Var>(*packaged_data)) = 10. * get(var_flux);
-    get<0>(get<ExtraData>(*packaged_data)) =
-        get(other_data) + 2. * get<0>(interface_unit_normal) +
-        3. * get<1>(interface_unit_normal);
+template <size_t Dim>
+struct MortarDataRecorder {
+  void local_insert(TemporalId temporal_id,
+                    TestBoundaryData<Dim> data) noexcept {
+    temporal_id_ = temporal_id;
+    local_data_ = std::move(data);
   }
 
-  // void operator()(...) is unused
+  void remote_insert(TemporalId temporal_id,
+                     TestBoundaryData<Dim> data) noexcept {
+    received_data.emplace_back(temporal_id, std::move(data));
+  }
 
-  // clang-tidy: do not use references
-  void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
+  TestBoundaryData<Dim> local_data(const TemporalId& temporal_id) const
+      noexcept {
+    CHECK(temporal_id == temporal_id_);
+    return local_data_;
+  }
+
+  void pup(PUP::er& p) noexcept {
+    p | temporal_id_;
+    p | local_data_;
+    p | received_data;
+  }
+
+  // Only recording remote data
+  TemporalId temporal_id_;
+  TestBoundaryData<Dim> local_data_;
+  std::vector<std::pair<TemporalId, TestBoundaryData<Dim>>> received_data{};
 };
 
 template <size_t Dim>
-struct NumericalFluxTag {
-  using type = NumericalFlux<Dim>;
+struct MortarDataTag : db::SimpleTag {
+  using type = MortarDataRecorder<Dim>;
 };
 
 template <size_t Dim>
-struct System {
-  static constexpr const size_t volume_dim = Dim;
-  using variables_tag = Tags::Variables<tmpl::list<Var>>;
-
-  template <typename Tag>
-  using magnitude_tag = Tags::EuclideanMagnitude<Tag>;
+struct DgBoundaryScheme {
+  static constexpr size_t volume_dim = Dim;
+  using temporal_id_tag = TemporalIdTag;
+  using mortar_data_tag = MortarDataTag<Dim>;
+  using BoundaryData = TestBoundaryData<Dim>;
+  struct boundary_data_computer {
+    using argument_tags = tmpl::list<::Tags::Element<Dim>>;
+    using volume_tags = tmpl::list<::Tags::Element<Dim>>;
+    static BoundaryData apply(const Element<Dim>& element) noexcept {
+      return {element.id(), false, false};
+    }
+  };
 };
 
-template <size_t Dim, typename Tag>
-using interface_tag = Tags::Interface<Tags::InternalDirections<Dim>, Tag>;
-template <size_t Dim, typename Tag>
-using interface_compute_tag =
-    Tags::InterfaceCompute<Tags::InternalDirections<Dim>, Tag>;
-
-template <typename FluxCommTypes>
-using LocalData = typename FluxCommTypes::LocalData;
-template <typename FluxCommTypes>
-using PackagedData = typename FluxCommTypes::PackagedData;
-template <size_t Dim, typename FluxCommTypes>
-using normal_dot_fluxes_tag =
-    interface_tag<Dim, typename FluxCommTypes::normal_dot_fluxes_tag>;
-
-template <size_t Dim>
-using other_data_tag =
-    interface_tag<Dim, Tags::Variables<tmpl::list<OtherData>>>;
-template <size_t Dim>
-using mortar_next_temporal_ids_tag = Tags::Mortars<Tags::Next<TemporalId>, Dim>;
-template <size_t Dim>
-using mortar_meshes_tag = Tags::Mortars<Tags::Mesh<Dim - 1>, Dim>;
-template <size_t Dim>
-using mortar_sizes_tag = Tags::Mortars<Tags::MortarSize<Dim - 1>, Dim>;
-
-struct DataRecorder;
-
-struct DataRecorderTag : db::SimpleTag {
-  static std::string name() { return "DataRecorderTag"; }
-  using type = DataRecorder;
-};
-
-struct MortarRecorderTag : Tags::VariablesBoundaryData,
-                           Tags::Mortars<DataRecorderTag, 2> {};
-
-template <size_t Dim, typename MV>
+template <size_t Dim, typename Metavariables>
 struct lts_component {
-  using metavariables = MV;
+  using metavariables = Metavariables;
   using chare_type = ActionTesting::MockArrayChare;
   using array_index = ElementIndex<Dim>;
-  using const_global_cache_tags = tmpl::list<NumericalFluxTag<Dim>>;
-  using flux_comm_types = dg::FluxCommunicationTypes<MV>;
+  using const_global_cache_tags = tmpl::list<>;
 
-  using simple_tags = db::AddSimpleTags<
-      TemporalId, Tags::Next<TemporalId>, Tags::Mesh<2>, Tags::Element<2>,
-      Tags::ElementMap<2>, normal_dot_fluxes_tag<2, flux_comm_types>,
-      other_data_tag<2>, mortar_meshes_tag<2>, mortar_sizes_tag<2>,
-      MortarRecorderTag, mortar_next_temporal_ids_tag<2>>;
-
-  using compute_tags = db::AddComputeTags<
-      Tags::InternalDirections<Dim>,
-      interface_compute_tag<Dim, Tags::Direction<Dim>>,
-      interface_compute_tag<Dim, Tags::InterfaceMesh<Dim>>,
-      interface_compute_tag<Dim, Tags::UnnormalizedFaceNormalCompute<Dim>>,
-      interface_compute_tag<
-          Dim, Tags::EuclideanMagnitude<Tags::UnnormalizedFaceNormal<Dim>>>,
-      interface_compute_tag<
-          Dim, Tags::NormalizedCompute<Tags::UnnormalizedFaceNormal<Dim>>>>;
+  using simple_tags = tmpl::list<::Tags::InitialExtents<Dim>, TemporalIdTag,
+                                 ::Tags::Next<TemporalIdTag>, ::Tags::Mesh<Dim>,
+                                 ::Tags::Element<Dim>, ::Tags::ElementMap<Dim>>;
+  using compute_tags = tmpl::list<
+      ::Tags::InternalDirections<Dim>, ::Tags::BoundaryDirectionsInterior<Dim>,
+      ::Tags::InterfaceCompute<::Tags::InternalDirections<Dim>,
+                               ::Tags::Direction<Dim>>,
+      ::Tags::InterfaceCompute<::Tags::BoundaryDirectionsInterior<Dim>,
+                               ::Tags::Direction<Dim>>,
+      ::Tags::InterfaceCompute<::Tags::InternalDirections<Dim>,
+                               ::Tags::InterfaceMesh<Dim>>,
+      ::Tags::InterfaceCompute<::Tags::BoundaryDirectionsInterior<Dim>,
+                               ::Tags::InterfaceMesh<Dim>>>;
+  using init_mortars_tags =
+      tmpl::list<::Tags::Mortars<MortarDataTag<Dim>, Dim>,
+                 ::Tags::Mortars<::Tags::Next<TemporalIdTag>, Dim>,
+                 ::Tags::Mortars<::Tags::Mesh<Dim - 1>, Dim>,
+                 ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>;
+  using db_tags_list =
+      tmpl::append<simple_tags, init_mortars_tags, compute_tags>;
 
   using phase_dependent_action_list = tmpl::list<
-      Parallel::PhaseActions<typename MV::Phase, MV::Phase::Initialization,
-                             tmpl::list<ActionTesting::InitializeDataBox<
-                                 simple_tags, compute_tags>>>,
       Parallel::PhaseActions<
-          typename MV::Phase, MV::Phase::Testing,
-          tmpl::list<dg::Actions::SendDataForFluxes<MV>,
-                     dg::Actions::ReceiveDataForFluxes<MV>>>>;
+          typename Metavariables::Phase, Metavariables::Phase::Initialization,
+          tmpl::list<
+              ActionTesting::InitializeDataBox<simple_tags, compute_tags>>>,
+      Parallel::PhaseActions<
+          typename Metavariables::Phase, Metavariables::Phase::Testing,
+          tmpl::list<
+              // https://github.com/sxs-collaboration/spectre/issues/1908
+              dg::Actions::InitializeMortars<DgBoundaryScheme<Dim>, false>,
+              dg::Actions::CollectDataForFluxes<
+                  DgBoundaryScheme<Dim>, ::Tags::InternalDirections<Dim>>,
+              dg::Actions::SendDataForFluxes<DgBoundaryScheme<Dim>>,
+              dg::Actions::ReceiveDataForFluxes<DgBoundaryScheme<Dim>>,
+              Initialization::Actions::RemoveOptionsAndTerminatePhase>>>;
 };
 
 template <size_t Dim>
 struct LtsMetavariables {
-  using system = System<Dim>;
   using component_list = tmpl::list<lts_component<Dim, LtsMetavariables>>;
-  using temporal_id = TemporalId;
-
-  using normal_dot_numerical_flux = NumericalFluxTag<Dim>;
   enum class Phase { Initialization, Testing, Exit };
-};
-
-template <size_t Dim>
-using flux_comm_types = dg::FluxCommunicationTypes<LtsMetavariables<Dim>>;
-
-template <typename Component>
-using compute_items = typename Component::compute_tags;
-
-struct DataRecorder {
-  // Only called on the sending sides, which are not interesting here.
-  void local_insert(int /*temporal_id*/,
-                    const LocalData<flux_comm_types<2>>& /*data*/) noexcept {}
-
-  void remote_insert(int temporal_id,
-                     PackagedData<flux_comm_types<2>> data) noexcept {
-    received_data.emplace_back(temporal_id, std::move(data));
-  }
-
-  void pup(PUP::er& p) noexcept { p | received_data; }  // NOLINT
-
-  std::vector<std::pair<int, PackagedData<flux_comm_types<2>>>> received_data{};
 };
 
 // Inserts the new neighbor element into the MockRuntimeSystem
@@ -225,73 +190,63 @@ template <typename Metavariables>
 void insert_neighbor(
     const gsl::not_null<ActionTesting::MockRuntimeSystem<Metavariables>*>
         runner,
-    const Element<2>& element, const int start, const int end,
-    const double n_dot_f) noexcept {
+    const Element<2>& element, const int start) noexcept {
   using metavariables = Metavariables;
   using my_component = lts_component<2, metavariables>;
-  const Direction<2>& send_direction = element.neighbors().begin()->first;
-  const ElementId<2>& receiver_id =
-      *element.neighbors().begin()->second.begin();
-
   const Mesh<2> mesh{2, Spectral::Basis::Legendre,
                      Spectral::Quadrature::GaussLobatto};
+  const std::vector<std::array<size_t, 2>> initial_extents{
+      {{{2, 2}}, {{2, 2}}, {{2, 2}}}};
 
   ElementMap<2, Frame::Inertial> map(
       element.id(),
       domain::make_coordinate_map_base<Frame::Logical, Frame::Inertial>(
           domain::CoordinateMaps::Identity<2>{}));
 
-  db::item_type<normal_dot_fluxes_tag<2, flux_comm_types<2>>> fluxes;
-  fluxes[send_direction].initialize(2, n_dot_f);
-
-  db::item_type<other_data_tag<2>> other_data;
-  other_data[send_direction].initialize(2, 0.);
-
-  db::item_type<mortar_meshes_tag<2>> mortar_meshes;
-  mortar_meshes.insert({{send_direction, receiver_id}, mesh.slice_away(0)});
-
-  db::item_type<mortar_sizes_tag<2>> mortar_sizes;
-  mortar_sizes.insert(
-      {{send_direction, receiver_id}, {{Spectral::MortarSize::Full}}});
-
-  db::item_type<MortarRecorderTag> recorders;
-  recorders.insert({{send_direction, receiver_id}, {}});
-
   ActionTesting::emplace_component_and_initialize<my_component>(
       runner, element.id(),
-      {start, end, mesh, element, std::move(map), std::move(fluxes),
-       std::move(other_data), std::move(mortar_meshes), std::move(mortar_sizes),
-       std::move(recorders), db::item_type<mortar_next_temporal_ids_tag<2>>{}});
+      {initial_extents, start, start, mesh, element, std::move(map)});
+}
+
+// We have to increment the "next" time on self after initialization, since we
+// had it set to the "current" time during initialization so it got picked up on
+// mortars by `InitializeMortars`
+template <typename Component, typename Runner, typename ElementIdType>
+void set_next_temporal_id(const gsl::not_null<Runner*> runner,
+                          const ElementIdType& element_id,
+                          const TemporalId& time) noexcept {
+  auto& box =
+      ActionTesting::get_databox<Component, typename Component::db_tags_list>(
+          runner, element_id);
+  db::mutate<::Tags::Next<TemporalIdTag>>(
+      make_not_null(&box),
+      [&time](const gsl::not_null<TemporalId*> next_temporal_id) {
+        *next_temporal_id = time;
+      });
 }
 
 // Update the time and flux, then send the data
 void send_from_neighbor(
     const gsl::not_null<ActionTesting::MockRuntimeSystem<LtsMetavariables<2>>*>
         runner,
-    const Element<2>& element, const int start, const int end,
-    const double n_dot_f) noexcept {
+    const Element<2>& element, const int start, const int end) noexcept {
   using metavariables = LtsMetavariables<2>;
   using my_component = lts_component<2, metavariables>;
-  const Direction<2>& send_direction = element.neighbors().begin()->first;
-
-  db::mutate<TemporalId, Tags::Next<TemporalId>,
-             normal_dot_fluxes_tag<2, flux_comm_types<2>>, other_data_tag<2>>(
+  db::mutate<TemporalIdTag, Tags::Next<TemporalIdTag>>(
       make_not_null(
-          &ActionTesting::get_databox<
-              my_component, tmpl::append<typename my_component::simple_tags,
-                                         typename my_component::compute_tags>>(
+          &ActionTesting::get_databox<my_component,
+                                      typename my_component::db_tags_list>(
               runner, element.id())),
-      [&send_direction, n_dot_f, start, end](auto tstart, auto tend,
-                                             auto fluxes, auto other_data) {
+      [start, end](auto tstart, auto tend) {
         *tstart = start;
         *tend = end;
-        fluxes->operator[](send_direction).initialize(2, n_dot_f);
-        other_data->operator[](send_direction).initialize(2, 0.);
       });
 
   runner->force_next_action_to_be<
-      my_component, dg::Actions::SendDataForFluxes<metavariables>>(
+      my_component, dg::Actions::CollectDataForFluxes<
+                        DgBoundaryScheme<2>, ::Tags::InternalDirections<2>>>(
       element.id());
+  runner->next_action<my_component>(element.id());
   runner->next_action<my_component>(element.id());
 }
 
@@ -301,6 +256,9 @@ void run_lts_case(const int self_step_end, const std::vector<int>& left_steps,
                   const std::vector<int>& right_steps) noexcept {
   using metavariables = LtsMetavariables<2>;
   using my_component = lts_component<2, metavariables>;
+  using all_mortar_data_tag = ::Tags::Mortars<MortarDataTag<2>, 2>;
+  using mortar_next_temporal_ids_tag =
+      ::Tags::Mortars<::Tags::Next<TemporalIdTag>, 2>;
 
   const int self_step_start = 0;  // We always start at 0
 
@@ -312,33 +270,26 @@ void run_lts_case(const int self_step_end, const std::vector<int>& left_steps,
   const MortarId left_mortar_id(Direction<2>::lower_xi(), left_id);
   const MortarId right_mortar_id(Direction<2>::upper_xi(), right_id);
 
-  db::item_type<MortarRecorderTag> initial_recorders;
-  initial_recorders.insert({{Direction<2>::lower_xi(), left_id}, {}});
-  initial_recorders.insert({{Direction<2>::upper_xi(), right_id}, {}});
-  db::item_type<mortar_next_temporal_ids_tag<2>> initial_mortar_temporal_ids{
-      {left_mortar_id, left_steps.front()},
-      {right_mortar_id, right_steps.front()}};
+  const Mesh<2> mesh{2, Spectral::Basis::Legendre,
+                     Spectral::Quadrature::GaussLobatto};
+  const std::vector<std::array<size_t, 2>> initial_extents{
+      {{{2, 2}}, {{2, 2}}, {{2, 2}}}};
 
-  ActionTesting::MockRuntimeSystem<metavariables> runner{{NumericalFlux<2>{}}};
+  ActionTesting::MockRuntimeSystem<metavariables> runner{{}};
 
   PUPable_reg(
       SINGLE_ARG(domain::CoordinateMap<Frame::Logical, Frame::Inertial,
                                        domain::CoordinateMaps::Identity<2>>));
   ActionTesting::emplace_component_and_initialize<my_component>(
       &runner, self_id,
-      {self_step_start, self_step_end,
-       Mesh<2>{2, Spectral::Basis::Legendre,
-               Spectral::Quadrature::GaussLobatto},
-       Element<2>{},
+      {initial_extents, self_step_start, self_step_start, mesh,
+       Element<2>{self_id,
+                  {{Direction<2>::lower_xi(), {{left_id}, {}}},
+                   {Direction<2>::upper_xi(), {{right_id}, {}}}}},
        ElementMap<2, Frame::Inertial>{
            self_id,
            domain::make_coordinate_map_base<Frame::Logical, Frame::Inertial>(
-               domain::CoordinateMaps::Identity<2>{})},
-       db::item_type<normal_dot_fluxes_tag<2, flux_comm_types<2>>>{},
-       db::item_type<other_data_tag<2>>{},
-       db::item_type<mortar_meshes_tag<2>>{},
-       db::item_type<mortar_sizes_tag<2>>{}, std::move(initial_recorders),
-       std::move(initial_mortar_temporal_ids)});
+               domain::CoordinateMaps::Identity<2>{})}});
 
   // Insert the left and right neighbor
   const Element<2> left_element(left_id,
@@ -346,17 +297,45 @@ void run_lts_case(const int self_step_end, const std::vector<int>& left_steps,
   const Element<2> right_element(right_id,
                                  {{Direction<2>::lower_xi(), {{self_id}, {}}}});
 
-  insert_neighbor(make_not_null(&runner), left_element, 0, 1, 0.0);
-  insert_neighbor(make_not_null(&runner), right_element, 0, 1, 0.0);
+  insert_neighbor(make_not_null(&runner), left_element, 0);
+  insert_neighbor(make_not_null(&runner), right_element, 0);
   runner.set_phase(metavariables::Phase::Testing);
 
-  runner.next_action<my_component>(self_id);  // SendDataForFluxes
+  const auto get_tag = [&runner, &self_id](auto tag_v) -> decltype(auto) {
+    using tag = std::decay_t<decltype(tag_v)>;
+    return ActionTesting::get_databox_tag<my_component, tag>(runner, self_id);
+  };
+
+  // InitializeMortars on self
+  runner.next_action<my_component>(self_id);
+  set_next_temporal_id<my_component>(make_not_null(&runner), self_id,
+                                      self_step_end);
+  db::mutate<mortar_next_temporal_ids_tag>(
+      make_not_null(
+          &ActionTesting::get_databox<my_component,
+                                      typename my_component::db_tags_list>(
+              make_not_null(&runner), self_id)),
+      [&left_mortar_id, &right_mortar_id, &left_steps,
+       &right_steps](auto mortar_next_temporal_ids) {
+        mortar_next_temporal_ids->at(left_mortar_id) = left_steps.front();
+        mortar_next_temporal_ids->at(right_mortar_id) = right_steps.front();
+      });
+  // InitializeMortars on neighbors
+  runner.next_action<my_component>(left_id);
+  set_next_temporal_id<my_component>(make_not_null(&runner), left_id, 1);
+  runner.next_action<my_component>(right_id);
+  set_next_temporal_id<my_component>(make_not_null(&runner), right_id, 1);
+
+  // CollectDataForFluxes on self
+  runner.next_action<my_component>(self_id);
+  // SendDataForFluxes on self
+  runner.next_action<my_component>(self_id);
 
   std::vector<int> relevant_left_steps{left_steps.front()};
   for (size_t step = 1; step < left_steps.size(); ++step) {
     CHECK_FALSE(runner.is_ready<my_component>(self_id));
     send_from_neighbor(&runner, left_element, left_steps[step - 1],
-                       left_steps[step], step);
+                       left_steps[step]);
     if (left_steps[step - 1] < self_step_end) {
       relevant_left_steps.push_back(left_steps[step]);
     }
@@ -365,7 +344,7 @@ void run_lts_case(const int self_step_end, const std::vector<int>& left_steps,
   for (size_t step = 1; step < right_steps.size(); ++step) {
     CHECK_FALSE(runner.is_ready<my_component>(self_id));
     send_from_neighbor(&runner, right_element, right_steps[step - 1],
-                       right_steps[step], step);
+                       right_steps[step]);
     if (right_steps[step - 1] < self_step_end) {
       relevant_right_steps.push_back(right_steps[step]);
     }
@@ -373,16 +352,12 @@ void run_lts_case(const int self_step_end, const std::vector<int>& left_steps,
   REQUIRE(runner.is_ready<my_component>(self_id));
   runner.next_action<my_component>(self_id);  // ReceiveDataForFluxes
 
-  CHECK(ActionTesting::get_databox_tag<my_component,
-                                       mortar_next_temporal_ids_tag<2>>(
-            runner, self_id) ==
-        db::item_type<mortar_next_temporal_ids_tag<2>>{
+  CHECK(get_tag(mortar_next_temporal_ids_tag{}) ==
+        db::item_type<mortar_next_temporal_ids_tag>{
             {left_mortar_id, relevant_left_steps.back()},
             {right_mortar_id, relevant_right_steps.back()}});
 
-  const auto& recorders =
-      ActionTesting::get_databox_tag<my_component, MortarRecorderTag>(runner,
-                                                                      self_id);
+  const auto& recorders = get_tag(all_mortar_data_tag{});
   const auto check_data = [](const auto& recorder,
                              const std::vector<int>& steps) noexcept {
     const auto& received_data = recorder.received_data;
@@ -390,13 +365,12 @@ void run_lts_case(const int self_step_end, const std::vector<int>& left_steps,
 
     for (size_t step = 0; step < received_data.size(); ++step) {
       CHECK(received_data[step].first == steps[step]);
-      CHECK(get(get<Var>(received_data[step].second)) ==
-            DataVector(2, 10. * (step + 1)));
     }
   };
   check_data(recorders.at(left_mortar_id), relevant_left_steps);
   check_data(recorders.at(right_mortar_id), relevant_right_steps);
 }
+
 }  // namespace
 
 SPECTRE_TEST_CASE("Unit.DiscontinuousGalerkin.Actions.FluxCommunication.lts",
