@@ -1,6 +1,10 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
+add_subdirectory(Actions)
+add_subdirectory(BoundarySchemes)
+add_subdirectory(NumericalFluxes)
+
 set(LIBRARY "Test_NumericalDiscontinuousGalerkin")
 
 set(LIBRARY_SOURCES
@@ -12,17 +16,9 @@ set(LIBRARY_SOURCES
   Test_Tags.cpp
   )
 
-add_subdirectory(Actions)
-add_subdirectory(NumericalFluxes)
-
 add_test_library(
   ${LIBRARY}
   "NumericalAlgorithms/DiscontinuousGalerkin/"
   "${LIBRARY_SOURCES}"
-  "CoordinateMaps;DataStructures;Domain;DiscontinuousGalerkin;ErrorHandling;Utilities"
-  )
-
-add_dependencies(
-  ${LIBRARY}
-  module_ConstGlobalCache
+  "DataStructures;Domain;DiscontinuousGalerkin;ErrorHandling;Spectral;Utilities"
   )
