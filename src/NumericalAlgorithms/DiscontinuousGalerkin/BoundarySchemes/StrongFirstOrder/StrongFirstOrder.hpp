@@ -8,13 +8,16 @@
 
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/DataVector.hpp"
+#include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
 #include "DataStructures/VariablesHelpers.hpp"
 #include "Domain/DirectionMap.hpp"
+#include "Domain/FaceNormal.hpp"
 #include "Domain/InterfaceHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/LiftFlux.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/NumericalFluxHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/SimpleBoundaryData.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/SimpleMortarData.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
@@ -63,45 +66,13 @@ struct boundary_data_computer_impl<
           ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<Dim>>>&
           magnitude_of_face_normal,
       const db::const_item_type<ArgsTags>&... args) noexcept {
-    BoundaryData boundary_data{};
-    boundary_data.field_data.initialize(face_mesh.number_of_grid_points());
+    BoundaryData boundary_data{face_mesh.number_of_grid_points()};
     boundary_data.field_data.assign_subset(normal_dot_fluxes);
-    numerical_flux_computer.package_data(
-        make_not_null(&get<PackageFieldTags>(boundary_data.field_data))...,
-        make_not_null(&get<PackageExtraTags>(boundary_data.extra_data))...,
-        args...);
+    dg::NumericalFluxes::package_data(make_not_null(&boundary_data),
+                                      numerical_flux_computer, args...);
     get<MagnitudeOfFaceNormalTag>(boundary_data.extra_data) =
         magnitude_of_face_normal;
     return boundary_data;
-  }
-};
-
-// Helper function to unpack arguments when invoking the numerical flux computer
-template <typename NormalDotNumericalFluxComputer,
-          typename PackageFieldTagsList =
-              typename NormalDotNumericalFluxComputer::package_field_tags,
-          typename PackageExtraTagsList =
-              typename NormalDotNumericalFluxComputer::package_extra_tags>
-struct ApplyNormalDotNumericalFluxImpl;
-
-template <typename NormalDotNumericalFluxComputer, typename... PackageFieldTags,
-          typename... PackageExtraTags>
-struct ApplyNormalDotNumericalFluxImpl<NormalDotNumericalFluxComputer,
-                                       tmpl::list<PackageFieldTags...>,
-                                       tmpl::list<PackageExtraTags...>> {
-  template <typename... NumericalFluxTags, typename BoundaryData>
-  static void apply(
-      const gsl::not_null<Variables<tmpl::list<NumericalFluxTags...>>*>
-          numerical_fluxes,
-      const NormalDotNumericalFluxComputer& normal_dot_numerical_flux_computer,
-      const BoundaryData& self_boundary_data,
-      const BoundaryData& neighbor_boundary_data) noexcept {
-    normal_dot_numerical_flux_computer(
-        make_not_null(&get<NumericalFluxTags>(*numerical_fluxes))...,
-        get<PackageFieldTags>(self_boundary_data.field_data)...,
-        get<PackageExtraTags>(self_boundary_data.extra_data)...,
-        get<PackageFieldTags>(neighbor_boundary_data.field_data)...,
-        get<PackageExtraTags>(neighbor_boundary_data.extra_data)...);
   }
 };
 
@@ -132,7 +103,7 @@ db::const_item_type<VariablesTag> compute_boundary_flux_contribution(
   db::const_item_type<
       db::add_tag_prefix<::Tags::NormalDotNumericalFlux, VariablesTag>>
       normal_dot_numerical_fluxes{mortar_mesh.number_of_grid_points()};
-  ApplyNormalDotNumericalFluxImpl<NormalDotNumericalFluxComputer>::apply(
+  dg::NumericalFluxes::normal_dot_numerical_fluxes(
       make_not_null(&normal_dot_numerical_fluxes),
       normal_dot_numerical_flux_computer, local_boundary_data,
       remote_boundary_data);

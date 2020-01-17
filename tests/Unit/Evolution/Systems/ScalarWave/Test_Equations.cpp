@@ -26,6 +26,7 @@
 #include "Utilities/MakeArray.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
+#include "tests/Unit/NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/TestHelpers.hpp"
 #include "tests/Unit/Pypp/CheckWithRandomValues.hpp"
 #include "tests/Unit/Pypp/SetupLocalPythonEnvironment.hpp"
 #include "tests/Unit/TestHelpers.hpp"
@@ -166,18 +167,10 @@ SPECTRE_TEST_CASE("Unit.Evolution.Systems.ScalarWave.NormalDotFluxes",
 }
 
 namespace {
-template <class... Tags, class FluxType, class... NormalDotNumericalFluxTypes>
-void apply_numerical_flux(
-    const FluxType& flux,
-    const Variables<tmpl::list<Tags...>>& packaged_data_int,
-    const Variables<tmpl::list<Tags...>>& packaged_data_ext,
-    NormalDotNumericalFluxTypes&&... normal_dot_numerical_flux) {
-  flux(std::forward<NormalDotNumericalFluxTypes>(normal_dot_numerical_flux)...,
-       get<Tags>(packaged_data_int)..., get<Tags>(packaged_data_ext)...);
-}
-
 template <size_t Dim>
 void check_upwind_flux(const size_t npts, const double t) {
+  const DataVector used_for_size{pow<Dim>(npts),
+                                 std::numeric_limits<double>::signaling_NaN()};
   const ScalarWave::Solutions::PlaneWave<Dim> solution(
       make_array<Dim>(0.1), make_array<Dim>(0.0),
       std::make_unique<MathFunctions::Gaussian>(1.0, 1.0, 0.0));
@@ -198,28 +191,25 @@ void check_upwind_flux(const size_t npts, const double t) {
     unit_normal.get(d) = x.get(d);
   }
 
-  Variables<typename ScalarWave::UpwindFlux<Dim>::package_tags>
-      packaged_data_int(pow<Dim>(npts), 0.0);
-  Variables<typename ScalarWave::UpwindFlux<Dim>::package_tags>
-      packaged_data_ext(pow<Dim>(npts), 0.0);
-
   ScalarWave::UpwindFlux<Dim> flux_computer{};
-  flux_computer.package_data(
-      make_not_null(&packaged_data_int), solution.dpsi_dt(x, t + 1.0),
+
+  auto packaged_data_int = TestHelpers::NumericalFluxes::get_packaged_data(
+      flux_computer, used_for_size, solution.dpsi_dt(x, t + 1.0),
       solution.dpsi_dx(x, t + 2.0), solution.psi(x, t + 4.0), unit_normal);
-  flux_computer.package_data(make_not_null(&packaged_data_ext),
-                             solution.dpsi_dt(x, 2.0 * t + 10.0),
-                             solution.dpsi_dx(x, 2.0 * t + 9.0),
-                             solution.psi(x, 2.0 * t + 7.0), unit_normal);
+  auto packaged_data_ext = TestHelpers::NumericalFluxes::get_packaged_data(
+      flux_computer, used_for_size, solution.dpsi_dt(x, 2.0 * t + 10.0),
+      solution.dpsi_dx(x, 2.0 * t + 9.0), solution.psi(x, 2.0 * t + 7.0),
+      unit_normal);
 
   Scalar<DataVector> normal_dot_numerical_flux_pi(pow<Dim>(npts), 0.0);
   Scalar<DataVector> normal_dot_numerical_flux_psi(pow<Dim>(npts), 0.0);
   tnsr::i<DataVector, Dim, Frame::Inertial> normal_dot_numerical_flux_phi(
       pow<Dim>(npts), 0.0);
-  apply_numerical_flux(flux_computer, packaged_data_int, packaged_data_ext,
-                       make_not_null(&normal_dot_numerical_flux_pi),
-                       make_not_null(&normal_dot_numerical_flux_phi),
-                       make_not_null(&normal_dot_numerical_flux_psi));
+  dg::NumericalFluxes::normal_dot_numerical_fluxes(
+      flux_computer, packaged_data_int, packaged_data_ext,
+      make_not_null(&normal_dot_numerical_flux_pi),
+      make_not_null(&normal_dot_numerical_flux_phi),
+      make_not_null(&normal_dot_numerical_flux_psi));
 
   CHECK(normal_dot_numerical_flux_psi ==
         Scalar<DataVector>(pow<Dim>(npts), 0.0));
