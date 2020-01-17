@@ -39,27 +39,15 @@ namespace Actions {
 /// Dirichlet boundary conditions on the exterior side.
 ///
 /// With:
-/// - Boundary<Tag> =
-///   Tags::Interface<Tags::BoundaryDirections<volume_dim>, Tag>
 /// - External<Tag> =
 ///   Tags::Interface<Tags::ExternalBoundaryDirections<volume_dim>, Tag>
 ///
 /// Uses:
 /// - ConstGlobalCache:
-///   - Metavariables::normal_dot_numerical_flux
 ///   - Metavariables::boundary_condition
 /// - DataBox:
-///   - Tags::Element<volume_dim>
-///   - Boundary<Tags listed in
-///               Metavariables::normal_dot_numerical_flux::type::argument_tags>
-///   - External<Tags listed in
-///               Metavariables::normal_dot_numerical_flux::type::argument_tags>
-///   - Boundary<Tags::Mesh<volume_dim - 1>>
-///   - External<Tags::Mesh<volume_dim - 1>>
-///   - Boundary<Tags::Magnitude<Tags::UnnormalizedFaceNormal<volume_dim>>>,
-///   - External<Tags::Magnitude<Tags::UnnormalizedFaceNormal<volume_dim>>>,
-///   - Boundary<Tags::BoundaryCoordinates<volume_dim>>,
-///   - Metavariables::temporal_id
+///   - Tags::Time
+///   - External<Tags::BoundaryCoordinates<volume_dim>>,
 ///
 /// DataBox changes:
 /// - Adds: nothing
@@ -85,8 +73,7 @@ struct ImposeDirichletBoundaryConditions {
 
  public:
   using const_global_cache_tags =
-      tmpl::list<typename Metavariables::normal_dot_numerical_flux,
-                 typename Metavariables::boundary_condition_tag>;
+      tmpl::list<typename Metavariables::boundary_condition_tag>;
 
   template <typename DbTags, typename... InboxTags, typename ArrayIndex,
             typename ActionList, typename ParallelComponent>
