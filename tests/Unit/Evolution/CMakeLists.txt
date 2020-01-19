@@ -11,6 +11,7 @@ set(LIBRARY "Test_Evolution")
 
 set(LIBRARY_SOURCES
   Test_ComputeTags.cpp
+  Test_NumericInitialData.cpp
   Test_TypeTraits.cpp
   )
 
