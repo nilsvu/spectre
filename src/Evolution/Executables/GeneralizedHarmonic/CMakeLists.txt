@@ -8,7 +8,6 @@ set(LIBS_TO_LINK
     Domain
     DomainCreators
     GeneralRelativity
-    GeneralRelativitySolutions
     GeneralizedHarmonic
     GeneralizedHarmonicGaugeSourceFunctions
     IO
@@ -21,10 +20,20 @@ set(LIBS_TO_LINK
     ${SPECTRE_LIBRARIES}
   )
 
-add_spectre_parallel_executable(
-  EvolveGeneralizedHarmonic
-  EvolveGeneralizedHarmonic
-  Evolution/Executables/GeneralizedHarmonic
-  EvolutionMetavars
-  "${LIBS_TO_LINK}"
+function(add_generalized_harmonic_executable
+  EXECUTABLE_NAME INITIAL_GUESS BOUNDARY_CONDITIONS EXTRA_LIBS_TO_LINK)
+  add_spectre_parallel_executable(
+    "Evolve${EXECUTABLE_NAME}"
+    EvolveGeneralizedHarmonic
+    Evolution/Executables/GeneralizedHarmonic
+    "EvolutionMetavars<${INITIAL_GUESS}, ${BOUNDARY_CONDITIONS}>"
+    "${LIBS_TO_LINK};${EXTRA_LIBS_TO_LINK}"
+    )
+endfunction(add_generalized_harmonic_executable)
+
+add_generalized_harmonic_executable(
+  KerrSchild
+  GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::KerrSchild>
+  GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::KerrSchild>
+  "GeneralRelativitySolutions"
 )
