@@ -38,6 +38,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/FluxCommunicationTypes.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"  // IWYU pragma: keep
+#include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
 #include "Time/Slab.hpp"
 #include "Time/Tags.hpp"
 #include "Time/Time.hpp"
@@ -112,7 +113,7 @@ struct NumericalFluxTag {
   using type = NumericalFlux;
 };
 
-struct BoundaryCondition {
+struct BoundaryCondition : MarkAsAnalyticSolution {
   tuples::TaggedTuple<Var> variables(const tnsr::I<DataVector, Dim>& /*x*/,
                                      double /*t*/,
                                      tmpl::list<Var> /*meta*/) const noexcept {
@@ -246,7 +247,6 @@ struct Metavariables {
 
   using normal_dot_numerical_flux = NumericalFluxTag;
   using boundary_condition_tag = BoundaryConditionTag;
-  using initial_data_tag = boundary_condition_tag;
   enum class Phase { Initialization, Testing, Exit };
 };
 

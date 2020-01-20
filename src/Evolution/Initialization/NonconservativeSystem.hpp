@@ -9,6 +9,7 @@
 
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "Evolution/Initialization/InitialData.hpp"
+#include "Evolution/NumericInitialData.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "Utilities/TMPL.hpp"
@@ -76,11 +77,13 @@ struct NonconservativeSystem {
         db::get<::Tags::Coordinates<dim, Frame::Inertial>>(box);
 
     // Set initial data from analytic solution
-    Vars vars{num_grid_points};
-    vars.assign_subset(evolution::initial_data(
-        Parallel::get<::Tags::AnalyticSolutionOrData>(cache), inertial_coords,
-        initial_time, typename Vars::tags_list{}));
-
+    Vars vars{num_grid_points, std::numeric_limits<double>::signaling_NaN()};
+    if (not evolution::is_numeric_initial_data_v<
+            typename Metavariables::initial_data>) {
+      vars.assign_subset(evolution::initial_data(
+          Parallel::get<::Tags::AnalyticSolutionOrData>(cache), inertial_coords,
+          initial_time, typename Vars::tags_list{}));
+    }
     return std::make_tuple(
         merge_into_databox<NonconservativeSystem, simple_tags, compute_tags>(
             std::move(box), std::move(vars)));

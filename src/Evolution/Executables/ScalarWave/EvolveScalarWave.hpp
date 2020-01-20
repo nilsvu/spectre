@@ -88,8 +88,8 @@ struct EvolutionMetavars {
   using system = ScalarWave::System<Dim>;
   using temporal_id = Tags::TimeStepId;
   static constexpr bool local_time_stepping = true;
-  using initial_data_tag =
-      Tags::AnalyticSolution<ScalarWave::Solutions::PlaneWave<Dim>>;
+  using initial_data = ScalarWave::Solutions::PlaneWave<Dim>;
+  using initial_data_tag = Tags::AnalyticSolution<initial_data>;
   using boundary_condition_tag = initial_data_tag;
   using normal_dot_numerical_flux =
       Tags::NumericalFlux<ScalarWave::UpwindFlux<Dim>>;

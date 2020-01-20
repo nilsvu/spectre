@@ -13,6 +13,7 @@
 #include "Domain/FaceNormal.hpp"
 #include "Domain/Tags.hpp"
 #include "ErrorHandling/Assert.hpp"
+#include "Evolution/TypeTraits.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/InterfaceActionHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/FluxCommunicationTypes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
@@ -164,8 +165,8 @@ struct ImposeDirichletBoundaryConditions {
 
     static_assert(
         system::is_in_flux_conservative_form or
-            cpp17::is_same_v<typename Metavariables::initial_data_tag,
-                             typename Metavariables::boundary_condition_tag>,
+            evolution::is_analytic_solution_v<
+                typename Metavariables::boundary_condition_tag::type>,
         "Only analytic boundary conditions, or dirichlet boundary conditions "
         "for conservative systems are implemented");
 
@@ -223,8 +224,8 @@ struct ImposeDirichletBoundaryConditions {
     static_assert(
         system::is_in_flux_conservative_form and
             system::has_primitive_and_conservative_vars and
-            cpp17::is_same_v<typename Metavariables::initial_data_tag,
-                             typename Metavariables::boundary_condition_tag>,
+            evolution::is_analytic_solution_v<
+                typename Metavariables::boundary_condition_tag::type>,
         "Only analytic boundary conditions, or dirichlet boundary conditions "
         "for conservative systems are implemented");
 

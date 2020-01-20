@@ -83,7 +83,8 @@ struct EvolutionMetavars {
   using system = Burgers::System;
   using temporal_id = Tags::TimeStepId;
   static constexpr bool local_time_stepping = false;
-  using initial_data_tag = Tags::AnalyticSolution<Burgers::Solutions::Step>;
+  using initial_data = Burgers::Solutions::Step;
+  using initial_data_tag = Tags::AnalyticSolution<initial_data>;
   using boundary_condition_tag = initial_data_tag;
   using normal_dot_numerical_flux =
       Tags::NumericalFlux<dg::NumericalFluxes::LocalLaxFriedrichs<system>>;
