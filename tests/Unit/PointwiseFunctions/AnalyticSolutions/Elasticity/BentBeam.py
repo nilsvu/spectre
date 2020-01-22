@@ -17,6 +17,18 @@ def displacement(x, length, height, bending_moment, bulk_modulus,
     ])
 
 
+def strain(x, length, height, bending_moment, bulk_modulus, shear_modulus):
+    youngs_modulus = 9. * bulk_modulus * shear_modulus / \
+        (3. * bulk_modulus + shear_modulus)
+    poisson_ratio = (3. * bulk_modulus - 2. * shear_modulus) / \
+        (6. * bulk_modulus + 2. * shear_modulus)
+    prefactor = 12. * bending_moment / (youngs_modulus * height**3)
+    result = np.zeros((2, 2))
+    result[0, 0] = -prefactor * x[1]
+    result[1, 1] = prefactor * poisson_ratio * x[1]
+    return result
+
+
 def stress(x, length, height, bending_moment, bulk_modulus, shear_modulus):
     return np.array([[12. * bending_moment / height**3 * x[1], 0], [0, 0]])
 
