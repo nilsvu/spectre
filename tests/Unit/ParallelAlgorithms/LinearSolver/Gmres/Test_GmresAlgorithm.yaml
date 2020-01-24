@@ -1,10 +1,14 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-LinearOperator: [[4, 1], [3, 1]]
+# LinearOperator: [[4, 1], [3, 1]]
+# Source: [1, 2]
+# InitialGuess: [2, 1]
+# ExpectedResult: [-1., 5.]
+LinearOperator: [[4, 1], [1, 3]]
 Source: [1, 2]
 InitialGuess: [2, 1]
-ExpectedResult: [-1., 5.]
+ExpectedResult: [0.0909090909090909, 0.6363636363636364]
 
 Observers:
   VolumeFileName: "Test_GmresAlgorithm_Volume"
@@ -12,7 +16,11 @@ Observers:
 
 SerialGmres:
   ConvergenceCriteria:
-    MaxIterations: 2
+    MaxIterations: 100
     AbsoluteResidual: 1e-14
     RelativeResidual: 0
   Verbosity: Verbose
+
+Preconditioner:
+  RelaxationParameter: 0.2857142857142857
+  Iterations: 10

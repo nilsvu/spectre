@@ -37,7 +37,7 @@ using operand_tag = db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
 using orthogonalization_iteration_id_tag =
     db::add_tag_prefix<LinearSolver::Tags::Orthogonalization,
                        LinearSolver::Tags::IterationId>;
-using basis_history_tag = LinearSolver::Tags::KrylovSubspaceBasis<fields_tag>;
+using basis_history_tag = LinearSolver::Tags::KrylovSubspaceBasis<operand_tag>;
 
 template <typename Metavariables>
 struct ElementArray {

@@ -66,6 +66,16 @@ struct Gmres {
   using fields_tag = FieldsTag;
   using options_group = OptionsGroup;
 
+  // Apply operator to this tag in each step
+  using operand_tag = db::add_tag_prefix<
+      LinearSolver::Tags::Preconditioned,
+      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>>;
+
+  // Invoke a linear solver on the `operand_tag` sourced by the
+  // `preconditioner_source_tag` before applying the operator in each step
+  using preconditioner_source_tag =
+      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+
   /*!
    * \brief The parallel components used by the GMRES linear solver
    */

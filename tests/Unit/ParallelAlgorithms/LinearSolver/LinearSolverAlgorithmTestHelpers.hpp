@@ -21,6 +21,7 @@
 #include "ErrorHandling/FloatingPointExceptions.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
 #include "Options/Options.hpp"
+#include "Parallel/Actions/Goto.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "Parallel/InitializationFunctions.hpp"
@@ -36,6 +37,8 @@
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
+
+#include "Parallel/Printf.hpp"
 
 namespace LinearSolverAlgorithmTestHelpers {
 
@@ -108,9 +111,15 @@ struct VectorTag : db::SimpleTag {
 };
 
 using fields_tag = VectorTag;
-using operand_tag = LinearSolver::Tags::Operand<fields_tag>;
-using operator_tag = LinearSolver::Tags::OperatorAppliedTo<operand_tag>;
+using source_tag = ::Tags::FixedSource<fields_tag>;
+using operator_applied_to_fields_tag =
+    LinearSolver::Tags::OperatorAppliedTo<fields_tag>;
+using operand_tag =
+    LinearSolver::Tags::Preconditioned<LinearSolver::Tags::Operand<fields_tag>>;
+using operator_applied_to_operand_tag =
+    LinearSolver::Tags::OperatorAppliedTo<operand_tag>;
 
+template <typename OperandTag>
 struct ComputeOperatorAction {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ActionList, typename ParallelComponent>
@@ -124,7 +133,9 @@ struct ComputeOperatorAction {
       const ActionList /*meta*/,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ParallelComponent* const /*meta*/) noexcept {
-    db::mutate<operator_tag>(
+    Parallel::printf("-> Compute operator action on %s\n",
+                     db::tag_name<OperandTag>());
+    db::mutate<LinearSolver::Tags::OperatorAppliedTo<OperandTag>>(
         make_not_null(&box),
         [](const gsl::not_null<DenseVector<double>*>
                operator_applied_to_operand,
@@ -132,7 +143,7 @@ struct ComputeOperatorAction {
            const DenseVector<double>& operand) noexcept {
           *operator_applied_to_operand = linear_operator * operand;
         },
-        get<LinearOperator>(cache), get<operand_tag>(box));
+        get<LinearOperator>(cache), get<OperandTag>(box));
     return {std::move(box), false};
   }
 };
@@ -157,7 +168,8 @@ struct TestResult {
     SPECTRE_PARALLEL_REQUIRE(has_converged);
     SPECTRE_PARALLEL_REQUIRE(has_converged.reason() ==
                              Convergence::Reason::AbsoluteResidual);
-    const auto& result = get<VectorTag>(box);
+    const auto& result = get<fields_tag>(box);
+    Parallel::printf("Result: %s\n", result);
     const auto& expected_result = get<ExpectedResult>(cache);
     for (size_t i = 0; i < expected_result.size(); i++) {
       SPECTRE_PARALLEL_REQUIRE(result[i] == approx(expected_result[i]));
@@ -178,18 +190,17 @@ struct InitializeElement {
     const auto& source = get<Source>(cache);
     const auto& initial_guess = get<InitialGuess>(cache);
 
+    const auto nan_vector = make_with_value<DenseVector<double>>(
+        initial_guess, std::numeric_limits<double>::signaling_NaN());
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeElement,
-            db::AddSimpleTags<VectorTag, ::Tags::FixedSource<VectorTag>,
-                              LinearSolver::Tags::OperatorAppliedTo<VectorTag>,
-                              operand_tag, operator_tag>>(
+            db::AddSimpleTags<fields_tag, source_tag,
+                              operator_applied_to_fields_tag, operand_tag,
+                              operator_applied_to_operand_tag>>(
             std::move(box), initial_guess, source,
-            DenseVector<double>{linear_operator * initial_guess},
-            make_with_value<DenseVector<double>>(
-                initial_guess, std::numeric_limits<double>::signaling_NaN()),
-            make_with_value<DenseVector<double>>(
-                initial_guess, std::numeric_limits<double>::signaling_NaN())));
+            DenseVector<double>{linear_operator * initial_guess}, nan_vector,
+            nan_vector));
   }
 };  // namespace
 
@@ -199,8 +210,9 @@ struct ElementArray {
   using array_index = int;
   using metavariables = Metavariables;
   using linear_solver = typename Metavariables::linear_solver;
+  using preconditioner = typename Metavariables::preconditioner;
   // In each step of the algorithm we must provide A(p). The linear solver then
-  // takes care of updating x and p, as well as the internal variables r, its
+  // takes care of updating x and xp, as well as the internal variables r, its
   // magnitude and the iteration step number.
   /// [action_list]
   using phase_dependent_action_list = tmpl::list<
@@ -208,6 +220,9 @@ struct ElementArray {
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
           tmpl::list<InitializeElement,
                      typename linear_solver::initialize_element,
+                     typename preconditioner::initialize_element,
+                     // Invoke `prepare_solve` here so we don't have to add
+                     // another phase
                      typename linear_solver::prepare_solve,
                      Parallel::Actions::TerminatePhase>>,
 
@@ -217,7 +232,15 @@ struct ElementArray {
           tmpl::list<LinearSolver::Actions::TerminateIfConverged<
                          typename linear_solver::options_group>,
                      typename linear_solver::prepare_step,
-                     ComputeOperatorAction,
+                     typename preconditioner::prepare_solve,
+                     ::Actions::RepeatUntil<
+                         LinearSolver::Tags::HasConverged<
+                             typename preconditioner::options_group>,
+                         tmpl::list<typename preconditioner::prepare_step,
+                                    ComputeOperatorAction<
+                                        typename preconditioner::operand_tag>,
+                                    typename preconditioner::perform_step>>,
+                     ComputeOperatorAction<typename linear_solver::operand_tag>,
                      typename linear_solver::perform_step>>,
 
       Parallel::PhaseActions<

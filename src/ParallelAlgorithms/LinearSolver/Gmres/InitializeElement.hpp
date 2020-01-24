@@ -26,12 +26,19 @@ template <typename FieldsTag, typename OptionsGroup>
 struct InitializeElement {
  private:
   using fields_tag = FieldsTag;
+  using operand_tag =
+      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+  using preconditioned_operand_tag =
+      db::add_tag_prefix<LinearSolver::Tags::Preconditioned, operand_tag>;
   using initial_fields_tag =
       db::add_tag_prefix<LinearSolver::Tags::Initial, fields_tag>;
   using orthogonalization_iteration_id_tag =
       db::add_tag_prefix<LinearSolver::Tags::Orthogonalization,
                          LinearSolver::Tags::IterationId<OptionsGroup>>;
-  using basis_history_tag = LinearSolver::Tags::KrylovSubspaceBasis<fields_tag>;
+  using basis_history_tag =
+      LinearSolver::Tags::KrylovSubspaceBasis<operand_tag>;
+  using preconditioned_basis_history_tag =
+      LinearSolver::Tags::KrylovSubspaceBasis<preconditioned_operand_tag>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -49,17 +56,20 @@ struct InitializeElement {
         ::Initialization::merge_into_databox<
             InitializeElement,
             db::AddSimpleTags<LinearSolver::Tags::IterationId<OptionsGroup>,
-                              initial_fields_tag,
+                              initial_fields_tag, operand_tag,
                               orthogonalization_iteration_id_tag,
                               basis_history_tag,
+                              preconditioned_basis_history_tag,
                               LinearSolver::Tags::HasConverged<OptionsGroup>>,
             compute_tags>(std::move(box),
                           // The `PrepareSolve` action populates these tags with
                           // initial values
                           std::numeric_limits<size_t>::max(),
                           db::item_type<initial_fields_tag>{},
+                          db::item_type<operand_tag>{},
                           std::numeric_limits<size_t>::max(),
                           db::item_type<basis_history_tag>{},
+                          db::item_type<preconditioned_basis_history_tag>{},
                           Convergence::HasConverged{}));
   }
 };

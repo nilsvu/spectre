@@ -195,8 +195,13 @@ struct KrylovSubspaceBasis : db::PrefixTag, db::SimpleTag {
     // operator
     return "KrylovSubspaceBasis(" + db::tag_name<Tag>() + ")";
   }
-  using type =
-      std::vector<db::const_item_type<db::add_tag_prefix<Operand, Tag>>>;
+  using type = std::vector<db::const_item_type<Tag>>;
+  using tag = Tag;
+};
+
+template <typename Tag>
+struct Preconditioned : db::PrefixTag, db::SimpleTag {
+  using type = typename Tag::type;
   using tag = Tag;
 };
 
