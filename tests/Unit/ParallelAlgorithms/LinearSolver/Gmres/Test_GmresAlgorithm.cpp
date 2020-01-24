@@ -17,10 +17,16 @@
 
 namespace helpers = LinearSolverAlgorithmTestHelpers;
 
+struct SerialGmres {
+  static constexpr OptionString help =
+      "Options for the iterative linear solver";
+};
+
 namespace {
 
 struct Metavariables {
-  using linear_solver = LinearSolver::Gmres<Metavariables, helpers::fields_tag>;
+  using linear_solver =
+      LinearSolver::Gmres<Metavariables, helpers::fields_tag, SerialGmres>;
 
   using component_list =
       tmpl::append<tmpl::list<helpers::ElementArray<Metavariables>,

@@ -23,6 +23,7 @@
 /// \cond
 namespace LinearSolver {
 namespace Tags {
+template <typename OptionsGroup>
 struct ConvergenceCriteria;
 }  // namespace Tags
 }  // namespace LinearSolver
@@ -73,10 +74,10 @@ struct OperatorAppliedTo : db::PrefixTag, db::SimpleTag {
  * \brief Holds an `IterationId` that identifies a step in the linear solver
  * algorithm
  */
+template <typename OptionsGroup>
 struct IterationId : db::SimpleTag {
   static std::string name() noexcept {
-    // Add "Linear" prefix to abbreviate the namespace for uniqueness
-    return "LinearIterationId";
+    return option_name<OptionsGroup>() + "(IterationId)";
   }
   using type = size_t;
   template <typename Tag>
@@ -203,8 +204,11 @@ struct KrylovSubspaceBasis : db::PrefixTag, db::SimpleTag {
  * \brief Holds a `Convergence::HasConverged` flag that signals the linear
  * solver has converged, along with the reason for convergence.
  */
+template <typename OptionsGroup>
 struct HasConverged : db::SimpleTag {
-  static std::string name() noexcept { return "LinearSolverHasConverged"; }
+  static std::string name() noexcept {
+    return option_name<OptionsGroup>() + "(HasConverged)";
+  }
   using type = Convergence::HasConverged;
 };
 
@@ -212,8 +216,9 @@ struct HasConverged : db::SimpleTag {
  * \brief Employs the `LinearSolver::Tags::ConvergenceCriteria` to
  * determine the linear solver has converged.
  */
-template <typename FieldsTag>
-struct HasConvergedCompute : LinearSolver::Tags::HasConverged, db::ComputeTag {
+template <typename FieldsTag, typename OptionsGroup>
+struct HasConvergedCompute : LinearSolver::Tags::HasConverged<OptionsGroup>,
+                             db::ComputeTag {
  private:
   using residual_magnitude_tag = db::add_tag_prefix<
       LinearSolver::Tags::Magnitude,
@@ -223,16 +228,15 @@ struct HasConvergedCompute : LinearSolver::Tags::HasConverged, db::ComputeTag {
 
  public:
   using argument_tags =
-      tmpl::list<LinearSolver::Tags::ConvergenceCriteria,
-                 LinearSolver::Tags::IterationId, residual_magnitude_tag,
-                 initial_residual_magnitude_tag>;
-  static db::const_item_type<LinearSolver::Tags::HasConverged> function(
+      tmpl::list<LinearSolver::Tags::ConvergenceCriteria<OptionsGroup>,
+                 LinearSolver::Tags::IterationId<OptionsGroup>,
+                 residual_magnitude_tag, initial_residual_magnitude_tag>;
+  static Convergence::HasConverged function(
       const Convergence::Criteria& convergence_criteria,
       const size_t& iteration_id, const double& residual_magnitude,
       const double& initial_residual_magnitude) noexcept {
-    return Convergence::HasConverged(convergence_criteria, iteration_id,
-                                     residual_magnitude,
-                                     initial_residual_magnitude);
+    return {convergence_criteria, iteration_id, residual_magnitude,
+            initial_residual_magnitude};
   }
 };
 
@@ -244,28 +248,19 @@ struct HasConvergedCompute : LinearSolver::Tags::HasConverged, db::ComputeTag {
  */
 namespace OptionTags {
 
-/*!
- * \ingroup OptionGroupsGroup
- * \brief Groups option tags related to the iterative linear solver, e.g.
- * convergence criteria.
- */
-struct Group {
-  static std::string name() noexcept { return "LinearSolver"; }
-  static constexpr OptionString help =
-      "Options for the iterative linear solver";
-};
-
+template <typename OptionsGroup>
 struct ConvergenceCriteria {
   static constexpr OptionString help =
       "Determine convergence of the linear solve";
   using type = Convergence::Criteria;
-  using group = Group;
+  using group = OptionsGroup;
 };
 
+template <typename OptionsGroup>
 struct Verbosity {
   using type = ::Verbosity;
   static constexpr OptionString help = "Logging verbosity";
-  using group = Group;
+  using group = OptionsGroup;
   static type default_value() noexcept { return ::Verbosity::Quiet; }
 };
 
@@ -292,9 +287,14 @@ namespace Tags {
  * remain. Therefore, ideally choose the absolute or relative residual criteria
  * based on an estimate of the discretization residual.
  */
+template <typename OptionsGroup>
 struct ConvergenceCriteria : db::SimpleTag {
+  static std::string name() noexcept {
+    return option_name<OptionsGroup>() + "(ConvergenceCriteria)";
+  }
   using type = Convergence::Criteria;
-  using option_tags = tmpl::list<LinearSolver::OptionTags::ConvergenceCriteria>;
+  using option_tags =
+      tmpl::list<LinearSolver::OptionTags::ConvergenceCriteria<OptionsGroup>>;
 
   template <typename Metavariables>
   static Convergence::Criteria create_from_options(
@@ -303,9 +303,14 @@ struct ConvergenceCriteria : db::SimpleTag {
   }
 };
 
+template <typename OptionsGroup>
 struct Verbosity : db::SimpleTag {
+  static std::string name() noexcept {
+    return option_name<OptionsGroup>() + "(Verbosity)";
+  }
   using type = ::Verbosity;
-  using option_tags = tmpl::list<LinearSolver::OptionTags::Verbosity>;
+  using option_tags =
+      tmpl::list<LinearSolver::OptionTags::Verbosity<OptionsGroup>>;
 
   template <typename Metavariables>
   static ::Verbosity create_from_options(
@@ -318,10 +323,11 @@ struct Verbosity : db::SimpleTag {
 
 namespace Tags {
 
-template <>
-struct NextCompute<LinearSolver::Tags::IterationId>
-    : Next<LinearSolver::Tags::IterationId>, db::ComputeTag {
-  using argument_tags = tmpl::list<LinearSolver::Tags::IterationId>;
+template <typename OptionsGroup>
+struct NextCompute<LinearSolver::Tags::IterationId<OptionsGroup>>
+    : Next<LinearSolver::Tags::IterationId<OptionsGroup>>, db::ComputeTag {
+  using argument_tags =
+      tmpl::list<LinearSolver::Tags::IterationId<OptionsGroup>>;
   static size_t function(const size_t& iteration_id) noexcept {
     return iteration_id + 1;
   }

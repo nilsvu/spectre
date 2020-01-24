@@ -126,10 +126,10 @@ struct ComputeOperatorAction {
       const ParallelComponent* const /*meta*/) noexcept {
     db::mutate<operator_tag>(
         make_not_null(&box),
-        [
-        ](const gsl::not_null<DenseVector<double>*> operator_applied_to_operand,
-          const DenseMatrix<double>& linear_operator,
-          const DenseVector<double>& operand) noexcept {
+        [](const gsl::not_null<DenseVector<double>*>
+               operator_applied_to_operand,
+           const DenseMatrix<double>& linear_operator,
+           const DenseVector<double>& operand) noexcept {
           *operator_applied_to_operand = linear_operator * operand;
         },
         get<LinearOperator>(cache), get<operand_tag>(box));
@@ -138,6 +138,7 @@ struct ComputeOperatorAction {
 };
 
 // Checks for the correct solution after the algorithm has terminated.
+template <typename OptionsGroup>
 struct TestResult {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ActionList, typename ParallelComponent>
@@ -151,7 +152,8 @@ struct TestResult {
       const ActionList /*meta*/,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ParallelComponent* const /*meta*/) noexcept {
-    const auto& has_converged = get<LinearSolver::Tags::HasConverged>(box);
+    const auto& has_converged =
+        get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box);
     SPECTRE_PARALLEL_REQUIRE(has_converged);
     SPECTRE_PARALLEL_REQUIRE(has_converged.reason() ==
                              Convergence::Reason::AbsoluteResidual);
@@ -212,14 +214,15 @@ struct ElementArray {
       Parallel::PhaseActions<
           typename Metavariables::Phase,
           Metavariables::Phase::PerformLinearSolve,
-          tmpl::list<LinearSolver::Actions::TerminateIfConverged,
+          tmpl::list<LinearSolver::Actions::TerminateIfConverged<
+                         typename linear_solver::options_group>,
                      typename linear_solver::prepare_step,
                      ComputeOperatorAction,
                      typename linear_solver::perform_step>>,
 
-      Parallel::PhaseActions<typename Metavariables::Phase,
-                             Metavariables::Phase::TestResult,
-                             tmpl::list<TestResult>>>;
+      Parallel::PhaseActions<
+          typename Metavariables::Phase, Metavariables::Phase::TestResult,
+          tmpl::list<TestResult<typename linear_solver::options_group>>>>;
   /// [action_list]
   using initialization_tags = Parallel::get_initialization_tags<
       Parallel::get_initialization_actions_list<phase_dependent_action_list>>;
