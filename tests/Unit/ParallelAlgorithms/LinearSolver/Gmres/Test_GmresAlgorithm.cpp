@@ -12,15 +12,35 @@
 #include "Parallel/InitializationFunctions.hpp"
 #include "Parallel/Main.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
+#include "ParallelAlgorithms/LinearSolver/None/None.hpp"
+#include "ParallelAlgorithms/LinearSolver/Richardson/Richardson.hpp"
 #include "Utilities/TMPL.hpp"
 #include "tests/Unit/ParallelAlgorithms/LinearSolver/LinearSolverAlgorithmTestHelpers.hpp"  // IWYU pragma: keep
 
 namespace helpers = LinearSolverAlgorithmTestHelpers;
 
+struct SerialGmres {
+  static constexpr OptionString help =
+      "Options for the iterative linear solver";
+};
+
+struct Preconditioner {
+  static constexpr OptionString help = "Options for the preconditioner";
+};
+
 namespace {
 
 struct Metavariables {
-  using linear_solver = LinearSolver::Gmres<Metavariables, helpers::fields_tag>;
+  using linear_solver =
+      LinearSolver::Gmres<Metavariables, helpers::fields_tag, SerialGmres>;
+  // using linear_solver =
+  //     LinearSolver::Richardson<typename helpers::fields_tag, SerialGmres>;
+  // using preconditioner =
+  //     LinearSolver::None<typename linear_solver::operand_tag, Preconditioner,
+  //                        typename linear_solver::preconditioner_source_tag>;
+  using preconditioner = LinearSolver::Richardson<
+      typename linear_solver::operand_tag, Preconditioner,
+      typename linear_solver::preconditioner_source_tag>;
 
   using component_list =
       tmpl::append<tmpl::list<helpers::ElementArray<Metavariables>,

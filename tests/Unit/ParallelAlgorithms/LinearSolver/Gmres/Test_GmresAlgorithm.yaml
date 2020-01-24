@@ -10,9 +10,13 @@ Observers:
   VolumeFileName: "Test_GmresAlgorithm_Volume"
   ReductionFileName: "Test_GmresAlgorithm_Reductions"
 
-LinearSolver:
+SerialGmres:
   ConvergenceCriteria:
-    MaxIterations: 2
+    MaxIterations: 100
     AbsoluteResidual: 1e-14
     RelativeResidual: 0
   Verbosity: Verbose
+
+Preconditioner:
+  EigenvalueEstimate: 5.
+  Iterations: 2
