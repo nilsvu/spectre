@@ -39,6 +39,7 @@ SPECTRE_TEST_CASE("Unit.DG.SimpleMortarData", "[Unit][NumericalAlgorithms]") {
   ERROR("Failed to trigger ASSERT in an assertion test");
 #endif
 }
+
 // [[OutputRegex, Only have local data at temporal_id]]
 [[noreturn]] SPECTRE_TEST_CASE(
     "Unit.DG.SimpleMortarData.no_local_data_at_time",
