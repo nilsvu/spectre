@@ -49,7 +49,7 @@ SPECTRE_TEST_CASE("Unit.DG.SimpleBoundaryData", "[Unit][NumericalAlgorithms]") {
   const Mesh<1> mortar_mesh{num_points + 1, Spectral::Basis::Legendre,
                             Spectral::Quadrature::GaussLobatto};
   const std::array<Spectral::MortarSize, 1> mortar_size{
-      Spectral::MortarSize::UpperHalf};
+      {Spectral::MortarSize::UpperHalf}};
   const auto projected_data =
       data.project_to_mortar(face_mesh, mortar_mesh, mortar_size);
   CHECK(projected_data.field_data ==
