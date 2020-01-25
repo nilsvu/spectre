@@ -25,6 +25,8 @@ namespace LinearSolver {
 namespace Tags {
 template <typename>
 struct Operand;
+template <typename>
+struct Preconditioned;
 }  // namespace Tags
 }  // namespace LinearSolver
 /// \endcond
@@ -96,12 +98,15 @@ struct FirstOrderSystem {
       ::Tags::Variables<tmpl::append<primal_fields, auxiliary_fields>>;
 
   // The variables to compute bulk contributions and fluxes for.
-  using variables_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
-  using primal_variables =
-      db::wrap_tags_in<LinearSolver::Tags::Operand, primal_fields>;
-  using auxiliary_variables =
-      db::wrap_tags_in<LinearSolver::Tags::Operand, auxiliary_fields>;
+  using variables_tag = db::add_tag_prefix<
+      LinearSolver::Tags::Preconditioned,
+      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>>;
+  using primal_variables = db::wrap_tags_in<
+      LinearSolver::Tags::Preconditioned,
+      db::wrap_tags_in<LinearSolver::Tags::Operand, primal_fields>>;
+  using auxiliary_variables = db::wrap_tags_in<
+      LinearSolver::Tags::Preconditioned,
+      db::wrap_tags_in<LinearSolver::Tags::Operand, auxiliary_fields>>;
 
   using fluxes = EuclideanFluxes<Dim>;
   using sources = Sources;

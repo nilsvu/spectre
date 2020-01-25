@@ -28,6 +28,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder/StrongFirstOrder.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
+#include "Parallel/Actions/Goto.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "Parallel/InitializationFunctions.hpp"
@@ -44,6 +45,7 @@
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Actions/TerminateIfConverged.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
+#include "ParallelAlgorithms/LinearSolver/Richardson/Richardson.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Lorentzian.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Moustache.hpp"
@@ -51,6 +53,31 @@
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
+
+struct LinearSolverGroup {
+  static std::string name() noexcept { return "LinearSolver"; }
+  static constexpr OptionString help = "The iterative linear solver";
+};
+
+struct LinearSolverOptions {
+  using group = LinearSolverGroup;
+  static std::string name() noexcept { return "GMRES"; }
+  static constexpr OptionString help =
+      "Options for the GMRES iterative linear solver";
+};
+
+struct PreconditionerGroup {
+  static std::string name() noexcept { return "Preconditioner"; }
+  static constexpr OptionString help =
+      "The preconditioner for the linear solves";
+};
+
+struct PreconditionerOptions {
+  using group = PreconditionerGroup;
+  static std::string name() noexcept { return "Richardson"; }
+  static constexpr OptionString help =
+      "Options for the Richardson preconditioner";
+};
 
 /// \cond
 template <typename System, typename InitialGuess, typename BoundaryConditions>
@@ -77,8 +104,13 @@ struct Metavariables {
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
   using linear_solver =
-      LinearSolver::Gmres<Metavariables, typename system::fields_tag>;
-  using temporal_id = LinearSolver::Tags::IterationId;
+      LinearSolver::Gmres<Metavariables, typename system::fields_tag,
+                          LinearSolverOptions>;
+  using preconditioner = LinearSolver::Richardson<
+      typename linear_solver::operand_tag, PreconditionerOptions,
+      typename linear_solver::preconditioner_source_tag>;
+  using temporal_id =
+      LinearSolver::Tags::IterationId<typename linear_solver::options_group>;
 
   // Parse numerical flux parameters from the input file to store in the cache.
   using normal_dot_numerical_flux = Tags::NumericalFlux<
@@ -99,12 +131,11 @@ struct Metavariables {
   using analytic_solution_fields = observe_fields;
   using events = tmpl::list<
       dg::Events::Registrars::ObserveFields<
-          volume_dim, LinearSolver::Tags::IterationId, observe_fields,
-          analytic_solution_fields>,
-      dg::Events::Registrars::ObserveErrorNorms<LinearSolver::Tags::IterationId,
+          volume_dim, temporal_id, observe_fields, analytic_solution_fields>,
+      dg::Events::Registrars::ObserveErrorNorms<temporal_id,
                                                 analytic_solution_fields>>;
-  using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
-      LinearSolver::Tags::IterationId>>;
+  using triggers =
+      tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<temporal_id>>;
 
   // Collect all items to store in the cache.
   using const_global_cache_tags =
@@ -134,6 +165,7 @@ struct Metavariables {
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           Metavariables>,
       typename linear_solver::initialize_element,
+      typename preconditioner::initialize_element,
       dg::Actions::InitializeMortars<boundary_scheme>,
       elliptic::dg::Actions::InitializeFluxes<Metavariables>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
@@ -156,30 +188,38 @@ struct Metavariables {
   using component_list = tmpl::append<
       tmpl::list<elliptic::DgElementArray<
           Metavariables,
-          tmpl::list<Parallel::PhaseActions<Phase, Phase::Initialization,
-                                            initialization_actions>,
+          tmpl::list<
+              Parallel::PhaseActions<Phase, Phase::Initialization,
+                                     initialization_actions>,
 
-                     Parallel::PhaseActions<
-                         Phase, Phase::RegisterWithObserver,
-                         tmpl::list<observers::Actions::RegisterWithObservers<
-                                        observers::RegisterObservers<
-                                            LinearSolver::Tags::IterationId,
-                                            element_observation_type>>,
-                                    // We prepare the linear solve here to avoid
-                                    // adding an extra phase. We can't do it
-                                    // before registration because it
-                                    // contributes to observers.
-                                    typename linear_solver::prepare_solve,
-                                    Parallel::Actions::TerminatePhase>>,
+              Parallel::PhaseActions<
+                  Phase, Phase::RegisterWithObserver,
+                  tmpl::list<observers::Actions::RegisterWithObservers<
+                                 observers::RegisterObservers<
+                                     temporal_id, element_observation_type>>,
+                             // We prepare the linear solve here to avoid
+                             // adding an extra phase. We can't do it
+                             // before registration because it
+                             // contributes to observers.
+                             typename linear_solver::prepare_solve,
+                             Parallel::Actions::TerminatePhase>>,
 
-                     Parallel::PhaseActions<
-                         Phase, Phase::Solve,
-                         tmpl::flatten<tmpl::list<
-                             typename linear_solver::prepare_step,
-                             Actions::RunEventsAndTriggers,
-                             LinearSolver::Actions::TerminateIfConverged,
-                             build_linear_operator_actions,
-                             typename linear_solver::perform_step>>>>>>,
+              Parallel::PhaseActions<
+                  Phase, Phase::Solve,
+                  tmpl::flatten<tmpl::list<
+                      typename linear_solver::prepare_step,
+                      Actions::RunEventsAndTriggers,
+                      LinearSolver::Actions::TerminateIfConverged<
+                          typename linear_solver::options_group>,
+                      typename preconditioner::prepare_solve,
+                      ::Actions::RepeatUntil<
+                          LinearSolver::Tags::HasConverged<
+                              typename preconditioner::options_group>,
+                          tmpl::list<typename preconditioner::prepare_step,
+                                     build_linear_operator_actions,
+                                     typename preconditioner::perform_step>>,
+                      build_linear_operator_actions,
+                      typename linear_solver::perform_step>>>>>>,
       typename linear_solver::component_list,
       tmpl::list<observers::Observer<Metavariables>,
                  observers::ObserverWriter<Metavariables>>>;

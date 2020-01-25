@@ -17,22 +17,28 @@ DomainCreator:
     UpperBound: [3.141592653589793, 3.141592653589793, 3.141592653589793]
     IsPeriodicIn: [false, false, false]
     InitialRefinement: [1, 1, 1]
-    InitialGridPoints: [2, 2, 2]
+    InitialGridPoints: [4, 4, 4]
 
 NumericalFlux:
   InternalPenalty:
-    PenaltyParameter: 2.5464790894703255 # p^2 / h
+    PenaltyParameter: 13. # p^2 / h
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids3DVolume"
   ReductionFileName: "PoissonProductOfSinusoids3DReductions"
 
 LinearSolver:
-  ConvergenceCriteria:
-    MaxIterations: 1
-    AbsoluteResidual: 0
-    RelativeResidual: 0
-  Verbosity: Verbose
+  GMRES:
+    ConvergenceCriteria:
+      MaxIterations: 100
+      AbsoluteResidual: 0
+      RelativeResidual: 1e-5
+    Verbosity: Verbose
+
+Preconditioner:
+  Richardson:
+    RelaxationParameter: 0.1
+    Iterations: 10
 
 EventsAndTriggers:
   ? EveryNIterations:

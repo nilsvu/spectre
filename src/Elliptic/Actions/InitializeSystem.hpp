@@ -82,8 +82,9 @@ struct InitializeSystem {
         db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
     using fixed_sources_tag =
         db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
-    using linear_operand_tag =
-        db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+    using linear_operand_tag = db::add_tag_prefix<
+        LinearSolver::Tags::Preconditioned,
+        db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>>;
     using linear_operator_applied_to_operand_tag =
         db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
                            linear_operand_tag>;
