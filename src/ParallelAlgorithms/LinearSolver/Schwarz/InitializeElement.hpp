@@ -23,12 +23,13 @@ class TaggedTuple;
 namespace LinearSolver {
 namespace schwarz_detail {
 
-template <typename FieldsTag, typename OptionsGroup>
+template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
 struct InitializeElement {
  private:
   using fields_tag = FieldsTag;
+  using source_tag = SourceTag;
   using subdomain_solver_tag = Tags::SubdomainSolverFromOptions<
-      LinearSolver::Serial::Gmres<db::item_type<FieldsTag>>, OptionsGroup>;
+      LinearSolver::Serial::Gmres<db::item_type<fields_tag>>, OptionsGroup>;
 
  public:
   using initialization_tags = tmpl::list<subdomain_solver_tag>;
@@ -43,7 +44,8 @@ struct InitializeElement {
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using compute_tags = db::AddComputeTags<>;
+    using compute_tags = db::AddComputeTags<
+        LinearSolver::Tags::ResidualCompute<fields_tag, source_tag>>;
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeElement,

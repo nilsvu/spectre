@@ -7,6 +7,10 @@
 #include <vector>
 
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
+#include "Domain/Element.hpp"
+#include "Domain/ElementId.hpp"
+#include "Domain/ElementIndex.hpp"
+#include "Domain/Tags.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
@@ -30,35 +34,133 @@ struct SchwarzSolverOptions {
 };
 
 template <size_t Dim>
+struct InitializeElement {
+ private:
+  using fields_tag = helpers_distributed::fields_tag;
+  using source_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
+  using operator_applied_to_fields_tag =
+      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
+
+ public:
+  using const_global_cache_tags =
+      tmpl::list<helpers_distributed::LinearOperator,
+                 helpers_distributed::Source,
+                 helpers_distributed::ExpectedResult>;
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ActionList, typename ParallelComponent>
+  static auto apply(db::DataBox<DbTagsList>& box,
+                    const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+                    const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+                    const ElementIndex<Dim>& element_index,
+                    const ActionList /*meta*/,
+                    const ParallelComponent* const /*meta*/) noexcept {
+    int array_index = element_index.segments()[0].index();
+    auto source = db::item_type<source_tag>{
+        gsl::at(get<helpers_distributed::Source>(box), array_index)};
+    auto initial_fields =
+        make_with_value<db::item_type<fields_tag>>(source, 0.);
+    auto operator_applied_to_fields =
+        make_with_value<db::item_type<operator_applied_to_fields_tag>>(
+            source, std::numeric_limits<double>::signaling_NaN());
+
+    using compute_tags = db::AddComputeTags<>;
+    return std::make_tuple(::Initialization::merge_into_databox<
+                           InitializeElement,
+                           db::AddSimpleTags<fields_tag, source_tag,
+                                             operator_applied_to_fields_tag>,
+                           compute_tags>(
+        std::move(box), std::move(initial_fields), std::move(source),
+        std::move(operator_applied_to_fields)));
+  }
+};
+
+template <typename OptionsGroup>
+struct TestResult {
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ActionList, typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&, bool> apply(
+      db::DataBox<DbTagsList>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::ConstGlobalCache<Metavariables>& cache,
+      const ElementIndex<1>& element_index, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    int array_index = element_index.segments()[0].index();
+    const auto& has_converged =
+        get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box);
+    SPECTRE_PARALLEL_REQUIRE(has_converged);
+    SPECTRE_PARALLEL_REQUIRE(has_converged.reason() ==
+                             Convergence::Reason::MaxIterations);
+    const auto& expected_result =
+        gsl::at(get<helpers_distributed::ExpectedResult>(cache), array_index);
+    const auto& result = get(get<helpers_distributed::ScalarFieldTag>(box));
+    for (size_t i = 0; i < expected_result.size(); i++) {
+      SPECTRE_PARALLEL_REQUIRE(result[i] == approx(expected_result[i]));
+    }
+    return {std::move(box), true};
+  }
+};
+
+struct SubdomainOperator {
+ private:
+  using Vars = db::item_type<helpers_distributed::fields_tag>;
+
+ public:
+  using argument_tags =
+      tmpl::list<helpers_distributed::LinearOperator, ::Tags::Element<1>>;
+  static Vars apply(
+      const Vars& arg,
+      const db::item_type<helpers_distributed::LinearOperator>& linear_operator,
+      const Element<1>& element) noexcept {
+    int array_index = element.id().segment_ids()[0].index();
+    const auto& operator_slice = gsl::at(linear_operator, array_index);
+    const size_t num_points = operator_slice.columns();
+    const DenseMatrix<double, blaze::columnMajor> subdomain_operator =
+        blaze::submatrix(operator_slice, array_index * num_points, 0,
+                         num_points, num_points);
+    Vars result{num_points};
+    dgemv_('N', num_points, num_points, 1, subdomain_operator.data(),
+           num_points, arg.data(), 1, 0, result.data(), 1);
+    // Parallel::printf("%d operand: %s\n", array_index, arg);
+    // Parallel::printf("%d operator: %s\n", array_index, subdomain_operator);
+    // Parallel::printf("%d applied: %s\n", array_index, result);
+    return result;
+  }
+};
+
+template <size_t Dim>
 struct Metavariables {
   static constexpr size_t volume_dim = Dim;
 
   using linear_solver =
       LinearSolver::Schwarz<Metavariables, helpers_distributed::fields_tag,
-                            SchwarzSolverOptions>;
+                            SchwarzSolverOptions, SubdomainOperator>;
 
   using initialization_actions =
       tmpl::list<dg::Actions::InitializeDomain<volume_dim>,
+                 InitializeElement<Dim>,
                  typename linear_solver::initialize_element,
                  typename linear_solver::prepare_solve,
                  Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
-  using build_linear_operator_actions = tmpl::list<>;
+  using solve_actions =
+      tmpl::flatten<tmpl::list<typename linear_solver::prepare_step,
+                               LinearSolver::Actions::TerminateIfConverged<
+                                   typename linear_solver::options_group>,
+                               helpers_distributed::ComputeOperatorAction<
+                                   helpers_distributed::fields_tag>,
+                               typename linear_solver::perform_step>>;
 
   enum class Phase { Initialization, Solve, TestResult, Exit };
 
   using element_array = elliptic::DgElementArray<
       Metavariables,
-      tmpl::list<Parallel::PhaseActions<Phase, Phase::Initialization,
-                                        initialization_actions>,
-                 Parallel::PhaseActions<
-                     Phase, Phase::Solve,
-                     tmpl::flatten<
-                         tmpl::list<typename linear_solver::prepare_step,
-                                    LinearSolver::Actions::TerminateIfConverged<
-                                        typename linear_solver::options_group>,
-                                    build_linear_operator_actions,
-                                    typename linear_solver::perform_step>>>>>;
+      tmpl::list<
+          Parallel::PhaseActions<Phase, Phase::Initialization,
+                                 initialization_actions>,
+          Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>,
+          Parallel::PhaseActions<
+              Phase, Phase::TestResult,
+              tmpl::list<TestResult<typename linear_solver::options_group>>>>>;
 
   using component_list = tmpl::append<tmpl::list<element_array>,
                                       typename linear_solver::component_list>;

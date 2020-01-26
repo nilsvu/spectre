@@ -39,10 +39,10 @@ struct PrepareSolve {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& cache,
+      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("PrepareSolve\n");
+    Parallel::printf("%s Prepare Schwarz solve\n", array_index);
     db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>>(
         make_not_null(&box),
         [](const gsl::not_null<size_t*> iteration_id) noexcept {
@@ -64,23 +64,34 @@ struct PrepareStep {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& cache,
+      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("PrepareStep\n");
-    db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>>(
+    Parallel::printf(
+        "%s Prepare Schwarz step %zu\n", array_index,
+        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box) + 1);
+    db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>,
+               LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
-        [](const gsl::not_null<size_t*> iteration_id) noexcept {
+        [](const gsl::not_null<size_t*> iteration_id,
+           const gsl::not_null<Convergence::HasConverged*> has_converged,
+           const size_t& max_iterations) noexcept {
           (*iteration_id)++;
-        });
+          *has_converged = Convergence::HasConverged{
+              {max_iterations, 0., 0.}, *iteration_id, 1., 1.};
+        },
+        get<LinearSolver::Tags::Iterations<OptionsGroup>>(box));
     return std::forward_as_tuple(std::move(box));
   }
 };
 
-template <typename FieldsTag, typename OptionsGroup>
+template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
+          typename SourceTag>
 struct PerformStep {
  private:
   using fields_tag = FieldsTag;
+  using residual_tag =
+      db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
 
  public:
   using const_global_cache_tags =
@@ -92,25 +103,33 @@ struct PerformStep {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& cache,
+      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("PerformStep\n");
+    Parallel::printf("%s Perform Schwarz step %zu\n", array_index,
+                     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
 
-    db::mutate<Tags::SubdomainSolverBase<OptionsGroup>>(
-        make_not_null(&box),
-        [](const gsl::not_null<
-            db::item_type<Tags::SubdomainSolverBase<OptionsGroup>, DbTagsList>*>
-               subdomain_solver) noexcept {
+    db::mutate_apply<
+        tmpl::list<fields_tag, Tags::SubdomainSolverBase<OptionsGroup>>,
+        tmpl::append<tmpl::list<residual_tag>,
+                     typename SubdomainOperator::argument_tags>>(
+        [&array_index](
+            const gsl::not_null<db::item_type<fields_tag>*> fields,
+            const gsl::not_null<db::item_type<
+                Tags::SubdomainSolverBase<OptionsGroup>, DbTagsList>*>
+                subdomain_solver,
+            const db::const_item_type<residual_tag>& residual,
+            const auto&... args) noexcept {
           using Vars = db::item_type<fields_tag>;
-          constexpr size_t num_points = 2;
-          DataVector used_for_size{num_points};
-          auto source = make_with_value<Vars>(used_for_size, 0.);
-          auto initial_guess = make_with_value<Vars>(used_for_size, 0.);
-          auto sol =
-              (*subdomain_solver)([](const Vars& arg) noexcept { return arg; },
-                                  std::move(source), std::move(initial_guess));
-        });
+          Parallel::printf("%s  Initial fields: %s\n", array_index, *fields);
+          *fields += (*subdomain_solver)(
+              [&args...](const Vars& arg) noexcept {
+                return SubdomainOperator::apply(arg, args...);
+              },
+              residual, Vars(residual));
+          Parallel::printf("%s  Updated fields: %s\n", array_index, *fields);
+        },
+        make_not_null(&box));
 
     db::mutate<LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),

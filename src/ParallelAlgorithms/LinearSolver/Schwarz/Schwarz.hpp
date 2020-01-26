@@ -24,6 +24,7 @@ namespace LinearSolver {
  * 3. Weight result with function and sum over subdomains
  */
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup,
+          typename SubdomainOperator,
           typename SourceTag =
               db::add_tag_prefix<::Tags::FixedSource, FieldsTag>>
 struct Schwarz {
@@ -35,13 +36,15 @@ struct Schwarz {
   using observed_reduction_data_tags = tmpl::list<>;
 
   using initialize_element =
-      schwarz_detail::InitializeElement<FieldsTag, OptionsGroup>;
+      schwarz_detail::InitializeElement<FieldsTag, OptionsGroup, SourceTag>;
 
   using prepare_solve = schwarz_detail::PrepareSolve<FieldsTag, OptionsGroup>;
 
   using prepare_step = schwarz_detail::PrepareStep<FieldsTag, OptionsGroup>;
 
-  using perform_step = schwarz_detail::PerformStep<FieldsTag, OptionsGroup>;
+  using perform_step =
+      schwarz_detail::PerformStep<FieldsTag, OptionsGroup, SubdomainOperator,
+                                  SourceTag>;
 };
 
 }  // namespace LinearSolver
