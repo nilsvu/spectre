@@ -97,6 +97,21 @@ struct Residual : db::PrefixTag, db::SimpleTag {
   using tag = Tag;
 };
 
+template <typename FieldsTag, typename SourceTag>
+struct ResidualCompute : db::add_tag_prefix<Residual, FieldsTag>,
+                         db::ComputeTag {
+  using base = db::add_tag_prefix<Residual, FieldsTag>;
+  using type = db::item_type<base>;
+  using argument_tags =
+      tmpl::list<SourceTag, db::add_tag_prefix<OperatorAppliedTo, FieldsTag>>;
+  static type function(
+      const db::const_item_type<SourceTag>& source,
+      const db::item_type<db::add_tag_prefix<OperatorAppliedTo, FieldsTag>>&
+          operator_applied_to_fields) noexcept {
+    return source - operator_applied_to_fields;
+  }
+};
+
 template <typename Tag>
 struct Initial : db::PrefixTag, db::SimpleTag {
   static std::string name() noexcept {
