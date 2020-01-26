@@ -9,12 +9,13 @@ set(LIBRARY_SOURCES
   Test_Tags.cpp
   )
 
-add_subdirectory(ConjugateGradient)
-add_subdirectory(Gmres)
-
 add_test_library(
   ${LIBRARY}
   "ParallelAlgorithms/LinearSolver/"
   "${LIBRARY_SOURCES}"
   "Convergence;DataStructures"
   )
+
+add_subdirectory(ConjugateGradient)
+add_subdirectory(Gmres)
+add_subdirectory(Schwarz)
