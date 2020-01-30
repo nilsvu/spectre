@@ -20,6 +20,7 @@
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Actions/TerminateIfConverged.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/SubdomainData.hpp"
 #include "Utilities/TMPL.hpp"
 #include "tests/Unit/ParallelAlgorithms/LinearSolver/DistributedLinearSolverAlgorithmTestHelpers.hpp"
 
@@ -101,14 +102,14 @@ struct TestResult {
 };
 
 struct SubdomainOperator {
- private:
-  using Vars = db::item_type<helpers_distributed::fields_tag>;
+  static constexpr size_t volume_dim = 1;
+  using SubdomainDataType = LinearSolver::schwarz_detail::SubdomainData<
+      volume_dim, db::get_variables_tags_list<helpers_distributed::fields_tag>>;
 
- public:
   using argument_tags =
       tmpl::list<helpers_distributed::LinearOperator, ::Tags::Element<1>>;
-  static Vars apply(
-      const Vars& arg,
+  static SubdomainDataType apply(
+      const SubdomainDataType& arg,
       const db::item_type<helpers_distributed::LinearOperator>& linear_operator,
       const Element<1>& element) noexcept {
     int array_index = element.id().segment_ids()[0].index();
@@ -117,12 +118,15 @@ struct SubdomainOperator {
     const DenseMatrix<double, blaze::columnMajor> subdomain_operator =
         blaze::submatrix(operator_slice, array_index * num_points, 0,
                          num_points, num_points);
-    Vars result{num_points};
+    SubdomainDataType result{num_points};
+    // Apply matrix to central element data
     dgemv_('N', num_points, num_points, 1, subdomain_operator.data(),
-           num_points, arg.data(), 1, 0, result.data(), 1);
-    // Parallel::printf("%d operand: %s\n", array_index, arg);
+           num_points, arg.element_data.data(), 1, 0,
+           result.element_data.data(), 1);
+    // TODO: Add boundary contributions
+    // Parallel::printf("%d operand: %s\n", array_index, arg.element_data);
     // Parallel::printf("%d operator: %s\n", array_index, subdomain_operator);
-    // Parallel::printf("%d applied: %s\n", array_index, result);
+    // Parallel::printf("%d applied: %s\n", array_index, result.element_data);
     return result;
   }
 };

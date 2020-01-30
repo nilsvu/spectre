@@ -36,15 +36,20 @@ struct Schwarz {
   using observed_reduction_data_tags = tmpl::list<>;
 
   using initialize_element =
-      schwarz_detail::InitializeElement<FieldsTag, OptionsGroup, SourceTag>;
+      schwarz_detail::InitializeElement<FieldsTag, OptionsGroup,
+                                        SubdomainOperator, SourceTag>;
 
   using prepare_solve = schwarz_detail::PrepareSolve<FieldsTag, OptionsGroup>;
 
   using prepare_step = schwarz_detail::PrepareStep<FieldsTag, OptionsGroup>;
 
   using perform_step =
-      schwarz_detail::PerformStep<FieldsTag, OptionsGroup, SubdomainOperator,
-                                  SourceTag>;
+      tmpl::list<schwarz_detail::SendSubdomainData<FieldsTag, OptionsGroup,
+                                                   SubdomainOperator>,
+                 schwarz_detail::ReceiveSubdomainData<FieldsTag, OptionsGroup,
+                                                      SubdomainOperator>,
+                 schwarz_detail::PerformStep<FieldsTag, OptionsGroup,
+                                             SubdomainOperator, SourceTag>>;
 };
 
 }  // namespace LinearSolver
