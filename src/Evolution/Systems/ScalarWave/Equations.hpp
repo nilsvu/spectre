@@ -145,10 +145,11 @@ struct PenaltyFlux {
   // `dg::SendBoundaryFluxes` calls `package_data` to store these tags in a
   // Variables. Local and remote values of this data are then combined inside
   // `operator()`.
-  using package_tags =
+  using package_field_tags =
       tmpl::list<::Tags::NormalDotFlux<Pi>, ::Tags::NormalDotFlux<Phi<Dim>>,
                  Tags::VPlus, Tags::VMinus, NormalTimesVPlus,
                  NormalTimesVMinus>;
+  using package_extra_tags = tmpl::list<>;
 
   // These tags on the interface of the element are passed to
   // `package_data` to provide the data needed to compute the numerical fluxes.
@@ -162,7 +163,15 @@ struct PenaltyFlux {
   // Following the not-null pointer to packaged_data, this function expects as
   // arguments the databox types of the `argument_tags`.
   void package_data(
-      gsl::not_null<Variables<package_tags>*> packaged_data,
+      gsl::not_null<Scalar<DataVector>*> packaged_n_dot_flux_pi,
+      gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*>
+          packaged_n_dot_flux_phi,
+      gsl::not_null<Scalar<DataVector>*> packaged_v_plus,
+      gsl::not_null<Scalar<DataVector>*> packaged_v_minus,
+      gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*>
+          packaged_n_times_v_plus,
+      gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*>
+          packaged_n_times_v_minus,
       const Scalar<DataVector>& normal_dot_flux_pi,
       const tnsr::i<DataVector, Dim, Frame::Inertial>& normal_dot_flux_phi,
       const Scalar<DataVector>& v_plus, const Scalar<DataVector>& v_minus,
