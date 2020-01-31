@@ -35,8 +35,8 @@ SPECTRE_TEST_CASE("Unit.DG.SimpleMortarData", "[Unit][NumericalAlgorithms]") {
                                "[Unit][NumericalAlgorithms]") {
   ASSERTION_TEST();
 #ifdef SPECTRE_DEBUG
-  dg::SimpleMortarData<size_t, std::string, double> data;
-  data.remote_insert(0, 1.234);
+  dg::SimpleMortarData<size_t, std::string> data;
+  data.remote_insert(0, "");
   data.local_data(0);
   ERROR("Failed to trigger ASSERT in an assertion test");
 #endif
@@ -48,7 +48,7 @@ SPECTRE_TEST_CASE("Unit.DG.SimpleMortarData", "[Unit][NumericalAlgorithms]") {
     "[Unit][NumericalAlgorithms]") {
   ASSERTION_TEST();
 #ifdef SPECTRE_DEBUG
-  dg::SimpleMortarData<size_t, std::string, double> data;
+  dg::SimpleMortarData<size_t, std::string> data;
   data.local_insert(1, "");
   data.local_data(0);
   ERROR("Failed to trigger ASSERT in an assertion test");
