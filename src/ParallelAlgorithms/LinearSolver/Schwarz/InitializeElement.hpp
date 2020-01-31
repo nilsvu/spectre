@@ -52,7 +52,8 @@ struct InitializeElement {
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
     using compute_tags = db::AddComputeTags<
-        LinearSolver::Tags::ResidualCompute<fields_tag, source_tag>>;
+        LinearSolver::Tags::ResidualCompute<fields_tag, source_tag>,
+        ::Tags::NextCompute<LinearSolver::Tags::IterationId<OptionsGroup>>>;
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeElement,

@@ -102,6 +102,22 @@ class Gmres {
     constexpr bool use_preconditioner =
         not cpp17::is_same_v<Preconditioner, IdentityPreconditioner<VarsType>>;
 
+    // Build matrix for testing
+    const size_t num_points =
+        initial_guess.element_data.number_of_grid_points();
+    const size_t size = initial_guess.element_data.size();
+    DenseMatrix<double> matrix{size, size};
+    for (size_t i = 0; i < size; i++) {
+      VarsType unit_vector{num_points};
+      unit_vector.element_data = typename VarsType::Vars{num_points, 0.};
+      unit_vector.element_data.data()[i] = 1.;
+      const auto col = linear_operator(unit_vector);
+      for (size_t j = 0; j < size; j++) {
+        matrix(i, j) = col.element_data.data()[j];
+      }
+    }
+    Parallel::printf("\nSolving matrix:\n%s\n", matrix);
+
     auto result = initial_guess;
     convergence_reason_ = boost::none;
     size_t iteration = 0;
@@ -119,14 +135,14 @@ class Gmres {
       if (convergence_reason_) {
         break;
       }
-      // Parallel::printf("Init residual: %e\n", initial_residual_magnitude);
+      Parallel::printf("Init residual: %e\n", initial_residual_magnitude);
       operand_ /= initial_residual_magnitude;
       // Parallel::printf("  init q: %s\n", operand_);
       basis_history_[0] = operand_;
 
       std::pair<DenseVector<double>, double> minres_and_magnitude{};
       for (size_t k = 0; k < restart_; k++) {
-        // Parallel::printf("Iteration %zu:\n", k);
+        Parallel::printf("Iteration %zu:\n", k);
         if (use_preconditioner) {
           preconditioned_basis_history_[k] = preconditioner(operand_);
           // Parallel::printf("  z: %s\n", preconditioned_basis_history_[k]);
@@ -155,13 +171,13 @@ class Gmres {
         }
         orthogonalization_history_(k + 1, k) =
             sqrt(inner_product(operand_, operand_));
-        // Parallel::printf("  orthogonalization_history_: %s\n",
+        // Parallel::printf("  orthogonalization_history_:\n%s\n",
         //                  orthogonalization_history_);
         // Least-squares solve for the minimal residual
         minres_and_magnitude = gmres_detail::minimal_residual(
             orthogonalization_history_, initial_residual_magnitude);
         // Parallel::printf("  minres: %s\n", minres_and_magnitude.first);
-        // Parallel::printf("  res: %e\n", minres_and_magnitude.second);
+        Parallel::printf("  res: %e\n", minres_and_magnitude.second);
         convergence_reason_ = Convergence::criteria_match(
             convergence_criteria_, iteration + 1, minres_and_magnitude.second,
             initial_residual_magnitude);
@@ -169,6 +185,8 @@ class Gmres {
         if (UNLIKELY(convergence_reason_)) {
           break;
         } else if (k + 1 < restart_) {
+          // Parallel::printf("  norm for next: %e\n",
+          //                  orthogonalization_history_(k + 1, k));
           operand_ /= orthogonalization_history_(k + 1, k);
           basis_history_[k + 1] = operand_;
         }

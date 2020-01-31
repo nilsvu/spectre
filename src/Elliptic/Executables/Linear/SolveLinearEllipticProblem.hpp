@@ -27,6 +27,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/FluxCommunication.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder/StrongFirstOrder.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/Actions/Goto.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
@@ -46,6 +47,8 @@
 #include "ParallelAlgorithms/LinearSolver/Actions/TerminateIfConverged.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Richardson/Richardson.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/SubdomainData.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Lorentzian.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Moustache.hpp"
@@ -61,9 +64,9 @@ struct LinearSolverGroup {
 
 struct LinearSolverOptions {
   using group = LinearSolverGroup;
-  static std::string name() noexcept { return "GMRES"; }
+  static std::string name() noexcept { return "Schwarz"; }
   static constexpr OptionString help =
-      "Options for the GMRES iterative linear solver";
+      "Options for the iterative linear solver";
 };
 
 struct PreconditionerGroup {
@@ -77,6 +80,62 @@ struct PreconditionerOptions {
   static std::string name() noexcept { return "Richardson"; }
   static constexpr OptionString help =
       "Options for the Richardson preconditioner";
+};
+
+template <size_t Dim, typename FieldsTag, typename PrimalFields,
+          typename AuxiliaryFields, typename FluxesComputerTag,
+          typename SourcesComputer, typename FluxCommTypes,
+          typename NumericalFluxComputerTag>
+struct DgSubdomainOperator {
+  static constexpr size_t volume_dim = Dim;
+  using SubdomainDataType = LinearSolver::schwarz_detail::SubdomainData<
+      volume_dim, db::get_variables_tags_list<FieldsTag>>;
+
+  using inv_jacobian_tag =
+      ::Tags::InverseJacobian<::Tags::ElementMap<volume_dim>,
+                              ::Tags::Coordinates<volume_dim, Frame::Logical>>;
+  using argument_tags =
+      tmpl::list<::Tags::Element<volume_dim>, ::Tags::Mesh<volume_dim>,
+                 inv_jacobian_tag, FluxesComputerTag, NumericalFluxComputerTag>;
+  static SubdomainDataType apply(
+      const SubdomainDataType& arg, const Element<volume_dim>& element,
+      const Mesh<volume_dim>& mesh,
+      const db::const_item_type<inv_jacobian_tag>& inv_jacobian,
+      const db::const_item_type<FluxesComputerTag>& fluxes_computer,
+      const db::const_item_type<NumericalFluxComputerTag>&
+          numerical_flux_computer) noexcept {
+    SubdomainDataType result{arg.element_data.number_of_grid_points()};
+    Parallel::printf("\n\nComputing subdomain operator of:\n%s\n",
+                     arg.element_data);
+    // Compute bulk contribution in central element
+    elliptic::first_order_operator(
+        make_not_null(&result.element_data),
+        divergence(elliptic::first_order_fluxes<volume_dim, PrimalFields,
+                                                AuxiliaryFields>(
+                       arg.element_data, fluxes_computer),
+                   mesh, inv_jacobian),
+        elliptic::first_order_sources<PrimalFields, AuxiliaryFields,
+                                      SourcesComputer>(arg.element_data));
+    // Add external boundary contributions
+    for (const auto& direction : element.external_boundaries()) {
+      const size_t dimension = direction.dimension();
+      const auto face_mesh = mesh.slice_away(dimension);
+      auto lifted_data =
+          dg::compute_boundary_flux_contribution<FluxCommTypes>(
+              numerical_flux_computer, local_mortar_data,
+              remote_mortar_data, face_mesh, face_mesh, mesh.extents(dimension),
+              make_array<volume_dim - 1>(Spectral::MortarSize::Full)));
+      add_slice_to_data(make_not_null(&result.element_data),
+                        std::move(lifted_data), mesh.extents(), dimension,
+                        index_to_slice_at(mesh.extents(), direction));
+    }
+
+    // Add internal boundary contributions
+
+    // Parallel::printf("Result:\n%s\n",
+    //                  result.element_data);
+    return result;
+  }
 };
 
 /// \cond
@@ -95,6 +154,14 @@ struct Metavariables {
   using fluxes_computer_tag =
       elliptic::Tags::FluxesComputer<typename system::fluxes>;
 
+  // Parse numerical flux parameters from the input file to store in the cache.
+  using normal_dot_numerical_flux = Tags::NumericalFlux<
+      elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
+          volume_dim, fluxes_computer_tag, typename system::primal_variables,
+          typename system::auxiliary_variables>>;
+
+  using temporal_id = LinearSolver::Tags::IterationId<LinearSolverOptions>;
+
   // Only Dirichlet boundary conditions are currently supported, and they are
   // are all imposed by analytic solutions right now.
   // This will be generalized ASAP. We will also support numeric initial guesses
@@ -103,14 +170,20 @@ struct Metavariables {
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
+  using subdomain_operator = DgSubdomainOperator<
+      volume_dim, typename system::fields_tag, typename system::primal_fields,
+      typename system::auxiliary_fields, fluxes_computer_tag,
+      typename system::sources, dg::FluxCommunicationTypes<Metavariables>,
+      normal_dot_numerical_flux>;
   using linear_solver =
-      LinearSolver::Gmres<Metavariables, typename system::fields_tag,
-                          LinearSolverOptions>;
-  using preconditioner = LinearSolver::Richardson<
-      typename linear_solver::operand_tag, PreconditionerOptions,
-      typename linear_solver::preconditioner_source_tag>;
-  using temporal_id =
-      LinearSolver::Tags::IterationId<typename linear_solver::options_group>;
+      LinearSolver::Schwarz<Metavariables, typename system::fields_tag,
+                            LinearSolverOptions, subdomain_operator>;
+  //   using linear_solver =
+  //       LinearSolver::Gmres<Metavariables, typename system::fields_tag,
+  //                           LinearSolverOptions>;
+  //   using preconditioner = LinearSolver::Richardson<
+  //       typename linear_solver::operand_tag, PreconditionerOptions,
+  //       typename linear_solver::preconditioner_source_tag>;
 
   // Parse numerical flux parameters from the input file to store in the cache.
   using normal_dot_numerical_flux = Tags::NumericalFlux<
@@ -165,7 +238,7 @@ struct Metavariables {
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           Metavariables>,
       typename linear_solver::initialize_element,
-      typename preconditioner::initialize_element,
+    //   typename preconditioner::initialize_element,
       dg::Actions::InitializeMortars<boundary_scheme>,
       elliptic::dg::Actions::InitializeFluxes<Metavariables>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
@@ -211,13 +284,14 @@ struct Metavariables {
                       Actions::RunEventsAndTriggers,
                       LinearSolver::Actions::TerminateIfConverged<
                           typename linear_solver::options_group>,
-                      typename preconditioner::prepare_solve,
-                      ::Actions::RepeatUntil<
-                          LinearSolver::Tags::HasConverged<
-                              typename preconditioner::options_group>,
-                          tmpl::list<typename preconditioner::prepare_step,
-                                     build_linear_operator_actions,
-                                     typename preconditioner::perform_step>>,
+                      //   typename preconditioner::prepare_solve,
+                      //   ::Actions::RepeatUntil<
+                      //       LinearSolver::Tags::HasConverged<
+                      //           typename preconditioner::options_group>,
+                      //       tmpl::list<typename preconditioner::prepare_step,
+                      //                  build_linear_operator_actions,
+                      //                  typename
+                      //                  preconditioner::perform_step>>,
                       build_linear_operator_actions,
                       typename linear_solver::perform_step>>>>>>,
       typename linear_solver::component_list,

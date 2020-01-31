@@ -9,6 +9,7 @@ set(LIBS_TO_LINK
   Informer
   IO
   LinearOperators
+  LinearSolver
   MathFunctions
   Utilities
   ${SPECTRE_LIBRARIES}

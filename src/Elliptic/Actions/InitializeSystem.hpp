@@ -82,14 +82,17 @@ struct InitializeSystem {
         db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
     using fixed_sources_tag =
         db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
-    using linear_operand_tag = db::add_tag_prefix<
-        LinearSolver::Tags::Preconditioned,
-        db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>>;
-    using linear_operator_applied_to_operand_tag =
-        db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
-                           linear_operand_tag>;
-    using fluxes_tag = db::add_tag_prefix<::Tags::Flux, linear_operand_tag,
+    // using linear_operand_tag = db::add_tag_prefix<
+    //     LinearSolver::Tags::Preconditioned,
+    //     db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>>;
+    // using linear_operator_applied_to_operand_tag =
+    //     db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
+    //                        linear_operand_tag>;
+    using fluxes_tag = db::add_tag_prefix<::Tags::Flux, fields_tag,
                                           tmpl::size_t<Dim>, Frame::Inertial>;
+    // using fluxes_tag = db::add_tag_prefix<::Tags::Flux, linear_operand_tag,
+    //                                       tmpl::size_t<Dim>,
+    //                                       Frame::Inertial>;
     using inv_jacobian_tag =
         ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
                                 ::Tags::Coordinates<Dim, Frame::Logical>>;
@@ -100,8 +103,8 @@ struct InitializeSystem {
 
     using simple_tags =
         db::AddSimpleTags<fields_tag, linear_operator_applied_to_fields_tag,
-                          fixed_sources_tag, linear_operand_tag,
-                          linear_operator_applied_to_operand_tag>;
+                          fixed_sources_tag/*, linear_operand_tag,
+                          linear_operator_applied_to_operand_tag*/>;
     using compute_tags =
         db::AddComputeTags<fluxes_compute_tag, sources_compute_tag,
                            ::Tags::DivCompute<fluxes_tag, inv_jacobian_tag>>;
@@ -131,20 +134,20 @@ struct InitializeSystem {
     // Initialize the variables for the elliptic solve. Their initial value is
     // determined by the linear solver. The value is also updated by the linear
     // solver in every step.
-    db::item_type<linear_operand_tag> linear_operand{num_grid_points};
+    // db::item_type<linear_operand_tag> linear_operand{num_grid_points};
 
     // Initialize the linear operator applied to the variables. It needs no
     // initial value, but is computed in every step of the elliptic solve.
-    db::item_type<linear_operator_applied_to_operand_tag>
-        linear_operator_applied_to_operand{num_grid_points};
+    // db::item_type<linear_operator_applied_to_operand_tag>
+    //     linear_operator_applied_to_operand{num_grid_points};
 
     return std::make_tuple(
         ::Initialization::merge_into_databox<InitializeSystem, simple_tags,
                                              compute_tags>(
             std::move(box), std::move(fields),
             std::move(linear_operator_applied_to_fields),
-            std::move(fixed_sources), std::move(linear_operand),
-            std::move(linear_operator_applied_to_operand)));
+            std::move(fixed_sources)/*, std::move(linear_operand),
+            std::move(linear_operator_applied_to_operand)*/));
   }
 };
 

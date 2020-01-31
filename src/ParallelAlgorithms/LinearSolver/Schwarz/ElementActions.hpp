@@ -253,7 +253,7 @@ struct PerformStep {
 
     // Gather residual overlap from neighbors
     typename SubdomainDataType::BoundaryDataType boundary_data{};
-    for (const auto& id_and_data : get<subdomain_boundary_data_tag>(box)){
+    for (const auto& id_and_data : get<subdomain_boundary_data_tag>(box)) {
       boundary_data[id_and_data.first] = id_and_data.second;
     }
     const SubdomainDataType residual_subdomain{
@@ -270,6 +270,8 @@ struct PerformStep {
                 subdomain_solver,
             const auto&... args) noexcept {
           Parallel::printf("%s  Initial fields: %s\n", element_index, *fields);
+          Parallel::printf("%s  Residual (central): %s\n", element_index,
+                           residual_subdomain.element_data);
           const auto delta_fields_subdomain = (*subdomain_solver)(
               [&args...](const SubdomainDataType& arg) noexcept {
                 return SubdomainOperator::apply(arg, args...);
