@@ -247,6 +247,10 @@ jobs:
           - compiler: gcc-8
             build_type: Debug
             PYTHON_EXECUTABLE: /usr/bin/python2
+          # Test building with shared libraries
+          - compiler: gcc-9
+            build_type: Debug
+            BUILD_SHARED_LIBS: ON
 
     container:
       image: sxscollaboration/spectrebuildenv:latest
@@ -306,6 +310,7 @@ jobs:
           ASAN=${{ matrix.ASAN }}
           UBSAN_UNDEFINED=${{ matrix.UBSAN_UNDEFINED }}
           UBSAN_INTEGER=${{ matrix.UBSAN_INTEGER }}
+          BUILD_SHARED_LIBS=${{ matrix.BUILD_SHARED_LIBS }}
 
           cmake
           -D CMAKE_C_COMPILER=${CC}
@@ -322,6 +327,7 @@ jobs:
           -D ASAN=${ASAN:-'OFF'}
           -D UBSAN_UNDEFINED=${UBSAN_UNDEFINED:-'OFF'}
           -D UBSAN_INTEGER=${UBSAN_INTEGER:-'OFF'}
+          -D BUILD_SHARED_LIBS=${BUILD_SHARED_LIBS:-'OFF'}
           $GITHUB_WORKSPACE
         # Make sure this runs in bash so the regex matching works
         shell: bash
