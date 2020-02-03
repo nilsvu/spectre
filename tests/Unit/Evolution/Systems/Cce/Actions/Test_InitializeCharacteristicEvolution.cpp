@@ -83,7 +83,8 @@ struct metavariables {
       Tags::BondiUAtScri, Tags::GaugeC, Tags::GaugeD, Tags::GaugeOmega,
       Tags::Du<Tags::GaugeOmega>,
       Spectral::Swsh::Tags::Derivative<Tags::GaugeOmega,
-                                       Spectral::Swsh::Tags::Eth>>>;
+                                       Spectral::Swsh::Tags::Eth>,
+      all_boundary_swsh_derivative_tags_for_scri>>;
 
   using scri_values_to_observe = tmpl::list<>;
   using cce_integrand_tags = tmpl::flatten<tmpl::transform<
