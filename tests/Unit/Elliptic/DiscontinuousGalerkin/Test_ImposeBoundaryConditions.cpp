@@ -39,7 +39,6 @@
 #include "NumericalAlgorithms/Spectral/Projection.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"  // IWYU pragma: keep
-#include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/StdHelpers.hpp"
 #include "Utilities/TMPL.hpp"
@@ -70,13 +69,13 @@ struct ScalarFieldTag : db::SimpleTag {
   using type = Scalar<DataVector>;
 };
 
-using field_tag = LinearSolver::Tags::Operand<ScalarFieldTag>;
+using field_tag = ScalarFieldTag;
 using vars_tag = Tags::Variables<tmpl::list<field_tag>>;
 
 struct System {
   static constexpr const size_t volume_dim = Dim;
   using variables_tag = vars_tag;
-  using primal_fields = tmpl::list<ScalarFieldTag>;
+  using primal_variables = tmpl::list<ScalarFieldTag>;
 };
 
 using interior_bdry_vars_tag =

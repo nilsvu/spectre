@@ -117,7 +117,7 @@ struct ImposeHomogeneousDirichletBoundaryConditions {
           for (auto& exterior_direction_and_vars : *exterior_boundary_vars) {
             auto& direction = exterior_direction_and_vars.first;
             homogeneous_dirichlet_boundary_conditions<dirichlet_tags>(
-                make_not_null(exterior_direction_and_vars.second),
+                make_not_null(&exterior_direction_and_vars.second),
                 interior_vars.at(direction));
           }
         },
