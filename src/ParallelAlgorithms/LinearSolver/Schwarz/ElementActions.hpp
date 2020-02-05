@@ -182,14 +182,16 @@ struct ReceiveSubdomainData {
     const auto& temporal_id =
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
     const auto temporal_received = inbox.find(temporal_id);
-    db::mutate<subdomain_boundary_data_tag>(
-        make_not_null(&box),
-        [&temporal_received](
-            const gsl::not_null<db::item_type<subdomain_boundary_data_tag>*>
-                subdomain_boundary_data) noexcept {
-          *subdomain_boundary_data = std::move(temporal_received->second);
-        });
-    inbox.erase(temporal_received);
+    if (temporal_received != inbox.end()) {
+      db::mutate<subdomain_boundary_data_tag>(
+          make_not_null(&box),
+          [&temporal_received](
+              const gsl::not_null<db::item_type<subdomain_boundary_data_tag>*>
+                  subdomain_boundary_data) noexcept {
+            *subdomain_boundary_data = std::move(temporal_received->second);
+          });
+      inbox.erase(temporal_received);
+    }
     return std::forward_as_tuple(std::move(box));
   }
 
@@ -200,6 +202,10 @@ struct ReceiveSubdomainData {
       const tuples::TaggedTuple<InboxTags...>& inboxes,
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ElementIndex<Dim>& /*element_index*/) noexcept {
+    const auto& element = get<::Tags::Element<Dim>>(box);
+    if (element.number_of_neighbors() == 0) {
+      return true;
+    }
     const auto& inbox = tuples::get<inbox_tag>(inboxes);
     // Check that we have received data from all neighbors for this iteration
     const auto& temporal_id =
@@ -209,7 +215,6 @@ struct ReceiveSubdomainData {
       return false;
     }
     const auto& received_neighbor_data = temporal_received->second;
-    const auto& element = get<::Tags::Element<Dim>>(box);
     for (const auto& direction_and_neighbors : element.neighbors()) {
       const auto& direction = direction_and_neighbors.first;
       for (const auto& neighbor : direction_and_neighbors.second) {

@@ -59,7 +59,7 @@ decltype(auto) operator-(const SubdomainData<Dim, LhsTagsList>& lhs,
                          const SubdomainData<Dim, RhsTagsList>& rhs) noexcept {
   SubdomainData<Dim, LhsTagsList> result{
       lhs.element_data.number_of_grid_points()};
-  result.element_data = lhs.element_data + rhs.element_data;
+  result.element_data = lhs.element_data - rhs.element_data;
   return result;
 }
 
