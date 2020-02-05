@@ -12,8 +12,38 @@
 #include "Domain/MaxNumberOfNeighbors.hpp"
 #include "ParallelAlgorithms/LinearSolver/InnerProduct.hpp"
 
+#include "Domain/Mesh.hpp"
+
 namespace LinearSolver {
 namespace schwarz_detail {
+
+template <size_t Dim, typename FieldTags>
+struct OverlapData {
+  static constexpr size_t volume_dim = Dim;
+  using field_tags = FieldTags;
+
+  Variables<FieldTags> field_data{};
+
+  Mesh<volume_dim - 1> mortar_mesh{};
+  std::array<Spectral::MortarSize, volume_dim - 1> mortar_size{};
+
+  // OverlapData() = default;
+  // OverlapData(const OverlapData&) noexcept = default;
+  // OverlapData& operator=(const OverlapData&) noexcept = default;
+  // OverlapData(OverlapData&&) noexcept = default;
+  // OverlapData& operator=(OverlapData&&) noexcept = default;
+  // ~OverlapData() noexcept = default;
+
+  // explicit OverlapData(const size_t num_points) noexcept
+  //     : field_data{num_points} {}
+
+  // NOLINTNEXTLINE(google-runtime-references)
+  void pup(PUP::er& p) noexcept {
+    p | field_data;
+    p | mortar_mesh;
+    p | mortar_size;
+  }
+};
 
 /*!
  * \brief Data on an element-centered Schwarz subdomain
@@ -23,8 +53,10 @@ struct SubdomainData {
   static constexpr size_t volume_dim = Dim;
   using Vars = Variables<TagsList>;
   using MortarId = std::pair<Direction<volume_dim>, ElementId<volume_dim>>;
-  using BoundaryDataType = FixedHashMap<maximum_number_of_neighbors(volume_dim),
-                                        MortarId, Vars, boost::hash<MortarId>>;
+  using OverlapDataType = OverlapData<volume_dim, TagsList>;
+  using BoundaryDataType =
+      FixedHashMap<maximum_number_of_neighbors(volume_dim), MortarId,
+                   OverlapDataType, boost::hash<MortarId>>;
 
   SubdomainData() = default;
   SubdomainData(size_t num_points) noexcept : element_data{num_points} {}
@@ -35,7 +67,7 @@ struct SubdomainData {
   Vars element_data{};
   BoundaryDataType boundary_data{};
 
-// TODO: Add boundary contributions to all operators
+  // TODO: Add boundary contributions to all operators
   template <typename RhsTagsList>
   SubdomainData& operator+=(
       const SubdomainData<Dim, RhsTagsList>& rhs) noexcept {

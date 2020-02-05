@@ -89,14 +89,13 @@ struct PrepareStep {
   }
 };
 
-template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
+template <typename OptionsGroup, typename SubdomainOperator>
 struct SubdomainBoundaryDataInboxTag {
   static constexpr size_t volume_dim = SubdomainOperator::volume_dim;
   using temporal_id = size_t;
   using type =
-      std::unordered_map<temporal_id,
-                         db::item_type<Tags::SubdomainBoundaryData<
-                             FieldsTag, OptionsGroup, SubdomainOperator>>>;
+      std::unordered_map<temporal_id, db::item_type<Tags::SubdomainBoundaryData<
+                                          OptionsGroup, SubdomainOperator>>>;
 };
 
 template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
@@ -106,7 +105,7 @@ struct SendSubdomainData {
   using residual_tag =
       db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
   using inbox_tag =
-      SubdomainBoundaryDataInboxTag<FieldsTag, OptionsGroup, SubdomainOperator>;
+      SubdomainBoundaryDataInboxTag<OptionsGroup, SubdomainOperator>;
 
  public:
   using const_global_cache_tags = tmpl::list<Tags::Overlap<OptionsGroup>>;
@@ -125,6 +124,10 @@ struct SendSubdomainData {
     const auto& temporal_id =
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
     // const auto& mesh = get<::Tags::Mesh<Dim>>(box);
+    const auto& mortar_meshes =
+        get<::Tags::Mortars<::Tags::Mesh<Dim - 1>, Dim>>(box);
+    const auto& mortar_sizes =
+        get<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>(box);
 
     auto& receiver_proxy =
         Parallel::get_parallel_component<ParallelComponent>(cache);
@@ -135,20 +138,22 @@ struct SendSubdomainData {
       const auto& orientation = direction_and_neighbors.second.orientation();
       const auto direction_from_neighbor = orientation(direction.opposite());
       for (const auto& neighbor : direction_and_neighbors.second) {
+        const auto mortar_id = std::make_pair(direction, neighbor);
         // Construct the data to send
-        // TODO: Make this a custom data type that includes information about
-        // the mesh for the DG operator
-        // Sending the raw residual data for now
-        auto residual_on_overlap = data_on_overlap(get<residual_tag>(box));
+        auto overlap_data =
+            typename SubdomainOperator::SubdomainDataType::OverlapDataType{
+                typename SubdomainOperator::SubdomainDataType::Vars(
+                    get<residual_tag>(box)),
+                mortar_meshes.at(mortar_id), mortar_sizes.at(mortar_id)};
         // Orient data
-        if (not orientation.is_aligned()) {
-          residual_on_overlap = orient_data_on_overlap(residual_on_overlap);
-        }
+        // if (not orientation.is_aligned()) {
+        //   residual_on_overlap = orient_data_on_overlap(residual_on_overlap);
+        // }
         Parallel::receive_data<inbox_tag>(
             receiver_proxy[neighbor], temporal_id,
             std::make_pair(
                 std::make_pair(direction_from_neighbor, element.id()),
-                std::move(residual_on_overlap)));
+                std::move(overlap_data)));
       }
     }
     return std::forward_as_tuple(std::move(box));
@@ -162,9 +167,9 @@ struct ReceiveSubdomainData {
   using residual_tag =
       db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
   using inbox_tag =
-      SubdomainBoundaryDataInboxTag<FieldsTag, OptionsGroup, SubdomainOperator>;
+      SubdomainBoundaryDataInboxTag<OptionsGroup, SubdomainOperator>;
   using subdomain_boundary_data_tag =
-      Tags::SubdomainBoundaryData<FieldsTag, OptionsGroup, SubdomainOperator>;
+      Tags::SubdomainBoundaryData<OptionsGroup, SubdomainOperator>;
 
  public:
   using inbox_tags = tmpl::list<inbox_tag>;
@@ -239,7 +244,7 @@ struct PerformStep {
   static constexpr size_t volume_dim = SubdomainOperator::volume_dim;
   using SubdomainDataType = typename SubdomainOperator::SubdomainDataType;
   using subdomain_boundary_data_tag =
-      Tags::SubdomainBoundaryData<FieldsTag, OptionsGroup, SubdomainOperator>;
+      Tags::SubdomainBoundaryData<OptionsGroup, SubdomainOperator>;
 
  public:
   using const_global_cache_tags =

@@ -116,7 +116,9 @@ class Gmres {
         matrix(i, j) = col.element_data.data()[j];
       }
     }
-    Parallel::printf("\nSolving matrix:\n%s\n", matrix);
+    Parallel::printf("\n\n--- Serial GMRES --- \n\nSolving matrix:\n%s\n", matrix);
+    Parallel::printf("Source: %s\n", source.element_data);
+    Parallel::printf("initial_guess: %s\n", initial_guess.element_data);
 
     auto result = initial_guess;
     convergence_reason_ = boost::none;
@@ -199,6 +201,8 @@ class Gmres {
                           i);
       }
     }
+    Parallel::printf("\n=> GMRES is done. Result:\n%s\n",
+                     result.element_data);
     return result;
   };
 

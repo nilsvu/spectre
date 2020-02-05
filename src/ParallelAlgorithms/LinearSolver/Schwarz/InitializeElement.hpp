@@ -34,7 +34,7 @@ struct InitializeElement {
       db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
   using SubdomainDataType = typename SubdomainOperator::SubdomainDataType;
   using subdomain_boundary_data_tag =
-      Tags::SubdomainBoundaryData<FieldsTag, OptionsGroup, SubdomainOperator>;
+      Tags::SubdomainBoundaryData<OptionsGroup, SubdomainOperator>;
   using subdomain_solver_tag =
       Tags::SubdomainSolver<LinearSolver::Serial::Gmres<SubdomainDataType>,
                             OptionsGroup>;

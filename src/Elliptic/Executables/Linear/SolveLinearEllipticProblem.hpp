@@ -119,6 +119,9 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
   using MortarId = std::pair<::Direction<VolumeDim>, ElementId<VolumeDim>>;
   template <size_t MortarDim>
   using MortarSizes = std::array<Spectral::MortarSize, MortarDim>;
+  template <size_t VolumeDim, typename ValueType>
+  using MortarMap = std::unordered_map<MortarId<VolumeDim>, ValueType,
+                                       boost::hash<MortarId<VolumeDim>>>;
 
  private:
   // These functions are specific to the strong first-order internal penalty
@@ -168,11 +171,19 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
       ::Tags::Element<volume_dim>, ::Tags::Mesh<volume_dim>, inv_jacobian_tag,
       FluxesComputerTag, NumericalFluxesComputerTag,
       ::Tags::Interface<
-          ::Tags::BoundaryDirectionsInterior<volume_dim>,
+          ::Tags::InternalDirections<volume_dim>,
           ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<volume_dim>>>,
       ::Tags::Interface<
           ::Tags::BoundaryDirectionsInterior<volume_dim>,
-          ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<volume_dim>>>>;
+          ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<volume_dim>>>,
+      ::Tags::Interface<
+          ::Tags::InternalDirections<volume_dim>,
+          ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<volume_dim>>>,
+      ::Tags::Interface<
+          ::Tags::BoundaryDirectionsInterior<volume_dim>,
+          ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<volume_dim>>>,
+      ::Tags::Mortars<::Tags::Mesh<volume_dim - 1>, volume_dim>,
+      ::Tags::Mortars<::Tags::MortarSize<volume_dim - 1>, volume_dim>>;
   static SubdomainDataType apply(
       const SubdomainDataType& arg, const Element<volume_dim>& element,
       const Mesh<volume_dim>& mesh,
@@ -180,13 +191,26 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
       const FluxesComputerType& fluxes_computer,
       const NumericalFluxesComputerType& numerical_fluxes_computer,
       const db::const_item_type<::Tags::Interface<
+          ::Tags::InternalDirections<volume_dim>,
+          ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<volume_dim>>>>&
+          internal_face_normals,
+      const db::const_item_type<::Tags::Interface<
           ::Tags::BoundaryDirectionsInterior<volume_dim>,
           ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<volume_dim>>>>&
           boundary_face_normals,
       const db::const_item_type<::Tags::Interface<
+          ::Tags::InternalDirections<volume_dim>,
+          ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<volume_dim>>>>&
+          internal_face_normal_magnitudes,
+      const db::const_item_type<::Tags::Interface<
           ::Tags::BoundaryDirectionsInterior<volume_dim>,
           ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<volume_dim>>>>&
-          boundary_face_normal_magnitudes) noexcept {
+          boundary_face_normal_magnitudes,
+      const db::const_item_type<::Tags::Mortars<::Tags::Mesh<volume_dim - 1>,
+                                                volume_dim>>& mortar_meshes,
+      const db::const_item_type<
+          ::Tags::Mortars<::Tags::MortarSize<volume_dim - 1>, volume_dim>>&
+          mortar_sizes) noexcept {
     SubdomainDataType result{arg.element_data.number_of_grid_points()};
     // Parallel::printf("\n\nComputing subdomain operator of:\n%s\n",
     //                  arg.element_data);
@@ -202,24 +226,28 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
         elliptic::first_order_sources<tmpl::list<PrimalFields...>,
                                       tmpl::list<AuxiliaryFields...>,
                                       SourcesComputer>(arg.element_data));
+    // Add boundary contributions
+    for (const auto& mortar_id_and_mesh : mortar_meshes) {
+      const auto& mortar_id = mortar_id_and_mesh.first;
+      const auto& mortar_mesh = mortar_id_and_mesh.second;
+      const auto& mortar_size = mortar_sizes.at(mortar_id);
+      const auto& direction = mortar_id.first;
+      const auto& neighbor_id = mortar_id.second;
 
-    // Add external boundary contributions
-    for (const auto& direction : element.external_boundaries()) {
       const size_t dimension = direction.dimension();
       const auto face_mesh = mesh.slice_away(dimension);
       const size_t face_num_points = face_mesh.number_of_grid_points();
       const size_t slice_index = index_to_slice_at(mesh.extents(), direction);
 
-      const MortarId<volume_dim> mortar_id{
-          direction, ElementId<volume_dim>::external_boundary_id()};
-      const auto& mortar_mesh = face_mesh;
-      const auto mortar_size =
-          make_array<volume_dim - 1>(Spectral::MortarSize::Full);
-      const auto& neighbor_id = mortar_id.second;
+      const bool is_boundary =
+          neighbor_id == ElementId<volume_dim>::external_boundary_id();
 
-      const auto& face_normal = boundary_face_normals.at(direction);
-      const auto& magnitude_of_face_normal =
-          boundary_face_normal_magnitudes.at(direction);
+      const tnsr::i<DataVector, volume_dim>& face_normal =
+          is_boundary ? boundary_face_normals.at(direction)
+                      : internal_face_normals.at(direction);
+      const Scalar<DataVector>& magnitude_of_face_normal =
+          is_boundary ? boundary_face_normal_magnitudes.at(direction)
+                      : internal_face_normal_magnitudes.at(direction);
 
       // Compute normal dot fluxes
       const auto central_fluxes_on_face =
@@ -264,6 +292,7 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
                                   // TODO: Is this correct?
                                   central_div_fluxes_on_face);
       } else {
+        continue;
         //     // On internal boundaries, get neighbor data from workspace
         //     const auto& neighbor_orientation =
         //         dg_element.element.neighbors().at(direction).orientation();

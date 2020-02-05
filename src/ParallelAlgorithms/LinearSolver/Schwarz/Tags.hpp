@@ -52,15 +52,10 @@ struct Overlap : db::SimpleTag {
   }
 };
 
-template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
+template <typename OptionsGroup, typename SubdomainOperator>
 struct SubdomainBoundaryData : db::SimpleTag {
   static constexpr size_t volume_dim = SubdomainOperator::volume_dim;
-  using type = FixedHashMap<
-      maximum_number_of_neighbors(volume_dim),
-      std::pair<Direction<volume_dim>, ElementId<volume_dim>>,
-      db::item_type<
-          db::add_tag_prefix<LinearSolver::Tags::Residual, FieldsTag>>,
-      boost::hash<std::pair<Direction<volume_dim>, ElementId<volume_dim>>>>;
+  using type = typename SubdomainOperator::SubdomainDataType::BoundaryDataType;
 };
 
 template <typename OptionsGroup>
