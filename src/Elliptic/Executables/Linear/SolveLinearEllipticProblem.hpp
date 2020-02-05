@@ -84,50 +84,223 @@ struct PreconditionerOptions {
 
 template <size_t Dim, typename FieldsTag, typename PrimalFields,
           typename AuxiliaryFields, typename FluxesComputerTag,
-          typename SourcesComputer, typename FluxCommTypes,
-          typename NumericalFluxComputerTag>
-struct DgSubdomainOperator {
-  static constexpr size_t volume_dim = Dim;
-  using SubdomainDataType = LinearSolver::schwarz_detail::SubdomainData<
-      volume_dim, db::get_variables_tags_list<FieldsTag>>;
+          typename SourcesComputer, typename NumericalFluxesComputerTag>
+struct DgSubdomainOperator;
 
+template <size_t Dim, typename FieldsTag, typename... PrimalFields,
+          typename... AuxiliaryFields, typename FluxesComputerTag,
+          typename SourcesComputer, typename NumericalFluxesComputerTag>
+struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
+                           tmpl::list<AuxiliaryFields...>, FluxesComputerTag,
+                           SourcesComputer, NumericalFluxesComputerTag> {
+ public:
+  static constexpr size_t volume_dim = Dim;
+
+  using all_fields_tags = db::get_variables_tags_list<FieldsTag>;
+  using fluxes_tags =
+      db::wrap_tags_in<::Tags::Flux, all_fields_tags, tmpl::size_t<volume_dim>,
+                       Frame::Inertial>;
+  using div_fluxes_tags = db::wrap_tags_in<::Tags::div, fluxes_tags>;
+  using n_dot_fluxes_tags =
+      db::wrap_tags_in<::Tags::NormalDotFlux, all_fields_tags>;
+
+  using FluxesComputerType = db::const_item_type<FluxesComputerTag>;
+  using NumericalFluxesComputerType =
+      db::const_item_type<NumericalFluxesComputerTag>;
+  using SubdomainDataType =
+      LinearSolver::schwarz_detail::SubdomainData<volume_dim, all_fields_tags>;
+  using BoundaryData = dg::SimpleBoundaryData<
+      tmpl::remove_duplicates<tmpl::append<
+          n_dot_fluxes_tags,
+          typename NumericalFluxesComputerType::package_field_tags>>,
+      typename NumericalFluxesComputerType::package_extra_tags>;
+
+  template <size_t VolumeDim>
+  using MortarId = std::pair<::Direction<VolumeDim>, ElementId<VolumeDim>>;
+  template <size_t MortarDim>
+  using MortarSizes = std::array<Spectral::MortarSize, MortarDim>;
+
+ private:
+  // These functions are specific to the strong first-order internal penalty
+  // scheme
+  static BoundaryData package_boundary_data(
+      const NumericalFluxesComputerType& numerical_fluxes_computer,
+      const FluxesComputerType& fluxes_computer,
+      const tnsr::i<DataVector, volume_dim>& face_normal,
+      const Variables<n_dot_fluxes_tags>& n_dot_fluxes,
+      const Variables<div_fluxes_tags>& div_fluxes) noexcept {
+    BoundaryData boundary_data{n_dot_fluxes.number_of_grid_points()};
+    boundary_data.field_data.assign_subset(n_dot_fluxes);
+    dg::NumericalFluxes::package_data(
+        make_not_null(&boundary_data), numerical_fluxes_computer,
+        get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_fluxes)...,
+        get<::Tags::div<::Tags::Flux<AuxiliaryFields, tmpl::size_t<volume_dim>,
+                                     Frame::Inertial>>>(div_fluxes)...,
+        fluxes_computer, face_normal);
+    return boundary_data;
+  }
+  static void apply_boundary_contribution(
+      const gsl::not_null<Variables<all_fields_tags>*> result,
+      const NumericalFluxesComputerType& numerical_fluxes_computer,
+      const BoundaryData& local_boundary_data,
+      const BoundaryData& remote_boundary_data,
+      const Scalar<DataVector>& magnitude_of_face_normal,
+      const Mesh<volume_dim>& mesh, const MortarId<volume_dim>& mortar_id,
+      const Mesh<volume_dim - 1>& mortar_mesh,
+      const MortarSizes<volume_dim - 1>& mortar_size) noexcept {
+    const size_t dimension = mortar_id.first.dimension();
+    auto boundary_contribution =
+        dg::BoundarySchemes::strong_first_order_boundary_flux<all_fields_tags>(
+            local_boundary_data, remote_boundary_data,
+            numerical_fluxes_computer, magnitude_of_face_normal,
+            mesh.extents(dimension), mesh.slice_away(dimension), mortar_mesh,
+            mortar_size);
+    add_slice_to_data(result, std::move(boundary_contribution), mesh.extents(),
+                      dimension,
+                      index_to_slice_at(mesh.extents(), mortar_id.first));
+  }
+
+ public:
   using inv_jacobian_tag =
       ::Tags::InverseJacobian<::Tags::ElementMap<volume_dim>,
                               ::Tags::Coordinates<volume_dim, Frame::Logical>>;
-  using argument_tags =
-      tmpl::list<::Tags::Element<volume_dim>, ::Tags::Mesh<volume_dim>,
-                 inv_jacobian_tag, FluxesComputerTag, NumericalFluxComputerTag>;
+  using argument_tags = tmpl::list<
+      ::Tags::Element<volume_dim>, ::Tags::Mesh<volume_dim>, inv_jacobian_tag,
+      FluxesComputerTag, NumericalFluxesComputerTag,
+      ::Tags::Interface<
+          ::Tags::BoundaryDirectionsInterior<volume_dim>,
+          ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<volume_dim>>>,
+      ::Tags::Interface<
+          ::Tags::BoundaryDirectionsInterior<volume_dim>,
+          ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<volume_dim>>>>;
   static SubdomainDataType apply(
       const SubdomainDataType& arg, const Element<volume_dim>& element,
       const Mesh<volume_dim>& mesh,
       const db::const_item_type<inv_jacobian_tag>& inv_jacobian,
-      const db::const_item_type<FluxesComputerTag>& fluxes_computer,
-      const db::const_item_type<NumericalFluxComputerTag>&
-          numerical_flux_computer) noexcept {
+      const FluxesComputerType& fluxes_computer,
+      const NumericalFluxesComputerType& numerical_fluxes_computer,
+      const db::const_item_type<::Tags::Interface<
+          ::Tags::BoundaryDirectionsInterior<volume_dim>,
+          ::Tags::Normalized<::Tags::UnnormalizedFaceNormal<volume_dim>>>>&
+          boundary_face_normals,
+      const db::const_item_type<::Tags::Interface<
+          ::Tags::BoundaryDirectionsInterior<volume_dim>,
+          ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<volume_dim>>>>&
+          boundary_face_normal_magnitudes) noexcept {
     SubdomainDataType result{arg.element_data.number_of_grid_points()};
-    Parallel::printf("\n\nComputing subdomain operator of:\n%s\n",
-                     arg.element_data);
+    // Parallel::printf("\n\nComputing subdomain operator of:\n%s\n",
+    //                  arg.element_data);
     // Compute bulk contribution in central element
+    const auto central_fluxes =
+        elliptic::first_order_fluxes<volume_dim, tmpl::list<PrimalFields...>,
+                                     tmpl::list<AuxiliaryFields...>>(
+            arg.element_data, fluxes_computer);
+    const auto central_div_fluxes =
+        divergence(central_fluxes, mesh, inv_jacobian);
     elliptic::first_order_operator(
-        make_not_null(&result.element_data),
-        divergence(elliptic::first_order_fluxes<volume_dim, PrimalFields,
-                                                AuxiliaryFields>(
-                       arg.element_data, fluxes_computer),
-                   mesh, inv_jacobian),
-        elliptic::first_order_sources<PrimalFields, AuxiliaryFields,
+        make_not_null(&result.element_data), central_div_fluxes,
+        elliptic::first_order_sources<tmpl::list<PrimalFields...>,
+                                      tmpl::list<AuxiliaryFields...>,
                                       SourcesComputer>(arg.element_data));
+
     // Add external boundary contributions
     for (const auto& direction : element.external_boundaries()) {
       const size_t dimension = direction.dimension();
       const auto face_mesh = mesh.slice_away(dimension);
-      auto lifted_data =
-          dg::compute_boundary_flux_contribution<FluxCommTypes>(
-              numerical_flux_computer, local_mortar_data,
-              remote_mortar_data, face_mesh, face_mesh, mesh.extents(dimension),
-              make_array<volume_dim - 1>(Spectral::MortarSize::Full)));
-      add_slice_to_data(make_not_null(&result.element_data),
-                        std::move(lifted_data), mesh.extents(), dimension,
-                        index_to_slice_at(mesh.extents(), direction));
+      const size_t face_num_points = face_mesh.number_of_grid_points();
+      const size_t slice_index = index_to_slice_at(mesh.extents(), direction);
+
+      const MortarId<volume_dim> mortar_id{
+          direction, ElementId<volume_dim>::external_boundary_id()};
+      const auto& mortar_mesh = face_mesh;
+      const auto mortar_size =
+          make_array<volume_dim - 1>(Spectral::MortarSize::Full);
+      const auto& neighbor_id = mortar_id.second;
+
+      const auto& face_normal = boundary_face_normals.at(direction);
+      const auto& magnitude_of_face_normal =
+          boundary_face_normal_magnitudes.at(direction);
+
+      // Compute normal dot fluxes
+      const auto central_fluxes_on_face =
+          data_on_slice(central_fluxes, mesh.extents(), dimension, slice_index);
+      const auto normal_dot_central_fluxes =
+          normal_dot_flux<all_fields_tags>(face_normal, central_fluxes_on_face);
+
+      // Slice flux divergences to face
+      const auto central_div_fluxes_on_face = data_on_slice(
+          central_div_fluxes, mesh.extents(), dimension, slice_index);
+
+      // Assemble local boundary data
+      const auto local_boundary_data = package_boundary_data(
+          numerical_fluxes_computer, fluxes_computer, face_normal,
+          normal_dot_central_fluxes, central_div_fluxes_on_face);
+
+      // Assemble remote boundary data
+      auto remote_face_normal = face_normal;
+      for (size_t d = 0; d < volume_dim; d++) {
+        remote_face_normal.get(d) *= -1.;
+      }
+      BoundaryData remote_boundary_data;
+      if (neighbor_id == ElementId<volume_dim>::external_boundary_id()) {
+        // On exterior ("ghost") faces, manufacture boundary data that represent
+        // homogeneous Dirichlet boundary conditions
+        const auto central_vars_on_face = data_on_slice(
+            arg.element_data, mesh.extents(), dimension, slice_index);
+        typename SubdomainDataType::Vars ghost_vars{face_num_points};
+        ::elliptic::dg::homogeneous_dirichlet_boundary_conditions<
+            tmpl::list<PrimalFields...>>(make_not_null(&ghost_vars),
+                                         central_vars_on_face);
+        const auto ghost_fluxes =
+            ::elliptic::first_order_fluxes<volume_dim,
+                                           tmpl::list<PrimalFields...>,
+                                           tmpl::list<AuxiliaryFields...>>(
+                ghost_vars, fluxes_computer);
+        const auto ghost_normal_dot_fluxes =
+            normal_dot_flux<all_fields_tags>(remote_face_normal, ghost_fluxes);
+        remote_boundary_data =
+            package_boundary_data(numerical_fluxes_computer, fluxes_computer,
+                                  remote_face_normal, ghost_normal_dot_fluxes,
+                                  // TODO: Is this correct?
+                                  central_div_fluxes_on_face);
+      } else {
+        //     // On internal boundaries, get neighbor data from workspace
+        //     const auto& neighbor_orientation =
+        //         dg_element.element.neighbors().at(direction).orientation();
+        //     const auto direction_from_neighbor =
+        //         neighbor_orientation(direction.opposite());
+        //     const auto& neighbor = dg_elements.at(neighbor_id);
+        //     const auto& remote_vars = workspace.at(neighbor_id);
+        //     // TODO: Make sure fluxes args are used from neighbor
+        //     const auto remote_fluxes =
+        //         ::elliptic::first_order_fluxes<volume_dim, PrimalFields,
+        //                                        AuxiliaryFields>(remote_vars,
+        //                                                         fluxes_computer);
+        //     const auto remote_div_fluxes_on_face = data_on_slice(
+        //         divergence(remote_fluxes, neighbor.mesh,
+        //         neighbor.inv_jacobian), neighbor.mesh.extents(),
+        //         direction_from_neighbor.dimension(),
+        //         index_to_slice_at(neighbor.mesh.extents(),
+        //                           direction_from_neighbor));
+        //     const auto remote_fluxes_on_face =
+        //         data_on_slice(remote_fluxes, neighbor.mesh.extents(),
+        //                       direction_from_neighbor.dimension(),
+        //                       index_to_slice_at(neighbor.mesh.extents(),
+        //                                         direction_from_neighbor));
+        //     auto remote_normal_dot_fluxes = normal_dot_flux<TagsList>(
+        //         remote_face_normal, remote_fluxes_on_face);
+        //     remote_boundary_data =
+        //         package_boundary_data(remote_face_normal,
+        //         remote_normal_dot_fluxes,
+        //                               remote_div_fluxes_on_face);
+        //     // TODO: orient and project
+      }
+
+      // Compute boundary contribution and add to operator
+      apply_boundary_contribution(
+          make_not_null(&result.element_data), numerical_fluxes_computer,
+          local_boundary_data, remote_boundary_data, magnitude_of_face_normal,
+          mesh, mortar_id, mortar_mesh, mortar_size);
     }
 
     // Add internal boundary contributions
@@ -173,8 +346,7 @@ struct Metavariables {
   using subdomain_operator = DgSubdomainOperator<
       volume_dim, typename system::fields_tag, typename system::primal_fields,
       typename system::auxiliary_fields, fluxes_computer_tag,
-      typename system::sources, dg::FluxCommunicationTypes<Metavariables>,
-      normal_dot_numerical_flux>;
+      typename system::sources, normal_dot_numerical_flux>;
   using linear_solver =
       LinearSolver::Schwarz<Metavariables, typename system::fields_tag,
                             LinearSolverOptions, subdomain_operator>;
@@ -185,17 +357,12 @@ struct Metavariables {
   //       typename linear_solver::operand_tag, PreconditionerOptions,
   //       typename linear_solver::preconditioner_source_tag>;
 
-  // Parse numerical flux parameters from the input file to store in the cache.
-  using normal_dot_numerical_flux = Tags::NumericalFlux<
-      elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
-          volume_dim, fluxes_computer_tag, typename system::primal_variables,
-          typename system::auxiliary_variables>>;
   // Specify the DG boundary scheme. We use the strong first-order scheme here
   // that only requires us to compute normals dotted into the first-order
   // fluxes.
   using boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
       volume_dim, typename system::variables_tag, normal_dot_numerical_flux,
-      LinearSolver::Tags::IterationId>;
+      temporal_id>;
 
   // Collect events and triggers
   // (public for use by the Charm++ registration code)
@@ -238,7 +405,7 @@ struct Metavariables {
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           Metavariables>,
       typename linear_solver::initialize_element,
-    //   typename preconditioner::initialize_element,
+      //   typename preconditioner::initialize_element,
       dg::Actions::InitializeMortars<boundary_scheme>,
       elliptic::dg::Actions::InitializeFluxes<Metavariables>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
