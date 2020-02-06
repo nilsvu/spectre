@@ -119,36 +119,60 @@ struct SendSubdomainData {
       const ParallelComponent* const /*meta*/) noexcept {
     Parallel::printf("%s Send subdomain data in step %zu\n", element_index,
                      get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    using inv_jacobian_tag =
+        ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
+                                ::Tags::Coordinates<Dim, Frame::Logical>>;
 
     const auto& element = get<::Tags::Element<Dim>>(box);
     const auto& temporal_id =
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
-    // const auto& mesh = get<::Tags::Mesh<Dim>>(box);
+    const auto& mesh = get<::Tags::Mesh<Dim>>(box);
+    const auto& magnitude_of_face_normals = get<::Tags::Interface<
+        ::Tags::InternalDirections<Dim>,
+        ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<Dim>>>>(box);
     const auto& mortar_meshes =
         get<::Tags::Mortars<::Tags::Mesh<Dim - 1>, Dim>>(box);
     const auto& mortar_sizes =
         get<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>(box);
+    const auto& overlap = get<Tags::Overlap<OptionsGroup>>(box);
 
     auto& receiver_proxy =
         Parallel::get_parallel_component<ParallelComponent>(cache);
 
     for (const auto& direction_and_neighbors : element.neighbors()) {
       const auto& direction = direction_and_neighbors.first;
-      // const size_t dimension = direction.dimension();
+      const size_t dimension = direction.dimension();
       const auto& orientation = direction_and_neighbors.second.orientation();
       const auto direction_from_neighbor = orientation(direction.opposite());
+      // Construct the data on the overlap with the neighbor
+      auto overlap_extents = mesh.extents();
+      overlap_extents[dimension] = overlap;
+      db::item_type<residual_tag> residual_on_overlap{overlap_extents.product(),
+                                                      0.};
+      for (size_t i = 0; i < overlap; i++) {
+        add_slice_to_data(
+            make_not_null(&residual_on_overlap),
+            data_on_slice(get<residual_tag>(box), mesh.extents(), dimension,
+                          index_to_slice_at(mesh.extents(), direction, i)),
+            overlap_extents, dimension,
+            index_to_slice_at(overlap_extents, direction, i));
+      }
+      Parallel::printf("Sending residual on overlap: %s\n",
+                       residual_on_overlap);
+      // Iterate over neighbors
       for (const auto& neighbor : direction_and_neighbors.second) {
         const auto mortar_id = std::make_pair(direction, neighbor);
         // Construct the data to send
         auto overlap_data =
             typename SubdomainOperator::SubdomainDataType::OverlapDataType{
                 typename SubdomainOperator::SubdomainDataType::Vars(
-                    get<residual_tag>(box)),
-                mortar_meshes.at(mortar_id), mortar_sizes.at(mortar_id)};
-        // Orient data
-        // if (not orientation.is_aligned()) {
-        //   residual_on_overlap = orient_data_on_overlap(residual_on_overlap);
-        // }
+                    residual_on_overlap),
+                mesh,
+                get<inv_jacobian_tag>(box),
+                magnitude_of_face_normals.at(direction),
+                overlap_extents,
+                mortar_meshes.at(mortar_id),
+                mortar_sizes.at(mortar_id)};
         Parallel::receive_data<inbox_tag>(
             receiver_proxy[neighbor], temporal_id,
             std::make_pair(
@@ -261,14 +285,10 @@ struct PerformStep {
     Parallel::printf("%s Perform Schwarz step %zu\n", element_index,
                      get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
 
-    // Gather residual overlap from neighbors
-    typename SubdomainDataType::BoundaryDataType boundary_data{};
-    for (const auto& id_and_data : get<subdomain_boundary_data_tag>(box)) {
-      boundary_data[id_and_data.first] = id_and_data.second;
-    }
+    // Gather residual and overlap from neighbors
     const SubdomainDataType residual_subdomain{
         typename SubdomainDataType::Vars(get<residual_tag>(box)),
-        boundary_data};
+        get<subdomain_boundary_data_tag>(box)};
 
     db::mutate_apply<
         tmpl::list<fields_tag, Tags::SubdomainSolverBase<OptionsGroup>>,
@@ -282,6 +302,8 @@ struct PerformStep {
           Parallel::printf("%s  Initial fields: %s\n", element_index, *fields);
           Parallel::printf("%s  Residual (central): %s\n", element_index,
                            residual_subdomain.element_data);
+          Parallel::printf("%s  Overlap with: %d elements\n", element_index,
+                           residual_subdomain.boundary_data.size());
           const auto delta_fields_subdomain = (*subdomain_solver)(
               [&args...](const SubdomainDataType& arg) noexcept {
                 return SubdomainOperator::apply(arg, args...);
