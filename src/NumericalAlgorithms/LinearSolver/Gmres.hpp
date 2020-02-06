@@ -103,20 +103,22 @@ class Gmres {
         not cpp17::is_same_v<Preconditioner, IdentityPreconditioner<VarsType>>;
 
     // Build matrix for testing
-    const size_t num_points =
-        initial_guess.element_data.number_of_grid_points();
-    const size_t size = initial_guess.element_data.size();
-    DenseMatrix<double> matrix{size, size};
-    for (size_t i = 0; i < size; i++) {
-      VarsType unit_vector{num_points};
-      unit_vector.element_data = typename VarsType::Vars{num_points, 0.};
-      unit_vector.element_data.data()[i] = 1.;
-      const auto col = linear_operator(unit_vector);
-      for (size_t j = 0; j < size; j++) {
-        matrix(i, j) = col.element_data.data()[j];
-      }
-    }
-    Parallel::printf("\n\n--- Serial GMRES --- \n\nSolving matrix:\n%s\n", matrix);
+    // Only works if there are no internal boundaries
+    // const size_t num_points =
+    //     initial_guess.element_data.number_of_grid_points();
+    // const size_t size = initial_guess.element_data.size();
+    // DenseMatrix<double> matrix{size, size};
+    // for (size_t i = 0; i < size; i++) {
+    //   VarsType unit_vector{num_points};
+    //   unit_vector.element_data = typename VarsType::Vars{num_points, 0.};
+    //   unit_vector.element_data.data()[i] = 1.;
+    //   const auto col = linear_operator(unit_vector);
+    //   for (size_t j = 0; j < size; j++) {
+    //     matrix(i, j) = col.element_data.data()[j];
+    //   }
+    // }
+    Parallel::printf("\n\n--- Serial GMRES --- \n\n");
+    // Parallel::printf("Solving matrix :\n % s\n ", matrix);
     Parallel::printf("Source: %s\n", source.element_data);
     Parallel::printf("initial_guess: %s\n", initial_guess.element_data);
 
@@ -128,16 +130,17 @@ class Gmres {
     VarsType operand_{};
     while (not convergence_reason_) {
       operand_ = source - linear_operator(result);
-      // Parallel::printf("r: %s\n", operand_);
+      // Parallel::printf("r: %s\n", operand_.element_data);
+      // Parallel::printf("r.boundary: %d\n", operand_.boundary_data.size());
       const double initial_residual_magnitude =
           sqrt(inner_product(operand_, operand_));
+      Parallel::printf("Init residual: %e\n", initial_residual_magnitude);
       convergence_reason_ = Convergence::criteria_match(
           convergence_criteria_, iteration, initial_residual_magnitude,
           initial_residual_magnitude);
       if (convergence_reason_) {
         break;
       }
-      Parallel::printf("Init residual: %e\n", initial_residual_magnitude);
       operand_ /= initial_residual_magnitude;
       // Parallel::printf("  init q: %s\n", operand_);
       basis_history_[0] = operand_;
@@ -201,8 +204,7 @@ class Gmres {
                           i);
       }
     }
-    Parallel::printf("\n=> GMRES is done. Result:\n%s\n",
-                     result.element_data);
+    Parallel::printf("\n=> GMRES is done. Result:\n%s\n", result.element_data);
     return result;
   };
 
