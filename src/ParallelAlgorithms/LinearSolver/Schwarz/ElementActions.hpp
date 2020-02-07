@@ -130,10 +130,6 @@ struct SendSubdomainData {
     const auto& magnitude_of_face_normals = get<::Tags::Interface<
         ::Tags::InternalDirections<Dim>,
         ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<Dim>>>>(box);
-    const auto& mortar_meshes =
-        get<::Tags::Mortars<::Tags::Mesh<Dim - 1>, Dim>>(box);
-    const auto& mortar_sizes =
-        get<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>(box);
     const auto& overlap = get<Tags::Overlap<OptionsGroup>>(box);
 
     auto& receiver_proxy =
@@ -145,23 +141,15 @@ struct SendSubdomainData {
       const auto& orientation = direction_and_neighbors.second.orientation();
       const auto direction_from_neighbor = orientation(direction.opposite());
       // Construct the data on the overlap with the neighbor
-      auto overlap_extents = mesh.extents();
-      overlap_extents[dimension] = overlap;
-      db::item_type<residual_tag> residual_on_overlap{overlap_extents.product(),
-                                                      0.};
-      for (size_t i = 0; i < overlap; i++) {
-        add_slice_to_data(
-            make_not_null(&residual_on_overlap),
-            data_on_slice(get<residual_tag>(box), mesh.extents(), dimension,
-                          index_to_slice_at(mesh.extents(), direction, i)),
-            overlap_extents, dimension,
-            index_to_slice_at(overlap_extents, direction, i));
-      }
+      const auto overlap_extents =
+          LinearSolver::schwarz_detail::overlap_extents(mesh.extents(), overlap,
+                                                        dimension);
+      const auto residual_on_overlap = data_on_overlap(
+          get<residual_tag>(box), mesh.extents(), overlap_extents, direction);
       Parallel::printf("Sending residual on overlap: %s\n",
                        residual_on_overlap);
       // Iterate over neighbors
       for (const auto& neighbor : direction_and_neighbors.second) {
-        const auto mortar_id = std::make_pair(direction, neighbor);
         // Construct the data to send
         auto overlap_data =
             typename SubdomainOperator::SubdomainDataType::OverlapDataType{
@@ -169,10 +157,12 @@ struct SendSubdomainData {
                     residual_on_overlap),
                 mesh,
                 get<inv_jacobian_tag>(box),
+                direction,
                 magnitude_of_face_normals.at(direction),
-                overlap_extents,
-                mortar_meshes.at(mortar_id),
-                mortar_sizes.at(mortar_id)};
+                overlap_extents};
+        if (not orientation.is_aligned()) {
+          overlap_data.orient(orientation);
+        }
         Parallel::receive_data<inbox_tag>(
             receiver_proxy[neighbor], temporal_id,
             std::make_pair(

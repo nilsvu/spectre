@@ -263,7 +263,7 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
           central_div_fluxes, mesh.extents(), dimension, slice_index);
 
       // Assemble local boundary data
-      const auto local_boundary_data = package_boundary_data(
+      auto local_boundary_data = package_boundary_data(
           numerical_fluxes_computer, fluxes_computer, face_normal,
           normal_dot_central_fluxes, central_div_fluxes_on_face);
 
@@ -295,38 +295,21 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
                                   // TODO: Is this correct?
                                   central_div_fluxes_on_face);
       } else {
-        // On internal boundaries, get neighbor data from workspace
-        // Note that all overlap data is oriented from the perspective of the
-        // neighbor. We could re-orient it before sending, but then we'd also
-        // have to re-orient the meshes.
-        const auto& neighbor_orientation =
-            element.neighbors().at(direction).orientation();
-        const auto direction_from_neighbor =
-            neighbor_orientation(direction.opposite());
-        const size_t dimension_in_neighbor =
-            direction_from_neighbor.dimension();
+        // On internal boundaries, get neighbor data from the operand.
+        // Note that all overlap data must have been oriented to the perspective
+        // of the central element at this point.
+        const auto direction_from_neighbor = direction.opposite();
         // Parallel::printf("> Internal mortar %s:\n", mortar_id);
         const auto& overlap_data = arg.boundary_data.at(mortar_id);
+        ASSERT(
+            overlap_data.direction == direction_from_neighbor,
+            "Directions mismatch. Did you forget to orient the overlap data?");
         // Parallel::printf("Overlap data: %s\n", overlap_data.field_data);
         const auto& neighbor_mesh = overlap_data.volume_mesh;
-        const size_t overlap =
-            overlap_data.overlap_extents[dimension_in_neighbor];
 
         // Extend the overlap data to the full neighbor mesh by filling it
         // with zeros and adding the overlapping slices
-        typename SubdomainDataType::Vars neighbor_data{
-            neighbor_mesh.number_of_grid_points(), 0.};
-        for (size_t i = 0; i < overlap; i++) {
-          add_slice_to_data(
-              make_not_null(&neighbor_data),
-              data_on_slice(overlap_data.field_data,
-                            overlap_data.overlap_extents, dimension_in_neighbor,
-                            index_to_slice_at(overlap_data.overlap_extents,
-                                              direction_from_neighbor, i)),
-              neighbor_mesh.extents(), dimension_in_neighbor,
-              index_to_slice_at(neighbor_mesh.extents(),
-                                direction_from_neighbor, i));
-        }
+        const auto neighbor_data = overlap_data.extended_field_data();
         // Parallel::printf("Extended overlap data: %s\n", neighbor_data);
 
         // Compute the volume contribution in the neighbor from the extended
@@ -349,12 +332,12 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
         // Parallel::printf("Extended result on overlap: %s\n",
         //                  neighbor_result_extended);
 
-        const auto neighbor_fluxes_on_face = data_on_slice(
-            neighbor_fluxes, neighbor_mesh.extents(), dimension_in_neighbor,
-            index_to_slice_at(neighbor_mesh.extents(),
-                              direction_from_neighbor));
+        const auto neighbor_fluxes_on_face =
+            data_on_slice(neighbor_fluxes, neighbor_mesh.extents(), dimension,
+                          index_to_slice_at(neighbor_mesh.extents(),
+                                            direction_from_neighbor));
         const auto neighbor_div_fluxes_on_face = data_on_slice(
-            neighbor_div_fluxes, neighbor_mesh.extents(), dimension_in_neighbor,
+            neighbor_div_fluxes, neighbor_mesh.extents(), dimension,
             index_to_slice_at(neighbor_mesh.extents(),
                               direction_from_neighbor));
         auto remote_normal_dot_fluxes = normal_dot_flux<all_fields_tags>(
@@ -362,36 +345,38 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
         remote_boundary_data = package_boundary_data(
             numerical_fluxes_computer, fluxes_computer, remote_face_normal,
             remote_normal_dot_fluxes, neighbor_div_fluxes_on_face);
-        // TODO: orient and project
+
+        // Projections to the mortar
+        if (dg::needs_projection(face_mesh, mortar_mesh, mortar_size)) {
+          local_boundary_data = local_boundary_data.project_to_mortar(
+              face_mesh, mortar_mesh, mortar_size);
+          remote_boundary_data = remote_boundary_data.project_to_mortar(
+              overlap_data.volume_mesh.slice_away(dimension), mortar_mesh,
+              mortar_size);
+        }
 
         // Apply the boundary contribution to the neighbor overlap
         apply_boundary_contribution(
             make_not_null(&neighbor_result_extended), numerical_fluxes_computer,
             remote_boundary_data, local_boundary_data,
             overlap_data.magnitude_of_face_normal, neighbor_mesh,
-            direction_from_neighbor, overlap_data.mortar_mesh,
-            overlap_data.mortar_size);
+            direction_from_neighbor, mortar_mesh, mortar_size);
         // Parallel::printf("Extended result on overlap incl. boundary contribs:
         // %s\n",
         //                  neighbor_result_extended);
-        typename SubdomainDataType::Vars neighbor_result{
-            overlap_data.overlap_extents.product(), 0.};
-        for (size_t i = 0; i < overlap; i++) {
-          add_slice_to_data(
-              make_not_null(&neighbor_result),
-              data_on_slice(neighbor_result_extended, neighbor_mesh.extents(),
-                            dimension_in_neighbor,
-                            index_to_slice_at(neighbor_mesh.extents(),
-                                              direction_from_neighbor, i)),
-              overlap_data.overlap_extents, dimension_in_neighbor,
-              index_to_slice_at(overlap_data.overlap_extents,
-                                direction_from_neighbor, i));
-        }
+
+        // Take only the part of the neighbor data that lies within the overlap
+        const auto neighbor_result =
+            LinearSolver::schwarz_detail::data_on_overlap(
+                neighbor_result_extended, neighbor_mesh.extents(),
+                overlap_data.overlap_extents, direction_from_neighbor);
         // TODO: Fake boundary contributions from the other mortars of the
         // neighbor by filling their data with zeros
         // Parallel::printf("Final result on overlap: %s\n", neighbor_result);
-        // We make things easy by copying the argument data and changing the
-        // field data. This should be improved.
+
+        // Construct the data that represents the subdomain operator applied to
+        // the overlap. We make things easy by copying the operand and changing
+        // the field data. This should be improved.
         OverlapDataType overlap_result = overlap_data;
         overlap_result.field_data = std::move(neighbor_result);
         result.boundary_data.emplace(mortar_id, std::move(overlap_result));

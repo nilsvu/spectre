@@ -10,9 +10,10 @@
 #include "Domain/Direction.hpp"
 #include "Domain/ElementId.hpp"
 #include "Domain/MaxNumberOfNeighbors.hpp"
-#include "ParallelAlgorithms/LinearSolver/InnerProduct.hpp"
-
 #include "Domain/Mesh.hpp"
+#include "Domain/OrientationMapHelpers.hpp"
+#include "ParallelAlgorithms/LinearSolver/InnerProduct.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/SubdomainHelpers.hpp"
 
 namespace LinearSolver {
 namespace schwarz_detail {
@@ -22,15 +23,20 @@ struct OverlapData {
   static constexpr size_t volume_dim = Dim;
   using field_tags = FieldTags;
 
+  // Variable quantities
   Variables<FieldTags> field_data{};
 
+  // Geometric quantities
   Mesh<volume_dim> volume_mesh{};
   InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>
       inv_jacobian{};
+  Direction<volume_dim> direction{};
   Scalar<DataVector> magnitude_of_face_normal{};
   Index<volume_dim> overlap_extents{};
-  Mesh<volume_dim - 1> mortar_mesh{};
-  std::array<Spectral::MortarSize, volume_dim - 1> mortar_size{};
+
+  size_t overlap() const noexcept {
+    return overlap_extents[direction.dimension()];
+  }
 
   // OverlapData() = default;
   // OverlapData(const OverlapData&) noexcept = default;
@@ -42,15 +48,49 @@ struct OverlapData {
   // explicit OverlapData(const size_t num_points) noexcept
   //     : field_data{num_points} {}
 
+  /*!
+   * \brief Extend the field data to the full mesh by filling it with zeros and
+   * adding the overlapping slices.
+   *
+   * Note that `direction` must be consistent with the `volume_mesh` and the
+   * `overlap_extents` in the sense that the `direction.dimension()` is the
+   * overlapping dimension. This means the data must be oriented correctly.
+   */
+  Variables<FieldTags> extended_field_data() const noexcept {
+    return extended_overlap_data(field_data, volume_mesh.extents(),
+                                 overlap_extents, direction);
+  }
+
+  void orient(const OrientationMap<Dim>& orientation) noexcept {
+    if (orientation.is_aligned()) {
+      return;
+    }
+    field_data = orient_variables(field_data, overlap_extents, orientation);
+    inv_jacobian =
+        orient_tensor(inv_jacobian, volume_mesh.extents(), orientation);
+    magnitude_of_face_normal = orient_tensor_on_slice(
+        magnitude_of_face_normal,
+        volume_mesh.slice_away(direction.dimension()).extents(),
+        direction.dimension(), orientation);
+    // const auto orientation_on_face =
+    //     orientation.slice_away(direction.dimension());
+    // mortar_mesh = orientation_on_face(mortar_mesh);
+    // mortar_size = orientation_on_face.permute_from_neighbor(mortar_size);
+    // Orient these quantities last because previous calls are using them
+    volume_mesh = orientation(volume_mesh);
+    direction = orientation(direction);
+    overlap_extents = Index<volume_dim>{
+        orientation.permute_from_neighbor(overlap_extents.indices())};
+  }
+
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) noexcept {
     p | field_data;
     p | volume_mesh;
     p | inv_jacobian;
+    p | direction;
     p | magnitude_of_face_normal;
     p | overlap_extents;
-    p | mortar_mesh;
-    p | mortar_size;
   }
 
   template <typename RhsFieldTags>
@@ -76,19 +116,20 @@ OverlapData<Dim, LhsFieldTags> operator-(
   return {lhs.field_data - rhs.field_data,
           lhs.volume_mesh,
           lhs.inv_jacobian,
+          lhs.direction,
           lhs.magnitude_of_face_normal,
-          lhs.overlap_extents,
-          lhs.mortar_mesh,
-          lhs.mortar_size};
+          lhs.overlap_extents};
 }
 
 template <size_t Dim, typename FieldTags>
 OverlapData<Dim, FieldTags> operator*(
     const double scalar, const OverlapData<Dim, FieldTags>& data) noexcept {
-  return {scalar * data.field_data, data.volume_mesh,
-          data.inv_jacobian,        data.magnitude_of_face_normal,
-          data.overlap_extents,     data.mortar_mesh,
-          data.mortar_size};
+  return {scalar * data.field_data,
+          data.volume_mesh,
+          data.inv_jacobian,
+          data.direction,
+          data.magnitude_of_face_normal,
+          data.overlap_extents};
 }
 
 }  // namespace schwarz_detail
