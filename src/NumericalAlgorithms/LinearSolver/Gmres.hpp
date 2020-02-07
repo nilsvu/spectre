@@ -77,7 +77,7 @@ class Gmres {
     preconditioned_basis_history_.resize(restart_);
   }
 
-  Convergence::Reason convergence_reason() noexcept {
+  Convergence::Reason convergence_reason() const noexcept {
     ASSERT(convergence_reason_,
            "Tried to retrieve the convergence reason, but has not performed a "
            "solve yet.");
@@ -98,7 +98,7 @@ class Gmres {
   VarsType operator()(LinearOperator&& linear_operator,
                       const SourceType& source, const VarsType& initial_guess,
                       const Preconditioner& preconditioner =
-                          IdentityPreconditioner<VarsType>{}) noexcept {
+                          IdentityPreconditioner<VarsType>{}) const noexcept {
     constexpr bool use_preconditioner =
         not cpp17::is_same_v<Preconditioner, IdentityPreconditioner<VarsType>>;
 
@@ -213,12 +213,12 @@ class Gmres {
   ::Verbosity verbosity_{::Verbosity::Verbose};
   size_t restart_{};
 
-  DenseMatrix<double> orthogonalization_history_{};
+  mutable DenseMatrix<double> orthogonalization_history_{};
   // VarsType operand_{};
-  std::vector<VarsType> basis_history_{};
-  std::vector<VarsType> preconditioned_basis_history_{};
+  mutable std::vector<VarsType> basis_history_{};
+  mutable std::vector<VarsType> preconditioned_basis_history_{};
 
-  boost::optional<Convergence::Reason> convergence_reason_{};
+  mutable boost::optional<Convergence::Reason> convergence_reason_{};
 };
 
 }  // namespace Serial
