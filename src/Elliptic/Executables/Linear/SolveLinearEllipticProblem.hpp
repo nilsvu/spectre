@@ -185,8 +185,7 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
       ::Tags::Mortars<::Tags::Mesh<volume_dim - 1>, volume_dim>,
       ::Tags::Mortars<::Tags::MortarSize<volume_dim - 1>, volume_dim>>;
   static SubdomainDataType apply(
-      const SubdomainDataType& arg, const Element<volume_dim>& element,
-      const Mesh<volume_dim>& mesh,
+      const Element<volume_dim>& /*element*/, const Mesh<volume_dim>& mesh,
       const db::const_item_type<inv_jacobian_tag>& inv_jacobian,
       const FluxesComputerType& fluxes_computer,
       const NumericalFluxesComputerType& numerical_fluxes_computer,
@@ -210,7 +209,8 @@ struct DgSubdomainOperator<Dim, FieldsTag, tmpl::list<PrimalFields...>,
                                                 volume_dim>>& mortar_meshes,
       const db::const_item_type<
           ::Tags::Mortars<::Tags::MortarSize<volume_dim - 1>, volume_dim>>&
-          mortar_sizes) noexcept {
+          mortar_sizes,
+      const SubdomainDataType& arg) noexcept {
     SubdomainDataType result{arg.element_data.number_of_grid_points()};
     // Since the subdomain operator is called repeatedly for the subdomain solve
     // it could help performance to avoid re-allocating memory by storing the

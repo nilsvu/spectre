@@ -46,10 +46,10 @@ struct Schwarz {
   using perform_step =
       tmpl::list<schwarz_detail::SendSubdomainData<FieldsTag, OptionsGroup,
                                                    SubdomainOperator>,
-                 schwarz_detail::ReceiveSubdomainData<FieldsTag, OptionsGroup,
-                                                      SubdomainOperator>,
                  schwarz_detail::PerformStep<FieldsTag, OptionsGroup,
-                                             SubdomainOperator, SourceTag>>;
+                                             SubdomainOperator, SourceTag>,
+                 schwarz_detail::ReceiveOverlapSolution<FieldsTag, OptionsGroup,
+                                                        SubdomainOperator>>;
 };
 
 }  // namespace LinearSolver

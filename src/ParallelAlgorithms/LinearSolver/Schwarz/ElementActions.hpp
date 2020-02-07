@@ -93,9 +93,9 @@ template <typename OptionsGroup, typename SubdomainOperator>
 struct SubdomainBoundaryDataInboxTag {
   static constexpr size_t volume_dim = SubdomainOperator::volume_dim;
   using temporal_id = size_t;
-  using type =
-      std::unordered_map<temporal_id, db::item_type<Tags::SubdomainBoundaryData<
-                                          OptionsGroup, SubdomainOperator>>>;
+  using type = std::unordered_map<
+      temporal_id,
+      typename SubdomainOperator::SubdomainDataType::BoundaryDataType>;
 };
 
 template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
@@ -104,11 +104,12 @@ struct SendSubdomainData {
   using fields_tag = FieldsTag;
   using residual_tag =
       db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
-  using inbox_tag =
+  using boundary_data_inbox_tag =
       SubdomainBoundaryDataInboxTag<OptionsGroup, SubdomainOperator>;
 
  public:
   using const_global_cache_tags = tmpl::list<Tags::Overlap<OptionsGroup>>;
+
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             size_t Dim, typename ActionList, typename ParallelComponent>
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
@@ -163,7 +164,7 @@ struct SendSubdomainData {
         if (not orientation.is_aligned()) {
           overlap_data.orient(orientation);
         }
-        Parallel::receive_data<inbox_tag>(
+        Parallel::receive_data<boundary_data_inbox_tag>(
             receiver_proxy[neighbor], temporal_id,
             std::make_pair(
                 std::make_pair(direction_from_neighbor, element.id()),
@@ -174,19 +175,174 @@ struct SendSubdomainData {
   }
 };
 
-template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
-struct ReceiveSubdomainData {
+template <typename InboxTag, size_t Dim, typename TemporalIdType,
+          typename... InboxTags>
+bool has_received_from_all_neighbors(
+    const TemporalIdType& temporal_id, const Element<Dim>& element,
+    const tuples::TaggedTuple<InboxTags...>& inboxes) noexcept {
+  if (element.number_of_neighbors() == 0) {
+    return true;
+  }
+  const auto& inbox = tuples::get<InboxTag>(inboxes);
+  const auto temporal_received = inbox.find(temporal_id);
+  if (temporal_received == inbox.end()) {
+    return false;
+  }
+  const auto& received_neighbor_data = temporal_received->second;
+  for (const auto& direction_and_neighbors : element.neighbors()) {
+    const auto& direction = direction_and_neighbors.first;
+    for (const auto& neighbor : direction_and_neighbors.second) {
+      const auto neighbor_received =
+          received_neighbor_data.find(std::make_pair(direction, neighbor));
+      if (neighbor_received == received_neighbor_data.end()) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+template <typename OptionsGroup, typename SubdomainOperator>
+struct SubdomainBoundarySolutionsInboxTag {
+  static constexpr size_t volume_dim = SubdomainOperator::volume_dim;
+  using temporal_id = size_t;
+  using type = std::unordered_map<
+      temporal_id,
+      typename SubdomainOperator::SubdomainDataType::BoundaryDataType>;
+};
+
+template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
+          typename SourceTag>
+struct PerformStep {
  private:
   using fields_tag = FieldsTag;
   using residual_tag =
       db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
-  using inbox_tag =
+  static constexpr size_t volume_dim = SubdomainOperator::volume_dim;
+  using SubdomainDataType = typename SubdomainOperator::SubdomainDataType;
+  using boundary_data_inbox_tag =
       SubdomainBoundaryDataInboxTag<OptionsGroup, SubdomainOperator>;
-  using subdomain_boundary_data_tag =
-      Tags::SubdomainBoundaryData<OptionsGroup, SubdomainOperator>;
+  using boundary_solutions_inbox_tag =
+      SubdomainBoundarySolutionsInboxTag<OptionsGroup, SubdomainOperator>;
 
  public:
-  using inbox_tags = tmpl::list<inbox_tag>;
+  using const_global_cache_tags =
+      tmpl::list<LinearSolver::Tags::Iterations<OptionsGroup>>;
+  using inbox_tags = tmpl::list<boundary_data_inbox_tag>;
+
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ActionList, typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&> apply(
+      db::DataBox<DbTagsList>& box, tuples::TaggedTuple<InboxTags...>& inboxes,
+      Parallel::ConstGlobalCache<Metavariables>& cache,
+      const ElementIndex<volume_dim>& element_index, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    Parallel::printf("%s Receive subdomain data in step %zu\n", element_index,
+                     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    auto& inbox = tuples::get<boundary_data_inbox_tag>(inboxes);
+    const auto& temporal_id =
+        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
+    const auto temporal_received = inbox.find(temporal_id);
+    typename SubdomainDataType::BoundaryDataType subdomain_boundary_data{};
+    if (temporal_received != inbox.end()) {
+      subdomain_boundary_data = std::move(temporal_received->second);
+      inbox.erase(temporal_received);
+    }
+
+    Parallel::printf("%s Perform Schwarz step %zu\n", element_index,
+                     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+
+    // Gather residual and overlap from neighbors
+    const SubdomainDataType residual_subdomain{
+        typename SubdomainDataType::Vars(get<residual_tag>(box)),
+        std::move(subdomain_boundary_data)};
+
+    Parallel::printf("%s  Initial fields: %s\n", element_index,
+                     get<fields_tag>(box));
+    Parallel::printf("%s  Residual (central): %s\n", element_index,
+                     residual_subdomain.element_data);
+    Parallel::printf("%s  Overlap with: %d elements\n", element_index,
+                     residual_subdomain.boundary_data.size());
+
+    const auto& subdomain_solver =
+        get<Tags::SubdomainSolverBase<OptionsGroup>>(box);
+    auto subdomain_solution = subdomain_solver(
+        [&box](const SubdomainDataType& arg) noexcept {
+          return db::apply<SubdomainOperator>(box, arg);
+        },
+        residual_subdomain,
+        // Using the residual as initial guess so not iterating the
+        // subdomain solver at all is the identity operation
+        residual_subdomain);
+
+    // Send overlap data to neighbors
+    auto& receiver_proxy =
+        Parallel::get_parallel_component<ParallelComponent>(cache);
+    const auto& element = db::get<::Tags::Element<volume_dim>>(box);
+    for (auto& mortar_id_and_overlap_solution :
+         subdomain_solution.boundary_data) {
+      const auto& mortar_id = mortar_id_and_overlap_solution.first;
+      const auto& direction = mortar_id.first;
+      const auto& neighbor_id = mortar_id.second;
+      const auto& orientation = element.neighbors().at(direction).orientation();
+      const auto direction_from_neighbor = orientation(direction.opposite());
+      auto& overlap_solution = mortar_id_and_overlap_solution.second;
+
+      if (not orientation.is_aligned()) {
+        overlap_solution.orient(orientation);
+      }
+      Parallel::receive_data<boundary_solutions_inbox_tag>(
+          receiver_proxy[neighbor_id], temporal_id,
+          std::make_pair(std::make_pair(direction_from_neighbor, element.id()),
+                         std::move(overlap_solution)));
+    }
+
+    // Apply solution to central element
+    db::mutate<fields_tag>(
+        make_not_null(&box),
+        [&subdomain_solution](
+            const gsl::not_null<db::item_type<fields_tag>*> fields) noexcept {
+          // TODO: weighting
+          *fields += subdomain_solution.element_data;
+        });
+    Parallel::printf("%s  Updated fields: %s\n", element_index,
+                     get<fields_tag>(box));
+
+    db::mutate<LinearSolver::Tags::HasConverged<OptionsGroup>>(
+        make_not_null(&box),
+        [](const gsl::not_null<Convergence::HasConverged*> has_converged,
+           const size_t& max_iterations, const size_t& iteration_id) noexcept {
+          // Run the solver for a set number of iterations
+          *has_converged = Convergence::HasConverged{
+              {max_iterations, 0., 0.}, iteration_id + 1, 1., 1.};
+        },
+        get<LinearSolver::Tags::Iterations<OptionsGroup>>(box),
+        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    return std::forward_as_tuple(std::move(box));
+  }
+
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            size_t Dim>
+  static bool is_ready(
+      const db::DataBox<DbTagsList>& box,
+      const tuples::TaggedTuple<InboxTags...>& inboxes,
+      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      const ElementIndex<Dim>& /*element_index*/) noexcept {
+    return has_received_from_all_neighbors<boundary_data_inbox_tag>(
+        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box),
+        get<::Tags::Element<Dim>>(box), inboxes);
+  }
+};
+
+template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
+struct ReceiveOverlapSolution {
+ private:
+  using fields_tag = FieldsTag;
+  using boundary_solutions_inbox_tag =
+      SubdomainBoundarySolutionsInboxTag<OptionsGroup, SubdomainOperator>;
+
+ public:
+  using inbox_tags = tmpl::list<boundary_solutions_inbox_tag>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             size_t Dim, typename ActionList, typename ParallelComponent>
@@ -195,19 +351,25 @@ struct ReceiveSubdomainData {
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ElementIndex<Dim>& element_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("%s Receive subdomain data in step %zu\n", element_index,
+    Parallel::printf("%s Receive overlap solution in step %zu\n", element_index,
                      get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
-    auto& inbox = tuples::get<inbox_tag>(inboxes);
+    auto& inbox = tuples::get<boundary_solutions_inbox_tag>(inboxes);
     const auto& temporal_id =
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
     const auto temporal_received = inbox.find(temporal_id);
     if (temporal_received != inbox.end()) {
-      db::mutate<subdomain_boundary_data_tag>(
+      db::mutate<fields_tag>(
           make_not_null(&box),
           [&temporal_received](
-              const gsl::not_null<db::item_type<subdomain_boundary_data_tag>*>
-                  subdomain_boundary_data) noexcept {
-            *subdomain_boundary_data = std::move(temporal_received->second);
+              const gsl::not_null<
+                  db::item_type<fields_tag>*> /*fields*/) noexcept {
+            for (const auto& mortar_id_and_overlap_solution :
+                 temporal_received->second) {
+              const auto& mortar_id = mortar_id_and_overlap_solution.first;
+              const auto& overlap_solution =
+                  mortar_id_and_overlap_solution.second;
+              // *fields += std::move(temporal_received->second);
+            }
           });
       inbox.erase(temporal_received);
     }
@@ -221,105 +383,9 @@ struct ReceiveSubdomainData {
       const tuples::TaggedTuple<InboxTags...>& inboxes,
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ElementIndex<Dim>& /*element_index*/) noexcept {
-    const auto& element = get<::Tags::Element<Dim>>(box);
-    if (element.number_of_neighbors() == 0) {
-      return true;
-    }
-    const auto& inbox = tuples::get<inbox_tag>(inboxes);
-    // Check that we have received data from all neighbors for this iteration
-    const auto& temporal_id =
-        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
-    const auto temporal_received = inbox.find(temporal_id);
-    if (temporal_received == inbox.end()) {
-      return false;
-    }
-    const auto& received_neighbor_data = temporal_received->second;
-    for (const auto& direction_and_neighbors : element.neighbors()) {
-      const auto& direction = direction_and_neighbors.first;
-      for (const auto& neighbor : direction_and_neighbors.second) {
-        const auto neighbor_received =
-            received_neighbor_data.find(std::make_pair(direction, neighbor));
-        if (neighbor_received == received_neighbor_data.end()) {
-          return false;
-        }
-      }
-    }
-    return true;
-  }
-};
-
-template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
-          typename SourceTag>
-struct PerformStep {
- private:
-  using fields_tag = FieldsTag;
-  using residual_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
-  static constexpr size_t volume_dim = SubdomainOperator::volume_dim;
-  using SubdomainDataType = typename SubdomainOperator::SubdomainDataType;
-  using subdomain_boundary_data_tag =
-      Tags::SubdomainBoundaryData<OptionsGroup, SubdomainOperator>;
-
- public:
-  using const_global_cache_tags =
-      tmpl::list<LinearSolver::Tags::Iterations<OptionsGroup>>;
-
-  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
-            typename ActionList, typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&> apply(
-      db::DataBox<DbTagsList>& box,
-      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
-      const ElementIndex<volume_dim>& element_index, const ActionList /*meta*/,
-      const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("%s Perform Schwarz step %zu\n", element_index,
-                     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
-
-    // Gather residual and overlap from neighbors
-    const SubdomainDataType residual_subdomain{
-        typename SubdomainDataType::Vars(get<residual_tag>(box)),
-        get<subdomain_boundary_data_tag>(box)};
-
-    db::mutate_apply<
-        tmpl::list<fields_tag, Tags::SubdomainSolverBase<OptionsGroup>>,
-        tmpl::append<typename SubdomainOperator::argument_tags>>(
-        [&element_index, &residual_subdomain](
-            const gsl::not_null<db::item_type<fields_tag>*> fields,
-            const gsl::not_null<db::item_type<
-                Tags::SubdomainSolverBase<OptionsGroup>, DbTagsList>*>
-                subdomain_solver,
-            const auto&... args) noexcept {
-          Parallel::printf("%s  Initial fields: %s\n", element_index, *fields);
-          Parallel::printf("%s  Residual (central): %s\n", element_index,
-                           residual_subdomain.element_data);
-          Parallel::printf("%s  Overlap with: %d elements\n", element_index,
-                           residual_subdomain.boundary_data.size());
-          const auto delta_fields_subdomain = (*subdomain_solver)(
-              [&args...](const SubdomainDataType& arg) noexcept {
-                return SubdomainOperator::apply(arg, args...);
-              },
-              residual_subdomain,
-              // Using the residual as initial guess so not iterating the
-              // subdomain solver at all is the identity operation
-              residual_subdomain);
-          // TODO: transpose-restrict from subdomain to full domain (includes
-          // weighting and sending the data to neighbors)
-          *fields += delta_fields_subdomain.element_data;
-          Parallel::printf("%s  Updated fields: %s\n", element_index, *fields);
-        },
-        make_not_null(&box));
-
-    db::mutate<LinearSolver::Tags::HasConverged<OptionsGroup>>(
-        make_not_null(&box),
-        [](const gsl::not_null<Convergence::HasConverged*> has_converged,
-           const size_t& max_iterations, const size_t& iteration_id) noexcept {
-          // Run the solver for a set number of iterations
-          *has_converged = Convergence::HasConverged{
-              {max_iterations, 0., 0.}, iteration_id + 1, 1., 1.};
-        },
-        get<LinearSolver::Tags::Iterations<OptionsGroup>>(box),
-        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
-    return std::forward_as_tuple(std::move(box));
+    return has_received_from_all_neighbors<boundary_solutions_inbox_tag>(
+        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box),
+        get<::Tags::Element<Dim>>(box), inboxes);
   }
 };
 

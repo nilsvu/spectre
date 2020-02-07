@@ -33,8 +33,6 @@ struct InitializeElement {
   using residual_tag =
       db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
   using SubdomainDataType = typename SubdomainOperator::SubdomainDataType;
-  using subdomain_boundary_data_tag =
-      Tags::SubdomainBoundaryData<OptionsGroup, SubdomainOperator>;
   using subdomain_solver_tag =
       Tags::SubdomainSolver<LinearSolver::Serial::Gmres<SubdomainDataType>,
                             OptionsGroup>;
@@ -58,14 +56,12 @@ struct InitializeElement {
         ::Initialization::merge_into_databox<
             InitializeElement,
             db::AddSimpleTags<LinearSolver::Tags::IterationId<OptionsGroup>,
-                              LinearSolver::Tags::HasConverged<OptionsGroup>,
-                              subdomain_boundary_data_tag>,
+                              LinearSolver::Tags::HasConverged<OptionsGroup>>,
             compute_tags>(std::move(box),
                           // The `PrepareSolve` action populates these tags with
                           // initial values
                           std::numeric_limits<size_t>::max(),
-                          Convergence::HasConverged{},
-                          db::item_type<subdomain_boundary_data_tag>{}));
+                          Convergence::HasConverged{}));
   }
 };
 

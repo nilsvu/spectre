@@ -52,12 +52,6 @@ struct Overlap : db::SimpleTag {
   }
 };
 
-template <typename OptionsGroup, typename SubdomainOperator>
-struct SubdomainBoundaryData : db::SimpleTag {
-  static constexpr size_t volume_dim = SubdomainOperator::volume_dim;
-  using type = typename SubdomainOperator::SubdomainDataType::BoundaryDataType;
-};
-
 template <typename OptionsGroup>
 struct SubdomainSolverBase : db::BaseTag {};
 
