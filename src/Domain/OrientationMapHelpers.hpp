@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "DataStructures/Tensor/Tensor.hpp"
 #include "ErrorHandling/Assert.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
@@ -30,27 +31,33 @@ constexpr const typename Tag::type& get(  // NOLINT
 
 namespace OrientationMapHelpers_detail {
 
+template <typename DataType, typename Symm, typename IndexList>
+void orient_each_component(
+    const gsl::not_null<Tensor<DataType, Symm, IndexList>*> oriented_tensor,
+    const Tensor<DataType, Symm, IndexList>& tensor,
+    const std::vector<size_t>& oriented_offset) noexcept {
+  for (decltype(auto) oriented_and_tensor_components :
+       boost::combine(*oriented_tensor, tensor)) {
+    DataType& oriented_tensor_component =
+        boost::get<0>(oriented_and_tensor_components);
+    const DataType& tensor_component =
+        boost::get<1>(oriented_and_tensor_components);
+    for (size_t s = 0; s < tensor_component.size(); ++s) {
+      oriented_tensor_component[oriented_offset[s]] = tensor_component[s];
+    }
+  }
+}
+
 template <typename TagsList>
 void orient_each_component(
     const gsl::not_null<Variables<TagsList>*> oriented_variables,
     const Variables<TagsList>& variables,
     const std::vector<size_t>& oriented_offset) noexcept {
-  using VectorType = typename Variables<TagsList>::vector_type;
   tmpl::for_each<TagsList>(
       [&oriented_variables, &variables, &oriented_offset](auto tag) {
         using Tag = tmpl::type_from<decltype(tag)>;
-        auto& oriented_tensor = get<Tag>(*oriented_variables);
-        const auto& tensor = get<Tag>(variables);
-        for (decltype(auto) oriented_and_tensor_components :
-             boost::combine(oriented_tensor, tensor)) {
-          VectorType& oriented_tensor_component =
-              boost::get<0>(oriented_and_tensor_components);
-          const VectorType& tensor_component =
-              boost::get<1>(oriented_and_tensor_components);
-          for (size_t s = 0; s < tensor_component.size(); ++s) {
-            oriented_tensor_component[oriented_offset[s]] = tensor_component[s];
-          }
-        }
+        orient_each_component(make_not_null(&get<Tag>(*oriented_variables)),
+                              get<Tag>(variables), oriented_offset);
       });
 }
 
@@ -80,6 +87,45 @@ std::vector<size_t> oriented_offset_on_slice(
 /// \ingroup ComputationalDomainGroup
 /// Orient variables to the data-storage order of a neighbor element with
 /// the given orientation.
+template <size_t VolumeDim, typename DataType, typename Symm,
+          typename IndexList>
+Tensor<DataType, Symm, IndexList> orient_tensor(
+    const Tensor<DataType, Symm, IndexList>& tensor,
+    const Index<VolumeDim>& extents,
+    const OrientationMap<VolumeDim>& orientation_of_neighbor) noexcept {
+  // Skip work (aside from a copy) if neighbor is aligned
+  if (orientation_of_neighbor.is_aligned()) {
+    return tensor;
+  }
+  const size_t number_of_grid_points = extents.product();
+  Tensor<DataType, Symm, IndexList> oriented_tensor{number_of_grid_points};
+  const auto oriented_offset = OrientationMapHelpers_detail::oriented_offset(
+      extents, orientation_of_neighbor);
+  OrientationMapHelpers_detail::orient_each_component(
+      make_not_null(&oriented_tensor), tensor, oriented_offset);
+  return oriented_tensor;
+}
+
+template <size_t VolumeDim, typename DataType, typename Symm,
+          typename IndexList>
+Tensor<DataType, Symm, IndexList> orient_tensor_on_slice(
+    const Tensor<DataType, Symm, IndexList>& tensor_on_slice,
+    const Index<VolumeDim - 1>& slice_extents, const size_t sliced_dim,
+    const OrientationMap<VolumeDim>& orientation_of_neighbor) noexcept {
+  // Skip work (aside from a copy) if neighbor slice is aligned
+  if (orientation_of_neighbor.is_aligned()) {
+    return tensor_on_slice;
+  }
+  const size_t number_of_grid_points = slice_extents.product();
+  Tensor<DataType, Symm, IndexList> oriented_tensor{number_of_grid_points};
+  const auto oriented_offset =
+      OrientationMapHelpers_detail::oriented_offset_on_slice(
+          slice_extents, sliced_dim, orientation_of_neighbor);
+  OrientationMapHelpers_detail::orient_each_component(
+      make_not_null(&oriented_tensor), tensor_on_slice, oriented_offset);
+  return oriented_tensor;
+}
+
 template <size_t VolumeDim, typename TagsList>
 Variables<TagsList> orient_variables(
     const Variables<TagsList>& variables, const Index<VolumeDim>& extents,
