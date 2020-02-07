@@ -49,6 +49,21 @@ std::array<Spectral::MortarSize, Dim - 1> mortar_size(
     size_t dimension, const OrientationMap<Dim>& orientation) noexcept;
 
 /// \ingroup DiscontinuousGalerkinGroup
+/// Determine whether data on an element face needs to be projected to a mortar.
+/// If no projection is necessary the data may be used on the mortar as-is.
+template <size_t Dim>
+bool needs_projection(
+    const Mesh<Dim>& face_mesh, const Mesh<Dim>& mortar_mesh,
+    const std::array<Spectral::MortarSize, Dim>& mortar_size) noexcept {
+  const bool needs_no_projection =
+      mortar_mesh == face_mesh and
+      alg::all_of(mortar_size, [](const Spectral::MortarSize& size) noexcept {
+        return size == Spectral::MortarSize::Full;
+      });
+  return not needs_no_projection;
+}
+
+/// \ingroup DiscontinuousGalerkinGroup
 /// Project variables from a face to a mortar.
 template <typename Tags, size_t Dim>
 Variables<Tags> project_to_mortar(
