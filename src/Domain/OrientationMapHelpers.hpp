@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "DataStructures/Tensor/Tensor.hpp"
 #include "ErrorHandling/Assert.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
@@ -52,6 +53,52 @@ std::vector<size_t> oriented_offset_on_slice(
 /// \ingroup ComputationalDomainGroup
 /// Orient variables to the data-storage order of a neighbor element with
 /// the given orientation.
+template <size_t VolumeDim, typename DataType, typename Symm,
+          typename IndexList>
+Tensor<DataType, Symm, IndexList> orient_tensor(
+    const Tensor<DataType, Symm, IndexList>& tensor,
+    const Index<VolumeDim>& extents,
+    const OrientationMap<VolumeDim>& orientation_of_neighbor) noexcept {
+  // Skip work (aside from a copy) if neighbor is aligned
+  if (orientation_of_neighbor.is_aligned()) {
+    return tensor;
+  }
+  const size_t number_of_grid_points = extents.product();
+  Tensor<DataType, Symm, IndexList> oriented_tensor{number_of_grid_points};
+  const auto oriented_offset = OrientationMapHelpers_detail::oriented_offset(
+      extents, orientation_of_neighbor);
+
+  auto oriented_tensor_view = gsl::make_span(oriented_tensor);
+  OrientationMapHelpers_detail::orient_each_component(
+      make_not_null(&oriented_tensor_view), gsl::make_span(tensor),
+      number_of_grid_points, oriented_offset);
+  return oriented_tensor;
+}
+
+template <size_t VolumeDim, typename DataType, typename Symm,
+          typename IndexList>
+Tensor<DataType, Symm, IndexList> orient_tensor_on_slice(
+    const Tensor<DataType, Symm, IndexList>& tensor_on_slice,
+    const Index<VolumeDim - 1>& slice_extents, const size_t sliced_dim,
+    const OrientationMap<VolumeDim>& orientation_of_neighbor) noexcept {
+  // Skip work (aside from a copy) if neighbor slice is aligned
+  if (orientation_of_neighbor.is_aligned()) {
+    return tensor_on_slice;
+  }
+  const size_t number_of_grid_points = slice_extents.product();
+  Tensor<DataType, Symm, IndexList> oriented_tensor{number_of_grid_points};
+
+  const auto oriented_offset =
+      OrientationMapHelpers_detail::oriented_offset_on_slice(
+          slice_extents, sliced_dim, orientation_of_neighbor);
+
+  auto oriented_tensor_view = gsl::make_span(oriented_tensor);
+  OrientationMapHelpers_detail::orient_each_component(
+      make_not_null(&oriented_tensor_view), gsl::make_span(tensor_on_slice),
+      number_of_grid_points, oriented_offset);
+  return oriented_tensor;
+}
+
 template <size_t VolumeDim, typename TagsList>
 Variables<TagsList> orient_variables(
     const Variables<TagsList>& variables, const Index<VolumeDim>& extents,
