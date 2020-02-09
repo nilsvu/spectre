@@ -10,6 +10,7 @@
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Variables.hpp"
+#include "Domain/ElementIndex.hpp"
 #include "Domain/Mesh.hpp"
 #include "Elliptic/FirstOrderComputeTags.hpp"
 #include "Elliptic/Tags.hpp"
@@ -18,6 +19,9 @@
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/TMPL.hpp"
+
+#include <random>
+#include "tests/Utilities/MakeWithRandomValues.hpp"
 
 namespace elliptic {
 namespace Actions {
@@ -73,7 +77,7 @@ struct InitializeSystem {
   static auto apply(db::DataBox<DbTagsList>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
                     const Parallel::ConstGlobalCache<Metavariables>& cache,
-                    const ElementIndex<Dim>& /*array_index*/,
+                    const ElementIndex<Dim>& element_index,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
     using system = typename Metavariables::system;
@@ -117,8 +121,19 @@ struct InitializeSystem {
     // Set initial data to zero. Non-zero initial data would require us to also
     // compute the linear operator applied to the the initial data.
     db::item_type<fields_tag> fields{num_grid_points, 0.};
+    // Make random initial data distributed around the solution
+    fields.assign_subset(
+        Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
+            .variables(inertial_coords,
+                       db::get_variables_tags_list<fields_tag>{}));
+    // std::mt19937 generator(std::hash<ElementIndex<Dim>>{}(element_index));
+    // std::uniform_real_distribution<> dist(-1., 1.);
+    // fields += make_with_random_values<db::item_type<fields_tag>>(
+    //     make_not_null(&generator), make_not_null(&dist), inertial_coords);
+
     db::item_type<linear_operator_applied_to_fields_tag>
-        linear_operator_applied_to_fields{num_grid_points, 0.};
+        linear_operator_applied_to_fields{
+            num_grid_points, std::numeric_limits<double>::signaling_NaN()};
 
     // Retrieve the sources of the elliptic system from the analytic solution,
     // which defines the problem we want to solve.
