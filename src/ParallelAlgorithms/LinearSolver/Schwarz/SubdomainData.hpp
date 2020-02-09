@@ -34,8 +34,13 @@ struct OverlapData {
   Scalar<DataVector> magnitude_of_face_normal{};
   Index<volume_dim> overlap_extents{};
 
-  size_t overlap() const noexcept {
+  size_t overlap_extent() const noexcept {
     return overlap_extents[direction.dimension()];
+  }
+
+  double overlap_width() const noexcept {
+    return LinearSolver::schwarz_detail::overlap_width(
+        volume_mesh.slice_through(direction.dimension()), overlap_extent());
   }
 
   // OverlapData() = default;

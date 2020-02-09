@@ -275,10 +275,57 @@ struct PerformStep {
         // subdomain solver at all is the identity operation
         residual_subdomain);
 
+    Parallel::printf("%s  Subdomain solution (central): %s\n", element_index,
+                     subdomain_solution.element_data);
+
+    // Weighting
+    // The central element will receive overlap contributions from its face
+    // neighbors, so we weight the subdomain solution with each neighbor's
+    // _incoming_ overlap width.
+    // TODO: Is this the correct way to handle h-refined mortars?
+    // TODO: The overlap width we'll receive may be different to the overlap
+    // we're sending because of p-refinement. Should we weight with the expected
+    // incoming contribution's width or with the one we're sending?
+    // TODO: We'll have to keep in mind that the weighting operation should
+    // preserve symmetry of the linear operator
+    const auto& element = db::get<::Tags::Element<volume_dim>>(box);
+    const auto& logical_coords =
+        db::get<::Tags::Coordinates<volume_dim, Frame::Logical>>(box);
+    // const auto& mesh = db::get<::Tags::Mesh<volume_dim>>(box);
+    for (const auto& direction_and_neighbors : element.neighbors()) {
+      const auto& direction = direction_and_neighbors.first;
+      const size_t dimension = direction.dimension();
+      const auto& neighbors_in_direction = direction_and_neighbors.second;
+      const auto& logical_coord = logical_coords.get(dimension);
+      for (const auto& neighbor_id : neighbors_in_direction) {
+        const auto mortar_id = std::make_pair(direction, neighbor_id);
+        const auto& overlap_solution =
+            subdomain_solution.boundary_data.at(mortar_id);
+        // Use incoming or outgoing overlap width here?
+        // const double overlap_width_in_center = overlap_width(
+        //     mesh.slice_through(dimension),
+        //     overlap_extent(
+        //         mesh.extents(dimension),
+        //         get<LinearSolver::Tags::Overlap<OptionsGroup>>(box)));
+        const double overlap_width_in_center = overlap_solution.overlap_width();
+        Parallel::printf(
+            "%s  Weighting center with width %f for overlap with %s\n",
+            element_index, overlap_width_in_center, mortar_id);
+        Parallel::printf("%s  Logical coords for overlap with %s: %s\n",
+                         element_index, mortar_id, logical_coord);
+        const auto w =
+            weight(logical_coord, overlap_width_in_center, direction.side());
+        Parallel::printf("%s  Weights:\n%s\n", element_index, w);
+        subdomain_solution.element_data *= w;
+      }
+    }
+
+    Parallel::printf("%s  Subdomain solution WEIGHTED (central): %s\n",
+                     element_index, subdomain_solution.element_data);
+
     // Send overlap data to neighbors
     auto& receiver_proxy =
         Parallel::get_parallel_component<ParallelComponent>(cache);
-    const auto& element = db::get<::Tags::Element<volume_dim>>(box);
     for (auto& mortar_id_and_overlap_solution :
          subdomain_solution.boundary_data) {
       const auto& mortar_id = mortar_id_and_overlap_solution.first;
@@ -302,11 +349,8 @@ struct PerformStep {
         make_not_null(&box),
         [&subdomain_solution](
             const gsl::not_null<db::item_type<fields_tag>*> fields) noexcept {
-          // TODO: weighting
           *fields += subdomain_solution.element_data;
         });
-    Parallel::printf("%s  Updated fields: %s\n", element_index,
-                     get<fields_tag>(box));
 
     db::mutate<LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
@@ -357,22 +401,51 @@ struct ReceiveOverlapSolution {
     const auto& temporal_id =
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
     const auto temporal_received = inbox.find(temporal_id);
+    const auto& logical_coords =
+        db::get<::Tags::Coordinates<Dim, Frame::Logical>>(box);
     if (temporal_received != inbox.end()) {
       db::mutate<fields_tag>(
           make_not_null(&box),
-          [&temporal_received](
-              const gsl::not_null<
-                  db::item_type<fields_tag>*> /*fields*/) noexcept {
+          [&temporal_received, &element_index, &logical_coords](
+              const gsl::not_null<db::item_type<fields_tag>*> fields) noexcept {
             for (const auto& mortar_id_and_overlap_solution :
                  temporal_received->second) {
               const auto& mortar_id = mortar_id_and_overlap_solution.first;
+              const auto& direction = mortar_id.first;
+              const size_t dimension = direction.dimension();
               const auto& overlap_solution =
                   mortar_id_and_overlap_solution.second;
-              // *fields += std::move(temporal_received->second);
+              const double overlap_width = overlap_solution.overlap_width();
+              Parallel::printf("%s  Incoming overlap data from %s:\n%s\n",
+                               element_index, mortar_id,
+                               overlap_solution.field_data);
+              auto extended_overlap_solution =
+                  overlap_solution.extended_field_data();
+              Parallel::printf(
+                  "%s  Weighting overlap data with width %f (coming from %s)\n",
+                  element_index, overlap_width, mortar_id);
+              DataVector extended_logical_coords =
+                  logical_coords.get(dimension) - direction.sign() * 2.;
+              Parallel::printf(
+                  "%s  Extended logical coords for overlap coming from %s: "
+                  "%s\n",
+                  element_index, mortar_id, extended_logical_coords);
+              const auto w = weight(extended_logical_coords, overlap_width,
+                                    opposite(direction.side()));
+              Parallel::printf("%s  Weights:\n%s\n", element_index, w);
+              extended_overlap_solution *= w;
+              Parallel::printf(
+                  "%s  Weighted (extended) overlap data from %s:\n%s\n",
+                  element_index, mortar_id, extended_overlap_solution);
+              *fields += extended_overlap_solution;
             }
           });
       inbox.erase(temporal_received);
     }
+
+    Parallel::printf("%s  Updated fields: %s\n", element_index,
+                     get<fields_tag>(box));
+
     return std::forward_as_tuple(std::move(box));
   }
 
