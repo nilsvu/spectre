@@ -21,18 +21,22 @@ DomainCreator:
 
 NumericalFlux:
   InternalPenalty:
-    PenaltyParameter: 5.729577951308232 # p^2 / h
+    PenaltyParameter: 8.594366926962348 # p^2 / h
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids2DVolume"
   ReductionFileName: "PoissonProductOfSinusoids2DReductions"
 
 LinearSolver:
-  ConvergenceCriteria:
-    MaxIterations: 1
-    AbsoluteResidual: 0
-    RelativeResidual: 0
-  Verbosity: Verbose
+  Schwarz:
+    Iterations: 5
+    Overlap: 2
+    SubdomainSolver:
+      ConvergenceCriteria:
+        MaxIterations: 300
+        AbsoluteResidual: 1e-14
+        RelativeResidual: 1e-14
+      Verbosity: Verbose
 
 EventsAndTriggers:
   ? EveryNIterations:
