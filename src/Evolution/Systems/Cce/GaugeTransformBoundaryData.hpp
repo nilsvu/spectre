@@ -28,8 +28,10 @@ namespace Cce {
 using gauge_adjustments_setup_tags =
     tmpl::list<Tags::BondiR, Tags::BondiJ, Tags::Dr<Tags::BondiJ>>;
 
+/// \cond
 template <typename Tag>
 struct GaugeAdjustedBoundaryValue;
+/// \endcond
 
 /*!
  * \brief Computes the evolution gauge Bondi \f$\hat R\f$ on the worldtube from
