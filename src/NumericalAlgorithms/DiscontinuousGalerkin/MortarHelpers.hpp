@@ -7,6 +7,7 @@
 #include <array>
 #include <cstddef>
 #include <functional>
+#include <tuple>
 #include <type_traits>
 #include <utility>  // IWYU pragma: keep // for std::forward
 
@@ -14,6 +15,8 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Matrix.hpp"
 #include "DataStructures/Variables.hpp"
+#include "Domain/Direction.hpp"
+#include "Domain/ElementId.hpp"
 #include "Domain/Mesh.hpp"
 #include "ErrorHandling/Assert.hpp"
 #include "NumericalAlgorithms/LinearOperators/ApplyMatrices.hpp"
@@ -31,6 +34,15 @@ class OrientationMap;
 /// \endcond
 
 namespace dg {
+
+template <size_t VolumeDim>
+using MortarId = std::pair<::Direction<VolumeDim>, ElementId<VolumeDim>>;
+template <size_t MortarDim>
+using MortarSizes = std::array<Spectral::MortarSize, MortarDim>;
+template <size_t VolumeDim, typename ValueType>
+using MortarMap = std::unordered_map<MortarId<VolumeDim>, ValueType,
+                                     boost::hash<MortarId<VolumeDim>>>;
+
 /// \ingroup DiscontinuousGalerkinGroup
 /// Find a mesh for a mortar capable of representing data from either
 /// of two faces.
