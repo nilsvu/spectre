@@ -9,6 +9,7 @@ set(LIBRARY_SOURCES
   Test_ImposeBoundaryConditions.cpp
   Test_ImposeInhomogeneousBoundaryConditionsOnSource.cpp
   Test_InitializeFluxes.cpp
+  Test_SchwarzSubdomainOperator.cpp
   Test_StrongFirstOrderScheme.cpp
   TestHelpers.cpp
   )
