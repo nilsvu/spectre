@@ -9,6 +9,8 @@
 #include "DataStructures/Variables.hpp"
 #include "DataStructures/VariablesHelpers.hpp"
 #include "Domain/Creators/Interval.hpp"
+#include "Domain/Creators/Rectangle.hpp"
+#include "Domain/Creators/Brick.hpp"
 #include "Elliptic/DiscontinuousGalerkin/NumericalFluxes/FirstOrderInternalPenalty.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "Elliptic/Tags.hpp"  // Needed by the numerical flux (for now)
@@ -23,12 +25,28 @@
 
 namespace helpers = TestHelpers::elliptic::dg;
 
-SPECTRE_TEST_CASE("Unit.Elliptic.DG.TestHelpers", "[Unit][Elliptic]") {
-  static constexpr size_t volume_dim = 1;
+namespace {
 
-  // Choose a domain
-  const domain::creators::Interval domain_creator{
-      {{-2.}}, {{2.}}, {{false}}, {{1}}, {{3}}};
+/*
+ * Makes the following assumptions:
+ * - First-order Poisson system
+ * - Strong first-order internal penalty DG scheme
+ * - Diagonal mass matrix approximation ("mass-lumping")
+ * - The `penalty_parameter` is used directly as the prefactor to the penalty
+ * term in the numerical flux.
+ * - The elements are ordered by block first, and then by segment index of each
+ * dimension in turn.
+ * - Within each element this is the data layout:
+ *   - The primal field precedes the auxiliary field
+ *   - Tensor components are ordered first by index, then by dimension (as one
+ *   would expect)
+ *   - Grid points for each component are stored in column-major format
+ *   (corresponding to the order called 'F' in Numpy).
+ */
+template <size_t Dim>
+DenseMatrix<double> build_poisson_strong_first_order_operator(
+    const DomainCreator<Dim>& domain_creator, const double penalty_parameter) {
+  static constexpr size_t volume_dim = Dim;
 
   // Choose a system
   using system = Poisson::FirstOrderSystem<volume_dim>;
@@ -39,7 +57,7 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.TestHelpers", "[Unit][Elliptic]") {
       elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
           volume_dim, elliptic::Tags::FluxesComputer<typename system::fluxes>,
           typename system::primal_fields, typename system::auxiliary_fields>;
-  const NumericalFlux numerical_fluxes_computer{6.75};  // C=1.5
+  const NumericalFlux numerical_fluxes_computer{penalty_parameter};
 
   // Shortcuts for tags
   using field_tag = Poisson::Tags::Field;
@@ -101,18 +119,163 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.TestHelpers", "[Unit][Elliptic]") {
       };
 
   // Build the operator matrix
-  const auto operator_matrix = helpers::build_operator_matrix<system>(
-      domain_creator, fluxes_computer, package_boundary_data,
-      apply_boundary_contribution);
+  return helpers::build_operator_matrix<system>(domain_creator, fluxes_computer,
+                                                package_boundary_data,
+                                                apply_boundary_contribution);
+}
 
-  Parallel::printf("\n\nDG operator matrix:\n\n");
-  Parallel::printf("[");
-  for (size_t i = 0; i < operator_matrix.rows(); i++) {
-    Parallel::printf("[");
-    for (size_t j = 0; j < operator_matrix.columns(); j++) {
-      Parallel::printf("%e,", operator_matrix(i, j));
-    }
-    Parallel::printf("],\n");
+}  // namespace
+
+SPECTRE_TEST_CASE("Unit.Elliptic.DG.TestHelpers", "[Unit][Elliptic]") {
+  {
+    INFO("1D");
+    const domain::creators::Interval domain_creator{
+        {{-2.}}, {{2.}}, {{false}}, {{1}}, {{3}}};
+    const double penalty_parameter = 6.75;
+    CAPTURE(penalty_parameter);
+    const DenseMatrix<double> expected_operator_matrix{
+        {36.0, 6.0, -1.5, -1.5, -2.0, 0.5, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0},
+        {-0.0, -0.0, -0.0, 0.5, -0.0, -0.5, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0},
+        {-0.75, 3.0, 18.0, -0.5, 2.0, 1.5, -18.0, -3.0, 0.75, -0.0, -0.0, -0.0},
+        {-1.5, -2.0, 0.5, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+        {0.5, 0.0, -0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+        {-0.5, 2.0, 0.0, 0.0, 0.0, 1.0, -1.5, 0.0, 0.0, 0.0, 0.0, 0.0},
+        {0.75, -3.0, -18.0, -0.0, -0.0, -0.0, 18.0, 3.0, -0.75, -1.5, -2.0,
+         0.5},
+        {-0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -0.0, 0.5, -0.0, -0.5},
+        {-0.0, -0.0, -0.0, -0.0, -0.0, -0.0, -1.5, 6.0, 36.0, -0.5, 2.0, 1.5},
+        {0.0, 0.0, 1.5, 0.0, 0.0, 0.0, 0.0, -2.0, 0.5, 1.0, 0.0, 0.0},
+        {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, -0.5, 0.0, 1.0, 0.0},
+        {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.5, 2.0, 1.5, 0.0, 0.0, 1.0}};
+    const auto operator_matrix = build_poisson_strong_first_order_operator(
+        domain_creator, penalty_parameter);
+    CHECK_MATRIX_APPROX(operator_matrix, expected_operator_matrix);
   }
-  Parallel::printf("]\n");
+  {
+    INFO("2D");
+    const domain::creators::Rectangle domain_creator{
+        {{-2., -2.}}, {{2., 2.}}, {{false, false}}, {{1, 1}}, {{3, 3}}};
+    const double penalty_parameter = 6.75;
+    CAPTURE(penalty_parameter);
+    const auto operator_matrix = build_poisson_strong_first_order_operator(
+        domain_creator, penalty_parameter);
+    std::vector<double> expected_sum_over_each_row{
+        75.0, 37.5, 40.5, 37.5, 0.0,  3.0,  40.5, 3.0,  6.0,  -2.0, 1.0,  1.0,
+        -2.0, 1.0,  1.0,  -2.0, 1.0,  1.0,  -2.0, -2.0, -2.0, 1.0,  1.0,  1.0,
+        1.0,  1.0,  1.0,  34.5, -3.0, 0.0,  37.5, 0.0,  3.0,  81.0, 43.5, 46.5,
+        -2.0, 1.0,  1.0,  -2.0, 1.0,  1.0,  -2.0, 1.0,  1.0,  1.0,  1.0,  1.0,
+        1.0,  1.0,  1.0,  4.0,  4.0,  4.0,  34.5, 37.5, 81.0, -3.0, 0.0,  43.5,
+        0.0,  3.0,  46.5, 1.0,  1.0,  4.0,  1.0,  1.0,  4.0,  1.0,  1.0,  4.0,
+        -2.0, -2.0, -2.0, 1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  -6.0, -3.0, 40.5,
+        -3.0, 0.0,  43.5, 40.5, 43.5, 87.0, 1.0,  1.0,  4.0,  1.0,  1.0,  4.0,
+        1.0,  1.0,  4.0,  1.0,  1.0,  1.0,  1.0,  1.0,  1.0,  4.0,  4.0,  4.0};
+    for (size_t row = 0; row < operator_matrix.rows(); row++) {
+      double sum_over_row = 0;
+      for (size_t col = 0; col < operator_matrix.columns(); col++) {
+        sum_over_row += operator_matrix(row, col);
+      }
+      CAPTURE(row);
+      CHECK(sum_over_row == expected_sum_over_each_row.at(row));
+    }
+  }
+  {
+    INFO("3D");
+    const domain::creators::Brick domain_creator{{{-2., -2., -2.}},
+                                                     {{2., 2., 2.}},
+                                                     {{false, false, false}},
+                                                     {{1, 1, 1}},
+                                                     {{3, 3, 3}}};
+    const double penalty_parameter = 6.75;
+    CAPTURE(penalty_parameter);
+    const auto operator_matrix = build_poisson_strong_first_order_operator(
+        domain_creator, penalty_parameter);
+    std::vector<double> expected_sum_over_each_row{
+        112.5, 75.0,  78.0,  75.0, 37.5, 40.5,  78.0, 40.5,  43.5, 75.0, 37.5,
+        40.5,  37.5,  0.0,   3.0,  40.5, 3.0,   6.0,  78.0,  40.5, 43.5, 40.5,
+        3.0,   6.0,   43.5,  6.0,  9.0,  -2.0,  1.0,  1.0,   -2.0, 1.0,  1.0,
+        -2.0,  1.0,   1.0,   -2.0, 1.0,  1.0,   -2.0, 1.0,   1.0,  -2.0, 1.0,
+        1.0,   -2.0,  1.0,   1.0,  -2.0, 1.0,   1.0,  -2.0,  1.0,  1.0,  -2.0,
+        -2.0,  -2.0,  1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   -2.0, -2.0, -2.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   -2.0, -2.0,  -2.0, 1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  -2.0, -2.0,  -2.0, -2.0,  -2.0, -2.0, -2.0,
+        -2.0,  -2.0,  1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  72.0, 34.5,
+        37.5,  34.5,  -3.0,  0.0,  37.5, 0.0,   3.0,  75.0,  37.5, 40.5, 37.5,
+        0.0,   3.0,   40.5,  3.0,  6.0,  118.5, 81.0, 84.0,  81.0, 43.5, 46.5,
+        84.0,  46.5,  49.5,  -2.0, 1.0,  1.0,   -2.0, 1.0,   1.0,  -2.0, 1.0,
+        1.0,   -2.0,  1.0,   1.0,  -2.0, 1.0,   1.0,  -2.0,  1.0,  1.0,  -2.0,
+        1.0,   1.0,   -2.0,  1.0,  1.0,  -2.0,  1.0,  1.0,   -2.0, -2.0, -2.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   -2.0, -2.0,  -2.0, 1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  -2.0, -2.0,  -2.0, 1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  4.0,  4.0,
+        4.0,   4.0,   4.0,   4.0,  4.0,  4.0,   4.0,  72.0,  34.5, 37.5, 75.0,
+        37.5,  40.5,  118.5, 81.0, 84.0, 34.5,  -3.0, 0.0,   37.5, 0.0,  3.0,
+        81.0,  43.5,  46.5,  37.5, 0.0,  3.0,   40.5, 3.0,   6.0,  84.0, 46.5,
+        49.5,  -2.0,  1.0,   1.0,  -2.0, 1.0,   1.0,  -2.0,  1.0,  1.0,  -2.0,
+        1.0,   1.0,   -2.0,  1.0,  1.0,  -2.0,  1.0,  1.0,   -2.0, 1.0,  1.0,
+        -2.0,  1.0,   1.0,   -2.0, 1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   4.0,   4.0,   4.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  4.0,
+        4.0,   4.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   4.0,  4.0,  4.0,
+        -2.0,  -2.0,  -2.0,  -2.0, -2.0, -2.0,  -2.0, -2.0,  -2.0, 1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  31.5,  -6.0, -3.0,  34.5, -3.0, 0.0,
+        78.0,  40.5,  43.5,  34.5, -3.0, 0.0,   37.5, 0.0,   3.0,  81.0, 43.5,
+        46.5,  78.0,  40.5,  43.5, 81.0, 43.5,  46.5, 124.5, 87.0, 90.0, -2.0,
+        1.0,   1.0,   -2.0,  1.0,  1.0,  -2.0,  1.0,  1.0,   -2.0, 1.0,  1.0,
+        -2.0,  1.0,   1.0,   -2.0, 1.0,  1.0,   -2.0, 1.0,   1.0,  -2.0, 1.0,
+        1.0,   -2.0,  1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  4.0,
+        4.0,   4.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   4.0,  4.0,  4.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   4.0,  4.0,   4.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  4.0,   4.0,  4.0,   4.0,  4.0,  4.0,
+        4.0,   4.0,   4.0,   72.0, 75.0, 118.5, 34.5, 37.5,  81.0, 37.5, 40.5,
+        84.0,  34.5,  37.5,  81.0, -3.0, 0.0,   43.5, 0.0,   3.0,  46.5, 37.5,
+        40.5,  84.0,  0.0,   3.0,  46.5, 3.0,   6.0,  49.5,  1.0,  1.0,  4.0,
+        1.0,   1.0,   4.0,   1.0,  1.0,  4.0,   1.0,  1.0,   4.0,  1.0,  1.0,
+        4.0,   1.0,   1.0,   4.0,  1.0,  1.0,   4.0,  1.0,   1.0,  4.0,  1.0,
+        1.0,   4.0,   -2.0,  -2.0, -2.0, 1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        -2.0,  -2.0,  -2.0,  1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  -2.0, -2.0,
+        -2.0,  1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  -2.0,  -2.0, -2.0, -2.0,
+        -2.0,  -2.0,  -2.0,  -2.0, -2.0, 1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   31.5,  34.5,  78.0, -6.0, -3.0,  40.5, -3.0,  0.0,  43.5, 34.5,
+        37.5,  81.0,  -3.0,  0.0,  43.5, 0.0,   3.0,  46.5,  78.0, 81.0, 124.5,
+        40.5,  43.5,  87.0,  43.5, 46.5, 90.0,  1.0,  1.0,   4.0,  1.0,  1.0,
+        4.0,   1.0,   1.0,   4.0,  1.0,  1.0,   4.0,  1.0,   1.0,  4.0,  1.0,
+        1.0,   4.0,   1.0,   1.0,  4.0,  1.0,   1.0,  4.0,   1.0,  1.0,  4.0,
+        -2.0,  -2.0,  -2.0,  1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  -2.0, -2.0,
+        -2.0,  1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  -2.0,  -2.0, -2.0, 1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   4.0,   4.0,   4.0,  4.0,  4.0,   4.0,  4.0,   4.0,  4.0,  31.5,
+        34.5,  78.0,  34.5,  37.5, 81.0, 78.0,  81.0, 124.5, -6.0, -3.0, 40.5,
+        -3.0,  0.0,   43.5,  40.5, 43.5, 87.0,  -3.0, 0.0,   43.5, 0.0,  3.0,
+        46.5,  43.5,  46.5,  90.0, 1.0,  1.0,   4.0,  1.0,   1.0,  4.0,  1.0,
+        1.0,   4.0,   1.0,   1.0,  4.0,  1.0,   1.0,  4.0,   1.0,  1.0,  4.0,
+        1.0,   1.0,   4.0,   1.0,  1.0,  4.0,   1.0,  1.0,   4.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  4.0,  4.0,   4.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   4.0,   4.0,  4.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        4.0,   4.0,   4.0,   -2.0, -2.0, -2.0,  -2.0, -2.0,  -2.0, -2.0, -2.0,
+        -2.0,  1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   -9.0, -6.0, 37.5,
+        -6.0,  -3.0,  40.5,  37.5, 40.5, 84.0,  -6.0, -3.0,  40.5, -3.0, 0.0,
+        43.5,  40.5,  43.5,  87.0, 37.5, 40.5,  84.0, 40.5,  43.5, 87.0, 84.0,
+        87.0,  130.5, 1.0,   1.0,  4.0,  1.0,   1.0,  4.0,   1.0,  1.0,  4.0,
+        1.0,   1.0,   4.0,   1.0,  1.0,  4.0,   1.0,  1.0,   4.0,  1.0,  1.0,
+        4.0,   1.0,   1.0,   4.0,  1.0,  1.0,   4.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   4.0,   4.0,  4.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        4.0,   4.0,   4.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  4.0,  4.0,
+        4.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   1.0,  1.0,  1.0,
+        1.0,   1.0,   1.0,   1.0,  1.0,  1.0,   1.0,  1.0,   4.0,  4.0,  4.0,
+        4.0,   4.0,   4.0,   4.0,  4.0,  4.0};
+    for (size_t row = 0; row < operator_matrix.rows(); row++) {
+      double sum_over_row = 0;
+      for (size_t col = 0; col < operator_matrix.columns(); col++) {
+        sum_over_row += operator_matrix(row, col);
+      }
+      CAPTURE(row);
+      CHECK(sum_over_row == expected_sum_over_each_row.at(row));
+    }
+  }
 }
