@@ -18,6 +18,10 @@
 namespace LinearSolver {
 namespace schwarz_detail {
 
+/*!
+ * \brief Data on a region within an element that extends a certain number of
+ * grid points from a face into the volume.
+ */
 template <size_t Dim, typename FieldTags>
 struct OverlapData {
   static constexpr size_t volume_dim = Dim;
@@ -28,11 +32,14 @@ struct OverlapData {
 
   // Geometric quantities
   Mesh<volume_dim> volume_mesh{};
-  InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>
-      inv_jacobian{};
+  ElementMap<volume_dim, Frame::Inertial> element_map{};
+  /// Direction from which the overlap extends into the element
   Direction<volume_dim> direction{};
-  Scalar<DataVector> magnitude_of_face_normal{};
   Index<volume_dim> overlap_extents{};
+  ::dg::MortarMap<volume_dim, Mesh<volume_dim - 1>>
+      perpendicular_mortar_meshes{};
+  ::dg::MortarMap<volume_dim, ::dg::MortarSizes<volume_dim - 1>>
+      perpendicular_mortar_sizes{};
 
   size_t overlap_extent() const noexcept {
     return overlap_extents[direction.dimension()];
@@ -71,17 +78,25 @@ struct OverlapData {
       return;
     }
     field_data = orient_variables(field_data, overlap_extents, orientation);
-    inv_jacobian =
-        orient_tensor(inv_jacobian, volume_mesh.extents(), orientation);
-    magnitude_of_face_normal = orient_tensor_on_slice(
-        magnitude_of_face_normal,
-        volume_mesh.slice_away(direction.dimension()).extents(),
-        direction.dimension(), orientation);
-    // const auto orientation_on_face =
-    //     orientation.slice_away(direction.dimension());
-    // mortar_mesh = orientation_on_face(mortar_mesh);
-    // mortar_size = orientation_on_face.permute_from_neighbor(mortar_size);
-    // Orient these quantities last because previous calls are using them
+    // inv_jacobian =
+    //     orient_tensor(inv_jacobian, volume_mesh.extents(), orientation);
+    // magnitude_of_face_normal = orient_tensor_on_slice(
+    //     magnitude_of_face_normal,
+    //     volume_mesh.slice_away(direction.dimension()).extents(),
+    //     direction.dimension(), orientation);
+    
+    // for (auto& mortar_id_and_mesh : perpendicular_mortar_meshes) {
+    //   const auto& mortar_id = mortar_id_and_mesh.first;
+    //   auto& mortar_mesh = mortar_id_and_mesh.second;
+    //   auto& mortar_size = perpendicular_mortar_sizes[mortar_id];
+    //   const auto& face_direction = mortar_id.first;
+    //   const auto orientation_on_face =
+    //       orientation.slice_away(face_direction.dimension());
+    //   mortar_mesh = Mesh<Dim - 1>{orientation_on_face(mortar_mesh)};
+    //   mortar_size = orientation_on_face.permute_from_neighbor(mortar_size);
+    // }
+
+    // Orient these quantities last because previous calls may use them
     volume_mesh = orientation(volume_mesh);
     direction = orientation(direction);
     overlap_extents = Index<volume_dim>{
@@ -92,10 +107,11 @@ struct OverlapData {
   void pup(PUP::er& p) noexcept {
     p | field_data;
     p | volume_mesh;
-    p | inv_jacobian;
+    p | element_map;
     p | direction;
-    p | magnitude_of_face_normal;
     p | overlap_extents;
+    p | perpendicular_mortar_meshes;
+    p | perpendicular_mortar_sizes;
   }
 
   template <typename RhsFieldTags>
@@ -120,10 +136,11 @@ OverlapData<Dim, LhsFieldTags> operator-(
     const OverlapData<Dim, RhsFieldTags>& rhs) noexcept {
   return {lhs.field_data - rhs.field_data,
           lhs.volume_mesh,
-          lhs.inv_jacobian,
+          lhs.element_map,
           lhs.direction,
-          lhs.magnitude_of_face_normal,
-          lhs.overlap_extents};
+          lhs.overlap_extents,
+          lhs.perpendicular_mortar_meshes,
+          lhs.perpendicular_mortar_sizes};
 }
 
 template <size_t Dim, typename FieldTags>
@@ -131,10 +148,11 @@ OverlapData<Dim, FieldTags> operator*(
     const double scalar, const OverlapData<Dim, FieldTags>& data) noexcept {
   return {scalar * data.field_data,
           data.volume_mesh,
-          data.inv_jacobian,
+          data.element_map,
           data.direction,
-          data.magnitude_of_face_normal,
-          data.overlap_extents};
+          data.overlap_extents,
+          data.perpendicular_mortar_meshes,
+          data.perpendicular_mortar_sizes};
 }
 
 }  // namespace schwarz_detail

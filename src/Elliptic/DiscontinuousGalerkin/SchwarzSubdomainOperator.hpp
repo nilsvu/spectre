@@ -14,7 +14,9 @@
 #include "Domain/Direction.hpp"
 #include "Domain/Element.hpp"
 #include "Domain/ElementId.hpp"
+#include "Domain/ElementMap.hpp"
 #include "Domain/IndexToSliceAt.hpp"
+#include "Domain/LogicalCoordinates.hpp"
 #include "Domain/Mesh.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeBoundaryConditions.hpp"
@@ -30,6 +32,8 @@
 #include "ParallelAlgorithms/LinearSolver/Schwarz/SubdomainHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
+// #include "Parallel/Printf.hpp"
+
 namespace elliptic {
 namespace dg {
 
@@ -40,7 +44,7 @@ template <typename BoundaryData, size_t Dim,
           typename NumericalFluxesComputerType, typename FluxesComputerType,
           typename NormalDotFluxesTags, typename DivFluxesTags,
           typename... AuxiliaryFields>
-static BoundaryData package_boundary_data(
+BoundaryData package_boundary_data(
     const NumericalFluxesComputerType& numerical_fluxes_computer,
     const FluxesComputerType& fluxes_computer,
     const tnsr::i<DataVector, Dim>& face_normal,
@@ -60,7 +64,7 @@ static BoundaryData package_boundary_data(
 }
 template <size_t Dim, typename FieldsTagsList,
           typename NumericalFluxesComputerType, typename BoundaryData>
-static void apply_boundary_contribution(
+void apply_boundary_contribution(
     const gsl::not_null<Variables<FieldsTagsList>*> result,
     const NumericalFluxesComputerType& numerical_fluxes_computer,
     const BoundaryData& local_boundary_data,
@@ -77,6 +81,59 @@ static void apply_boundary_contribution(
   add_slice_to_data(result, std::move(boundary_contribution), mesh.extents(),
                     dimension, index_to_slice_at(mesh.extents(), direction));
 }
+
+template <typename PrimalFields, typename AuxiliaryFields, size_t Dim,
+          typename BoundaryData, typename FluxesComputerType,
+          typename NumericalFluxesComputerType,
+          typename FieldsTags = tmpl::append<PrimalFields, AuxiliaryFields>,
+          typename FluxesTags = db::wrap_tags_in<
+              ::Tags::Flux, FieldsTags, tmpl::size_t<Dim>, Frame::Inertial>,
+          typename DivFluxesTags = db::wrap_tags_in<::Tags::div, FluxesTags>>
+void exterior_boundary_data(
+    const gsl::not_null<BoundaryData*> boundary_data,
+    const Variables<FieldsTags>& vars_on_interior_face,
+    const Variables<DivFluxesTags>& div_fluxes_on_interior_face,
+    const tnsr::i<DataVector, Dim>& interior_face_normal,
+    const FluxesComputerType& fluxes_computer,
+    const NumericalFluxesComputerType& numerical_fluxes_computer) noexcept {
+  static constexpr size_t volume_dim = Dim;
+  // On exterior ("ghost") faces, manufacture boundary data that represent
+  // homogeneous Dirichlet boundary conditions
+  Variables<FieldsTags> ghost_vars{
+      vars_on_interior_face.number_of_grid_points()};
+  ::elliptic::dg::homogeneous_dirichlet_boundary_conditions<PrimalFields>(
+      make_not_null(&ghost_vars), vars_on_interior_face);
+  const auto ghost_fluxes =
+      ::elliptic::first_order_fluxes<volume_dim, PrimalFields, AuxiliaryFields>(
+          ghost_vars, fluxes_computer);
+  auto exterior_face_normal = interior_face_normal;
+  for (size_t d = 0; d < volume_dim; d++) {
+    exterior_face_normal.get(d) *= -1.;
+  }
+  const auto ghost_normal_dot_fluxes =
+      normal_dot_flux<FieldsTags>(exterior_face_normal, ghost_fluxes);
+  *boundary_data = package_boundary_data<BoundaryData>(
+      numerical_fluxes_computer, fluxes_computer, exterior_face_normal,
+      ghost_normal_dot_fluxes,
+      // TODO: Is this correct?
+      div_fluxes_on_interior_face, AuxiliaryFields{});
+}
+
+template <size_t Dim>
+std::pair<tnsr::i<DataVector, Dim>, Scalar<DataVector>>
+face_normal_and_magnitude(const Mesh<Dim - 1>& face_mesh,
+                          const ElementMap<Dim, Frame::Inertial>& element_map,
+                          const Direction<Dim>& direction) noexcept {
+  auto face_normal =
+      unnormalized_face_normal(face_mesh, element_map, direction);
+  // TODO: handle curved backgrounds
+  auto magnitude_of_face_normal = magnitude(face_normal);
+  for (size_t d = 0; d < Dim; d++) {
+    face_normal.get(d) /= get(magnitude_of_face_normal);
+  }
+  return {std::move(face_normal), std::move(magnitude_of_face_normal)};
+}
+
 }  // namespace SubdomainOperator_detail
 
 template <typename PrimalFields, typename AuxiliaryFields,
@@ -132,8 +189,8 @@ static SubdomainDataType apply_subdomain_operator(
   // Since the subdomain operator is called repeatedly for the subdomain solve
   // it could help performance to avoid re-allocating memory by storing the
   // tensor quantities in a buffer.
-  // Parallel::printf("\n\nComputing subdomain operator of:\n%s\n",
-  //                  arg.element_data);
+//   Parallel::printf("\n\nComputing subdomain operator of:\n%s\n",
+//                    arg.element_data);
   // Compute bulk contribution in central element
   const auto central_fluxes =
       elliptic::first_order_fluxes<volume_dim, PrimalFields, AuxiliaryFields>(
@@ -154,7 +211,6 @@ static SubdomainDataType apply_subdomain_operator(
 
     const size_t dimension = direction.dimension();
     const auto face_mesh = mesh.slice_away(dimension);
-    const size_t face_num_points = face_mesh.number_of_grid_points();
     const size_t slice_index = index_to_slice_at(mesh.extents(), direction);
 
     const bool is_boundary =
@@ -183,33 +239,22 @@ static SubdomainDataType apply_subdomain_operator(
             numerical_fluxes_computer, fluxes_computer, face_normal,
             normal_dot_central_fluxes, central_div_fluxes_on_face,
             AuxiliaryFields{});
+    if (::dg::needs_projection(face_mesh, mortar_mesh, mortar_size)) {
+      local_boundary_data = local_boundary_data.project_to_mortar(
+          face_mesh, mortar_mesh, mortar_size);
+    }
 
     // Assemble remote boundary data
-    auto remote_face_normal = face_normal;
-    for (size_t d = 0; d < volume_dim; d++) {
-      remote_face_normal.get(d) *= -1.;
-    }
     BoundaryData remote_boundary_data;
     if (is_boundary) {
-      // On exterior ("ghost") faces, manufacture boundary data that represent
-      // homogeneous Dirichlet boundary conditions
       const auto central_vars_on_face = data_on_slice(
           arg.element_data, mesh.extents(), dimension, slice_index);
-      typename SubdomainDataType::Vars ghost_vars{face_num_points};
-      ::elliptic::dg::homogeneous_dirichlet_boundary_conditions<PrimalFields>(
-          make_not_null(&ghost_vars), central_vars_on_face);
-      const auto ghost_fluxes =
-          ::elliptic::first_order_fluxes<volume_dim, PrimalFields,
-                                         AuxiliaryFields>(ghost_vars,
-                                                          fluxes_computer);
-      const auto ghost_normal_dot_fluxes =
-          normal_dot_flux<all_fields_tags>(remote_face_normal, ghost_fluxes);
-      remote_boundary_data =
-          SubdomainOperator_detail::package_boundary_data<BoundaryData>(
-              numerical_fluxes_computer, fluxes_computer, remote_face_normal,
-              ghost_normal_dot_fluxes,
-              // TODO: Is this correct?
-              central_div_fluxes_on_face, AuxiliaryFields{});
+      SubdomainOperator_detail::exterior_boundary_data<PrimalFields,
+                                                       AuxiliaryFields>(
+          make_not_null(&remote_boundary_data), central_vars_on_face,
+          central_div_fluxes_on_face, face_normal, fluxes_computer,
+          numerical_fluxes_computer);
+      // No projections necessary since exterior mortars cover the full face
     } else {
       // On internal boundaries, get neighbor data from the operand.
       // Note that all overlap data must have been oriented to the perspective
@@ -221,11 +266,15 @@ static SubdomainDataType apply_subdomain_operator(
              "Directions mismatch. Did you forget to orient the overlap data?");
       // Parallel::printf("Overlap data: %s\n", overlap_data.field_data);
       const auto& neighbor_mesh = overlap_data.volume_mesh;
+      auto neighbor_face_mesh = neighbor_mesh.slice_away(dimension);
+      size_t neighbor_face_slice_index =
+          index_to_slice_at(neighbor_mesh.extents(), direction_from_neighbor);
+    //   Parallel::printf("slice index: %d\n", neighbor_face_slice_index);
 
       // Extend the overlap data to the full neighbor mesh by filling it
       // with zeros and adding the overlapping slices
       const auto neighbor_data = overlap_data.extended_field_data();
-      // Parallel::printf("Extended overlap data: %s\n", neighbor_data);
+    //   Parallel::printf("Extended overlap data: %s\n", neighbor_data);
 
       // Compute the volume contribution in the neighbor from the extended
       // overlap data
@@ -234,49 +283,168 @@ static SubdomainDataType apply_subdomain_operator(
           ::elliptic::first_order_fluxes<volume_dim, PrimalFields,
                                          AuxiliaryFields>(neighbor_data,
                                                           fluxes_computer);
+      const auto neighbor_logical_coords = logical_coordinates(neighbor_mesh);
+      const auto neighbor_inv_jacobian =
+          overlap_data.element_map.inv_jacobian(neighbor_logical_coords);
+    //   Parallel::printf("Inv jac for %s: %s\n", neighbor_id,
+    //                    neighbor_inv_jacobian);
       const auto neighbor_div_fluxes =
-          divergence(neighbor_fluxes, neighbor_mesh, overlap_data.inv_jacobian);
+          divergence(neighbor_fluxes, neighbor_mesh, neighbor_inv_jacobian);
       typename SubdomainDataType::Vars neighbor_result_extended{
           neighbor_mesh.number_of_grid_points()};
       elliptic::first_order_operator(
           make_not_null(&neighbor_result_extended), neighbor_div_fluxes,
           elliptic::first_order_sources<PrimalFields, AuxiliaryFields,
                                         SourcesComputerType>(neighbor_data));
-      // Parallel::printf("Extended result on overlap: %s\n",
-      //                  neighbor_result_extended);
+    //   Parallel::printf("Extended result on overlap: %s\n",
+    //                    neighbor_result_extended);
 
-      const auto neighbor_fluxes_on_face = data_on_slice(
-          neighbor_fluxes, neighbor_mesh.extents(), dimension,
-          index_to_slice_at(neighbor_mesh.extents(), direction_from_neighbor));
-      const auto neighbor_div_fluxes_on_face = data_on_slice(
-          neighbor_div_fluxes, neighbor_mesh.extents(), dimension,
-          index_to_slice_at(neighbor_mesh.extents(), direction_from_neighbor));
-      auto remote_normal_dot_fluxes = normal_dot_flux<all_fields_tags>(
-          remote_face_normal, neighbor_fluxes_on_face);
+      auto neighbor_face_normal_and_magnitude =
+          SubdomainOperator_detail::face_normal_and_magnitude(
+              neighbor_face_mesh, overlap_data.element_map,
+              direction_from_neighbor);
+      for (size_t d = 0; d < volume_dim; d++) {
+        ASSERT(neighbor_face_normal_and_magnitude.first.get(d) ==
+                   -1. * face_normal.get(d),
+               "Face normals should be opposite");
+      }
+      ASSERT(get(neighbor_face_normal_and_magnitude.second) ==
+                 get(magnitude_of_face_normal),
+             "Face normals magnitudes should be the same");
+
+      auto neighbor_fluxes_on_face =
+          data_on_slice(neighbor_fluxes, neighbor_mesh.extents(), dimension,
+                        neighbor_face_slice_index);
+      auto neighbor_div_fluxes_on_face =
+          data_on_slice(neighbor_div_fluxes, neighbor_mesh.extents(), dimension,
+                        neighbor_face_slice_index);
+      auto neighbor_normal_dot_fluxes = normal_dot_flux<all_fields_tags>(
+          neighbor_face_normal_and_magnitude.first, neighbor_fluxes_on_face);
       remote_boundary_data =
           SubdomainOperator_detail::package_boundary_data<BoundaryData>(
-              numerical_fluxes_computer, fluxes_computer, remote_face_normal,
-              remote_normal_dot_fluxes, neighbor_div_fluxes_on_face,
+              numerical_fluxes_computer, fluxes_computer,
+              neighbor_face_normal_and_magnitude.first,
+              neighbor_normal_dot_fluxes, neighbor_div_fluxes_on_face,
               AuxiliaryFields{});
-
-      // Projections to the mortar
-      if (::dg::needs_projection(face_mesh, mortar_mesh, mortar_size)) {
-        local_boundary_data = local_boundary_data.project_to_mortar(
-            face_mesh, mortar_mesh, mortar_size);
+      if (::dg::needs_projection(neighbor_face_mesh, mortar_mesh,
+                                 mortar_size)) {
         remote_boundary_data = remote_boundary_data.project_to_mortar(
-            overlap_data.volume_mesh.slice_away(dimension), mortar_mesh,
-            mortar_size);
+            neighbor_face_mesh, mortar_mesh, mortar_size);
       }
 
       // Apply the boundary contribution to the neighbor overlap
       SubdomainOperator_detail::apply_boundary_contribution(
           make_not_null(&neighbor_result_extended), numerical_fluxes_computer,
           remote_boundary_data, local_boundary_data,
-          overlap_data.magnitude_of_face_normal, neighbor_mesh,
+          neighbor_face_normal_and_magnitude.second, neighbor_mesh,
           direction_from_neighbor, mortar_mesh, mortar_size);
-      // Parallel::printf("Extended result on overlap incl. boundary contribs:
-      // %s\n",
-      //                  neighbor_result_extended);
+    //   Parallel::printf(
+    //       "Extended result on overlap incl. boundary contrib from central "
+    //       "element: %s\n",
+    //       neighbor_result_extended);
+
+      // Add boundary contributions from the neighbor's neighbors to the
+      // extended overlap data. We need only consider faces that share points
+      // with the overlap region.
+      for (const auto& neighbor_mortar_id_and_mesh :
+           overlap_data.perpendicular_mortar_meshes) {
+        const auto& neighbor_mortar_id = neighbor_mortar_id_and_mesh.first;
+        const auto& neighbor_face_direction = neighbor_mortar_id.first;
+        if (neighbor_face_direction == direction_from_neighbor) {
+          continue;
+        }
+        const auto& neighbors_neighbor_id = neighbor_mortar_id.second;
+        const bool neighbor_face_is_boundary =
+            neighbors_neighbor_id ==
+            ElementId<volume_dim>::external_boundary_id();
+        const size_t neighbor_face_dimension =
+            neighbor_face_direction.dimension();
+        neighbor_face_slice_index =
+            index_to_slice_at(neighbor_mesh.extents(), neighbor_face_direction);
+        neighbor_face_mesh = neighbor_mesh.slice_away(neighbor_face_dimension);
+        const auto& neighbor_face_num_points =
+            neighbor_face_mesh.number_of_grid_points();
+        const auto& neighbor_mortar_mesh = neighbor_mortar_id_and_mesh.second;
+        const auto& neighbor_mortar_size =
+            overlap_data.perpendicular_mortar_sizes.at(neighbor_mortar_id);
+
+        neighbor_face_normal_and_magnitude =
+            SubdomainOperator_detail::face_normal_and_magnitude(
+                neighbor_face_mesh, overlap_data.element_map,
+                neighbor_face_direction);
+
+        neighbor_fluxes_on_face =
+            data_on_slice(neighbor_fluxes, neighbor_mesh.extents(),
+                          neighbor_face_dimension, neighbor_face_slice_index);
+        neighbor_div_fluxes_on_face =
+            data_on_slice(neighbor_div_fluxes, neighbor_mesh.extents(),
+                          neighbor_face_dimension, neighbor_face_slice_index);
+        neighbor_normal_dot_fluxes = normal_dot_flux<all_fields_tags>(
+            neighbor_face_normal_and_magnitude.first, neighbor_fluxes_on_face);
+        auto neighbor_local_boundary_data =
+            SubdomainOperator_detail::package_boundary_data<BoundaryData>(
+                numerical_fluxes_computer, fluxes_computer,
+                neighbor_face_normal_and_magnitude.first,
+                neighbor_normal_dot_fluxes, neighbor_div_fluxes_on_face,
+                AuxiliaryFields{});
+        // BoundaryData neighbor_local_boundary_data;
+        // SubdomainOperator_detail::interior_boundary_data<PrimalFields,
+        //                                                  AuxiliaryFields>(
+        //     make_not_null(&neighbor_local_boundary_data), neighbor_mesh,
+        //     neighbor_fluxes, neighbor_div_fluxes, neighbor_face_direction,
+        //     neighbor_face_normal_and_magnitude.first, fluxes_computer,
+        //     numerical_fluxes_computer);
+        if (::dg::needs_projection(neighbor_face_mesh, neighbor_mortar_mesh,
+                                   neighbor_mortar_size)) {
+          neighbor_local_boundary_data =
+              neighbor_local_boundary_data.project_to_mortar(
+                  neighbor_face_mesh, neighbor_mortar_mesh,
+                  neighbor_mortar_size);
+        }
+
+        BoundaryData neighbor_remote_boundary_data;
+        if (neighbor_face_is_boundary) {
+          const auto neighbor_face_data =
+              data_on_slice(neighbor_data, neighbor_mesh.extents(),
+                            neighbor_face_dimension, neighbor_face_slice_index);
+          SubdomainOperator_detail::exterior_boundary_data<PrimalFields,
+                                                           AuxiliaryFields>(
+              make_not_null(&neighbor_remote_boundary_data), neighbor_face_data,
+              neighbor_div_fluxes_on_face,
+              neighbor_face_normal_and_magnitude.first, fluxes_computer,
+              numerical_fluxes_computer);
+        } else {
+          // Assume the data on the neighbor's neighbor is zero.
+
+          // TODO: Make sure this works with h-refinement.. we know the
+          // data on mortars to other neighbors in the same direction, so it
+          // shouldn't be zero.
+
+          // The normal is probably irrelevent in this case, but we compute it
+          // to be safe.
+          auto neighbor_remote_face_normal =
+              neighbor_face_normal_and_magnitude.first;
+          for (size_t d = 0; d < volume_dim; d++) {
+            neighbor_remote_face_normal.get(d) *= -1;
+          }
+          neighbor_remote_boundary_data =
+              SubdomainOperator_detail::package_boundary_data<BoundaryData>(
+                  numerical_fluxes_computer, fluxes_computer,
+                  neighbor_remote_face_normal,
+                  Variables<n_dot_fluxes_tags>{neighbor_face_num_points, 0.},
+                  Variables<div_fluxes_tags>{neighbor_face_num_points, 0.},
+                  AuxiliaryFields{});
+        }
+        SubdomainOperator_detail::apply_boundary_contribution(
+            make_not_null(&neighbor_result_extended), numerical_fluxes_computer,
+            neighbor_local_boundary_data, neighbor_remote_boundary_data,
+            neighbor_face_normal_and_magnitude.second, neighbor_mesh,
+            neighbor_face_direction, neighbor_mortar_mesh,
+            neighbor_mortar_size);
+      }
+    //   Parallel::printf(
+    //       "Extended result on overlap incl. all boundary contribs: %s\n",
+    //       neighbor_result_extended);
 
       // Take only the part of the neighbor data that lies within the overlap
       const auto neighbor_result =
@@ -285,7 +453,7 @@ static SubdomainDataType apply_subdomain_operator(
               overlap_data.overlap_extents, direction_from_neighbor);
       // TODO: Fake boundary contributions from the other mortars of the
       // neighbor by filling their data with zeros
-      // Parallel::printf("Final result on overlap: %s\n", neighbor_result);
+    //   Parallel::printf("Final result on overlap: %s\n", neighbor_result);
 
       // Construct the data that represents the subdomain operator applied to
       // the overlap. We make things easy by copying the operand and changing
@@ -302,8 +470,7 @@ static SubdomainDataType apply_subdomain_operator(
         mesh, direction, mortar_mesh, mortar_size);
   }
 
-  // Parallel::printf("Result:\n%s\n",
-  //                  result.element_data);
+//   Parallel::printf("Result:\n%s\n", result.element_data);
   return result;
 }
 
@@ -311,6 +478,13 @@ template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
           typename FluxesComputerTag, typename SourcesComputer,
           typename NumericalFluxesComputerTag>
 struct SubdomainOperator {
+ private:
+  using all_fields_tags = tmpl::append<PrimalFields, AuxiliaryFields>;
+
+ public:
+  static constexpr size_t volume_dim = Dim;
+  using SubdomainDataType =
+      LinearSolver::schwarz_detail::SubdomainData<Dim, all_fields_tags>;
   using argument_tags = tmpl::list<
       ::Tags::Mesh<Dim>,
       ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
@@ -328,10 +502,11 @@ struct SubdomainOperator {
                         ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<Dim>>>,
       ::Tags::Mortars<::Tags::Mesh<Dim - 1>, Dim>,
       ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>;
-  static constexpr auto function = &apply_subdomain_operator<
-      PrimalFields, AuxiliaryFields, SourcesComputer, Dim,
-      db::const_item_type<FluxesComputerTag>,
-      db::const_item_type<NumericalFluxesComputerTag>>;
+  static constexpr auto apply =
+      &apply_subdomain_operator<PrimalFields, AuxiliaryFields, SourcesComputer,
+                                Dim, db::const_item_type<FluxesComputerTag>,
+                                db::const_item_type<NumericalFluxesComputerTag>,
+                                all_fields_tags, SubdomainDataType>;
 };
 
 }  // namespace dg

@@ -46,7 +46,7 @@ struct PrepareSolve {
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("%s Prepare Schwarz solve\n", array_index);
+    // Parallel::printf("%s Prepare Schwarz solve\n", array_index);
     db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>>(
         make_not_null(&box),
         [](const gsl::not_null<size_t*> iteration_id) noexcept {
@@ -71,9 +71,9 @@ struct PrepareStep {
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf(
-        "%s Prepare Schwarz step %zu\n", array_index,
-        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box) + 1);
+    // Parallel::printf(
+    //     "%s Prepare Schwarz step %zu\n", array_index,
+    //     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box) + 1);
     db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
@@ -118,8 +118,8 @@ struct SendSubdomainData {
       Parallel::ConstGlobalCache<Metavariables>& cache,
       const ElementIndex<Dim>& element_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("%s Send subdomain data in step %zu\n", element_index,
-                     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    // Parallel::printf("%s Send subdomain data in step %zu\n", element_index,
+    //                  get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
     using inv_jacobian_tag =
         ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
                                 ::Tags::Coordinates<Dim, Frame::Logical>>;
@@ -128,10 +128,15 @@ struct SendSubdomainData {
     const auto& temporal_id =
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
     const auto& mesh = get<::Tags::Mesh<Dim>>(box);
-    const auto& magnitude_of_face_normals = get<::Tags::Interface<
-        ::Tags::InternalDirections<Dim>,
-        ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<Dim>>>>(box);
+    // const auto& magnitude_of_face_normals = get<::Tags::Interface<
+    //     ::Tags::InternalDirections<Dim>,
+    //     ::Tags::Magnitude<::Tags::UnnormalizedFaceNormal<Dim>>>>(box);
     const auto& overlap = get<Tags::Overlap<OptionsGroup>>(box);
+
+    const auto& mortar_meshes =
+        get<::Tags::Mortars<::Tags::Mesh<Dim - 1>, Dim>>(box);
+    const auto& mortar_sizes =
+        get<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>(box);
 
     auto& receiver_proxy =
         Parallel::get_parallel_component<ParallelComponent>(cache);
@@ -147,8 +152,12 @@ struct SendSubdomainData {
                                                         dimension);
       const auto residual_on_overlap = data_on_overlap(
           get<residual_tag>(box), mesh.extents(), overlap_extents, direction);
-      Parallel::printf("Sending residual on overlap: %s\n",
-                       residual_on_overlap);
+      // Parallel::printf("Sending residual on overlap: %s\n",
+      //                  residual_on_overlap);
+      const auto perpendicular_mortar_meshes =
+          perpendicular(mortar_meshes, direction);
+      const auto perpendicular_mortar_sizes =
+          perpendicular(mortar_sizes, direction);
       // Iterate over neighbors
       for (const auto& neighbor : direction_and_neighbors.second) {
         // Construct the data to send
@@ -157,10 +166,11 @@ struct SendSubdomainData {
                 typename SubdomainOperator::SubdomainDataType::Vars(
                     residual_on_overlap),
                 mesh,
-                get<inv_jacobian_tag>(box),
+                get<::Tags::ElementMap<Dim>>(box),
                 direction,
-                magnitude_of_face_normals.at(direction),
-                overlap_extents};
+                overlap_extents,
+                perpendicular_mortar_meshes,
+                perpendicular_mortar_sizes};
         if (not orientation.is_aligned()) {
           overlap_data.orient(orientation);
         }
@@ -237,8 +247,8 @@ struct PerformStep {
       Parallel::ConstGlobalCache<Metavariables>& cache,
       const ElementIndex<volume_dim>& element_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("%s Receive subdomain data in step %zu\n", element_index,
-                     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    // Parallel::printf("%s Receive subdomain data in step %zu\n", element_index,
+    //                  get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
     auto& inbox = tuples::get<boundary_data_inbox_tag>(inboxes);
     const auto& temporal_id =
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
@@ -249,20 +259,20 @@ struct PerformStep {
       inbox.erase(temporal_received);
     }
 
-    Parallel::printf("%s Perform Schwarz step %zu\n", element_index,
-                     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    // Parallel::printf("%s Perform Schwarz step %zu\n", element_index,
+    //                  get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
 
     // Gather residual and overlap from neighbors
     const SubdomainDataType residual_subdomain{
         typename SubdomainDataType::Vars(get<residual_tag>(box)),
         std::move(subdomain_boundary_data)};
 
-    Parallel::printf("%s  Initial fields: %s\n", element_index,
-                     get<fields_tag>(box));
-    Parallel::printf("%s  Residual (central): %s\n", element_index,
-                     residual_subdomain.element_data);
-    Parallel::printf("%s  Overlap with: %d elements\n", element_index,
-                     residual_subdomain.boundary_data.size());
+    // Parallel::printf("%s  Initial fields: %s\n", element_index,
+    //                  get<fields_tag>(box));
+    // Parallel::printf("%s  Residual (central): %s\n", element_index,
+    //                  residual_subdomain.element_data);
+    // Parallel::printf("%s  Overlap with: %d elements\n", element_index,
+    //                  residual_subdomain.boundary_data.size());
 
     const auto& subdomain_solver =
         get<Tags::SubdomainSolverBase<OptionsGroup>>(box);
@@ -275,8 +285,8 @@ struct PerformStep {
         // subdomain solver at all is the identity operation
         residual_subdomain);
 
-    Parallel::printf("%s  Subdomain solution (central): %s\n", element_index,
-                     subdomain_solution.element_data);
+    // Parallel::printf("%s  Subdomain solution (central): %s\n", element_index,
+    //                  subdomain_solution.element_data);
 
     // Weighting
     // The central element will receive overlap contributions from its face
@@ -308,20 +318,20 @@ struct PerformStep {
         //         mesh.extents(dimension),
         //         get<LinearSolver::Tags::Overlap<OptionsGroup>>(box)));
         const double overlap_width_in_center = overlap_solution.overlap_width();
-        Parallel::printf(
-            "%s  Weighting center with width %f for overlap with %s\n",
-            element_index, overlap_width_in_center, mortar_id);
-        Parallel::printf("%s  Logical coords for overlap with %s: %s\n",
-                         element_index, mortar_id, logical_coord);
+        // Parallel::printf(
+        //     "%s  Weighting center with width %f for overlap with %s\n",
+        //     element_index, overlap_width_in_center, mortar_id);
+        // Parallel::printf("%s  Logical coords for overlap with %s: %s\n",
+        //                  element_index, mortar_id, logical_coord);
         const auto w =
             weight(logical_coord, overlap_width_in_center, direction.side());
-        Parallel::printf("%s  Weights:\n%s\n", element_index, w);
+        // Parallel::printf("%s  Weights:\n%s\n", element_index, w);
         subdomain_solution.element_data *= w;
       }
     }
 
-    Parallel::printf("%s  Subdomain solution WEIGHTED (central): %s\n",
-                     element_index, subdomain_solution.element_data);
+    // Parallel::printf("%s  Subdomain solution WEIGHTED (central): %s\n",
+    //                  element_index, subdomain_solution.element_data);
 
     // Send overlap data to neighbors
     auto& receiver_proxy =
@@ -395,8 +405,8 @@ struct ReceiveOverlapSolution {
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ElementIndex<Dim>& element_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("%s Receive overlap solution in step %zu\n", element_index,
-                     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    // Parallel::printf("%s Receive overlap solution in step %zu\n", element_index,
+    //                  get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
     auto& inbox = tuples::get<boundary_solutions_inbox_tag>(inboxes);
     const auto& temporal_id =
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
@@ -416,35 +426,35 @@ struct ReceiveOverlapSolution {
               const auto& overlap_solution =
                   mortar_id_and_overlap_solution.second;
               const double overlap_width = overlap_solution.overlap_width();
-              Parallel::printf("%s  Incoming overlap data from %s:\n%s\n",
-                               element_index, mortar_id,
-                               overlap_solution.field_data);
+              // Parallel::printf("%s  Incoming overlap data from %s:\n%s\n",
+              //                  element_index, mortar_id,
+              //                  overlap_solution.field_data);
               auto extended_overlap_solution =
                   overlap_solution.extended_field_data();
-              Parallel::printf(
-                  "%s  Weighting overlap data with width %f (coming from %s)\n",
-                  element_index, overlap_width, mortar_id);
+              // Parallel::printf(
+              //     "%s  Weighting overlap data with width %f (coming from %s)\n",
+              //     element_index, overlap_width, mortar_id);
               DataVector extended_logical_coords =
                   logical_coords.get(dimension) - direction.sign() * 2.;
-              Parallel::printf(
-                  "%s  Extended logical coords for overlap coming from %s: "
-                  "%s\n",
-                  element_index, mortar_id, extended_logical_coords);
+              // Parallel::printf(
+              //     "%s  Extended logical coords for overlap coming from %s: "
+              //     "%s\n",
+              //     element_index, mortar_id, extended_logical_coords);
               const auto w = weight(extended_logical_coords, overlap_width,
                                     opposite(direction.side()));
-              Parallel::printf("%s  Weights:\n%s\n", element_index, w);
+              // Parallel::printf("%s  Weights:\n%s\n", element_index, w);
               extended_overlap_solution *= w;
-              Parallel::printf(
-                  "%s  Weighted (extended) overlap data from %s:\n%s\n",
-                  element_index, mortar_id, extended_overlap_solution);
+              // Parallel::printf(
+              //     "%s  Weighted (extended) overlap data from %s:\n%s\n",
+              //     element_index, mortar_id, extended_overlap_solution);
               *fields += extended_overlap_solution;
             }
           });
       inbox.erase(temporal_received);
     }
 
-    Parallel::printf("%s  Updated fields: %s\n", element_index,
-                     get<fields_tag>(box));
+    // Parallel::printf("%s  Updated fields: %s\n", element_index,
+    //                  get<fields_tag>(box));
 
     return std::forward_as_tuple(std::move(box));
   }

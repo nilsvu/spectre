@@ -14,6 +14,7 @@
 #include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
 #include "Elliptic/DiscontinuousGalerkin/InitializeFluxes.hpp"
 #include "Elliptic/DiscontinuousGalerkin/NumericalFluxes/FirstOrderInternalPenalty.hpp"
+#include "Elliptic/DiscontinuousGalerkin/SchwarzSubdomainOperator.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "Elliptic/Tags.hpp"
@@ -114,8 +115,8 @@ struct Metavariables {
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
-  using subdomain_operator = DgSubdomainOperator<
-      volume_dim, typename system::fields_tag, typename system::primal_fields,
+  using subdomain_operator = elliptic::dg::SubdomainOperator<
+      volume_dim, typename system::primal_fields,
       typename system::auxiliary_fields, fluxes_computer_tag,
       typename system::sources, normal_dot_numerical_flux>;
   using linear_solver =

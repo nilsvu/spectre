@@ -9,6 +9,7 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
 #include "DataStructures/VariablesHelpers.hpp"
+#include "Domain/Creators/Brick.hpp"
 #include "Domain/Creators/DomainCreator.hpp"
 #include "Domain/Creators/Interval.hpp"
 #include "Domain/Creators/Rectangle.hpp"
@@ -72,7 +73,8 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
   const auto& central_element = elements.at(subdomain_center);
 
   // Setup the faces and mortars in the subdomain
-  const auto mortars = helpers::make_mortars(subdomain_center, elements);
+  const auto central_mortars =
+      helpers::make_mortars(subdomain_center, elements);
   std::unordered_map<Direction<volume_dim>, tnsr::i<DataVector, volume_dim>>
       internal_face_normals;
   std::unordered_map<Direction<volume_dim>, tnsr::i<DataVector, volume_dim>>
@@ -81,9 +83,10 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
       internal_face_normal_magnitudes;
   std::unordered_map<Direction<volume_dim>, Scalar<DataVector>>
       boundary_face_normal_magnitudes;
-  dg::MortarMap<volume_dim, Mesh<volume_dim - 1>> mortar_meshes;
-  dg::MortarMap<volume_dim, dg::MortarSizes<volume_dim - 1>> mortar_sizes;
-  for (const auto& mortar : mortars) {
+  dg::MortarMap<volume_dim, Mesh<volume_dim - 1>> central_mortar_meshes;
+  dg::MortarMap<volume_dim, dg::MortarSizes<volume_dim - 1>>
+      central_mortar_sizes;
+  for (const auto& mortar : central_mortars) {
     const auto& mortar_id = mortar.first;
     const auto& mortar_mesh_and_size = mortar.second;
     const auto& direction = mortar_id.first;
@@ -103,8 +106,8 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
       internal_face_normals[direction] = std::move(face_normal);
       internal_face_normal_magnitudes[direction] = std::move(normal_magnitude);
     }
-    mortar_meshes[mortar_id] = mortar_mesh_and_size.first;
-    mortar_sizes[mortar_id] = mortar_mesh_and_size.second;
+    central_mortar_meshes[mortar_id] = mortar_mesh_and_size.first;
+    central_mortar_sizes[mortar_id] = mortar_mesh_and_size.second;
   }
 
   // Create workspace vars for each element. Fill the operand with zeros
@@ -141,23 +144,53 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
           LinearSolver::schwarz_detail::extended_overlap_data(
               overlap_vars, neighbor.mesh.extents(), overlap_extents,
               direction_from_neighbor);
+
+      // Setup neighbor mortars perpendicular to the overlap direction
+      const auto perpendicular_neighbor_mortars =
+          LinearSolver::schwarz_detail::perpendicular(
+              helpers::make_mortars(neighbor_id, elements), direction);
+      ::dg::MortarMap<volume_dim, Mesh<volume_dim - 1>>
+          perpendicular_mortar_meshes{};
+      ::dg::MortarMap<volume_dim, ::dg::MortarSizes<volume_dim - 1>>
+          perpendicular_mortar_sizes{};
+      std::transform(perpendicular_neighbor_mortars.begin(),
+                     perpendicular_neighbor_mortars.end(),
+                     std::inserter(perpendicular_mortar_meshes,
+                                   perpendicular_mortar_meshes.end()),
+                     [](auto const& id_and_mortar) {
+                       return std::make_pair(id_and_mortar.first,
+                                             id_and_mortar.second.first);
+                     });
+      std::transform(perpendicular_neighbor_mortars.begin(),
+                     perpendicular_neighbor_mortars.end(),
+                     std::inserter(perpendicular_mortar_sizes,
+                                   perpendicular_mortar_sizes.end()),
+                     [](auto const& id_and_mortar) {
+                       return std::make_pair(id_and_mortar.first,
+                                             id_and_mortar.second.second);
+                     });
+
       // The overlap data should be oriented from the perspective of the central
       // element. We create it from the neighbor's perspective (because that's
       // the data we have available) and then re-orient.
       typename SubdomainDataType::OverlapDataType overlap_data{
           std::move(overlap_vars),
           neighbor.mesh,
-          neighbor.inv_jacobian,
+          neighbor.element_map,
           direction_from_neighbor,
-          orient_tensor_on_slice(
-              internal_face_normal_magnitudes.at(direction),
-              central_element.mesh.slice_away(dimension).extents(), dimension,
-              orientation),
-          overlap_extents};
+          overlap_extents,
+          std::move(perpendicular_mortar_meshes),
+          std::move(perpendicular_mortar_sizes)};
+      Parallel::printf("%s has inv_jac = %s\n", neighbor_id,
+                       neighbor.inv_jacobian);
       overlap_data.orient(orientation.inverse_map());
+      Parallel::printf("Created overlap data.\n");
       subdomain_boundary_data[mortar_id] = std::move(overlap_data);
+      Parallel::printf("Moved overlap data.\n");
     }
   }
+
+  Parallel::printf("Applying full DG operator\n");
 
   // (1) Apply the full DG operator
   // We use the StrongFirstOrder scheme, so we'll need the n.F on the boundaries
@@ -214,6 +247,8 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
             package_boundary_data, apply_boundary_contribution);
   }
 
+  Parallel::printf("Applying subdomain operator\n");
+
   // (2) Apply the subdomain operator to the restricted data (as opposed to
   // applying the full DG operator to the full data and then restricting)
   const SubdomainDataType subdomain_operand{workspace.at(subdomain_center),
@@ -225,8 +260,8 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
           central_element.mesh, central_element.inv_jacobian, fluxes_computer,
           numerical_fluxes_computer, internal_face_normals,
           boundary_face_normals, internal_face_normal_magnitudes,
-          boundary_face_normal_magnitudes, mortar_meshes, mortar_sizes,
-          subdomain_operand);
+          boundary_face_normal_magnitudes, central_mortar_meshes,
+          central_mortar_sizes, subdomain_operand);
 
   // (3) Check the subdomain operator is equivalent to the full DG operator
   // restricted to the subdomain
@@ -275,4 +310,14 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.SchwarzSubdomainOperator",
       test_subdomain_operator(domain_creator, overlap);
     }
   }
+  //   {
+  //     const domain::creators::Brick domain_creator{{{-2., 0., -1.}},
+  //                                                  {{2., 1., 1.}},
+  //                                                  {{false, false, false}},
+  //                                                  {{1, 1, 1}},
+  //                                                  {{3, 3, 3}}};
+  //     for (size_t overlap = 1; overlap <= 4; overlap++) {
+  //       test_subdomain_operator(domain_creator, overlap);
+  //     }
+  //   }
 }

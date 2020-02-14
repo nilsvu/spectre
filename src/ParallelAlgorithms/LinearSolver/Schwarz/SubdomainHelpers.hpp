@@ -54,6 +54,20 @@ Index<Dim> overlap_extents(const Index<Dim>& volume_extents,
 }
 // @}
 
+template <size_t Dim, typename ValueType>
+::dg::MortarMap<Dim, ValueType> perpendicular(
+    const ::dg::MortarMap<Dim, ValueType>& mortar_map,
+    const Direction<Dim>& direction) noexcept {
+  ::dg::MortarMap<Dim, ValueType> perpendicular_map{};
+  std::copy_if(mortar_map.begin(), mortar_map.end(),
+               std::inserter(perpendicular_map, perpendicular_map.end()),
+               [&direction](auto mortar_id_and_value) {
+                 return mortar_id_and_value.first.first.dimension() !=
+                        direction.dimension();
+               });
+  return perpendicular_map;
+}
+
 double overlap_width(const Mesh<1>& overlapped_mesh,
                      const size_t overlap_extent) noexcept {
   return Spectral::collocation_points(overlapped_mesh)[overlap_extent] + 1.;
