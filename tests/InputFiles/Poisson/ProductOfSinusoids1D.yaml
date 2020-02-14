@@ -30,7 +30,7 @@ Observers:
 LinearSolver:
   Schwarz:
     Iterations: 10
-    Overlap: 4
+    Overlap: 3
     SubdomainSolver:
       ConvergenceCriteria:
         MaxIterations: 100

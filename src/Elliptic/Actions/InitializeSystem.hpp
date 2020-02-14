@@ -126,10 +126,10 @@ struct InitializeSystem {
         Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
             .variables(inertial_coords,
                        db::get_variables_tags_list<fields_tag>{}));
-    // std::mt19937 generator(std::hash<ElementIndex<Dim>>{}(element_index));
-    // std::uniform_real_distribution<> dist(-1., 1.);
-    // fields += make_with_random_values<db::item_type<fields_tag>>(
-    //     make_not_null(&generator), make_not_null(&dist), inertial_coords);
+    std::mt19937 generator(std::hash<ElementIndex<Dim>>{}(element_index));
+    std::uniform_real_distribution<> dist(-1., 1.);
+    fields += make_with_random_values<db::item_type<fields_tag>>(
+        make_not_null(&generator), make_not_null(&dist), inertial_coords);
 
     db::item_type<linear_operator_applied_to_fields_tag>
         linear_operator_applied_to_fields{

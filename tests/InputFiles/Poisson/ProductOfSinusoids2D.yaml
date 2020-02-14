@@ -16,12 +16,12 @@ DomainCreator:
     LowerBound: [0, 0]
     UpperBound: [3.141592653589793, 3.141592653589793]
     IsPeriodicIn: [false, false]
-    InitialRefinement: [1, 1]
-    InitialGridPoints: [3, 3]
+    InitialRefinement: [2, 2]
+    InitialGridPoints: [4, 4]
 
 NumericalFlux:
   InternalPenalty:
-    PenaltyParameter: 8.594366926962348 # p^2 / h
+    PenaltyParameter: 30.557749073643905 # p^2 / h
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids2DVolume"
