@@ -26,8 +26,6 @@
 #include "tests/Unit/Elliptic/DiscontinuousGalerkin/TestHelpers.hpp"
 #include "tests/Unit/TestHelpers.hpp"
 
-#include "Parallel/Printf.hpp"
-
 namespace helpers = TestHelpers::elliptic::dg;
 
 namespace {
@@ -181,16 +179,10 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
           overlap_extents,
           std::move(perpendicular_mortar_meshes),
           std::move(perpendicular_mortar_sizes)};
-      Parallel::printf("%s has inv_jac = %s\n", neighbor_id,
-                       neighbor.inv_jacobian);
       overlap_data.orient(orientation.inverse_map());
-      Parallel::printf("Created overlap data.\n");
       subdomain_boundary_data[mortar_id] = std::move(overlap_data);
-      Parallel::printf("Moved overlap data.\n");
     }
   }
-
-  Parallel::printf("Applying full DG operator\n");
 
   // (1) Apply the full DG operator
   // We use the StrongFirstOrder scheme, so we'll need the n.F on the boundaries
@@ -246,8 +238,6 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
             element_id, elements, workspace, fluxes_computer,
             package_boundary_data, apply_boundary_contribution);
   }
-
-  Parallel::printf("Applying subdomain operator\n");
 
   // (2) Apply the subdomain operator to the restricted data (as opposed to
   // applying the full DG operator to the full data and then restricting)
@@ -310,14 +300,14 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.SchwarzSubdomainOperator",
       test_subdomain_operator(domain_creator, overlap);
     }
   }
-  //   {
-  //     const domain::creators::Brick domain_creator{{{-2., 0., -1.}},
-  //                                                  {{2., 1., 1.}},
-  //                                                  {{false, false, false}},
-  //                                                  {{1, 1, 1}},
-  //                                                  {{3, 3, 3}}};
-  //     for (size_t overlap = 1; overlap <= 4; overlap++) {
-  //       test_subdomain_operator(domain_creator, overlap);
-  //     }
-  //   }
+    {
+      const domain::creators::Brick domain_creator{{{-2., 0., -1.}},
+                                                   {{2., 1., 1.}},
+                                                   {{false, false, false}},
+                                                   {{1, 1, 1}},
+                                                   {{3, 3, 3}}};
+      for (size_t overlap = 1; overlap <= 4; overlap++) {
+        test_subdomain_operator(domain_creator, overlap);
+      }
+    }
 }
