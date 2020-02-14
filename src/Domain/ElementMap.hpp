@@ -50,6 +50,30 @@ class ElementMap {
     return *block_map_;
   }
 
+  ElementMap(const ElementMap& rhs) {
+    block_map_ = rhs.block_map().get_clone();
+    element_id_ = rhs.element_id_;
+    map_slope_ = rhs.map_slope_;
+    map_offset_ = rhs.map_offset_;
+    map_inverse_slope_ = rhs.map_inverse_slope_;
+    map_inverse_offset_ = rhs.map_inverse_offset_;
+    jacobian_ = rhs.jacobian_;
+    inverse_jacobian_ = rhs.inverse_jacobian_;
+  }
+  ElementMap& operator=(const ElementMap& rhs) noexcept {
+    block_map_.reset(rhs.block_map().get_clone().get());
+    element_id_ = rhs.element_id_;
+    map_slope_ = rhs.map_slope_;
+    map_offset_ = rhs.map_offset_;
+    map_inverse_slope_ = rhs.map_inverse_slope_;
+    map_inverse_offset_ = rhs.map_inverse_offset_;
+    jacobian_ = rhs.jacobian_;
+    inverse_jacobian_ = rhs.inverse_jacobian_;
+    return *this;
+  };
+  ElementMap(ElementMap&& rhs) = default;
+  ElementMap& operator=(ElementMap&& rhs) noexcept = default;
+
   const ElementId<Dim>& element_id() const noexcept { return element_id_; }
 
   template <typename T>
