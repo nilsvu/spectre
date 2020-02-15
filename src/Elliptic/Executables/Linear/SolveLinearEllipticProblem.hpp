@@ -44,6 +44,7 @@
 #include "ParallelAlgorithms/Events/ObserveErrorNorms.hpp"
 #include "ParallelAlgorithms/Events/ObserveFields.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/Actions/RunEventsAndTriggers.hpp"
+#include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Actions/TerminateIfConverged.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
@@ -65,7 +66,7 @@ struct LinearSolverGroup {
 
 struct LinearSolverOptions {
   using group = LinearSolverGroup;
-  static std::string name() noexcept { return "Schwarz"; }
+  static std::string name() noexcept { return "GMRES"; }
   static constexpr OptionString help =
       "Options for the iterative linear solver";
 };
@@ -78,9 +79,20 @@ struct PreconditionerGroup {
 
 struct PreconditionerOptions {
   using group = PreconditionerGroup;
-  static std::string name() noexcept { return "Richardson"; }
-  static constexpr OptionString help =
-      "Options for the Richardson preconditioner";
+  static std::string name() noexcept { return "Schwarz"; }
+  static constexpr OptionString help = "Options for the Schwarz preconditioner";
+};
+
+template <typename... Tags>
+struct CombinedIterationId : db::ComputeTag {
+  static std::string name() noexcept { return "CombinedIterationId"; }
+  using argument_tags = tmpl::list<Tags...>;
+  static tuples::TaggedTuple<Tags...> function(
+      const db::const_item_type<Tags>&... components) noexcept {
+    return {components...};
+  }
+  template <typename Tag>
+  using step_prefix = LinearSolver::Tags::OperatorAppliedTo<Tag>;
 };
 
 /// \cond
@@ -116,25 +128,29 @@ struct Metavariables {
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
   using subdomain_operator = elliptic::dg::SubdomainOperator<
-      volume_dim, typename system::primal_fields,
-      typename system::auxiliary_fields, fluxes_computer_tag,
+      volume_dim, typename system::primal_variables,
+      typename system::auxiliary_variables, fluxes_computer_tag,
       typename system::sources, normal_dot_numerical_flux>;
-  using linear_solver =
-      LinearSolver::Schwarz<Metavariables, typename system::fields_tag,
-                            LinearSolverOptions, subdomain_operator>;
   //   using linear_solver =
-  //       LinearSolver::Gmres<Metavariables, typename system::fields_tag,
-  //                           LinearSolverOptions>;
-  //   using preconditioner = LinearSolver::Richardson<
-  //       typename linear_solver::operand_tag, PreconditionerOptions,
-  //       typename linear_solver::preconditioner_source_tag>;
+  //       LinearSolver::Schwarz<Metavariables, typename system::fields_tag,
+  //                             LinearSolverOptions, subdomain_operator>;
+  using linear_solver =
+      LinearSolver::Gmres<Metavariables, typename system::fields_tag,
+                          LinearSolverOptions>;
+  using preconditioner =
+      LinearSolver::Schwarz<Metavariables, typename linear_solver::operand_tag,
+                            PreconditionerOptions, subdomain_operator,
+                            typename linear_solver::preconditioner_source_tag>;
 
   // Specify the DG boundary scheme. We use the strong first-order scheme here
   // that only requires us to compute normals dotted into the first-order
   // fluxes.
+  using combined_iteration_id = CombinedIterationId<
+      LinearSolver::Tags::IterationId<typename linear_solver::options_group>,
+      LinearSolver::Tags::IterationId<typename preconditioner::options_group>>;
   using boundary_scheme = dg::BoundarySchemes::StrongFirstOrder<
       volume_dim, typename system::variables_tag, normal_dot_numerical_flux,
-      temporal_id>;
+      combined_iteration_id>;
 
   // Collect events and triggers
   // (public for use by the Charm++ registration code)
@@ -177,7 +193,9 @@ struct Metavariables {
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           Metavariables>,
       typename linear_solver::initialize_element,
-      //   typename preconditioner::initialize_element,
+      typename preconditioner::initialize_element,
+      Initialization::Actions::AddComputeTags<
+          tmpl::list<combined_iteration_id>>,
       dg::Actions::InitializeMortars<boundary_scheme>,
       elliptic::dg::Actions::InitializeFluxes<Metavariables>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
@@ -223,14 +241,14 @@ struct Metavariables {
                       Actions::RunEventsAndTriggers,
                       LinearSolver::Actions::TerminateIfConverged<
                           typename linear_solver::options_group>,
-                      //   typename preconditioner::prepare_solve,
-                      //   ::Actions::RepeatUntil<
-                      //       LinearSolver::Tags::HasConverged<
-                      //           typename preconditioner::options_group>,
-                      //       tmpl::list<typename preconditioner::prepare_step,
-                      //                  build_linear_operator_actions,
-                      //                  typename
-                      //                  preconditioner::perform_step>>,
+                      typename preconditioner::prepare_solve,
+                      ::Actions::RepeatUntil<
+                          LinearSolver::Tags::HasConverged<
+                              typename preconditioner::options_group>,
+                          tmpl::list<typename preconditioner::prepare_step,
+                                     build_linear_operator_actions,
+                                     typename preconditioner::perform_step>>,
+                      typename preconditioner::prepare_step,
                       build_linear_operator_actions,
                       typename linear_solver::perform_step>>>>>>,
       typename linear_solver::component_list,

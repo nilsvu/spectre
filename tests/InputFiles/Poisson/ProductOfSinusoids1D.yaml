@@ -28,14 +28,22 @@ Observers:
   ReductionFileName: "PoissonProductOfSinusoids1DReductions"
 
 LinearSolver:
+  GMRES:
+    ConvergenceCriteria:
+      MaxIterations: 100
+      AbsoluteResidual: 1e-8
+      RelativeResidual: 1e-8
+    Verbosity: Verbose
+
+Preconditioner:
   Schwarz:
-    Iterations: 10
-    Overlap: 3
+    Iterations: 3
+    Overlap: 2
     SubdomainSolver:
       ConvergenceCriteria:
         MaxIterations: 100
-        AbsoluteResidual: 1e-14
-        RelativeResidual: 1e-14
+        AbsoluteResidual: 1e-8
+        RelativeResidual: 1e-8
       Verbosity: Verbose
 
 EventsAndTriggers:
