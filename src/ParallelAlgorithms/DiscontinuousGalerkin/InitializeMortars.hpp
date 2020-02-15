@@ -96,12 +96,12 @@ struct InitializeMortars {
                     const ArrayIndex& /*array_index*/, ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
     const auto& element = db::get<::Tags::Element<dim>>(box);
-    const auto& next_temporal_id = get<::Tags::Next<temporal_id_tag>>(box);
+    // const auto& next_temporal_id = get<::Tags::Next<temporal_id_tag>>(box);
     const auto& initial_extents = db::get<::Tags::InitialExtents<dim>>(box);
 
     db::item_type<mortar_data_tag> mortar_data{};
-    db::item_type<::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>>
-        mortar_next_temporal_ids{};
+    // db::item_type<::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>>
+    //     mortar_next_temporal_ids{};
     db::item_type<::Tags::Mortars<::Tags::Mesh<dim - 1>, dim>> mortar_meshes{};
     db::item_type<::Tags::Mortars<::Tags::MortarSize<dim - 1>, dim>>
         mortar_sizes{};
@@ -114,7 +114,7 @@ struct InitializeMortars {
       for (const auto& neighbor : neighbors) {
         const auto mortar_id = std::make_pair(direction, neighbor);
         mortar_data[mortar_id];  // Default initialize data
-        mortar_next_temporal_ids.insert({mortar_id, next_temporal_id});
+        // mortar_next_temporal_ids.insert({mortar_id, next_temporal_id});
         mortar_meshes.emplace(
             mortar_id,
             dg::mortar_mesh(
@@ -151,11 +151,12 @@ struct InitializeMortars {
             InitializeMortars,
             db::AddSimpleTags<
                 mortar_data_tag,
-                ::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>,
+                // ::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>,
                 ::Tags::Mortars<::Tags::Mesh<dim - 1>, dim>,
                 ::Tags::Mortars<::Tags::MortarSize<dim - 1>, dim>>>(
             std::move(box), std::move(mortar_data),
-            std::move(mortar_next_temporal_ids), std::move(mortar_meshes),
+            // std::move(mortar_next_temporal_ids),
+            std::move(mortar_meshes),
             std::move(mortar_sizes)));
   }
 
