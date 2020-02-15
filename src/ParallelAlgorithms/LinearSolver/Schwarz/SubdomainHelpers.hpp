@@ -5,6 +5,7 @@
 
 #include <algorithm>
 
+#include "DataStructures/SliceIterator.hpp"
 #include "DataStructures/Variables.hpp"
 #include "DataStructures/VariablesHelpers.hpp"
 #include "Domain/IndexToSliceAt.hpp"
@@ -100,6 +101,38 @@ DataType weight(const DataType& logical_coord, const double width,
   const double sign = side == Side::Lower ? -1. : 1.;
   return 0.5 *
          (1. - sign * smoothstep(DataType((logical_coord - sign) / width)));
+}
+
+template <size_t Dim, typename DataType, typename... TensorStructure>
+Tensor<DataType, TensorStructure...> restrict_to_overlap(
+    const Tensor<DataType, TensorStructure...>& tensor,
+    const Index<Dim>& volume_extents, const Index<Dim>& overlap_extents,
+    const Direction<Dim>& direction) noexcept {
+  Tensor<DataType, TensorStructure...> restricted_tensor{
+      overlap_extents.product()};
+  const size_t dimension = direction.dimension();
+  const size_t overlap = overlap_extents[dimension];
+  for (size_t i = 0; i < overlap; i++) {
+    SliceIterator slice_in_overlap{
+        overlap_extents, dimension,
+        index_to_slice_at(overlap_extents, direction, i)};
+    for (SliceIterator slice_in_volume{
+             volume_extents, dimension,
+             index_to_slice_at(volume_extents, direction, i)};
+         slice_in_volume; ++slice_in_volume) {
+      for (decltype(auto) overlap_and_volume_tensor_components :
+           boost::combine(restricted_tensor, tensor)) {
+        boost::get<0>(
+            overlap_and_volume_tensor_components)[slice_in_overlap
+                                                      .volume_offset()] =
+            boost::get<1>(
+                overlap_and_volume_tensor_components)[slice_in_volume
+                                                          .volume_offset()];
+      }
+      ++slice_in_overlap;
+    }
+  }
+  return restricted_tensor;
 }
 
 template <size_t Dim, typename TagsList>

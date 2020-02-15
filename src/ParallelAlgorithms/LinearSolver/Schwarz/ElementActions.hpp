@@ -46,7 +46,7 @@ struct PrepareSolve {
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    // Parallel::printf("%s Prepare Schwarz solve\n", array_index);
+    Parallel::printf("%s Prepare Schwarz solve\n", array_index);
     db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>>(
         make_not_null(&box),
         [](const gsl::not_null<size_t*> iteration_id) noexcept {
@@ -71,9 +71,9 @@ struct PrepareStep {
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    // Parallel::printf(
-    //     "%s Prepare Schwarz step %zu\n", array_index,
-    //     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box) + 1);
+    Parallel::printf(
+        "%s Prepare Schwarz step %zu\n", array_index,
+        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box) + 1);
     db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
@@ -116,13 +116,13 @@ struct SendSubdomainData {
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       Parallel::ConstGlobalCache<Metavariables>& cache,
-      const ElementIndex<Dim>& element_index, const ActionList /*meta*/,
+      const ElementIndex<Dim>& /*element_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     // Parallel::printf("%s Send subdomain data in step %zu\n", element_index,
-    //                  get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
-    using inv_jacobian_tag =
-        ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
-                                ::Tags::Coordinates<Dim, Frame::Logical>>;
+    //               get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    // using inv_jacobian_tag =
+    //     ::Tags::InverseJacobian<::Tags::ElementMap<Dim>,
+    //                             ::Tags::Coordinates<Dim, Frame::Logical>>;
 
     const auto& element = get<::Tags::Element<Dim>>(box);
     const auto& temporal_id =
@@ -247,8 +247,9 @@ struct PerformStep {
       Parallel::ConstGlobalCache<Metavariables>& cache,
       const ElementIndex<volume_dim>& element_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    // Parallel::printf("%s Receive subdomain data in step %zu\n", element_index,
-    //                  get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    // Parallel::printf("%s Receive subdomain data in step %zu\n",
+    // element_index,
+    //              get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
     auto& inbox = tuples::get<boundary_data_inbox_tag>(inboxes);
     const auto& temporal_id =
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
@@ -259,8 +260,8 @@ struct PerformStep {
       inbox.erase(temporal_received);
     }
 
-    // Parallel::printf("%s Perform Schwarz step %zu\n", element_index,
-    //                  get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    Parallel::printf("%s Perform Schwarz step %zu\n", element_index,
+                     get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
 
     // Gather residual and overlap from neighbors
     const SubdomainDataType residual_subdomain{
@@ -284,51 +285,23 @@ struct PerformStep {
         // Using the residual as initial guess so not iterating the
         // subdomain solver at all is the identity operation
         residual_subdomain);
+    if (subdomain_solver.convergence_reason() ==
+        Convergence::Reason::MaxIterations) {
+      Parallel::printf(
+          "WARNING: Subdomain solver on element %s did not converge in %zu "
+          "iterations.\n",
+          element_index, subdomain_solver.num_iterations());
+    } else {
+      Parallel::printf("%s Subdomain solver converged in %zu iterations.\n",
+                       element_index, subdomain_solver.num_iterations());
+    }
 
     // Parallel::printf("%s  Subdomain solution (central): %s\n", element_index,
     //                  subdomain_solution.element_data);
 
     // Weighting
-    // The central element will receive overlap contributions from its face
-    // neighbors, so we weight the subdomain solution with each neighbor's
-    // _incoming_ overlap width.
-    // TODO: Is this the correct way to handle h-refined mortars?
-    // TODO: The overlap width we'll receive may be different to the overlap
-    // we're sending because of p-refinement. Should we weight with the expected
-    // incoming contribution's width or with the one we're sending?
-    // TODO: We'll have to keep in mind that the weighting operation should
-    // preserve symmetry of the linear operator
-    const auto& element = db::get<::Tags::Element<volume_dim>>(box);
-    const auto& logical_coords =
-        db::get<::Tags::Coordinates<volume_dim, Frame::Logical>>(box);
-    // const auto& mesh = db::get<::Tags::Mesh<volume_dim>>(box);
-    for (const auto& direction_and_neighbors : element.neighbors()) {
-      const auto& direction = direction_and_neighbors.first;
-      const size_t dimension = direction.dimension();
-      const auto& neighbors_in_direction = direction_and_neighbors.second;
-      const auto& logical_coord = logical_coords.get(dimension);
-      for (const auto& neighbor_id : neighbors_in_direction) {
-        const auto mortar_id = std::make_pair(direction, neighbor_id);
-        const auto& overlap_solution =
-            subdomain_solution.boundary_data.at(mortar_id);
-        // Use incoming or outgoing overlap width here?
-        // const double overlap_width_in_center = overlap_width(
-        //     mesh.slice_through(dimension),
-        //     overlap_extent(
-        //         mesh.extents(dimension),
-        //         get<LinearSolver::Tags::Overlap<OptionsGroup>>(box)));
-        const double overlap_width_in_center = overlap_solution.overlap_width();
-        // Parallel::printf(
-        //     "%s  Weighting center with width %f for overlap with %s\n",
-        //     element_index, overlap_width_in_center, mortar_id);
-        // Parallel::printf("%s  Logical coords for overlap with %s: %s\n",
-        //                  element_index, mortar_id, logical_coord);
-        const auto w =
-            weight(logical_coord, overlap_width_in_center, direction.side());
-        // Parallel::printf("%s  Weights:\n%s\n", element_index, w);
-        subdomain_solution.element_data *= w;
-      }
-    }
+    subdomain_solution.apply_weighting(
+        get<::Tags::Coordinates<volume_dim, Frame::Logical>>(box));
 
     // Parallel::printf("%s  Subdomain solution WEIGHTED (central): %s\n",
     //                  element_index, subdomain_solution.element_data);
@@ -336,6 +309,7 @@ struct PerformStep {
     // Send overlap data to neighbors
     auto& receiver_proxy =
         Parallel::get_parallel_component<ParallelComponent>(cache);
+    const auto& element = get<::Tags::Element<volume_dim>>(box);
     for (auto& mortar_id_and_overlap_solution :
          subdomain_solution.boundary_data) {
       const auto& mortar_id = mortar_id_and_overlap_solution.first;
@@ -403,47 +377,48 @@ struct ReceiveOverlapSolution {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box, tuples::TaggedTuple<InboxTags...>& inboxes,
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
-      const ElementIndex<Dim>& element_index, const ActionList /*meta*/,
+      const ElementIndex<Dim>& /*element_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    // Parallel::printf("%s Receive overlap solution in step %zu\n", element_index,
-    //                  get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    // Parallel::printf("%s Receive overlap solution in step %zu\n",
+    // element_index,
+    //               get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
     auto& inbox = tuples::get<boundary_solutions_inbox_tag>(inboxes);
     const auto& temporal_id =
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
     const auto temporal_received = inbox.find(temporal_id);
-    const auto& logical_coords =
-        db::get<::Tags::Coordinates<Dim, Frame::Logical>>(box);
+    // const auto& logical_coords =
+    //     db::get<::Tags::Coordinates<Dim, Frame::Logical>>(box);
     if (temporal_received != inbox.end()) {
       db::mutate<fields_tag>(
           make_not_null(&box),
-          [&temporal_received, &element_index, &logical_coords](
+          [&temporal_received /*, &element_index, &logical_coords*/](
               const gsl::not_null<db::item_type<fields_tag>*> fields) noexcept {
             for (const auto& mortar_id_and_overlap_solution :
                  temporal_received->second) {
-              const auto& mortar_id = mortar_id_and_overlap_solution.first;
-              const auto& direction = mortar_id.first;
-              const size_t dimension = direction.dimension();
+              // const auto& mortar_id = mortar_id_and_overlap_solution.first;
+              // const auto& direction = mortar_id.first;
+              // const size_t dimension = direction.dimension();
               const auto& overlap_solution =
                   mortar_id_and_overlap_solution.second;
-              const double overlap_width = overlap_solution.overlap_width();
+              // const double overlap_width = overlap_solution.overlap_width();
               // Parallel::printf("%s  Incoming overlap data from %s:\n%s\n",
               //                  element_index, mortar_id,
               //                  overlap_solution.field_data);
               auto extended_overlap_solution =
                   overlap_solution.extended_field_data();
               // Parallel::printf(
-              //     "%s  Weighting overlap data with width %f (coming from %s)\n",
-              //     element_index, overlap_width, mortar_id);
-              DataVector extended_logical_coords =
-                  logical_coords.get(dimension) - direction.sign() * 2.;
+              //     "%s  Weighting overlap data with width %f (coming from
+              //     %s)\n", element_index, overlap_width, mortar_id);
+              // DataVector extended_logical_coords =
+              //     logical_coords.get(dimension) - direction.sign() * 2.;
               // Parallel::printf(
               //     "%s  Extended logical coords for overlap coming from %s: "
               //     "%s\n",
               //     element_index, mortar_id, extended_logical_coords);
-              const auto w = weight(extended_logical_coords, overlap_width,
-                                    opposite(direction.side()));
+              // const auto w = weight(extended_logical_coords, overlap_width,
+              //                       opposite(direction.side()));
               // Parallel::printf("%s  Weights:\n%s\n", element_index, w);
-              extended_overlap_solution *= w;
+              // extended_overlap_solution *= w;
               // Parallel::printf(
               //     "%s  Weighted (extended) overlap data from %s:\n%s\n",
               //     element_index, mortar_id, extended_overlap_solution);
