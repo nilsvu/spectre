@@ -65,7 +65,7 @@ struct InitializeResidualMagnitude {
                     Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
                     const double residual_magnitude) noexcept {
-    Parallel::printf("InitializeResMag\n");
+    // Parallel::printf("InitializeResMag\n");
     db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>,
                residual_magnitude_tag, initial_residual_magnitude_tag,
                orthogonalization_iteration_id_tag,
@@ -130,7 +130,7 @@ struct StoreOrthogonalization {
                     Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
                     const double orthogonalization) noexcept {
-    Parallel::printf("StoreOrth\n");
+    // Parallel::printf("StoreOrth\n");
     db::mutate<orthogonalization_history_tag,
                orthogonalization_iteration_id_tag>(
         make_not_null(&box),
@@ -177,7 +177,7 @@ struct StoreFinalOrthogonalization {
                     Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
                     const double orthogonalization) noexcept {
-    Parallel::printf("StoreFinalOrth\n");
+    // Parallel::printf("StoreFinalOrth\n");
     db::mutate<orthogonalization_history_tag>(
         make_not_null(&box),
         [orthogonalization](

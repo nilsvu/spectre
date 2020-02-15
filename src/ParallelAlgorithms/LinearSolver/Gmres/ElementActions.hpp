@@ -65,7 +65,7 @@ struct PrepareSolve {
       Parallel::ConstGlobalCache<Metavariables>& cache,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("PrepareSolve\n");
+    // Parallel::printf("PrepareSolve\n");
     db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>, operand_tag,
                initial_fields_tag, basis_history_tag,
                preconditioned_basis_history_tag>(
@@ -134,7 +134,7 @@ struct NormalizeInitialOperand {
                     const ArrayIndex& array_index,
                     const double residual_magnitude,
                     const Convergence::HasConverged& has_converged) noexcept {
-    Parallel::printf("NormalizeInitialOperand\n");
+    // Parallel::printf("NormalizeInitialOperand\n");
     db::mutate<operand_tag, basis_history_tag,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
@@ -166,7 +166,7 @@ struct PrepareStep {
       const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("PrepareStep\n");
+    // Parallel::printf("PrepareStep\n");
     using fields_tag = FieldsTag;
     using operand_tag =
         db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
@@ -217,7 +217,7 @@ struct PerformStep {
       const ActionList /*meta*/,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ParallelComponent* const /*meta*/) noexcept {
-    Parallel::printf("PerformStep\n");
+    // Parallel::printf("PerformStep\n");
     using fields_tag = FieldsTag;
     using operand_tag =
         db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
@@ -298,7 +298,7 @@ struct OrthogonalizeOperand {
                     Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& array_index,
                     const double orthogonalization) noexcept {
-    Parallel::printf("OrthogonalizeOperand\n");
+    // Parallel::printf("OrthogonalizeOperand\n");
     db::mutate<operand_tag, orthogonalization_iteration_id_tag>(
         make_not_null(&box),
         [orthogonalization](
@@ -376,7 +376,7 @@ struct NormalizeOperandAndUpdateField {
                     const ArrayIndex& array_index, const double normalization,
                     const DenseVector<double>& minres,
                     const Convergence::HasConverged& has_converged) noexcept {
-    Parallel::printf("NormalizeOperandAndUpdateField\n");
+    // Parallel::printf("NormalizeOperandAndUpdateField\n");
     db::mutate<operand_tag, basis_history_tag, fields_tag,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
