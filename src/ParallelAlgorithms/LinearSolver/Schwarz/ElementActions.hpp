@@ -47,11 +47,17 @@ struct PrepareSolve {
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     Parallel::printf("%s Prepare Schwarz solve\n", array_index);
-    db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>>(
+    db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>,
+               LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
-        [](const gsl::not_null<size_t*> iteration_id) noexcept {
+        [](const gsl::not_null<size_t*> iteration_id,
+           const gsl::not_null<Convergence::HasConverged*> has_converged,
+           const size_t& max_iterations) noexcept {
           *iteration_id = std::numeric_limits<size_t>::max();
-        });
+          *has_converged = Convergence::HasConverged{
+              {max_iterations, 0., 0.}, 0, 1., 1.};
+        },
+        get<LinearSolver::Tags::Iterations<OptionsGroup>>(box));
     return std::forward_as_tuple(std::move(box));
   }
 };
@@ -81,6 +87,7 @@ struct PrepareStep {
            const gsl::not_null<Convergence::HasConverged*> has_converged,
            const size_t& max_iterations) noexcept {
           (*iteration_id)++;
+          // Is this needed?
           *has_converged = Convergence::HasConverged{
               {max_iterations, 0., 0.}, *iteration_id, 1., 1.};
         },
