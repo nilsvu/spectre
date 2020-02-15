@@ -18,7 +18,7 @@
 #include "ParallelAlgorithms/LinearSolver/InnerProduct.hpp"
 #include "Utilities/Gsl.hpp"
 
-#include "Parallel/Printf.hpp"
+// #include "Parallel/Printf.hpp"
 
 namespace LinearSolver {
 namespace gmres_detail {
@@ -77,12 +77,18 @@ class Gmres {
     preconditioned_basis_history_.resize(restart_);
   }
 
+  const Convergence::Criteria& convergence_criteria() const noexcept {
+    return convergence_criteria_;
+  }
+
   Convergence::Reason convergence_reason() const noexcept {
     ASSERT(convergence_reason_,
            "Tried to retrieve the convergence reason, but has not performed a "
            "solve yet.");
     return *convergence_reason_;
   }
+
+  size_t num_iterations() const noexcept { return num_iterations_; }
 
   void pup(PUP::er& p) noexcept {
     p | convergence_criteria_;
@@ -117,10 +123,10 @@ class Gmres {
     //     matrix(i, j) = col.element_data.data()[j];
     //   }
     // }
-    Parallel::printf("\n\n--- Serial GMRES --- \n\n");
+    // Parallel::printf("\n\n--- Serial GMRES --- \n\n");
     // Parallel::printf("Solving matrix :\n % s\n ", matrix);
-    Parallel::printf("Source: %s\n", source.element_data);
-    Parallel::printf("initial_guess: %s\n", initial_guess.element_data);
+    // Parallel::printf("Source: %s\n", source.element_data);
+    // Parallel::printf("initial_guess: %s\n", initial_guess.element_data);
 
     auto result = initial_guess;
     convergence_reason_ = boost::none;
@@ -134,7 +140,7 @@ class Gmres {
       // Parallel::printf("r.boundary: %d\n", operand_.boundary_data.size());
       const double initial_residual_magnitude =
           sqrt(inner_product(operand_, operand_));
-      Parallel::printf("Init residual: %e\n", initial_residual_magnitude);
+      // Parallel::printf("Init residual: %e\n", initial_residual_magnitude);
       convergence_reason_ = Convergence::criteria_match(
           convergence_criteria_, iteration, initial_residual_magnitude,
           initial_residual_magnitude);
@@ -147,7 +153,7 @@ class Gmres {
 
       std::pair<DenseVector<double>, double> minres_and_magnitude{};
       for (size_t k = 0; k < restart_; k++) {
-        Parallel::printf("Iteration %zu:\n", k);
+        // Parallel::printf("Iteration %zu:\n", k);
         if (use_preconditioner) {
           preconditioned_basis_history_[k] = preconditioner(operand_);
           // Parallel::printf("  z: %s\n", preconditioned_basis_history_[k]);
@@ -182,7 +188,7 @@ class Gmres {
         minres_and_magnitude = gmres_detail::minimal_residual(
             orthogonalization_history_, initial_residual_magnitude);
         // Parallel::printf("  minres: %s\n", minres_and_magnitude.first);
-        Parallel::printf("  res: %e\n", minres_and_magnitude.second);
+        // Parallel::printf("  res: %e\n", minres_and_magnitude.second);
         convergence_reason_ = Convergence::criteria_match(
             convergence_criteria_, iteration + 1, minres_and_magnitude.second,
             initial_residual_magnitude);
@@ -204,7 +210,9 @@ class Gmres {
                           i);
       }
     }
-    Parallel::printf("\n=> GMRES is done. Result:\n%s\n", result.element_data);
+    num_iterations_ = iteration;
+    // Parallel::printf("\n=> GMRES is done. Result:\n%s\n",
+    // result.element_data);
     return result;
   };
 
@@ -219,6 +227,7 @@ class Gmres {
   mutable std::vector<VarsType> preconditioned_basis_history_{};
 
   mutable boost::optional<Convergence::Reason> convergence_reason_{};
+  mutable size_t num_iterations_{std::numeric_limits<size_t>::max()};
 };
 
 }  // namespace Serial
