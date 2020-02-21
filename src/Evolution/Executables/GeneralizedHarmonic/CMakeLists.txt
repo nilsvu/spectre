@@ -37,3 +37,9 @@ add_generalized_harmonic_executable(
   GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::KerrSchild>
   "GeneralRelativitySolutions"
 )
+add_generalized_harmonic_executable(
+  KerrSchildNumericInitialData
+  evolution::NumericInitialData<GeneralizedHarmonic::System<3>>
+  GeneralizedHarmonic::Solutions::WrappedGr<gr::Solutions::KerrSchild>
+  "GeneralRelativitySolutions"
+)
