@@ -8,10 +8,10 @@ function(add_single_input_file_test INPUT_FILE EXECUTABLE CHECK_TYPE TIMEOUT)
   get_filename_component(INPUT_FILE_NAME "${INPUT_FILE}" NAME)
 
   # Extract the main subdirectory name
-  string(FIND "${INPUT_FILE}" "tests/InputFiles/" POSITION_OF_INPUT_FILE_DIR)
+  string(FIND "${INPUT_FILE}" "tests/InputFiles/" POSITION_OF_TESTS_DIR)
   math(EXPR
     POSITION_OF_INPUT_FILE_DIR
-    ${POSITION_OF_INPUT_FILE_DIR}+17
+    ${POSITION_OF_TESTS_DIR}+17
     # 17 is the length of "tests/InputFiles/"
     )
   string(SUBSTRING "${INPUT_FILE}" ${POSITION_OF_INPUT_FILE_DIR}
@@ -24,6 +24,10 @@ function(add_single_input_file_test INPUT_FILE EXECUTABLE CHECK_TYPE TIMEOUT)
   set(TAGS "InputFiles;${EXECUTABLE_DIR_NAME};${CHECK_TYPE}")
   string(TOLOWER "${TAGS}" TAGS)
 
+  string(SUBSTRING "${INPUT_FILE}" ${POSITION_OF_TESTS_DIR}
+    -1 INPUT_FILE_RELATIVE_DIR)
+  set(CONFIGURED_INPUT_FILE ${CMAKE_BINARY_DIR}/${INPUT_FILE_RELATIVE_DIR})
+  configure_file(${INPUT_FILE} ${CONFIGURED_INPUT_FILE})
   set(
     CTEST_NAME
     "\"InputFiles.${EXECUTABLE_DIR_NAME}.${INPUT_FILE_NAME}.${CHECK_TYPE}\""
@@ -32,14 +36,14 @@ function(add_single_input_file_test INPUT_FILE EXECUTABLE CHECK_TYPE TIMEOUT)
     add_test(
       NAME "${CTEST_NAME}"
       COMMAND ${CMAKE_BINARY_DIR}/bin/${EXECUTABLE}
-      --check-options --input-file ${INPUT_FILE}
+      --check-options --input-file ${CONFIGURED_INPUT_FILE}
       )
   elseif("${CHECK_TYPE}" STREQUAL "execute")
     add_test(
       NAME "${CTEST_NAME}"
       # This script is written below, and only once
       COMMAND sh ${PROJECT_BINARY_DIR}/tmp/InputFileExecuteAndClean.sh
-      ${EXECUTABLE} ${INPUT_FILE}
+      ${EXECUTABLE} ${CONFIGURED_INPUT_FILE}
       # Make sure we run the test in the build directory for cleaning its output
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
       )
