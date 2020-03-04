@@ -15,3 +15,8 @@ add_test_library(
   "${LIBRARY_SOURCES}"
   "CoordinateMaps;DataStructures;Domain;PoissonSolutions;Spectral;Utilities"
   )
+
+spectre_add_python_bindings_test(
+  "Unit.AnalyticSolutions.Poisson.Python.VerifySolution"
+  "Test_VerifySolution.py"
+  "Unit;Elliptic;PointwiseFunctions")
