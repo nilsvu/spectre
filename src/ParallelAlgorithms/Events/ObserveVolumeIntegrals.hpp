@@ -79,26 +79,27 @@ class ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
                              tmpl::list<Tensors...>, EventRegistrars>
     : public Event<EventRegistrars> {
  private:
-  struct VectorPlus {
-    std::vector<double> operator()(const std::vector<double>& lhs,
-                                   const std::vector<double>& rhs) const
-        noexcept {
-      ASSERT(lhs.size() == rhs.size(),
-             "Error: vector sizes in `VectorPlus` operator do not match.");
-      std::vector<double> result(lhs.size());
-      for (size_t i = 0; i < lhs.size(); ++i) {
-        result[i] = lhs[i] + rhs[i];
-      }
-      return result;
-    }
-  };
+  static constexpr size_t num_tensor_components =
+      tmpl::fold<tmpl::integral_list<size_t, db::item_type<Tensors>::size()...>,
+                 tmpl::size_t<0>,
+                 tmpl::plus<tmpl::_state, tmpl::_element>>::value;
 
-  using VolIntDatum = Parallel::ReductionDatum<std::vector<double>, VectorPlus>;
-
+  using VolumeIntegralDatum = Parallel::ReductionDatum<double, funcl::Plus<>>;
   using ReductionData = tmpl::wrap<
-      tmpl::list<Parallel::ReductionDatum<double, funcl::AssertEqual<>>,
-                 Parallel::ReductionDatum<double, funcl::Plus<>>, VolIntDatum>,
+      tmpl::flatten<tmpl::list<
+          Parallel::ReductionDatum<double, funcl::AssertEqual<>>,
+          VolumeIntegralDatum,
+          tmpl::filled_list<VolumeIntegralDatum, num_tensor_components>>>,
       Parallel::ReductionData>;
+
+  template <size_t... Is>
+  static ReductionData make_reduction_data(
+      const double observation_value, const double local_volume,
+      std::array<double, num_tensor_components>&& local_volume_integrals,
+      std::index_sequence<Is...> /*meta*/) noexcept {
+    return ReductionData{observation_value, local_volume,
+                         local_volume_integrals.at(Is)...};
+  }
 
   template <typename T>
   static std::string component_suffix(const T& tensor,
@@ -157,18 +158,21 @@ class ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
         get(determinant(element_map.jacobian(logical_coordinates)));
     const double local_volume = definite_integral(det_jacobian, mesh);
 
-    std::vector<double> local_vol_ints{};
+    std::array<double, num_tensor_components> local_volume_integrals{};
     std::vector<std::string> reduction_names = {
         db::tag_name<ObservationValueTag>(), "Volume"};
-    const auto record_integrals =
-        [&local_vol_ints, &reduction_names, &det_jacobian, &mesh ](
-            const auto tensor_tag_v, const auto& tensor) noexcept {
+    size_t integral_index = 0;
+    const auto record_integrals = [&local_volume_integrals, &reduction_names,
+                                   &det_jacobian, &mesh, &integral_index](
+                                      const auto tensor_tag_v,
+                                      const auto& tensor) noexcept {
       using tensor_tag = tmpl::type_from<decltype(tensor_tag_v)>;
       for (size_t i = 0; i < tensor.size(); ++i) {
         reduction_names.push_back("VolInt(" + db::tag_name<tensor_tag>() +
                                   component_suffix(tensor, i) + ")");
-        local_vol_ints.push_back(
-            definite_integral(det_jacobian * tensor[i], mesh));
+        local_volume_integrals[integral_index] =
+            definite_integral(det_jacobian * tensor[i], mesh);
+        integral_index++;
       }
       return 0;
     };
@@ -185,8 +189,9 @@ class ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
             observation_value,
             typename Metavariables::element_observation_type{}),
         std::string{"/element_data"}, reduction_names,
-        ReductionData{static_cast<double>(observation_value), local_volume,
-                      local_vol_ints});
+        make_reduction_data(static_cast<double>(observation_value),
+                            local_volume, std::move(local_volume_integrals),
+                            std::make_index_sequence<num_tensor_components>{}));
   }
 };
 

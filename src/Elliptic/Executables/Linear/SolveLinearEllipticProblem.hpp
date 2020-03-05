@@ -52,6 +52,8 @@
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
 
+#include "ParallelAlgorithms/Events/ObserveVolumeIntegrals.hpp"
+
 /// \cond
 template <typename System, typename InitialGuess, typename BoundaryConditions>
 struct Metavariables {
@@ -94,12 +96,15 @@ struct Metavariables {
   using observe_fields =
       db::get_variables_tags_list<typename system::fields_tag>;
   using analytic_solution_fields = observe_fields;
-  using events = tmpl::list<
-      dg::Events::Registrars::ObserveFields<
-          volume_dim, LinearSolver::Tags::IterationId, observe_fields,
-          analytic_solution_fields>,
-      dg::Events::Registrars::ObserveErrorNorms<LinearSolver::Tags::IterationId,
-                                                analytic_solution_fields>>;
+  using events =
+      tmpl::list<dg::Events::Registrars::ObserveFields<
+                     volume_dim, LinearSolver::Tags::IterationId,
+                     observe_fields, analytic_solution_fields>,
+                 dg::Events::Registrars::ObserveErrorNorms<
+                     LinearSolver::Tags::IterationId, analytic_solution_fields>,
+                 dg::Events::Registrars::ObserveVolumeIntegrals<
+                     volume_dim, LinearSolver::Tags::IterationId,
+                     analytic_solution_fields>>;
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       LinearSolver::Tags::IterationId>>;
 
