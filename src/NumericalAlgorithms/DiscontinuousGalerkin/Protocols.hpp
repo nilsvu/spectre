@@ -76,11 +76,12 @@ struct IsNumericalFluxCallable
  * can be used as a numerical flux in DG boundary schemes. Essentially, the
  * class must be able to compute the quantity \f$G\f$ that appears, for example,
  * in the strong first-order DG boundary scheme
- * \f$G(\boldsymbol{n}^\mathrm{int}, u^\mathrm{int},
- * \boldsymbol{n}^\mathrm{ext}, u^\mathrm{ext}) - n^\mathrm{int}_i
- * F^i(u^\mathrm{int})\f$. See also Eq. (2.20) in \cite Teukolsky2015ega where
- * the same quantity is denoted \f$n_i F^{i*}\f$, which is why we occasionally
- * refer to it as the "normal-dot-numerical-fluxes".
+ * \f$G(n_i^\mathrm{int}, u^\mathrm{int}, n_i^\mathrm{ext}, u^\mathrm{ext}) -
+ * n_i^\mathrm{int} F^i(u^\mathrm{int})\f$ where \f$u\f$ is a system variable
+ * and \f$F^i(u)\f$ its corresponding flux. See also Eq. (2.20) in
+ * \cite Teukolsky2015ega where the quantity \f$G\f$ is denoted \f$n_i
+ * F^{i*}\f$, which is why we occasionally refer to it as the
+ * "normal-dot-numerical-fluxes".
  *
  * Requires the `ConformingType` has these type aliases:
  * - `variables_tags`: A typelist of DataBox tags that the class computes
@@ -112,16 +113,17 @@ struct IsNumericalFluxCallable
  * normal.
  *
  * Here's an example for a simple "central" numerical flux
- * \f$G(\boldsymbol{n}^\mathrm{int}, u^\mathrm{int},
- * \boldsymbol{n}^\mathrm{ext}, u^\mathrm{ext}) = \frac{1}{2}\left(
- * u_\mathrm{int} - n^\mathrm{int}_i n_\mathrm{ext}^i u_\mathrm{ext} \right)\f$
- * for the case where the interface normal is independent of the system
- * variables so
- * \f$\boldsymbol{n}_\mathrm{ext} = -\boldsymbol{n}_\mathrm{int}\f$
- * and therefore
- * \f$G=\frac{1}{2}\left(u_\mathrm{int} + u_\mathrm{ext} \right)\f$:
+ * \f$G(n_i^\mathrm{int}, u^\mathrm{int}, n_i^\mathrm{ext}, u^\mathrm{ext}) =
+ * \frac{1}{2}\left( n_i^\mathrm{int} F^i(u_\mathrm{int}) - n_i^\mathrm{ext}
+ * F^i(u_\mathrm{ext}) \right)\f$:
  *
  * \snippet DiscontinuousGalerkin/Test_Protocols.cpp numerical_flux_example
+ *
+ * Note that this numerical flux reduces to the interface average
+ * \f$G=\frac{n^\mathrm{int}_i}{2}\left(F^i(u_\mathrm{int}) +
+ * F^i(u_\mathrm{ext})\right)\f$ for the case where the interface normal is
+ * independent of the system variables and therefore
+ * \f$n_i^\mathrm{ext} = -n_i^\mathrm{int}\f$.
  */
 template <typename ConformingType>
 using NumericalFlux = std::conditional_t<
