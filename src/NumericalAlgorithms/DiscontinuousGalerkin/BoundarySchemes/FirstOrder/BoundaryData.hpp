@@ -50,7 +50,11 @@ using BoundaryData = typename detail::BoundaryDataImpl<NumericalFluxType>::type;
  * \brief Package the data on element boundaries that's needed for the (strong)
  * first-order boundary scheme.
  *
- * \see `dg::FirstOrderScheme::BoundaryData`
+ * This function currently packages the data required by the `NumericalFluxType`
+ * plus all "normal-dot-fluxes", which are needed for the strong first-order
+ * boundary scheme (see `dg::FirstOrderScheme::BoundaryData`). Note that for
+ * the weak formulation the normal-dot-fluxes need not be included explicitly,
+ * but the `NumericalFluxType` may require a subset of them.
  */
 template <
     size_t FaceDim, typename NumericalFluxType, typename... NumericalFluxArgs,
