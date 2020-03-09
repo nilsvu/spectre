@@ -19,24 +19,24 @@ namespace dg {
 ///
 /// Typically, values are inserted into this container by the flux
 /// communication actions.
-template <typename TemporalId, typename LocalVars, typename RemoteVars>
+template <typename TemporalId, typename BoundaryData>
 class SimpleMortarData {
  public:
   /// Add a value.  This function must be called once between calls to
   /// extract.
   //@{
-  void local_insert(TemporalId temporal_id, LocalVars vars) noexcept;
-  void remote_insert(TemporalId temporal_id, RemoteVars vars) noexcept;
+  void local_insert(TemporalId temporal_id, BoundaryData vars) noexcept;
+  void remote_insert(TemporalId temporal_id, BoundaryData vars) noexcept;
   //@}
 
   /// Return the inserted data and reset the state to empty.
-  std::pair<LocalVars, RemoteVars> extract() noexcept;
+  std::pair<BoundaryData, BoundaryData> extract() noexcept;
 
   // clang-tidy: google-runtime-references
   void pup(PUP::er& p) noexcept;  // NOLINT
 
   /// Retrieve the local data at `temporal_id`
-  const LocalVars& local_data(const TemporalId& temporal_id) const noexcept {
+  const BoundaryData& local_data(const TemporalId& temporal_id) const noexcept {
     ASSERT(local_data_, "Local data not available.");
     ASSERT(temporal_id == temporal_id_,
            "Only have local data at temporal_id "
@@ -46,13 +46,13 @@ class SimpleMortarData {
 
  private:
   TemporalId temporal_id_{};
-  boost::optional<LocalVars> local_data_{};
-  boost::optional<RemoteVars> remote_data_{};
+  boost::optional<BoundaryData> local_data_{};
+  boost::optional<BoundaryData> remote_data_{};
 };
 
-template <typename TemporalId, typename LocalVars, typename RemoteVars>
-void SimpleMortarData<TemporalId, LocalVars, RemoteVars>::local_insert(
-    TemporalId temporal_id, LocalVars vars) noexcept {
+template <typename TemporalId, typename BoundaryData>
+void SimpleMortarData<TemporalId, BoundaryData>::local_insert(
+    TemporalId temporal_id, BoundaryData vars) noexcept {
   ASSERT(not local_data_, "Already received local data.");
   ASSERT(not remote_data_ or temporal_id == temporal_id_,
          "Received local data at " << temporal_id
@@ -62,9 +62,9 @@ void SimpleMortarData<TemporalId, LocalVars, RemoteVars>::local_insert(
   local_data_ = std::move(vars);
 }
 
-template <typename TemporalId, typename LocalVars, typename RemoteVars>
-void SimpleMortarData<TemporalId, LocalVars, RemoteVars>::remote_insert(
-    TemporalId temporal_id, RemoteVars vars) noexcept {
+template <typename TemporalId, typename BoundaryData>
+void SimpleMortarData<TemporalId, BoundaryData>::remote_insert(
+    TemporalId temporal_id, BoundaryData vars) noexcept {
   ASSERT(not remote_data_, "Already received remote data.");
   ASSERT(not local_data_ or temporal_id == temporal_id_,
          "Received remote data at " << temporal_id
@@ -74,9 +74,9 @@ void SimpleMortarData<TemporalId, LocalVars, RemoteVars>::remote_insert(
   remote_data_ = std::move(vars);
 }
 
-template <typename TemporalId, typename LocalVars, typename RemoteVars>
-std::pair<LocalVars, RemoteVars>
-SimpleMortarData<TemporalId, LocalVars, RemoteVars>::extract() noexcept {
+template <typename TemporalId, typename BoundaryData>
+std::pair<BoundaryData, BoundaryData>
+SimpleMortarData<TemporalId, BoundaryData>::extract() noexcept {
   ASSERT(local_data_ and remote_data_,
          "Tried to extract boundary data, but do not have "
              << (local_data_ ? "remote" : remote_data_ ? "local" : "any")
@@ -88,9 +88,8 @@ SimpleMortarData<TemporalId, LocalVars, RemoteVars>::extract() noexcept {
   return result;
 }
 
-template <typename TemporalId, typename LocalVars, typename RemoteVars>
-void SimpleMortarData<TemporalId, LocalVars, RemoteVars>::pup(
-    PUP::er& p) noexcept {
+template <typename TemporalId, typename BoundaryData>
+void SimpleMortarData<TemporalId, BoundaryData>::pup(PUP::er& p) noexcept {
   p | temporal_id_;
   p | local_data_;
   p | remote_data_;
