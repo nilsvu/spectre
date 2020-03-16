@@ -16,9 +16,8 @@ namespace Tags {
 
 /// Base tag for the constitutive relation
 template <size_t Dim>
-struct ConstitutiveRelationBase : db::SimpleTag {
-  using type = std::unique_ptr<
-      Elasticity::ConstitutiveRelations::ConstitutiveRelation<Dim>>;
+struct ConstitutiveRelationBase : db::BaseTag {
+  using type = Elasticity::ConstitutiveRelations::ConstitutiveRelation<Dim>;
 };
 
 /*!
@@ -28,7 +27,8 @@ struct ConstitutiveRelationBase : db::SimpleTag {
  */
 template <typename ConstitutiveRelationType>
 struct ConstitutiveRelation
-    : ConstitutiveRelationBase<ConstitutiveRelationType::volume_dim> {
+    : ConstitutiveRelationBase<ConstitutiveRelationType::volume_dim>,
+      db::SimpleTag {
   using type = ConstitutiveRelationType;
 };
 

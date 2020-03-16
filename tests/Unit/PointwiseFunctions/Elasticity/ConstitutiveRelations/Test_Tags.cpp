@@ -27,12 +27,24 @@ struct ProviderOptionTag {
 
 SPECTRE_TEST_CASE("Unit.Elasticity.ConstitutiveRelations.Tags",
                   "[Unit][Elasticity]") {
-  TestHelpers::db::test_simple_tag<
+  TestHelpers::db::test_base_tag<
       Elasticity::Tags::ConstitutiveRelationBase<1>>(
       "ConstitutiveRelationBase");
   TestHelpers::db::test_simple_tag<
       Elasticity::Tags::ConstitutiveRelation<IsotropicHomogeneous<1>>>(
       "ConstitutiveRelation");
+  static_assert(
+      cpp17::is_same_v<
+          db::const_item_type<Elasticity::Tags::ConstitutiveRelationBase<1>>,
+          Elasticity::ConstitutiveRelations::ConstitutiveRelation<1>>,
+      "Failed testing ConstitutiveRelationBase");
+  static_assert(
+      cpp17::is_same_v<
+          db::const_item_type<Elasticity::Tags::ConstitutiveRelationBase<1>,
+                              tmpl::list<Elasticity::Tags::ConstitutiveRelation<
+                                  IsotropicHomogeneous<1>>>>,
+          Elasticity::ConstitutiveRelations::IsotropicHomogeneous<1>>,
+      "Failed testing ConstitutiveRelationBase");
   {
     INFO("ConstitutiveRelationFrom");
     // Fake some output of option-parsing
