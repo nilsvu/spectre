@@ -4,6 +4,7 @@
 add_subdirectory(Convergence)
 add_subdirectory(DiscontinuousGalerkin)
 add_subdirectory(Interpolation)
+add_subdirectory(Integration)
 add_subdirectory(LinearAlgebra)
 add_subdirectory(LinearOperators)
 add_subdirectory(LinearSolver)
