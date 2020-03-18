@@ -19,6 +19,7 @@ function(add_algorithm_test EXECUTABLE_NAME)
     ${EXECUTABLE_NAME}
     ErrorHandling
     Informer
+    Options
     Utilities
     ${SPECTRE_LIBRARIES}
     )
@@ -136,7 +137,7 @@ add_test_library(
   ${LIBRARY}
   "Parallel"
   "${LIBRARY_SOURCES}"
-  ""
+  "Options"
   )
 
 add_dependencies(

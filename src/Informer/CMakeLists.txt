@@ -15,10 +15,10 @@ target_link_libraries(
   ${LIBRARY}
   PUBLIC
   Boost
+  Options
 
   PRIVATE
   ErrorHandling
-  Options
   )
 
 add_subdirectory(Python)

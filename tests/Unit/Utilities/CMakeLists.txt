@@ -50,5 +50,5 @@ add_test_library(
   ${LIBRARY}
   "Utilities"
   "${LIBRARY_SOURCES}"
-  "Boost;DataStructures;Utilities"
+  "Boost;DataStructures;Options;Utilities"
   )

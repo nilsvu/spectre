@@ -17,4 +17,5 @@ target_link_libraries(
   Boost
   DataStructures
   ErrorHandling
+  Options
   )

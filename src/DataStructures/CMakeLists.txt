@@ -21,6 +21,7 @@ target_link_libraries(
   Blaze
   Boost
   ErrorHandling
+  Options
   )
 
 add_subdirectory(Python)

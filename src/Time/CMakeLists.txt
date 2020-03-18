@@ -21,5 +21,6 @@ target_link_libraries(
   PUBLIC
   Boost
   ErrorHandling
+  Options
   Utilities
   )
