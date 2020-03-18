@@ -351,6 +351,53 @@ Matrix build_operator_matrix(
   return operator_matrix;
 }
 
+template <typename System, typename SolutionType, typename ApplyDgOperator>
+auto apply_dg_operator_to_solution(
+    const SolutionType& solution,
+    const DomainCreator<System::volume_dim>& domain_creator,
+    ApplyDgOperator&& apply_dg_operator) {
+  static constexpr size_t volume_dim = System::volume_dim;
+  using all_fields_tags =
+      db::get_variables_tags_list<typename System::fields_tag>;
+  using Vars = Variables<all_fields_tags>;
+  using all_fixed_sources_tags =
+      db::wrap_tags_in<::Tags::FixedSource, all_fields_tags>;
+
+  const auto elements = create_elements(domain_creator);
+
+  // Evaluate the analytic solution on all elements. Also evaluate the
+  // solution's fixed sources (for primal fields only) on all elements.
+  std::unordered_map<ElementId<volume_dim>, Vars> solution_vars{};
+  std::unordered_map<ElementId<volume_dim>, Variables<all_fixed_sources_tags>>
+      fixed_sources{};
+  for (const auto& id_and_element : elements) {
+    const auto& element_id = id_and_element.first;
+    const auto& dg_element = id_and_element.second;
+    Vars element_solution_vars{dg_element.mesh.number_of_grid_points()};
+    const auto inertial_coords =
+        dg_element.element_map(logical_coordinates(dg_element.mesh));
+    solution_vars[element_id] = variables_from_tagged_tuple(
+        solution.variables(inertial_coords, all_fields_tags{}));
+    Variables<all_fixed_sources_tags> element_fixed_sources{
+        dg_element.mesh.number_of_grid_points(), 0.};
+    element_fixed_sources.assign_subset(solution.variables(
+        inertial_coords, db::wrap_tags_in<::Tags::FixedSource,
+                                          typename System::primal_fields>{}));
+    fixed_sources[element_id] = std::move(element_fixed_sources);
+  }
+
+  // Apply the DG operator on all elements
+  std::unordered_map<ElementId<volume_dim>, Vars>
+      operator_applied_to_solution_vars{};
+  for (const auto& id_and_element : elements) {
+    const auto& element_id = id_and_element.first;
+    operator_applied_to_solution_vars[element_id] =
+        apply_dg_operator(element_id, elements, solution_vars) -
+        fixed_sources.at(element_id);
+  }
+  return operator_applied_to_solution_vars;
+}
+
 }  // namespace dg
 }  // namespace elliptic
 }  // namespace TestHelpers
