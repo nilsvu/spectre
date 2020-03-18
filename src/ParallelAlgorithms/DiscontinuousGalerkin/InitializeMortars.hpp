@@ -20,7 +20,6 @@
 #include "Domain/Neighbors.hpp"
 #include "Domain/OrientationMap.hpp"
 #include "Domain/Tags.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/FluxCommunicationTypes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
@@ -75,22 +74,19 @@ namespace Actions {
  * - Removes: nothing
  * - Modifies: nothing
  */
-template <typename Metavariables, bool AddFluxBoundaryConditionMortars = true>
+template <typename BoundaryScheme, bool AddFluxBoundaryConditionMortars = true>
 struct InitializeMortars {
  private:
-  static constexpr size_t dim = Metavariables::system::volume_dim;
-  using temporal_id_tag = typename Metavariables::temporal_id;
-  using flux_comm_types = dg::FluxCommunicationTypes<Metavariables>;
-  using mortar_data_tag = tmpl::conditional_t<
-      Metavariables::local_time_stepping,
-      typename flux_comm_types::local_time_stepping_mortar_data_tag,
-      typename flux_comm_types::simple_mortar_data_tag>;
+  static constexpr size_t dim = BoundaryScheme::volume_dim;
+  using mortar_data_tag =
+      ::Tags::Mortars<typename BoundaryScheme::mortar_data_tag, dim>;
 
  public:
   using initialization_tags = tmpl::list<domain::Tags::InitialExtents<dim>>;
 
-  template <typename DataBox, typename... InboxTags, typename ArrayIndex,
-            typename ActionList, typename ParallelComponent,
+  template <typename DataBox, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent,
             Requires<db::tag_is_retrievable_v<domain::Tags::InitialExtents<dim>,
                                               DataBox>> = nullptr>
   static auto apply(DataBox& box,
@@ -99,13 +95,10 @@ struct InitializeMortars {
                     const ArrayIndex& /*array_index*/, ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
     const auto& element = db::get<domain::Tags::Element<dim>>(box);
-    const auto& next_temporal_id = get<::Tags::Next<temporal_id_tag>>(box);
     const auto& initial_extents =
         db::get<domain::Tags::InitialExtents<dim>>(box);
 
     db::item_type<mortar_data_tag> mortar_data{};
-    db::item_type<::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>>
-        mortar_next_temporal_ids{};
     db::item_type<::Tags::Mortars<domain::Tags::Mesh<dim - 1>, dim>>
         mortar_meshes{};
     db::item_type<::Tags::Mortars<::Tags::MortarSize<dim - 1>, dim>>
@@ -119,7 +112,6 @@ struct InitializeMortars {
       for (const auto& neighbor : neighbors) {
         const auto mortar_id = std::make_pair(direction, neighbor);
         mortar_data[mortar_id];  // Default initialize data
-        mortar_next_temporal_ids.insert({mortar_id, next_temporal_id});
         mortar_meshes.emplace(
             mortar_id,
             dg::mortar_mesh(
@@ -145,27 +137,30 @@ struct InitializeMortars {
         mortar_meshes.emplace(mortar_id, boundary_meshes.at(direction));
         mortar_sizes.emplace(mortar_id,
                              make_array<dim - 1>(Spectral::MortarSize::Full));
-        // Since no communication needs to happen for boundary conditions
-        // the temporal id is not advanced on the boundary, so we don't need to
-        // initialize it.
       }
     }
 
+    // We don't need to initialize the "next" temporal id on mortars if data is
+    // communicated synchronously
+    auto temporal_id_box = initialize_next_temporal_id_on_mortars(
+        std::move(box),
+        cpp17::negation<
+            std::is_same<typename BoundaryScheme::temporal_id_tag,
+                         typename BoundaryScheme::receive_temporal_id_tag>>{});
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeMortars,
             db::AddSimpleTags<
                 mortar_data_tag,
-                ::Tags::Mortars<::Tags::Next<temporal_id_tag>, dim>,
                 ::Tags::Mortars<domain::Tags::Mesh<dim - 1>, dim>,
                 ::Tags::Mortars<::Tags::MortarSize<dim - 1>, dim>>>(
-            std::move(box), std::move(mortar_data),
-            std::move(mortar_next_temporal_ids), std::move(mortar_meshes),
-            std::move(mortar_sizes)));
+            std::move(temporal_id_box), std::move(mortar_data),
+            std::move(mortar_meshes), std::move(mortar_sizes)));
   }
 
-  template <typename DataBox, typename... InboxTags, typename ArrayIndex,
-            typename ActionList, typename ParallelComponent,
+  template <typename DataBox, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent,
             Requires<not db::tag_is_retrievable_v<
                 domain::Tags::InitialExtents<dim>, DataBox>> = nullptr>
   static std::tuple<DataBox&&> apply(
@@ -176,6 +171,39 @@ struct InitializeMortars {
     ERROR(
         "Dependencies not fulfilled. Did you forget to terminate the phase "
         "after removing options?");
+  }
+
+ private:
+  template <typename DbTagsList>
+  static auto initialize_next_temporal_id_on_mortars(
+      db::DataBox<DbTagsList>&& box, std::true_type /* meta */) noexcept {
+    using next_temporal_id_tag =
+        typename BoundaryScheme::receive_temporal_id_tag;
+    using mortars_next_temporal_id_tag =
+        ::Tags::Mortars<next_temporal_id_tag, dim>;
+    const auto& next_temporal_id = get<next_temporal_id_tag>(box);
+    db::item_type<mortars_next_temporal_id_tag> mortar_next_temporal_ids{};
+    // Since no communication needs to happen for boundary conditions
+    // the temporal id is not advanced on the boundary, so we only need to
+    // initialize it on internal boundaries
+    for (const auto& direction_and_neighbors :
+         db::get<domain::Tags::Element<dim>>(box).neighbors()) {
+      const auto& direction = direction_and_neighbors.first;
+      const auto& neighbors = direction_and_neighbors.second;
+      for (const auto& neighbor : neighbors) {
+        const auto mortar_id = std::make_pair(direction, neighbor);
+        mortar_next_temporal_ids.insert({mortar_id, next_temporal_id});
+      }
+    }
+    return ::Initialization::merge_into_databox<
+        InitializeMortars, db::AddSimpleTags<mortars_next_temporal_id_tag>>(
+        std::move(box), std::move(mortar_next_temporal_ids));
+  }
+
+  template <typename DbTagsList>
+  static db::DataBox<DbTagsList> initialize_next_temporal_id_on_mortars(
+      db::DataBox<DbTagsList>&& box, std::false_type /* meta */) noexcept {
+    return std::forward<db::DataBox<DbTagsList>>(box);
   }
 };
 }  // namespace Actions
