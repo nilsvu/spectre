@@ -3,8 +3,6 @@
 
 find_package(GSL REQUIRED)
 
-spectre_include_directories(${GSL_INCLUDE_DIR})
-list(APPEND SPECTRE_LIBRARIES ${GSL_LIBRARIES})
 # Extract the path where the shared libraries are and point the linker to
 # that directory
 list(GET GSL_LIBRARIES 0 FIRST_GSL_LIBRARY)
@@ -22,3 +20,9 @@ file(APPEND
   "${CMAKE_BINARY_DIR}/LibraryVersions.txt"
   "GSL Version:  ${GSL_VERSION}\n"
   )
+
+add_library(GnuScientificLibrary INTERFACE IMPORTED)
+set_property(TARGET GnuScientificLibrary PROPERTY
+  INTERFACE_INCLUDE_DIRECTORIES ${GSL_INCLUDE_DIR})
+set_property(TARGET GnuScientificLibrary PROPERTY
+  INTERFACE_LINK_LIBRARIES ${GSL_LIBRARIES})
