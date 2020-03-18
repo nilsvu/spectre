@@ -117,9 +117,7 @@ void normal_dot_numerical_fluxes(
   detail::normal_dot_numerical_fluxes_impl(
       numerical_flux_computer, packaged_data_int, packaged_data_ext,
       typename NumericalFluxType::package_field_tags{},
-      typename NumericalFluxType::package_extra_tags{},
-      std::forward<gsl::not_null<NormalDotNumericalFluxes*>>(
-          n_dot_num_fluxes)...);
+      typename NumericalFluxType::package_extra_tags{}, n_dot_num_fluxes...);
 }
 // @}
 
