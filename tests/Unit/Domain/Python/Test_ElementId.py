@@ -32,6 +32,12 @@ class TestElementId(unittest.TestCase):
         self.assertNotEqual(ElementId1D(0, [SegmentId(1, 0)]),
                             ElementId1D(0, [SegmentId(1, 1)]))
 
+    def test_hash(self):
+        self.assertEqual(hash(ElementId1D(0, [SegmentId(1, 0)])),
+                         hash(ElementId1D(0, [SegmentId(1, 0)])))
+        self.assertNotEqual(hash(ElementId1D(0, [SegmentId(1, 0)])),
+                            hash(ElementId1D(0, [SegmentId(1, 1)])))
+
     def test_external_boundary_id(self):
         self.assertEqual(ElementId1D.external_boundary_id(),
                          ElementId1D.external_boundary_id())
