@@ -20,5 +20,5 @@ add_test_library(
   ${LIBRARY}
   "Evolution"
   "${LIBRARY_SOURCES}"
-  "Evolution;Utilities"
+  "Boost;Evolution;Utilities"
   )

@@ -24,7 +24,7 @@ add_test_library(
   ${LIBRARY}
   "Evolution/DiscontinuousGalerkin/Limiters/"
   "${LIBRARY_SOURCES}"
-  "Limiters"
+  "Boost;Limiters"
   )
 
 add_dependencies(

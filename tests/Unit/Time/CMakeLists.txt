@@ -23,7 +23,7 @@ add_test_library(
   ${LIBRARY}
   "Time"
   "${LIBRARY_SOURCES}"
-  "Time"
+  "Boost;Time"
   )
 
 add_dependencies(

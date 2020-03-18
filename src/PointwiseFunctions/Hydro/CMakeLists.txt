@@ -17,8 +17,10 @@ add_spectre_library(${LIBRARY} ${LIBRARY_SOURCES})
 
 target_link_libraries(
   ${LIBRARY}
-  INTERFACE DataStructures
-  INTERFACE ErrorHandling
+  PUBLIC
+  Boost
+  DataStructures
+  ErrorHandling
   )
 
 if(BUILD_PYTHON_BINDINGS)

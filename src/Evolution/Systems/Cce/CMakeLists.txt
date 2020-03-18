@@ -23,7 +23,9 @@ target_link_libraries(
   ${LIBRARY}
   PRIVATE
   LinearSolver
+
   PUBLIC
+  Boost
   DataStructures
   Domain
   ErrorHandling

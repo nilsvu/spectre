@@ -24,7 +24,7 @@ add_test_library(
   ${LIBRARY}
   "IO"
   "${LIBRARY_SOURCES}"
-  "IO"
+  "Boost;IO"
   )
 
 add_dependencies(
