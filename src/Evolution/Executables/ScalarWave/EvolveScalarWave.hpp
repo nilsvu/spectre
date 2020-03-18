@@ -167,7 +167,8 @@ struct EvolutionMetavars {
           domain::Tags::BoundaryDirectionsInterior<Dim>>,
       dg::Actions::ImposeDirichletBoundaryConditions<EvolutionMetavars>,
       dg::Actions::CollectDataForFluxes<
-          boundary_scheme, ::Tags::BoundaryDirectionsInterior<volume_dim>>,
+          boundary_scheme,
+          domain::Tags::BoundaryDirectionsInterior<volume_dim>>,
       dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
       tmpl::conditional_t<local_time_stepping,
                           tmpl::list<Actions::RecordTimeStepperData<>,

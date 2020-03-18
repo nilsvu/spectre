@@ -191,8 +191,8 @@ struct EvolutionMetavars {
 
   using step_actions = tmpl::flatten<tmpl::list<
       Actions::ComputeVolumeFluxes,
-      dg::Actions::CollectDataForFluxes<boundary_scheme,
-                                        ::Tags::InternalDirections<volume_dim>>,
+      dg::Actions::CollectDataForFluxes<
+          boundary_scheme, domain::Tags::InternalDirections<volume_dim>>,
       dg::Actions::SendDataForFluxes<boundary_scheme>,
       tmpl::conditional_t<has_source_terms, Actions::ComputeVolumeSources,
                           tmpl::list<>>,
@@ -203,7 +203,8 @@ struct EvolutionMetavars {
           dg::Actions::ImposeDirichletBoundaryConditions<EvolutionMetavars>,
           tmpl::list<>>,
       dg::Actions::CollectDataForFluxes<
-          boundary_scheme, ::Tags::BoundaryDirectionsInterior<volume_dim>>,
+          boundary_scheme,
+          domain::Tags::BoundaryDirectionsInterior<volume_dim>>,
       dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
       tmpl::conditional_t<local_time_stepping,
                           tmpl::list<Actions::RecordTimeStepperData<>,

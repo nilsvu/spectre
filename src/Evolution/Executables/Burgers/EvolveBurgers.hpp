@@ -150,14 +150,15 @@ struct EvolutionMetavars {
 
   using step_actions = tmpl::flatten<tmpl::list<
       Actions::ComputeVolumeFluxes,
-      dg::Actions::CollectDataForFluxes<boundary_scheme,
-                                        ::Tags::InternalDirections<volume_dim>>,
+      dg::Actions::CollectDataForFluxes<
+          boundary_scheme, domain::Tags::InternalDirections<volume_dim>>,
       dg::Actions::SendDataForFluxes<boundary_scheme>,
       Actions::ComputeTimeDerivative<
           evolution::dg::ConservativeDuDt<Burgers::System, dg_formulation>>,
       dg::Actions::ImposeDirichletBoundaryConditions<EvolutionMetavars>,
       dg::Actions::CollectDataForFluxes<
-          boundary_scheme, ::Tags::BoundaryDirectionsInterior<volume_dim>>,
+          boundary_scheme,
+          domain::Tags::BoundaryDirectionsInterior<volume_dim>>,
       dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
       tmpl::conditional_t<local_time_stepping,
                           tmpl::list<Actions::RecordTimeStepperData<>,
