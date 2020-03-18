@@ -11,3 +11,7 @@ file(APPEND
   "${CMAKE_BINARY_DIR}/LibraryVersions.txt"
   "NumPy Version:  ${NUMPY_VERSION}\n"
   )
+
+add_library(NumPy INTERFACE IMPORTED)
+set_property(TARGET NumPy PROPERTY
+  INTERFACE_INCLUDE_DIRECTORIES ${NUMPY_INCLUDE_DIR})
