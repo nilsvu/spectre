@@ -19,6 +19,7 @@ target_link_libraries(
   Blaze
   Brigand
   ErrorHandling
+  LIBXSMM
   )
 
 if (NOT USE_FORMALINE)
