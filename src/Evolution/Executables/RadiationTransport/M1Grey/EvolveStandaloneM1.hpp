@@ -34,7 +34,6 @@
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
 #include "IO/Observer/RegisterObservers.hpp"
-#include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/CollectDataForFluxes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder/StrongFirstOrder.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/StrongFirstOrder/StrongFirstOrderLocalTimeStepping.hpp"
@@ -47,6 +46,7 @@
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
 #include "ParallelAlgorithms/Actions/MutateApply.hpp"
+#include "ParallelAlgorithms/DiscontinuousGalerkin/CollectDataForFluxes.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/FluxCommunication.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeInterfaces.hpp"
