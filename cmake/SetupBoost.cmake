@@ -1,6 +1,8 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
+set(Boost_NO_BOOST_CMAKE ON)
+
 find_package(Boost 1.60.0 REQUIRED COMPONENTS program_options)
 
 message(STATUS "Boost include: ${Boost_INCLUDE_DIRS}")
