@@ -12,11 +12,13 @@ file(APPEND
   "LIBXSMM Version:  ${LIBXSMM_VERSION}\n"
   )
 
-add_library(LIBXSMM INTERFACE IMPORTED)
-set_property(TARGET LIBXSMM
+add_library(Libxsmm INTERFACE IMPORTED)
+set_property(TARGET Libxsmm
   APPEND PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${LIBXSMM_INCLUDE_DIRS})
-set_property(TARGET LIBXSMM
+set_property(TARGET Libxsmm
   APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${LIBXSMM_LIBRARIES})
 # LIBXSMM falls back to blas, so we need to link against Blas with it as well.
-set_property(TARGET LIBXSMM
-  APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${BLAS_LIBRARIES})
+add_dependencies(
+  Libxsmm
+  Blas
+  )
