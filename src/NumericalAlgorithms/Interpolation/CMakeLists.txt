@@ -32,6 +32,6 @@ target_link_libraries(
   Blas
   Domain
   ErrorHandling
-  GnuScientificLibrary
+  GSL::gsl
   Spectral
   )

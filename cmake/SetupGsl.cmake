@@ -20,9 +20,3 @@ file(APPEND
   "${CMAKE_BINARY_DIR}/LibraryVersions.txt"
   "GSL Version:  ${GSL_VERSION}\n"
   )
-
-add_library(GnuScientificLibrary INTERFACE IMPORTED)
-set_property(TARGET GnuScientificLibrary PROPERTY
-  INTERFACE_INCLUDE_DIRECTORIES ${GSL_INCLUDE_DIR})
-set_property(TARGET GnuScientificLibrary PROPERTY
-  INTERFACE_LINK_LIBRARIES ${GSL_LIBRARIES})

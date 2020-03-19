@@ -14,5 +14,5 @@ target_link_libraries(
   ${LIBRARY}
   PUBLIC
   ErrorHandling
-  GnuScientificLibrary
+  GSL::gsl
   )
