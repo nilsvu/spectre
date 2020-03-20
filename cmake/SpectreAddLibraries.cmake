@@ -36,5 +36,10 @@ function(ADD_SPECTRE_LIBRARY LIBRARY_NAME)
       PRIVATE
       $<TARGET_PROPERTY:${SPECTRE_PCH},INTERFACE_COMPILE_OPTIONS>
       )
+    target_link_libraries(
+      ${LIBRARY_NAME}
+      PRIVATE
+      SpectreWarnings
+      )
   endif()
 endfunction()

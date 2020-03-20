@@ -3,11 +3,13 @@
 
 include(AddCxxFlag)
 
+add_library(SpectreWarnings INTERFACE)
+
 # On systems where we can't use -isystem (Cray), we don't want
 # all the warnings enabled because we get flooded with system warnings.
 option(ENABLE_WARNINGS "Enable the default warning level" ON)
 if(${ENABLE_WARNINGS})
-  check_and_add_cxx_flags(
+  create_cxx_flags_target(
     "-W;\
 -Wall;\
 -Wextra;\
@@ -39,11 +41,18 @@ if(${ENABLE_WARNINGS})
 -Wstack-protector;\
 -Wswitch-default;\
 -Wunreachable-code;\
--Wwrite-strings")
+-Wwrite-strings" SpectreWarnings0)
 endif()
 
 # GCC 7.1ish and newer warn about noexcept changing mangled names,
 # but we don't care
-check_and_add_cxx_flag("-Wno-noexcept-type")
+create_cxx_flag_target("-Wno-noexcept-type" SpectreWarnNoNoexceptType)
 
 check_and_add_cxx_link_flag("-Qunused-arguments")
+
+target_link_libraries(
+  SpectreWarnings
+  INTERFACE
+  SpectreWarnNoNoexceptType
+  SpectreWarnings0
+  )
