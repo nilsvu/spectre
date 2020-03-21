@@ -56,3 +56,9 @@ target_link_libraries(
   SpectreWarnNoNoexceptType
   SpectreWarnings0
   )
+
+target_link_libraries(
+  SpectreFlags
+  INTERFACE
+  SpectreWarnings
+  )

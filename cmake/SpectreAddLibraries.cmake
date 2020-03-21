@@ -39,7 +39,7 @@ function(ADD_SPECTRE_LIBRARY LIBRARY_NAME)
     target_link_libraries(
       ${LIBRARY_NAME}
       PRIVATE
-      SpectreWarnings
+      SpectreFlags
       )
   endif()
 endfunction()
