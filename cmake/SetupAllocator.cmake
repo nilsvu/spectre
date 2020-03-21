@@ -8,11 +8,22 @@ if(NOT ${ASAN})
     "Which allocator to use: SYSTEM, TCMALLOC, JEMALLOC (default)"
     OFF)
 
+  add_library(SpectreAllocator INTERFACE)
   if("${MEMORY_ALLOCATOR}" STREQUAL "JEMALLOC"
       OR "${MEMORY_ALLOCATOR}" STREQUAL "OFF")
     include(SetupJemalloc)
+    target_link_libraries(
+      SpectreAllocator
+      INTERFACE
+      Jemalloc
+      )
   elseif("${MEMORY_ALLOCATOR}" STREQUAL "TCMALLOC")
     include(SetupTcmalloc)
+    target_link_libraries(
+      SpectreAllocator
+      INTERFACE
+      Tcmalloc
+      )
   elseif(NOT "${MEMORY_ALLOCATOR}" STREQUAL "SYSTEM")
     message(FATAL_ERROR
       "Unknown memory allocator specified '${MEMORY_ALLOCATOR}'. "
@@ -21,6 +32,11 @@ if(NOT ${ASAN})
   else()
     message(STATUS "Using system default memory allocator.")
   endif()
+  target_link_libraries(
+    SpectreFlags
+    INTERFACE
+    SpectreAllocator
+    )
 else(NOT ${ASAN})
   message(STATUS
     "Using system default malloc since we are using address sanitizer which "
