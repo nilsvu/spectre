@@ -98,6 +98,7 @@ include(SetupClangTidy)
 include(SetupIwyu)
 include(SetupCppCheck)
 include(SetupDoxygen)
+include(SetupSphinx)
 include(CodeCoverageDetection)
 include(SpectreAddLibraries)
 
