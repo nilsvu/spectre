@@ -19,6 +19,12 @@
 #include "NumericalAlgorithms/Spectral/Projection.hpp"
 #include "Options/Options.hpp"
 
+/// Functionality related to discontinuous Galerkin schemes
+namespace dg {
+// The classes below should be moved in the `dg` namespace. See issue:
+// https://github.com/sxs-collaboration/spectre/issues/2140
+}
+
 namespace Tags {
 /// \ingroup DataBoxTagsGroup
 /// \ingroup DiscontinuousGalerkinGroup
