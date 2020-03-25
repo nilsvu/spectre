@@ -404,8 +404,7 @@ jobs:
     runs-on: macos-latest
     env:
       SPECTRE_BREW_DEPS: >-
-        cmake gcc ccache autoconf boost catch2 gsl jemalloc hdf5
-        pybind11 yaml-cpp
+        cmake gcc openblas
       SPECTRE_PY_DEPS: numpy scipy h5py
       # We install `openblas` instead of using the system version because we
       # encountered this issue:
@@ -414,7 +413,7 @@ jobs:
       # with `pthread` enabled, which fails to be found by cmake, so we use
       # Spack to install `openblas`.
       SPECTRE_SPACK_DEPS: >-
-        openblas blaze@3.2 brigand@master libxsmm libsharp~mpi~openmp
+        blaze@3.2 brigand@master libxsmm libsharp~mpi~openmp
       CHARM_VERSION: "6.8.0"
       CHARM_PATCH: v6.8.patch
       SPECTRE_MIN_MACOS: -mmacosx-version-min=10.11
@@ -436,93 +435,90 @@ jobs:
       # Load an existing Python environment and install Python dependencies.
       # We use Python 3.7 for now since Spack has an issue with Python 3.8:
       # https://github.com/spack/spack/issues/14102
-      - name: Setup Python
-        uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
-      - name: Install Python dependencies
-        run: |
-          pip install $SPECTRE_PY_DEPS
+      # - name: Setup Python
+      #   uses: actions/setup-python@v1
+      #   with:
+      #     python-version: '3.7'
+      # - name: Install Python dependencies
+      #   run: |
+      #     pip install $SPECTRE_PY_DEPS
       # We need to build the remaining dependencies from source, but we can
       # cache them.
-      - name: Restore dependency cache
-        uses: actions/cache@v1
-        id: restore-spectre-dependencies
-        with:
-          path: ~/spectre-dependencies
-          key: spectre-dependencies-macos
-      - name: Setup dependency cache directory
-        if: steps.restore-spectre-dependencies.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p $HOME/spectre-dependencies/spack
+      # - name: Restore dependency cache
+      #   uses: actions/cache@v1
+      #   id: restore-spectre-dependencies
+      #   with:
+      #     path: ~/spectre-dependencies
+      #     key: spectre-dependencies-macos
+      # - name: Setup dependency cache directory
+      #   if: steps.restore-spectre-dependencies.outputs.cache-hit != 'true'
+      #   run: |
+      #     mkdir -p $HOME/spectre-dependencies/spack
       # Install the remaining dependencies using Spack if possible. We install
       # them in an environment that we can activate later. To avoid re-building
       # packages that are already installed by Homebrew we reference them in a
       # 'packages.yaml' file. Pre-built Spack dependencies from the cache are
       # used if available by adding the cache as an Spack mirror.
-      - name: Install Spack dependencies
-        run: |
-          cd $HOME
-          mkdir -p .spack
-          SPACK_PACKAGES=.spack/packages.yaml
-          echo "packages:" > $SPACK_PACKAGES
-          echo "  cmake:" >> $SPACK_PACKAGES
-          echo "    paths:" >> $SPACK_PACKAGES
-          echo "      cmake: $(brew --prefix cmake)" >> $SPACK_PACKAGES
-          echo "    buildable: False" >> $SPACK_PACKAGES
-          echo "  autoconf:" >> $SPACK_PACKAGES
-          echo "    paths:" >> $SPACK_PACKAGES
-          echo "      autoconf: $(brew --prefix autoconf)" >> $SPACK_PACKAGES
-          echo "    buildable: False" >> $SPACK_PACKAGES
-          cat $SPACK_PACKAGES
-          git clone https://github.com/spack/spack.git
-          source ./spack/share/spack/setup-env.sh
-          spack compiler find --scope defaults
-          spack mirror add spectre-dependencies file://$HOME/spectre-dependencies/spack
-          spack env create spectre
-          spack env activate spectre
-          spack install -j2 $SPECTRE_SPACK_DEPS
+      # - name: Install Spack dependencies
+      #   run: |
+      #     cd $HOME
+      #     mkdir -p .spack
+      #     SPACK_PACKAGES=.spack/packages.yaml
+      #     echo "packages:" > $SPACK_PACKAGES
+      #     echo "  cmake:" >> $SPACK_PACKAGES
+      #     echo "    paths:" >> $SPACK_PACKAGES
+      #     echo "      cmake: $(brew --prefix cmake)" >> $SPACK_PACKAGES
+      #     echo "    buildable: False" >> $SPACK_PACKAGES
+      #     echo "  autoconf:" >> $SPACK_PACKAGES
+      #     echo "    paths:" >> $SPACK_PACKAGES
+      #     echo "      autoconf: $(brew --prefix autoconf)" >> $SPACK_PACKAGES
+      #     echo "    buildable: False" >> $SPACK_PACKAGES
+      #     cat $SPACK_PACKAGES
+      #     git clone https://github.com/spack/spack.git
+      #     source ./spack/share/spack/setup-env.sh
+      #     spack compiler find --scope defaults
+      #     spack mirror add spectre-dependencies file://$HOME/spectre-dependencies/spack
+      #     spack env create spectre
+      #     spack env activate spectre
+      #     spack install -j2 $SPECTRE_SPACK_DEPS
+      #     spack find -v
       # After building the dependencies from source we cache them as compressed
       # tarballs.
-      - name: Package built Spack dependencies for caching
-        run: |
-          cd $HOME
-          source ./spack/share/spack/setup-env.sh
-          spack env activate spectre
-          spack buildcache create -uf -m spectre-dependencies $SPECTRE_SPACK_DEPS
+      # - name: Package built Spack dependencies for caching
+      #   run: |
+      #     cd $HOME
+      #     source ./spack/share/spack/setup-env.sh
+      #     spack env activate spectre
+      #     spack buildcache create -uf -m spectre-dependencies $SPECTRE_SPACK_DEPS
       # Install Charm++ separately. We may be able to install it via Spack as
       # well and patch it.
-      - name: Install Charm++
-        if: steps.restore-spectre-dependencies.outputs.cache-hit != 'true'
-        run: |
-          cd $HOME/spectre-dependencies
-          wget http://charm.cs.illinois.edu/distrib/charm-${CHARM_VERSION}.tar.bz2
-          tar -xjf charm-${CHARM_VERSION}.tar.bz2
-          cd ./charm-${CHARM_VERSION}
-          ./build charm++ multicore-darwin-x86_64 -j2 -O0 $SPECTRE_MIN_MACOS
-          git apply $GITHUB_WORKSPACE/support/Charm/${CHARM_PATCH}
-          rm ../charm-${CHARM_VERSION}.tar.bz2
+      # - name: Install Charm++
+      #   if: steps.restore-spectre-dependencies.outputs.cache-hit != 'true'
+      #   run: |
+      #     cd $HOME/spectre-dependencies
+      #     wget http://charm.cs.illinois.edu/distrib/charm-${CHARM_VERSION}.tar.bz2
+      #     tar -xjf charm-${CHARM_VERSION}.tar.bz2
+      #     cd ./charm-${CHARM_VERSION}
+      #     ./build charm++ multicore-darwin-x86_64 -j2 -O0 $SPECTRE_MIN_MACOS
+      #     git apply $GITHUB_WORKSPACE/support/Charm/${CHARM_PATCH}
+      #     rm ../charm-${CHARM_VERSION}.tar.bz2
       # Replace the ccache directory that building the dependencies may have
       # generated with the cached ccache directory.
-      - name: Clear ccache from dependencies
-        run: |
-          rm -rf $HOME/ccache
-      - name: Restore ccache
-        uses: actions/cache@v1
-        with:
-          path: ${{ env.HOME }}/ccache
-          key: ccache-macos
-      - name: Configure ccache
-        run: |
-          ccache -pz
+      # - name: Clear ccache from dependencies
+      #   run: |
+      #     rm -rf $HOME/ccache
+      # - name: Restore ccache
+      #   uses: actions/cache@v1
+      #   with:
+      #     path: ${{ env.HOME }}/ccache
+      #     key: ccache-macos
+      # - name: Configure ccache
+      #   run: |
+      #     ccache -pz
       # Configure, build and run tests. See the `unit_tests` job for details.
       - name: Configure build with cmake
         run: >
           mkdir build && cd build
-
-          source $HOME/spack/share/spack/setup-env.sh
-
-          spack env activate spectre
 
           cmake
           -D CMAKE_C_COMPILER=gcc
@@ -531,6 +527,7 @@ jobs:
           -D CMAKE_CXX_FLAGS="-Werror"
           -D OVERRIDE_ARCH=x86-64
           -D CHARM_ROOT=$HOME/spectre-dependencies/charm-${CHARM_VERSION}
+          -D BLAS_ROOT=$(brew --prefix openblas)
           -D MACOSX_MIN=10.11
           -D CMAKE_BUILD_TYPE=Debug
           -D DEBUG_SYMBOLS=OFF
@@ -542,24 +539,24 @@ jobs:
           -D USE_CCACHE=ON
           -D BUILD_PYTHON_BINDINGS=ON
           $GITHUB_WORKSPACE
-      - name: Build tests
-        working-directory: build
-        run: |
-          make -j2 RunTests
-      - name: Build executables
-        working-directory: build
-        run: |
-          make test-executables
-      - name: Print size of build directory
-        working-directory: build
-        run: |
-          ls | xargs du -sh
-          du -sh .
-      - name: Diagnose ccache
-        run: |
-          ccache -s
-      - name: Run unit tests
-        working-directory: build
-        # Not running in parallel to avoid timeouts
-        run: |
-          ctest --output-on-failure
+      # - name: Build tests
+      #   working-directory: build
+      #   run: |
+      #     make -j2 RunTests
+      # - name: Build executables
+      #   working-directory: build
+      #   run: |
+      #     make test-executables
+      # - name: Print size of build directory
+      #   working-directory: build
+      #   run: |
+      #     ls | xargs du -sh
+      #     du -sh .
+      # - name: Diagnose ccache
+      #   run: |
+      #     ccache -s
+      # - name: Run unit tests
+      #   working-directory: build
+      #   # Not running in parallel to avoid timeouts
+      #   run: |
+      #     ctest --output-on-failure

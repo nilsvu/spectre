@@ -31,6 +31,8 @@ if (DOCS_ONLY)
   return()
 endif (DOCS_ONLY)
 
+include(SetupBlas)
+
 include(CheckCompilerVersion)
 include(ProhibitInSourceBuild)
 include(SetupNinjaColors)
@@ -69,7 +71,6 @@ include(SetupPythonLibs)
 
 # Blaze depends on both Blas and Lapack, since LIBXSMM is a Blas
 # alternative we set it up early too.
-include(SetupBlas)
 include(SetupLapack)
 include(SetupLIBXSMM)
 
