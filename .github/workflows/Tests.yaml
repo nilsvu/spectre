@@ -403,15 +403,18 @@ jobs:
     name: Unit tests on macOS
     runs-on: macos-latest
     env:
+      SPECTRE_BREW_DEPS: >-
+        cmake gcc ccache autoconf boost catch2 gsl jemalloc hdf5
+        pybind11 yaml-cpp
+      SPECTRE_PY_DEPS: numpy scipy h5py
       # We install `openblas` instead of using the system version because we
       # encountered this issue:
       # https://github.com/sxs-collaboration/spectre/issues/2131
-      SPECTRE_BREW_DEPS: >-
-        cmake gcc ccache autoconf openblas boost catch2 gsl jemalloc hdf5
-        pybind11 yaml-cpp
-      SPECTRE_PY_DEPS: numpy scipy h5py
+      # The Homebrew version, as well as the system version, have threading
+      # with `pthread` enabled, which fails to be found by cmake, so we use
+      # Spack to install `openblas`.
       SPECTRE_SPACK_DEPS: >-
-        blaze@3.2 brigand@master libxsmm libsharp~mpi~openmp
+        openblas blaze@3.2 brigand@master libxsmm libsharp~mpi~openmp
       CHARM_VERSION: "6.8.0"
       CHARM_PATCH: v6.8.patch
       SPECTRE_MIN_MACOS: -mmacosx-version-min=10.11
@@ -527,7 +530,6 @@ jobs:
           -D CMAKE_Fortran_COMPILER=gfortran
           -D CMAKE_CXX_FLAGS="-Werror"
           -D OVERRIDE_ARCH=x86-64
-          -D BLAS_ROOT=$(brew --prefix openblas)
           -D CHARM_ROOT=$HOME/spectre-dependencies/charm-${CHARM_VERSION}
           -D MACOSX_MIN=10.11
           -D CMAKE_BUILD_TYPE=Debug
