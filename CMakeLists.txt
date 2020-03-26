@@ -31,6 +31,14 @@ if (DOCS_ONLY)
   return()
 endif (DOCS_ONLY)
 
+# Sometimes `FindBlas` has trouble finding the threading library, but setting it
+# up this early resolves that issue. Since LIBXSMM is a Blas alternative we set
+# it up early too. Both Blas and Lapack are dependencies of Blaze, so both are
+# being set up before Blaze.
+include(SetupBlas)
+include(SetupLapack)
+include(SetupLIBXSMM)
+
 include(CheckCompilerVersion)
 include(ProhibitInSourceBuild)
 include(SpectreSetupFlagsTarget)
@@ -67,12 +75,6 @@ include(CheckBrokenArray0)
 
 # Need to load python libs before boost.python.
 include(SetupPythonLibs)
-
-# Blaze depends on both Blas and Lapack, since LIBXSMM is a Blas
-# alternative we set it up early too.
-include(SetupBlas)
-include(SetupLapack)
-include(SetupLIBXSMM)
 
 include(SetupBlaze)
 include(SetupBoost)
