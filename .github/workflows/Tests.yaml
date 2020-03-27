@@ -22,6 +22,18 @@ on:
       - gh-pages
 
 jobs:
+  # Cancel currently running instances of this workflow on the same branch
+  # to clean up redundant builds, e.g. when someone repeatedly pushes to a PR
+  # branch.
+  cancel_redundant:
+    name: Cancel redundant
+    if: github.ref != 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: rokroskar/workflow-run-cleanup-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # Make sure no commits are prefixed with `fixup` or similar keywords. See
   # `tools/CheckCommits.sh` for details.
   check_commits:
