@@ -374,7 +374,7 @@ jobs:
         if: matrix.use_pch == 'ON'
         working-directory: /work/build
         run: |
-          make -j2 RunTests
+          make -j4 RunTests
       # Build the executables in a single thread to reduce memory usage
       # sufficiently so they compile on the GitHub-hosted runners
       - name: Build executables
@@ -385,7 +385,7 @@ jobs:
         if: matrix.build_type == 'Release'
         working-directory: /work/build
         run: |
-          make -j2 Benchmark
+          make -j4 Benchmark
       - name: Print size of build directory
         working-directory: /work/build
         run: |
