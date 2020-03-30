@@ -25,8 +25,9 @@
 namespace {
 
 using field_tags = tmpl::list<Xcts::Tags::ConformalFactor<DataVector>>;
-using auxiliary_field_tags = tmpl::list<
-    Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataVector>>;
+using auxiliary_field_tags =
+    tmpl::list<::Tags::deriv<Xcts::Tags::ConformalFactor<DataVector>,
+                             tmpl::size_t<3>, Frame::Inertial>>;
 using initial_tags =
     db::wrap_tags_in<Tags::Initial,
                      tmpl::append<field_tags, auxiliary_field_tags>>;

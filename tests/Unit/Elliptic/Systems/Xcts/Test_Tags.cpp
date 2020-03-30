@@ -17,6 +17,9 @@ SPECTRE_TEST_CASE("Unit.Elliptic.Systems.Xcts.Tags", "[Unit][Elliptic]") {
   TestHelpers::db::test_simple_tag<Xcts::Tags::ConformalFactor<DataVector>>(
       "ConformalFactor");
   TestHelpers::db::test_simple_tag<
-      Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataVector>>(
-      "ConformalFactorGradient");
+      Xcts::Tags::LapseTimesConformalFactor<DataVector>>(
+      "LapseTimesConformalFactor");
+  TestHelpers::db::test_simple_tag<
+      Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataVector>>(
+      "ShiftStrain");
 }
