@@ -12,7 +12,49 @@
 /*!
  * \ingroup EllipticSystemsGroup
  * \brief Items related to solving the Extended Conformal Thin Sandwich (XCTS)
- * equations.
+ * decomposition of the Einstein constraint equations
+ *
+ * The XCTS equations
+ *
+ * \f{align}
+ * \bar{D}^2 \psi - \frac{1}{8}\psi\bar{R} - \frac{1}{12}\psi^5 K^2 +
+ * \frac{1}{8}\psi^{-7}\bar{A}_{ij}\bar{A}^{ij} = -2\pi\psi^5\rho
+ * \\
+ * \left(\bar{\Delta}_L\beta\right)^i - \left(\bar{L}\beta\right)^{ij}\bar{D}_j
+ * \ln(\bar{\alpha}) = \bar{\alpha}\bar{D}_j\left(\bar{\alpha^{-1}\bar{u}^{ij}
+ * \right) + \frac{4}{3}\bar{\alpha}\psi^6\bar{D}^i K + 16\pi\bar{\alpha}\psi^10
+ * S^i
+ * \\
+ * \bar{D}^2\left(\alpha\psi\right) = \alpha\psi\left(
+ * \frac{7}{8}\psi^{-8}\bar{A}_{ij}\bar{A}^{ij}
+ * + \frac{5}{12}\psi^4 K^2 + \frac{1}{8}\bar{R}
+ * + 2\pi\psi^4\left(\rho + 2S\right)\right)
+ * - \psi^5\delta_t K + \psi^5\beta^i\bar{D}_i K
+ * \f}
+ *
+ * See \cite BaumgarteShapiro, Box 3.3
+ *
+ * For conformal flatness \f$\gamma_{ij}=f_{ij}\f$, maximal slicing \f$K=0\f$
+ * and preserving these conditions instantaneously in time
+ * \f$\bar{u}_{ij}=0=\delta_t K\f$ in Cartesian coordinates
+ *
+ * \f{align}
+ * \partial^i\partial_i\psi = -\frac{1}{8}\psi^{-7}\bar{A}_ij\bar{A}^ij -
+ * 2\pi\psi^5\rho
+ * \\
+ * \partial^j\partial_j\beta^i + \frac{1}{3}\partial^i\partial_j\beta^j =
+ * 2\bar{A}^{ij}\partial_j\left(\alpha\psi^{-6}\right) + 16\pi\alpha\psi^4 S^i
+ * \\
+ * \partial^i\partial_i\left(\alpha\psi\right) = \alpha\psi\left(
+ * \frac{7}{8}\psi^{-8}\bar{A}_{ij}\bar{A}^{ij} + 2\pi\psi^4\left(\rho +
+ * 2S\right)\right)
+ * \f}
+ *
+ * See \cite BaumgarteShapiro, Eqns 3.119-3.121
+ *
+ * Under these assumptions we will also refer to the momentum constraint as
+ * "minimal distortion" constraint, and to the lapse equation as the "maximal
+ * slicing" constriant.
  */
 namespace Xcts {
 /// Tags related to the XCTS equations
@@ -47,6 +89,15 @@ struct Conformal : db::PrefixTag, db::SimpleTag {
 template <typename DataType, size_t Dim, typename Frame>
 using ConformalMetric =
     Conformal<gr::Tags::SpatialMetric<Dim, Frame, DataType>, -4>;
+
+/*!
+ * \brief The conformally scaled inverse spatial metric
+ * \f$\bar{\gamma}^{ij}=\psi^{4}\gamma^{ij}\f$, where \f$\psi\f$ is the
+ * `ConformalFactor` and \f$gamma\f$ is the `gr::Tags::SpatialMetric`
+ */
+template <typename DataType, size_t Dim, typename Frame>
+using InverseConformalMetric =
+    Conformal<gr::Tags::InverseSpatialMetric<Dim, Frame, DataType>, 4>;
 
 /*!
  * \brief The product of lapse \f$\alpha(x)\f$ and conformal factor
@@ -119,6 +170,71 @@ struct ShiftExcess : db::SimpleTag {
 template <typename DataType, size_t Dim, typename Frame>
 struct ShiftStrain : db::SimpleTag {
   using type = tnsr::ii<DataType, Dim, Frame>;
+};
+
+/*!
+ * \brief The conformal longitudinal operator applied to the background shift
+ * vector minus the time derivative of the conformal metric
+ * \f$(\bar{L}\beta^\mathrm{background})^{ij} - \bar{u}^ij\f$
+ *
+ * Note that the time derivative of the conformal metric has its indices raised
+ * as \f$\bar{u}^ij = \bar{\gamma}^{ik}\bar{\gamma}^{jl}
+ * \partial_t\bar{\gamma}_{kl}\f$, i.e. by the conformal metric, as usual for
+ * conformal quantities.
+ *
+ * \see `Xcts::Tags::ShiftBackground`
+ */
+template <typename DataType, size_t Dim, typename Frame>
+struct LongitudinalShiftBackgroundMinusDtConformalMetric : db::SimpleTag {
+  using type = tnsr::II<DataType, Dim, Frame>;
+};
+
+/*!
+ * \brief The conformal longitudinal operator applied to the shift vector minus
+ * the time derivative of the conformal metric, squared:
+ * \f$\left((\bar{L}\beta)^{ij} - \bar{u}^ij\right)
+ * \left((\bar{L}\beta)_{ij} - \bar{u}_ij\right)\f$
+ */
+template <typename DataType>
+struct LongitudinalShiftMinusDtConformalMetricSquare : db::SimpleTag {
+  using type = Scalar<DataType>;
+};
+
+/*!
+ * \brief The conformal longitudinal operator applied to the shift vector minus
+ * the time derivative of the conformal metric, squared and divided by the
+ * square of the lapse:
+ * \f$\frac{1}{\alpha^2}\left((\bar{L}\beta)^{ij} - \bar{u}^ij\right)
+ * \left((\bar{L}\beta)_{ij} - \bar{u}_ij\right)\f$
+ */
+template <typename DataType>
+struct LongitudinalShiftMinusDtConformalMetricOverLapseSquare : db::SimpleTag {
+  using type = Scalar<DataType>;
+};
+
+template <typename DataType>
+struct ShiftDotDerivExtrinsicCurvatureTrace : db::SimpleTag {
+  using type = Scalar<DataType>;
+};
+
+template <typename DataType, size_t Dim, typename Frame>
+struct ConformalChristoffelFirstKind : db::SimpleTag {
+  using type = tnsr::ijj<DataType, Dim, Frame>;
+};
+
+template <typename DataType, size_t Dim, typename Frame>
+struct ConformalChristoffelSecondKind : db::SimpleTag {
+  using type = tnsr::Ijj<DataType, Dim, Frame>;
+};
+
+template <typename DataType, size_t Dim, typename Frame>
+struct ConformalChristoffelContracted : db::SimpleTag {
+  using type = tnsr::i<DataType, Dim, Frame>;
+};
+
+template <typename DataType>
+struct ConformalRicciScalar : db::SimpleTag {
+  using type = Scalar<DataType>;
 };
 
 }  // namespace Tags
