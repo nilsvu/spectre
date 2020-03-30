@@ -136,10 +136,12 @@ class ConstantDensityStar {
 
   template <typename DataType>
   auto variables(const tnsr::I<DataType, 3, Frame::Inertial>& x,
-                 tmpl::list<::Tags::Initial<Xcts::Tags::ConformalFactorGradient<
-                     3, Frame::Inertial, DataType>>> /*meta*/) const noexcept
-      -> tuples::TaggedTuple<::Tags::Initial<
-          Xcts::Tags::ConformalFactorGradient<3, Frame::Inertial, DataType>>>;
+                 tmpl::list<::Tags::Initial<
+                     ::Tags::deriv<Xcts::Tags::ConformalFactor<DataType>,
+                                   tmpl::size_t<3>, Frame::Inertial>>> /*meta*/)
+      const noexcept -> tuples::TaggedTuple<
+          ::Tags::Initial<::Tags::deriv<Xcts::Tags::ConformalFactor<DataType>,
+                                        tmpl::size_t<3>, Frame::Inertial>>>;
 
   template <typename DataType>
   auto variables(const tnsr::I<DataType, 3, Frame::Inertial>& x,
