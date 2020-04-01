@@ -31,15 +31,15 @@ def linearized_hamiltonian_sources(energy_density, extrinsic_curvature_trace,
 
 
 def distortion_hamiltonian_sources(
-        longitudinal_shift_minus_dt_conformal_metric_over_lapse_square,
-        conformal_factor):
+    longitudinal_shift_minus_dt_conformal_metric_over_lapse_square,
+    conformal_factor):
     return (-1. / 32. * conformal_factor**5 *
             longitudinal_shift_minus_dt_conformal_metric_over_lapse_square)
 
 
 def linearized_distortion_hamiltonian_sources(
-        longitudinal_shift_minus_dt_conformal_metric_over_lapse_square,
-        conformal_factor, conformal_factor_correction):
+    longitudinal_shift_minus_dt_conformal_metric_over_lapse_square,
+    conformal_factor, conformal_factor_correction):
     return (-5. / 32. * conformal_factor**4 * conformal_factor_correction *
             longitudinal_shift_minus_dt_conformal_metric_over_lapse_square)
 
@@ -59,13 +59,11 @@ def lapse_sources(energy_density, stress_trace, extrinsic_curvature_trace,
              dt_extrinsic_curvature_trace))
 
 
-def linearized_lapse_sources(energy_density, stress_trace,
-                             extrinsic_curvature_trace,
-                             dt_extrinsic_curvature_trace,
-                             shift_dot_deriv_extrinsic_curvature_trace,
-                             conformal_factor, lapse_times_conformal_factor,
-                             conformal_factor_correction,
-                             lapse_times_conformal_factor_correction):
+def linearized_lapse_sources(
+    energy_density, stress_trace, extrinsic_curvature_trace,
+    dt_extrinsic_curvature_trace, shift_dot_deriv_extrinsic_curvature_trace,
+    conformal_factor, lapse_times_conformal_factor,
+    conformal_factor_correction, lapse_times_conformal_factor_correction):
     return ((4. * lapse_times_conformal_factor * conformal_factor**3 *
              conformal_factor_correction +
              conformal_factor**4 * lapse_times_conformal_factor_correction) *
@@ -77,16 +75,16 @@ def linearized_lapse_sources(energy_density, stress_trace,
 
 
 def distortion_hamiltonian_sources_with_lapse(
-        longitudinal_shift_minus_dt_conformal_metric_square, conformal_factor,
-        lapse_times_conformal_factor):
+    longitudinal_shift_minus_dt_conformal_metric_square, conformal_factor,
+    lapse_times_conformal_factor):
     return (-1. / 32. * conformal_factor**7 / lapse_times_conformal_factor**2 *
             longitudinal_shift_minus_dt_conformal_metric_square)
 
 
 def linearized_distortion_hamiltonian_sources_with_lapse(
-        longitudinal_shift_minus_dt_conformal_metric_square, conformal_factor,
-        lapse_times_conformal_factor, conformal_factor_correction,
-        lapse_times_conformal_factor_correction):
+    longitudinal_shift_minus_dt_conformal_metric_square, conformal_factor,
+    lapse_times_conformal_factor, conformal_factor_correction,
+    lapse_times_conformal_factor_correction):
     return (-1. / 32. *
             (7. * conformal_factor**6 * conformal_factor_correction /
              lapse_times_conformal_factor**2 -
@@ -96,16 +94,16 @@ def linearized_distortion_hamiltonian_sources_with_lapse(
 
 
 def distortion_lapse_sources(
-        longitudinal_shift_minus_dt_conformal_metric_square, conformal_factor,
-        lapse_times_conformal_factor):
+    longitudinal_shift_minus_dt_conformal_metric_square, conformal_factor,
+    lapse_times_conformal_factor):
     return (7. / 32. * conformal_factor**6 / lapse_times_conformal_factor *
             longitudinal_shift_minus_dt_conformal_metric_square)
 
 
 def linearized_distortion_lapse_sources(
-        longitudinal_shift_minus_dt_conformal_metric_square, conformal_factor,
-        lapse_times_conformal_factor, conformal_factor_correction,
-        lapse_times_conformal_factor_correction):
+    longitudinal_shift_minus_dt_conformal_metric_square, conformal_factor,
+    lapse_times_conformal_factor, conformal_factor_correction,
+    lapse_times_conformal_factor_correction):
     return (7. / 32. *
             (6. * conformal_factor**5 / lapse_times_conformal_factor *
              conformal_factor_correction -
@@ -132,10 +130,10 @@ def momentum_sources(momentum_density, extrinsic_curvature_trace_gradient,
 
 
 def euclidean_momentum_sources(
-        momentum_density, extrinsic_curvature_trace_gradient,
-        minus_div_dt_conformal_metric, conformal_factor,
-        lapse_times_conformal_factor, conformal_factor_flux,
-        lapse_times_conformal_factor_flux, longitudinal_shift):
+    momentum_density, extrinsic_curvature_trace_gradient,
+    minus_div_dt_conformal_metric, conformal_factor,
+    lapse_times_conformal_factor, conformal_factor_flux,
+    lapse_times_conformal_factor_flux, longitudinal_shift):
     return (momentum_sources(
         momentum_density, extrinsic_curvature_trace_gradient, np.identity(3),
         np.identity(3), minus_div_dt_conformal_metric, conformal_factor,
@@ -144,14 +142,14 @@ def euclidean_momentum_sources(
 
 
 def linearized_momentum_sources(
-        momentum_density, extrinsic_curvature_trace_gradient, conformal_metric,
-        inv_conformal_metric, conformal_factor, lapse_times_conformal_factor,
-        conformal_factor_flux, lapse_times_conformal_factor_flux,
-        longitudinal_shift, conformal_factor_correction,
-        lapse_times_conformal_factor_correction, shift_correction,
-        conformal_factor_flux_correction,
-        lapse_times_conformal_factor_flux_correction,
-        longitudinal_shift_correction):
+    momentum_density, extrinsic_curvature_trace_gradient, conformal_metric,
+    inv_conformal_metric, conformal_factor, lapse_times_conformal_factor,
+    conformal_factor_flux, lapse_times_conformal_factor_flux,
+    longitudinal_shift, conformal_factor_correction,
+    lapse_times_conformal_factor_correction, shift_correction,
+    conformal_factor_flux_correction,
+    lapse_times_conformal_factor_flux_correction,
+    longitudinal_shift_correction):
     return (np.einsum(
         'ij,jk,k', longitudinal_shift, conformal_metric,
         (lapse_times_conformal_factor_flux_correction /
@@ -175,13 +173,13 @@ def linearized_momentum_sources(
 
 
 def euclidean_linearized_momentum_sources(
-        momentum_density, extrinsic_curvature_trace_gradient, conformal_factor,
-        lapse_times_conformal_factor, conformal_factor_flux,
-        lapse_times_conformal_factor_flux, longitudinal_shift,
-        conformal_factor_correction, lapse_times_conformal_factor_correction,
-        shift_correction, conformal_factor_flux_correction,
-        lapse_times_conformal_factor_flux_correction,
-        longitudinal_shift_correction):
+    momentum_density, extrinsic_curvature_trace_gradient, conformal_factor,
+    lapse_times_conformal_factor, conformal_factor_flux,
+    lapse_times_conformal_factor_flux, longitudinal_shift,
+    conformal_factor_correction, lapse_times_conformal_factor_correction,
+    shift_correction, conformal_factor_flux_correction,
+    lapse_times_conformal_factor_flux_correction,
+    longitudinal_shift_correction):
     return linearized_momentum_sources(
         momentum_density, extrinsic_curvature_trace_gradient, np.identity(3),
         np.identity(3), conformal_factor, lapse_times_conformal_factor,
@@ -194,20 +192,20 @@ def euclidean_linearized_momentum_sources(
 
 
 def distortion_hamiltonian_sources_with_lapse_and_shift(
-        momentum_density, extrinsic_curvature_trace_gradient, conformal_metric,
-        inv_conformal_metric, minus_div_dt_conformal_metric, conformal_factor,
-        lapse_times_conformal_factor, conformal_factor_flux,
-        lapse_times_conformal_factor_flux, longitudinal_shift):
+    momentum_density, extrinsic_curvature_trace_gradient, conformal_metric,
+    inv_conformal_metric, minus_div_dt_conformal_metric, conformal_factor,
+    lapse_times_conformal_factor, conformal_factor_flux,
+    lapse_times_conformal_factor_flux, longitudinal_shift):
     return (-1. / 32. * conformal_factor**7 / lapse_times_conformal_factor**2 *
             np.einsum('ij,kl,ik,jl', conformal_metric, conformal_metric,
                       longitudinal_shift, longitudinal_shift))
 
 
 def euclidean_distortion_hamiltonian_sources_with_lapse_and_shift(
-        momentum_density, extrinsic_curvature_trace_gradient,
-        minus_div_dt_conformal_metric, conformal_factor,
-        lapse_times_conformal_factor, conformal_factor_flux,
-        lapse_times_conformal_factor_flux, longitudinal_shift):
+    momentum_density, extrinsic_curvature_trace_gradient,
+    minus_div_dt_conformal_metric, conformal_factor,
+    lapse_times_conformal_factor, conformal_factor_flux,
+    lapse_times_conformal_factor_flux, longitudinal_shift):
     return distortion_hamiltonian_sources_with_lapse_and_shift(
         momentum_density, extrinsic_curvature_trace_gradient, np.identity(3),
         np.identity(3), minus_div_dt_conformal_metric, conformal_factor,
@@ -216,14 +214,14 @@ def euclidean_distortion_hamiltonian_sources_with_lapse_and_shift(
 
 
 def linearized_distortion_hamiltonian_sources_with_lapse_and_shift(
-        momentum_density, extrinsic_curvature_trace_gradient, conformal_metric,
-        inv_conformal_metric, conformal_factor, lapse_times_conformal_factor,
-        conformal_factor_flux, lapse_times_conformal_factor_flux,
-        longitudinal_shift, conformal_factor_correction,
-        lapse_times_conformal_factor_correction, shift_correction,
-        conformal_factor_flux_correction,
-        lapse_times_conformal_factor_flux_correction,
-        longitudinal_shift_correction):
+    momentum_density, extrinsic_curvature_trace_gradient, conformal_metric,
+    inv_conformal_metric, conformal_factor, lapse_times_conformal_factor,
+    conformal_factor_flux, lapse_times_conformal_factor_flux,
+    longitudinal_shift, conformal_factor_correction,
+    lapse_times_conformal_factor_correction, shift_correction,
+    conformal_factor_flux_correction,
+    lapse_times_conformal_factor_flux_correction,
+    longitudinal_shift_correction):
     longitudinal_shift_square = np.einsum('ij,kl,ik,jl', conformal_metric,
                                           conformal_metric, longitudinal_shift,
                                           longitudinal_shift)
@@ -240,13 +238,13 @@ def linearized_distortion_hamiltonian_sources_with_lapse_and_shift(
 
 
 def euclidean_linearized_distortion_hamiltonian_sources_with_lapse_and_shift(
-        momentum_density, extrinsic_curvature_trace_gradient, conformal_factor,
-        lapse_times_conformal_factor, conformal_factor_flux,
-        lapse_times_conformal_factor_flux, longitudinal_shift,
-        conformal_factor_correction, lapse_times_conformal_factor_correction,
-        shift_correction, conformal_factor_flux_correction,
-        lapse_times_conformal_factor_flux_correction,
-        longitudinal_shift_correction):
+    momentum_density, extrinsic_curvature_trace_gradient, conformal_factor,
+    lapse_times_conformal_factor, conformal_factor_flux,
+    lapse_times_conformal_factor_flux, longitudinal_shift,
+    conformal_factor_correction, lapse_times_conformal_factor_correction,
+    shift_correction, conformal_factor_flux_correction,
+    lapse_times_conformal_factor_flux_correction,
+    longitudinal_shift_correction):
     return linearized_distortion_hamiltonian_sources_with_lapse_and_shift(
         momentum_density, extrinsic_curvature_trace_gradient, np.identity(3),
         np.identity(3), conformal_factor, lapse_times_conformal_factor,
@@ -259,20 +257,20 @@ def euclidean_linearized_distortion_hamiltonian_sources_with_lapse_and_shift(
 
 
 def distortion_lapse_sources_with_shift(
-        momentum_density, extrinsic_curvature_trace_gradient, conformal_metric,
-        inv_conformal_metric, minus_div_dt_conformal_metric, conformal_factor,
-        lapse_times_conformal_factor, conformal_factor_flux,
-        lapse_times_conformal_factor_flux, longitudinal_shift):
+    momentum_density, extrinsic_curvature_trace_gradient, conformal_metric,
+    inv_conformal_metric, minus_div_dt_conformal_metric, conformal_factor,
+    lapse_times_conformal_factor, conformal_factor_flux,
+    lapse_times_conformal_factor_flux, longitudinal_shift):
     return (7. / 32. * conformal_factor**6 / lapse_times_conformal_factor *
             np.einsum('ij,kl,ik,jl', conformal_metric, conformal_metric,
                       longitudinal_shift, longitudinal_shift))
 
 
 def euclidean_distortion_lapse_sources_with_shift(
-        momentum_density, extrinsic_curvature_trace_gradient,
-        minus_div_dt_conformal_metric, conformal_factor,
-        lapse_times_conformal_factor, conformal_factor_flux,
-        lapse_times_conformal_factor_flux, longitudinal_shift):
+    momentum_density, extrinsic_curvature_trace_gradient,
+    minus_div_dt_conformal_metric, conformal_factor,
+    lapse_times_conformal_factor, conformal_factor_flux,
+    lapse_times_conformal_factor_flux, longitudinal_shift):
     return distortion_lapse_sources_with_shift(
         momentum_density, extrinsic_curvature_trace_gradient, np.identity(3),
         np.identity(3), minus_div_dt_conformal_metric, conformal_factor,
@@ -281,14 +279,14 @@ def euclidean_distortion_lapse_sources_with_shift(
 
 
 def linearized_distortion_lapse_sources_with_shift(
-        momentum_density, extrinsic_curvature_trace_gradient, conformal_metric,
-        inv_conformal_metric, conformal_factor, lapse_times_conformal_factor,
-        conformal_factor_flux, lapse_times_conformal_factor_flux,
-        longitudinal_shift, conformal_factor_correction,
-        lapse_times_conformal_factor_correction, shift_correction,
-        conformal_factor_flux_correction,
-        lapse_times_conformal_factor_flux_correction,
-        longitudinal_shift_correction):
+    momentum_density, extrinsic_curvature_trace_gradient, conformal_metric,
+    inv_conformal_metric, conformal_factor, lapse_times_conformal_factor,
+    conformal_factor_flux, lapse_times_conformal_factor_flux,
+    longitudinal_shift, conformal_factor_correction,
+    lapse_times_conformal_factor_correction, shift_correction,
+    conformal_factor_flux_correction,
+    lapse_times_conformal_factor_flux_correction,
+    longitudinal_shift_correction):
     longitudinal_shift_square = np.einsum('ij,kl,ik,jl', conformal_metric,
                                           conformal_metric, longitudinal_shift,
                                           longitudinal_shift)
@@ -307,13 +305,13 @@ def linearized_distortion_lapse_sources_with_shift(
 
 
 def euclidean_linearized_distortion_lapse_sources_with_shift(
-        momentum_density, extrinsic_curvature_trace_gradient, conformal_factor,
-        lapse_times_conformal_factor, conformal_factor_flux,
-        lapse_times_conformal_factor_flux, longitudinal_shift,
-        conformal_factor_correction, lapse_times_conformal_factor_correction,
-        shift_correction, conformal_factor_flux_correction,
-        lapse_times_conformal_factor_flux_correction,
-        longitudinal_shift_correction):
+    momentum_density, extrinsic_curvature_trace_gradient, conformal_factor,
+    lapse_times_conformal_factor, conformal_factor_flux,
+    lapse_times_conformal_factor_flux, longitudinal_shift,
+    conformal_factor_correction, lapse_times_conformal_factor_correction,
+    shift_correction, conformal_factor_flux_correction,
+    lapse_times_conformal_factor_flux_correction,
+    longitudinal_shift_correction):
     return linearized_distortion_lapse_sources_with_shift(
         momentum_density, extrinsic_curvature_trace_gradient, np.identity(3),
         np.identity(3), conformal_factor, lapse_times_conformal_factor,

@@ -12,5 +12,5 @@ add_test_library(
   ${LIBRARY}
   "PointwiseFunctions/AnalyticSolutions/Xcts/"
   "${LIBRARY_SOURCES}"
-  "DataStructures;Utilities;Xcts;XctsSolutions"
+  "CoordinateMaps;DataStructures;Domain;Spectral;Utilities;Xcts;XctsSolutions"
   )
