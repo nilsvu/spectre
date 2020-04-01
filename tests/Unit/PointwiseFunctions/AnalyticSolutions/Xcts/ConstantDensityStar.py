@@ -15,19 +15,38 @@ def compute_alpha(density, radius):
     return newton(func=f, fprime=fprime, x0=2. * np.sqrt(5.))
 
 
+def compute_inner_prefactor(density):
+    return (3. / (2. * np.pi * density))**(1. / 4.)
+
+
 def sobolov(r, alpha, radius):
     return np.sqrt(alpha * radius / (r**2 + (alpha * radius)**2))
 
 
+def sobolov_dr_over_r(r, alpha, radius):
+    return -np.sqrt(alpha * radius / (r**2 + (alpha * radius)**2)**3)
+
+
 def conformal_factor(x, density, radius):
     alpha = compute_alpha(density, radius)
-    C = (3. / (2. * np.pi * density))**(1. / 4.)
+    C = compute_inner_prefactor(density)
     r = np.linalg.norm(x)
     if r <= radius:
         return C * sobolov(r, alpha, radius)
     else:
         beta = radius * (C * sobolov(radius, alpha, radius) - 1.)
         return beta / r + 1.
+
+
+def conformal_factor_gradient(x, density, radius):
+    alpha = compute_alpha(density, radius)
+    C = compute_inner_prefactor(density)
+    r = np.linalg.norm(x)
+    if r <= radius:
+        return -C * sobolov_dr_over_r(r, alpha, radius) * x
+    else:
+        beta = radius * (C * sobolov(radius, alpha, radius) - 1.)
+        return -beta / r**3 * x
 
 
 def initial_conformal_factor(x, density, radius):
