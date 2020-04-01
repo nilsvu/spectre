@@ -10,12 +10,21 @@
 #include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
+#include "Domain/CoordinateMaps/Affine.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.tpp"
+#include "Domain/CoordinateMaps/ProductMaps.hpp"
+#include "Domain/CoordinateMaps/ProductMaps.tpp"
+#include "Domain/LogicalCoordinates.hpp"
+#include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"  // IWYU pragma: keep
 #include "Framework/CheckWithRandomValues.hpp"
 #include "Framework/SetupLocalPythonEnvironment.hpp"
 #include "Framework/TestCreation.hpp"
 #include "Framework/TestHelpers.hpp"
+#include "Helpers/PointwiseFunctions/AnalyticSolutions/FirstOrderEllipticSolutionsTestHelpers.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
+#include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/ConstantDensityStar.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
@@ -105,6 +114,35 @@ void test_solution(const double density, const double radius,
       TestHelpers::test_creation<Xcts::Solutions::ConstantDensityStar>(options);
   CHECK(created_solution == solution);
   test_serialization(solution);
+
+  {
+    INFO("Verify the solution solves the XCTS system");
+    using system = Xcts::FirstOrderSystem<Xcts::Equations::Hamiltonian,
+                                          Xcts::Geometry::Euclidean>;
+    const Mesh<3> mesh{12, Spectral::Basis::Legendre,
+                       Spectral::Quadrature::GaussLobatto};
+    using AffineMap = domain::CoordinateMaps::Affine;
+    using AffineMap3D =
+        domain::CoordinateMaps::ProductOf3Maps<AffineMap, AffineMap, AffineMap>;
+    const domain::CoordinateMap<Frame::Logical, Frame::Inertial, AffineMap3D>
+        coord_map{{{-1., 1., 0., test_radius},
+                   {-1., 1., 0., test_radius},
+                   {-1., 1., 0., test_radius}}};
+    const auto logical_coords = logical_coordinates(mesh);
+    const auto inertial_coords = coord_map(logical_coords);
+    const auto background_fields = solution.variables(
+        inertial_coords, typename system::background_fields{});
+    FirstOrderEllipticSolutionsTestHelpers::verify_solution<system>(
+        solution, typename system::fluxes{}, mesh, coord_map, 5.e-2,
+        std::tuple<>{},
+        std::make_tuple(
+            get<gr::Tags::EnergyDensity<DataVector>>(background_fields),
+            get<gr::Tags::TraceExtrinsicCurvature<DataVector>>(
+                background_fields),
+            get<Xcts::Tags::
+                    LongitudinalShiftMinusDtConformalMetricOverLapseSquare<
+                        DataVector>>(background_fields)));
+  }
 }
 
 }  // namespace
