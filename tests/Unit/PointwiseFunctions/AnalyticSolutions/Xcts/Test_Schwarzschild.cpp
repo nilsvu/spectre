@@ -10,11 +10,20 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
+#include "Domain/CoordinateMaps/Affine.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.tpp"
+#include "Domain/CoordinateMaps/ProductMaps.hpp"
+#include "Domain/CoordinateMaps/ProductMaps.tpp"
+#include "Domain/LogicalCoordinates.hpp"
+#include "Domain/Mesh.hpp"
+#include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "Framework/CheckWithRandomValues.hpp"
 #include "Framework/SetupLocalPythonEnvironment.hpp"
 #include "Framework/TestCreation.hpp"
 #include "Framework/TestHelpers.hpp"
+#include "Helpers/PointwiseFunctions/AnalyticSolutions/FirstOrderEllipticSolutionsTestHelpers.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Schwarzschild.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
@@ -108,6 +117,40 @@ void test_solution(const double radius_at_horizon,
       TestHelpers::test_creation<Xcts::Solutions::Schwarzschild<Coords>>("");
   CHECK(created_solution == solution);
   test_serialization(solution);
+
+  {
+    INFO("Verify the solution solves the XCTS system");
+    using system =
+        Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift>;
+    const Mesh<3> mesh{12, Spectral::Basis::Legendre,
+                       Spectral::Quadrature::GaussLobatto};
+    using AffineMap = domain::CoordinateMaps::Affine;
+    using AffineMap3D =
+        domain::CoordinateMaps::ProductOf3Maps<AffineMap, AffineMap, AffineMap>;
+    const domain::CoordinateMap<Frame::Logical, Frame::Inertial, AffineMap3D>
+        coord_map{{{-1., 1., inner_radius, outer_radius},
+                   {-1., 1., inner_radius, outer_radius},
+                   {-1., 1., inner_radius, outer_radius}}};
+    const auto logical_coords = logical_coordinates(mesh);
+    const auto inertial_coords = coord_map(logical_coords);
+    const auto matter_sources =
+        solution.variables(inertial_coords, matter_source_tags{});
+    const auto background_fields =
+        solution.variables(inertial_coords, background_tags{});
+    FirstOrderEllipticSolutionsTestHelpers::verify_solution<system>(
+        solution, typename system::fluxes{}, mesh, coord_map, 1.e-3,
+        std::tuple<>{},
+        std::make_tuple(
+            get<gr::Tags::EnergyDensity<DataVector>>(matter_sources),
+            get<gr::Tags::StressTrace<DataVector>>(matter_sources),
+            get<gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>>(
+                matter_sources),
+            get<gr::Tags::TraceExtrinsicCurvature<DataVector>>(
+                background_fields),
+            get<::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
+                              tmpl::size_t<3>, Frame::Inertial>>(
+                background_fields)));
+  }
 }
 
 }  // namespace
