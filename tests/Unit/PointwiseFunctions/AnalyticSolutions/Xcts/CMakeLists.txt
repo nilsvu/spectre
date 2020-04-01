@@ -15,3 +15,8 @@ add_test_library(
   "${LIBRARY_SOURCES}"
   "XctsSolutions;Utilities"
   )
+
+spectre_add_python_bindings_test(
+  "Unit.AnalyticSolutions.Xcts.Python.VerifySolution"
+  "Test_VerifySolution.py"
+  "Unit;Elliptic;PointwiseFunctions")
