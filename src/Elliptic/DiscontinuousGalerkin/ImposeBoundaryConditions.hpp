@@ -14,7 +14,6 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/FluxCommunicationTypes.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
-#include "Parallel/ConstGlobalCache.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
@@ -24,6 +23,10 @@ namespace Tags {
 template <typename Tag>
 struct Magnitude;
 }  // namespace Tags
+namespace Parallel {
+template <typename Metavariables>
+struct ConstGlobalCache;
+}  // namespace Parallel
 // IWYU pragma: no_forward_declare db::DataBox
 /// \endcond
 
@@ -120,7 +123,7 @@ struct ImposeHomogeneousDirichletBoundaryConditions {
             typename ActionList, typename ParallelComponent>
   static auto apply(db::DataBox<DbTags>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::ConstGlobalCache<Metavariables>& cache,
+                    const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
@@ -157,7 +160,7 @@ struct ImposeHomogeneousDirichletBoundaryConditions {
     const auto& temporal_id = db::get<typename Metavariables::temporal_id>(box);
 
     const auto& normal_dot_numerical_flux_computer =
-        get<typename Metavariables::normal_dot_numerical_flux>(cache);
+        get<typename Metavariables::normal_dot_numerical_flux>(box);
 
     auto interior_data = DgActions_detail::compute_local_mortar_data(
         box, normal_dot_numerical_flux_computer,
