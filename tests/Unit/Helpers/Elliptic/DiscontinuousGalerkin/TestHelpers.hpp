@@ -85,6 +85,26 @@ template <size_t VolumeDim>
 create_mortars(const ElementId<VolumeDim>& element_id,
                const DgElementArray<VolumeDim>& dg_elements) noexcept;
 
+/// Empty boundary data for when we don't need or want to compute boundary
+/// terms, e.g. for analytic solutions that are continuous across element
+/// boundaries.
+struct EmptyBoundaryData {
+  template <size_t MortarDim>
+  EmptyBoundaryData project_to_mortar(
+      const Mesh<MortarDim>& /* face_mesh */,
+      const Mesh<MortarDim>& /* mortar_mesh */,
+      const std::array<Spectral::MortarSize, MortarDim>& /* mortar_size */)
+      const noexcept {
+    return {};
+  }
+  template <size_t MortarDim>
+  void orient_on_slice(
+      const Index<MortarDim>& /* slice_extents */,
+      const size_t /* sliced_dim */,
+      const OrientationMap<MortarDim + 1>& /* orientation_of_neighbor */) const
+      noexcept {}
+};
+
 namespace detail {
 // Dummy tag to check the system's magnitude tag
 struct TestTag : db::SimpleTag {
