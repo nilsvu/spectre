@@ -35,9 +35,12 @@ using source_tags = db::wrap_tags_in<Tags::FixedSource, field_tags>;
 
 struct ConstantDensityStarProxy : Xcts::Solutions::ConstantDensityStar {
   using Xcts::Solutions::ConstantDensityStar::ConstantDensityStar;
-  tuples::tagged_tuple_from_typelist<field_tags> field_variables(
-      const tnsr::I<DataVector, 3, Frame::Inertial>& x) const noexcept {
-    return Xcts::Solutions::ConstantDensityStar::variables(x, field_tags{});
+  tuples::tagged_tuple_from_typelist<
+      tmpl::append<field_tags, auxiliary_field_tags>>
+  field_variables(const tnsr::I<DataVector, 3, Frame::Inertial>& x) const
+      noexcept {
+    return Xcts::Solutions::ConstantDensityStar::variables(
+        x, tmpl::append<field_tags, auxiliary_field_tags>{});
   }
   tuples::tagged_tuple_from_typelist<initial_tags> initial_variables(
       const tnsr::I<DataVector, 3, Frame::Inertial>& x) const noexcept {
