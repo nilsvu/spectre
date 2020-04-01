@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
 #include <cstddef>
 #include <string>
 #include <tuple>
@@ -15,6 +16,7 @@
 #include "DataStructures/SliceVariables.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "DataStructures/Tensor/TensorData.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Domain/Element.hpp"
 #include "Domain/ElementId.hpp"
@@ -88,6 +90,30 @@ namespace detail {
 struct TestTag : db::SimpleTag {
   using type = Scalar<DataVector>;
 };
+
+template <size_t Dim, typename TagsList>
+void append_to_volume_data_dump(
+    const ElementId<Dim>& element_id, const Variables<TagsList> vars,
+    const gsl::not_null<std::vector<TensorComponent>*> all_tensor_components) {
+  const std::string grid_name = get_output(element_id);
+  tmpl::for_each<TagsList>([&vars, &all_tensor_components,
+                            &grid_name](const auto tag_v) {
+    using tag = tmpl::type_from<decltype(tag_v)>;
+    const auto& tensor = get<tag>(vars);
+    for (size_t i = 0; i < tensor.size(); ++i) {
+      all_tensor_components->emplace_back(
+          grid_name + "/" + db::tag_name<tag>() + tensor.component_suffix(i),
+          tensor[i]);
+    }
+  });
+}
+
+template <size_t Dim>
+void dump_volume_data_to_file(
+    const DgElementArray<Dim>& elements,
+    std::unordered_map<ElementId<Dim>, std::vector<TensorComponent>>&&
+        tensor_components,
+    const std::string& h5_file_name);
 }  // namespace detail
 
 /*!
@@ -116,6 +142,8 @@ apply_first_order_dg_operator(
     const ElementId<Dim>& element_id, const DgElementArray<Dim>& dg_elements,
     const std::unordered_map<ElementId<Dim>, Variables<TagsList>>&
         all_variables,
+    const boost::optional<gsl::not_null<std::vector<TensorComponent>*>>&
+        volume_data_dump,
     const FluxesComputer& fluxes_computer,
     PackageFluxesArgs&& package_fluxes_args,
     PackageSourcesArgs&& package_sources_args,
@@ -139,21 +167,32 @@ apply_first_order_dg_operator(
             vars, fluxes_computer, fluxes_args...);
       },
       package_fluxes_args(element_id, dg_element));
+  if (volume_data_dump) {
+    detail::append_to_volume_data_dump(element_id, fluxes, *volume_data_dump);
+  }
 
   // Compute divergences
   const auto div_fluxes =
       divergence(fluxes, dg_element.mesh, dg_element.inv_jacobian);
+  if (volume_data_dump) {
+    detail::append_to_volume_data_dump(element_id, div_fluxes,
+                                       *volume_data_dump);
+  }
+
+  // Compute sources
+  const auto sources = cpp17::apply(
+      [&vars](const auto&... sources_args) {
+        return ::elliptic::first_order_sources<PrimalFields, AuxiliaryFields,
+                                               SourcesComputer>(
+            vars, sources_args...);
+      },
+      package_sources_args(element_id, dg_element));
+  if (volume_data_dump) {
+    detail::append_to_volume_data_dump(element_id, sources, *volume_data_dump);
+  }
 
   // Compute bulk contribution in central element
-  ::elliptic::first_order_operator(
-      make_not_null(&result), div_fluxes,
-      cpp17::apply(
-          [&vars](const auto&... sources_args) {
-            return ::elliptic::first_order_sources<
-                PrimalFields, AuxiliaryFields, SourcesComputer>(
-                vars, sources_args...);
-          },
-          package_sources_args(element_id, dg_element)));
+  ::elliptic::first_order_operator(make_not_null(&result), div_fluxes, sources);
 
   // Setup mortars
   const auto mortars = create_mortars(element_id, dg_elements);
@@ -334,8 +373,8 @@ Matrix build_operator_matrix(
 
       for (const auto& id_and_element : elements) {
         // Apply the operator
-        const auto column_element_data =
-            apply_dg_operator(id_and_element.first, elements, all_variables);
+        const auto column_element_data = apply_dg_operator(
+            id_and_element.first, elements, all_variables, boost::none);
 
         // Store result in matrix
         for (size_t j = 0; j < column_element_data.size(); j++) {
@@ -355,7 +394,8 @@ template <typename System, typename SolutionType, typename ApplyDgOperator>
 auto apply_dg_operator_to_solution(
     const SolutionType& solution,
     const DomainCreator<System::volume_dim>& domain_creator,
-    ApplyDgOperator&& apply_dg_operator) {
+    ApplyDgOperator&& apply_dg_operator,
+    const boost::optional<std::string>& dump_to_file = boost::none) {
   static constexpr size_t volume_dim = System::volume_dim;
   using all_fields_tags =
       db::get_variables_tags_list<typename System::fields_tag>;
@@ -364,6 +404,18 @@ auto apply_dg_operator_to_solution(
       db::wrap_tags_in<::Tags::FixedSource, all_fields_tags>;
 
   const auto elements = create_elements(domain_creator);
+
+  // Construct volume data dump
+  boost::optional<
+      std::unordered_map<ElementId<volume_dim>, std::vector<TensorComponent>>>
+      volume_data_dump = boost::none;
+  if (dump_to_file) {
+    volume_data_dump = std::unordered_map<ElementId<volume_dim>,
+                                          std::vector<TensorComponent>>{};
+    for (const auto& id_and_element : elements) {
+      (*volume_data_dump)[id_and_element.first];
+    }
+  }
 
   // Evaluate the analytic solution on all elements. Also evaluate the
   // solution's fixed sources (for primal fields only) on all elements.
@@ -384,6 +436,14 @@ auto apply_dg_operator_to_solution(
         inertial_coords, db::wrap_tags_in<::Tags::FixedSource,
                                           typename System::primal_fields>{}));
     fixed_sources[element_id] = std::move(element_fixed_sources);
+    if (volume_data_dump) {
+      const auto element_volume_data_dump =
+          make_not_null(&(*volume_data_dump).at(element_id));
+      detail::append_to_volume_data_dump(element_id, solution_vars[element_id],
+                                         element_volume_data_dump);
+      detail::append_to_volume_data_dump(element_id, fixed_sources[element_id],
+                                         element_volume_data_dump);
+    }
   }
 
   // Apply the DG operator on all elements
@@ -391,9 +451,28 @@ auto apply_dg_operator_to_solution(
       operator_applied_to_solution_vars{};
   for (const auto& id_and_element : elements) {
     const auto& element_id = id_and_element.first;
+    boost::optional<gsl::not_null<std::vector<TensorComponent>*>>
+        element_volume_data_dump = boost::none;
+    if (volume_data_dump) {
+      element_volume_data_dump =
+          make_not_null(&(*volume_data_dump).at(element_id));
+    }
+    auto dg_operator_applied_to_element = apply_dg_operator(
+        element_id, elements, solution_vars, element_volume_data_dump);
+    if (volume_data_dump) {
+      detail::append_to_volume_data_dump(element_id,
+                                         dg_operator_applied_to_element,
+                                         *element_volume_data_dump);
+    }
     operator_applied_to_solution_vars[element_id] =
-        apply_dg_operator(element_id, elements, solution_vars) -
-        fixed_sources.at(element_id);
+        std::move(dg_operator_applied_to_element) -
+        std::move(fixed_sources.at(element_id));
+  }
+
+  // Dump to file if requested
+  if (dump_to_file) {
+    detail::dump_volume_data_to_file(elements, std::move(*volume_data_dump),
+                             *dump_to_file);
   }
   return operator_applied_to_solution_vars;
 }

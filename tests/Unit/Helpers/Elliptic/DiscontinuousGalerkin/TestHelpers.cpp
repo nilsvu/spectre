@@ -8,7 +8,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include "DataStructures/Index.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "DataStructures/Tensor/TensorData.hpp"
 #include "Domain/CreateInitialElement.hpp"
 #include "Domain/CreateInitialMesh.hpp"
 #include "Domain/Creators/DomainCreator.hpp"
@@ -19,8 +21,12 @@
 #include "Domain/LogicalCoordinates.hpp"
 #include "Domain/Mesh.hpp"
 #include "Domain/SegmentId.hpp"
+#include "IO/H5/AccessType.hpp"
+#include "IO/H5/File.hpp"
+#include "IO/H5/VolumeData.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
+#include "Utilities/GetOutput.hpp"
 
 /// \cond
 namespace TestHelpers {
@@ -116,17 +122,57 @@ create_mortars(const ElementId<VolumeDim>& element_id,
   return mortars;
 }
 
+namespace detail {
+
+template <size_t Dim>
+void dump_volume_data_to_file(
+    const DgElementArray<Dim>& elements,
+    std::unordered_map<ElementId<Dim>, std::vector<TensorComponent>>&&
+        tensor_components,
+    const std::string& h5_file_name) {
+  h5::H5File<h5::AccessType::ReadWrite> h5_file{h5_file_name};
+  auto& volume_file = h5_file.insert<h5::VolumeData>("/element_data");
+  std::vector<ExtentsAndTensorVolumeData> extents_and_tensors{};
+  for (const auto& id_and_element : elements) {
+    const auto& element_id = id_and_element.first;
+    const auto& dg_element = id_and_element.second;
+    const std::string grid_name = get_output(element_id);
+    auto element_tensor_components =
+        std::move(tensor_components.at(element_id));
+    const auto& extents = dg_element.mesh.extents().indices();
+    const auto logical_coords = logical_coordinates(dg_element.mesh);
+    const auto inertial_coords = dg_element.element_map(logical_coords);
+    for (size_t i = 0; i < inertial_coords.size(); ++i) {
+      element_tensor_components.emplace_back(
+          grid_name + "/InertialCoordinates" +
+              inertial_coords.component_suffix(i),
+          inertial_coords[i]);
+    }
+    extents_and_tensors.emplace_back(
+        std::vector<size_t>{extents.begin(), extents.end()},
+        std::move(element_tensor_components));
+  }
+  volume_file.write_volume_data(0, 0., std::move(extents_and_tensors));
+}
+
+}  // namespace detail
+
 #define DIM(data) BOOST_PP_TUPLE_ELEM(0, data)
 
-#define INSTANTIATE(r, data)                                           \
-  template struct ElementOrdering<DIM(data)>;                          \
-  template DgElementArray<DIM(data)> create_elements(                  \
-      const DomainCreator<DIM(data)>& domain_creator) noexcept;        \
-  template ::dg::MortarMap<                                            \
-      DIM(data),                                                       \
-      std::pair<Mesh<DIM(data) - 1>, ::dg::MortarSize<DIM(data) - 1>>> \
-  create_mortars(const ElementId<DIM(data)>& element_id,               \
-                 const DgElementArray<DIM(data)>& dg_elements) noexcept;
+#define INSTANTIATE(r, data)                                                   \
+  template struct ElementOrdering<DIM(data)>;                                  \
+  template DgElementArray<DIM(data)> create_elements(                          \
+      const DomainCreator<DIM(data)>& domain_creator) noexcept;                \
+  template ::dg::MortarMap<                                                    \
+      DIM(data),                                                               \
+      std::pair<Mesh<DIM(data) - 1>, ::dg::MortarSize<DIM(data) - 1>>>         \
+  create_mortars(const ElementId<DIM(data)>& element_id,                       \
+                 const DgElementArray<DIM(data)>& dg_elements) noexcept;       \
+  template void detail::dump_volume_data_to_file(                              \
+      const DgElementArray<DIM(data)>& elements,                               \
+      std::unordered_map<ElementId<DIM(data)>, std::vector<TensorComponent>>&& \
+          tensor_components,                                                   \
+      const std::string& h5_file_name);
 
 GENERATE_INSTANTIATIONS(INSTANTIATE, (1, 2, 3))
 

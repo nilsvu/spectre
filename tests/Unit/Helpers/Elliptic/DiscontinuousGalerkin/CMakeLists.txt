@@ -18,4 +18,7 @@ target_link_libraries(
   LinearOperators
   Spectral
   Utilities
+
+  PRIVATE
+  IO
   )
