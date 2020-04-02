@@ -14,6 +14,7 @@ spectre_python_add_module(
   DomainCreator.cpp
   Interval.cpp
   Rectangle.cpp
+  Shell.cpp
   )
 
 spectre_python_link_libraries(
