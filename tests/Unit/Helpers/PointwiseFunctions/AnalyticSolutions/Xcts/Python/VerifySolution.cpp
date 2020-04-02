@@ -16,7 +16,9 @@
 #include "Helpers/Elliptic/DiscontinuousGalerkin/TestHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/SimpleBoundaryData.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/ConstantDensityStar.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Xcts/Schwarzschild.hpp"
 #include "Utilities/GetOutput.hpp"
+#include "Utilities/TaggedTuple.hpp"
 
 // Allow using boost::optional in Python bindings
 namespace pybind11 {
@@ -35,12 +37,13 @@ namespace py_bindings {
 
 namespace {
 
-template <typename SolutionType>
+template <typename SolutionType, ::Xcts::Equations EnabledEquations>
 auto verify_solution_impl(
     const SolutionType& solution, const DomainCreator<3>& domain_creator,
     const boost::optional<std::string>& dump_to_file = boost::none) {
-  using system = ::Xcts::FirstOrderSystem<::Xcts::Equations::Hamiltonian>;
+  using system = ::Xcts::FirstOrderSystem<EnabledEquations>;
   const typename system::fluxes fluxes_computer{};
+  using sources_args_tags = typename system::sources::argument_tags;
   const auto dg_operator_applied_to_solution =
       TestHelpers::elliptic::dg::apply_dg_operator_to_solution<system>(
           solution, domain_creator,
@@ -55,11 +58,11 @@ auto verify_solution_impl(
                       logical_coordinates(dg_element.mesh);
                   const auto inertial_coords =
                       dg_element.element_map(logical_coords);
-                  return std::make_tuple(get<
-                                         gr::Tags::EnergyDensity<DataVector>>(
-                      solution.variables(
-                          inertial_coords,
-                          tmpl::list<gr::Tags::EnergyDensity<DataVector>>{})));
+                  return tuples::apply(
+                      [](const auto&... args) {
+                        return std::make_tuple(args...);
+                      },
+                      solution.variables(inertial_coords, sources_args_tags{}));
                 },
                 [](const auto&... /* unused */) {
                   return TestHelpers::elliptic::dg::EmptyBoundaryData{};
@@ -82,16 +85,33 @@ auto verify_solution_impl(
   return result;
 }
 
-void bind_verify_constant_density_star(py::module& m) {  // NOLINT
-  m.def("verify_constant_density_star",
-        &verify_solution_impl<::Xcts::Solutions::ConstantDensityStar>,
+template <typename SolutionType, ::Xcts::Equations EnabledEquations>
+void bind_verify_solution_impl(py::module& m,
+                               const std::string& name) {  // NOLINT
+  m.def(("verify_" + name).c_str(),
+        &verify_solution_impl<SolutionType, EnabledEquations>,
         py::arg("solution"), py::arg("domain_creator"),
         py::arg("dump_to_file") = boost::optional<std::string>{boost::none});
 }
 }  // namespace
 
 void bind_verify_solution(py::module& m) {  // NOLINT
-  bind_verify_constant_density_star(m);
+  bind_verify_solution_impl<::Xcts::Solutions::ConstantDensityStar,
+                            ::Xcts::Equations::Hamiltonian>(
+      m, "constant_density_star");
+  bind_verify_solution_impl<
+      ::Xcts::Solutions::Schwarzschild<
+          ::Xcts::Solutions::SchwarzschildCoordinates::Isotropic>,
+      ::Xcts::Equations::HamiltonianLapseAndShift>(m,
+                                                   "schwarzschild_isotropic");
+  bind_verify_solution_impl<
+      ::Xcts::Solutions::Schwarzschild<
+          ::Xcts::Solutions::SchwarzschildCoordinates::KerrSchildIsotropic>,
+      ::Xcts::Equations::HamiltonianLapseAndShift>(
+      m, "schwarzschild_kerr_schild_isotropic");
+  // bind_verify_solution_impl<::Xcts::Solutions::Schwarzschild<
+  //     SchwarzschildCoordinates::EddingtonFinkelstein>>(
+  //     m, "schwarzschild_eddington_finkelstein");
 }
 
 }  // namespace py_bindings
