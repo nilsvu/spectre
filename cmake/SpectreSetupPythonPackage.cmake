@@ -117,6 +117,10 @@ function(SPECTRE_PYTHON_ADD_MODULE MODULE_NAME)
       PRIVATE
       SpectreFlags
       )
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+      target_compile_options(${ARG_LIBRARY_NAME}
+        PRIVATE -fsized-deallocation)
+    endif()
     # We don't want the 'lib' prefix for python modules, so we set the output name
     set_target_properties(
       ${ARG_LIBRARY_NAME}
