@@ -7,10 +7,14 @@ namespace py = pybind11;
 
 namespace py_bindings {
 void bind_datavector(py::module& m);  // NOLINT
-void bind_matrix(py::module& m);      // NOLINT
+void bind_dense_matrix(py::module& m);  // NOLINT
+void bind_dense_vector(py::module& m);      // NOLINT
+void bind_matrix(py::module& m);        // NOLINT
 }  // namespace py_bindings
 
 PYBIND11_MODULE(_PyDataStructures, m) {  // NOLINT
   py_bindings::bind_datavector(m);
+  py_bindings::bind_dense_matrix(m);
+  py_bindings::bind_dense_vector(m);
   py_bindings::bind_matrix(m);
 }

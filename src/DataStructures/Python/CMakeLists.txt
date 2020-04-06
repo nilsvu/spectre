@@ -9,6 +9,8 @@ spectre_python_add_module(
   SOURCES
   Bindings.cpp
   DataVector.cpp
+  DenseMatrix.cpp
+  DenseVector.cpp
   Matrix.cpp
   )
 
