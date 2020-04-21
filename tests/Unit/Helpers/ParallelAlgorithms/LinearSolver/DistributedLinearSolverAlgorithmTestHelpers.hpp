@@ -23,6 +23,7 @@
 #include "DataStructures/DenseVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
+#include "Domain/ElementId.hpp"
 #include "ErrorHandling/Error.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
 #include "Helpers/ParallelAlgorithms/LinearSolver/LinearSolverAlgorithmTestHelpers.hpp"
@@ -164,11 +165,12 @@ struct ComputeOperatorAction {
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       const Parallel::ConstGlobalCache<Metavariables>& cache,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
-      const int array_index,
+      const ElementId<1>& element_index,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ActionList /*meta*/,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ParallelComponent* const /*meta*/) noexcept {
+    int array_index = element_index.segment_ids()[0].index();
     const auto& operator_matrices = get<LinearOperator>(cache);
     const auto number_of_elements = operator_matrices.size();
     const auto& linear_operator = gsl::at(operator_matrices, array_index);
@@ -185,7 +187,8 @@ struct ComputeOperatorAction {
         Parallel::ReductionData<
             Parallel::ReductionDatum<db::item_type<OperandTag>, funcl::Plus<>>>{
             operator_applied_to_operand},
-        Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
+        Parallel::get_parallel_component<ParallelComponent>(
+            cache)[element_index],
         Parallel::get_parallel_component<ParallelComponent>(cache));
 
     // Terminate algorithm for now. The reduction will be broadcast to the
@@ -205,9 +208,10 @@ struct CollectOperatorAction {
                 DbTagsList, local_operator_applied_to_operand_tag>> = nullptr>
   static void apply(db::DataBox<DbTagsList>& box,
                     const Parallel::ConstGlobalCache<Metavariables>& cache,
-                    const int array_index,
+                    const ElementId<1>& element_index,
                     const Variables<tmpl::list<ScalarFieldOperandTag>>&
                         Ap_global_data) noexcept {
+    int array_index = element_index.segment_ids()[0].index();
     // This could be generalized to work on the Variables instead of the
     // Scalar, but it's only for the purpose of this test.
     const auto number_of_grid_points = get<LinearOperator>(cache)[0].columns();
@@ -227,7 +231,7 @@ struct CollectOperatorAction {
               *Ap)) = Ap_local;
         });
     // Proceed with algorithm
-    Parallel::get_parallel_component<ParallelComponent>(cache)[array_index]
+    Parallel::get_parallel_component<ParallelComponent>(cache)[element_index]
         .perform_algorithm(true);
   }
 };
@@ -242,11 +246,12 @@ struct TestResult {
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       const Parallel::ConstGlobalCache<Metavariables>& cache,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
-      const int array_index,
+      const ElementId<1>& element_index,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ActionList /*meta*/,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ParallelComponent* const /*meta*/) noexcept {
+    int array_index = element_index.segment_ids()[0].index();
     const auto& has_converged =
         get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box);
     SPECTRE_PARALLEL_REQUIRE(has_converged);
@@ -269,8 +274,10 @@ struct InitializeElement {
   static auto apply(db::DataBox<DbTagsList>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
                     const Parallel::ConstGlobalCache<Metavariables>& cache,
-                    const int array_index, const ActionList /*meta*/,
+                    const ElementId<1>& element_index,
+                    const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
+    int array_index = element_index.segment_ids()[0].index();
     const auto& source = gsl::at(get<Source>(cache), array_index);
     const size_t num_points = source.size();
 
@@ -350,7 +357,7 @@ struct ElementArray {
       array_allocation_tags>;
   using const_global_cache_tags =
       tmpl::list<LinearOperator, Source, ExpectedResult>;
-  using array_index = int;
+  using array_index = ElementId<1>;
 
   static void allocate_array(
       Parallel::CProxy_ConstGlobalCache<Metavariables>& global_cache,
