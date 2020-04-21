@@ -33,12 +33,18 @@ struct InitializeElement {
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
   using operand_tag =
       db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
-  using operator_applied_to_operand_tag =
-      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, operand_tag>;
+  using preconditioned_operand_tag =
+      db::add_tag_prefix<LinearSolver::Tags::Preconditioned, operand_tag>;
+  using operator_applied_to_preconditioned_operand_tag =
+      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
+                         preconditioned_operand_tag>;
   using orthogonalization_iteration_id_tag =
       db::add_tag_prefix<LinearSolver::Tags::Orthogonalization,
                          LinearSolver::Tags::IterationId<OptionsGroup>>;
-  using basis_history_tag = LinearSolver::Tags::KrylovSubspaceBasis<fields_tag>;
+  using basis_history_tag =
+      LinearSolver::Tags::KrylovSubspaceBasis<operand_tag>;
+  using preconditioned_basis_history_tag =
+      LinearSolver::Tags::KrylovSubspaceBasis<preconditioned_operand_tag>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -58,23 +64,28 @@ struct InitializeElement {
             db::AddSimpleTags<
                 LinearSolver::Tags::IterationId<OptionsGroup>,
                 initial_fields_tag, operator_applied_to_fields_tag, operand_tag,
-                operator_applied_to_operand_tag,
+                preconditioned_operand_tag,
+                operator_applied_to_preconditioned_operand_tag,
                 orthogonalization_iteration_id_tag, basis_history_tag,
+                preconditioned_basis_history_tag,
                 LinearSolver::Tags::HasConverged<OptionsGroup>>,
             compute_tags>(
             std::move(box),
             // The `PrepareSolve` action populates these tags with initial
             // values, except for `operator_applied_to_fields_tag` which is
             // expected to be filled at that point and
-            // `operator_applied_to_operand_tag` which is expected to be updated
-            // in every iteration of the algorithm.
+            // `operator_applied_to_preconditioned_operand_tag` which is
+            // expected to be updated in every iteration of the algorithm.
             std::numeric_limits<size_t>::max(),
             db::item_type<initial_fields_tag>{},
             db::item_type<operator_applied_to_fields_tag>{},
             db::item_type<operand_tag>{},
-            db::item_type<operator_applied_to_operand_tag>{},
+            db::item_type<preconditioned_operand_tag>{},
+            db::item_type<operator_applied_to_preconditioned_operand_tag>{},
             std::numeric_limits<size_t>::max(),
-            db::item_type<basis_history_tag>{}, Convergence::HasConverged{}));
+            db::item_type<basis_history_tag>{},
+            db::item_type<preconditioned_basis_history_tag>{},
+            Convergence::HasConverged{}));
   }
 };
 

@@ -94,13 +94,18 @@ struct Metavariables {
       LinearSolver::Tags::IterationId<typename linear_solver::options_group>;
   // For the GMRES linear solver we need to apply the DG operator to its
   // internal "operand" in every iteration of the algorithm.
-  using linear_operand_tag = db::add_tag_prefix<LinearSolver::Tags::Operand,
-                                                typename system::fields_tag>;
-  using primal_variables = db::wrap_tags_in<LinearSolver::Tags::Operand,
-                                            typename system::primal_fields>;
+  using linear_operand_tag =
+      db::add_tag_prefix<LinearSolver::Tags::Preconditioned,
+                         db::add_tag_prefix<LinearSolver::Tags::Operand,
+                                            typename system::fields_tag>>;
+  using primal_variables =
+      db::wrap_tags_in<LinearSolver::Tags::Preconditioned,
+                       db::wrap_tags_in<LinearSolver::Tags::Operand,
+                                        typename system::primal_fields>>;
   using auxiliary_variables =
-      db::wrap_tags_in<LinearSolver::Tags::Operand,
-                       typename system::auxiliary_fields>;
+      db::wrap_tags_in<LinearSolver::Tags::Preconditioned,
+                       db::wrap_tags_in<LinearSolver::Tags::Operand,
+                                        typename system::auxiliary_fields>>;
 
   // Parse numerical flux parameters from the input file to store in the cache.
   using normal_dot_numerical_flux = Tags::NumericalFlux<

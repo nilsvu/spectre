@@ -10,6 +10,7 @@
 #include "Helpers/ParallelAlgorithms/LinearSolver/LinearSolverAlgorithmTestHelpers.hpp"
 #include "Parallel/InitializationFunctions.hpp"
 #include "Parallel/Main.hpp"
+#include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Richardson/Richardson.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -18,19 +19,26 @@ namespace helpers_distributed = DistributedLinearSolverAlgorithmTestHelpers;
 
 namespace {
 
-struct ParallelRichardson {
+struct ParallelGmres {
   static constexpr OptionString help =
       "Options for the iterative linear solver";
 };
 
+struct Preconditioner {
+  static constexpr OptionString help = "Options for the preconditioner";
+};
+
 struct Metavariables {
   static constexpr const char* const help{
-      "Test the Richardson linear solver algorithm on multiple elements"};
+      "Test the preconditioned GMRES linear solver algorithm on multiple "
+      "elements"};
 
   using linear_solver =
-      LinearSolver::Richardson<typename helpers_distributed::fields_tag,
-                               ParallelRichardson>;
-  using preconditioner = void;
+      LinearSolver::Gmres<Metavariables, helpers_distributed::fields_tag,
+                          ParallelGmres>;
+  using preconditioner = LinearSolver::Richardson<
+      typename linear_solver::operand_tag, Preconditioner,
+      typename linear_solver::preconditioner_source_tag>;
 
   using component_list = helpers_distributed::component_list<Metavariables>;
   using element_observation_type = helpers::element_observation_type;

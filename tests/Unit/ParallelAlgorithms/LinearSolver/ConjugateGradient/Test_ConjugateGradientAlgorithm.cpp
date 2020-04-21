@@ -28,6 +28,7 @@ struct Metavariables {
   using linear_solver =
       LinearSolver::ConjugateGradient<Metavariables, helpers::fields_tag,
                                       SerialCg>;
+  using preconditioner = void;
 
   using component_list = helpers::component_list<Metavariables>;
   using element_observation_type = helpers::element_observation_type;

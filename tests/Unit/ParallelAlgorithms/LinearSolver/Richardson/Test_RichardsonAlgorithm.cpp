@@ -27,6 +27,7 @@ struct Metavariables {
 
   using linear_solver =
       LinearSolver::Richardson<helpers::fields_tag, SerialRichardson>;
+  using preconditioner = void;
 
   using component_list = helpers::component_list<Metavariables>;
   using element_observation_type = helpers::element_observation_type;

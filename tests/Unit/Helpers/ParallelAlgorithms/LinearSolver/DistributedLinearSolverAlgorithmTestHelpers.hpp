@@ -282,17 +282,42 @@ struct InitializeElement {
   }
 };
 
+namespace detail {
+
+template <typename Preconditioner>
+struct run_preconditioner {
+  using type =
+      tmpl::list<ComputeOperatorAction<typename Preconditioner::fields_tag>,
+                 typename Preconditioner::prepare_solve,
+                 ::Actions::RepeatUntil<
+                     LinearSolver::Tags::HasConverged<
+                         typename Preconditioner::options_group>,
+                     tmpl::list<typename Preconditioner::prepare_step,
+                                ComputeOperatorAction<
+                                    typename Preconditioner::operand_tag>,
+                                typename Preconditioner::perform_step>>>;
+};
+template <>
+struct run_preconditioner<void> {
+  using type = tmpl::list<>;
+};
+
+}  // namespace detail
+
 template <typename Metavariables>
 struct ElementArray {
   using chare_type = Parallel::Algorithms::Array;
   using metavariables = Metavariables;
   using linear_solver = typename Metavariables::linear_solver;
+  using preconditioner = typename Metavariables::preconditioner;
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
           tmpl::list<InitializeElement,
                      typename linear_solver::initialize_element,
                      ComputeOperatorAction<fields_tag>,
+                     tmpl::type_from<
+                         helpers::detail::init_preconditioner<preconditioner>>,
                      Parallel::Actions::TerminatePhase>>,
       Parallel::PhaseActions<
           typename Metavariables::Phase,
@@ -307,11 +332,13 @@ struct ElementArray {
       Parallel::PhaseActions<
           typename Metavariables::Phase,
           Metavariables::Phase::PerformLinearSolve,
-          tmpl::list<typename linear_solver::prepare_step,
-                     LinearSolver::Actions::TerminateIfConverged<
-                         typename linear_solver::options_group>,
-                     ComputeOperatorAction<typename linear_solver::operand_tag>,
-                     typename linear_solver::perform_step>>,
+          tmpl::list<
+              typename linear_solver::prepare_step,
+              LinearSolver::Actions::TerminateIfConverged<
+                  typename linear_solver::options_group>,
+              tmpl::type_from<detail::run_preconditioner<preconditioner>>,
+              ComputeOperatorAction<typename linear_solver::operand_tag>,
+              typename linear_solver::perform_step>>,
 
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::TestResult,
@@ -351,11 +378,12 @@ struct ElementArray {
 };
 
 template <typename Metavariables>
-using component_list =
-    tmpl::append<tmpl::list<ElementArray<Metavariables>,
-                            observers::Observer<Metavariables>,
-                            observers::ObserverWriter<Metavariables>,
-                            helpers::OutputCleaner<Metavariables>>,
-                 typename Metavariables::linear_solver::component_list>;
+using component_list = tmpl::append<
+    tmpl::list<ElementArray<Metavariables>, observers::Observer<Metavariables>,
+               observers::ObserverWriter<Metavariables>,
+               helpers::OutputCleaner<Metavariables>>,
+    typename Metavariables::linear_solver::component_list,
+    tmpl::type_from<helpers::detail::get_component_list<
+        typename Metavariables::preconditioner>>>;
 
 }  // namespace DistributedLinearSolverAlgorithmTestHelpers
