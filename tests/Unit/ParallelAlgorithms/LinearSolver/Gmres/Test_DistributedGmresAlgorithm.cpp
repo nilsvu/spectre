@@ -29,7 +29,8 @@ struct Metavariables {
 
   using linear_solver =
       LinearSolver::Gmres<Metavariables, helpers_distributed::fields_tag,
-                          ParallelGmres>;
+                          ParallelGmres, false>;
+  using preconditioner = void;
 
   using component_list = helpers_distributed::component_list<Metavariables>;
   using element_observation_type = helpers::element_observation_type;

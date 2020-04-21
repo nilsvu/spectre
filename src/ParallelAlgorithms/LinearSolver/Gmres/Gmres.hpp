@@ -61,13 +61,24 @@ namespace LinearSolver {
  * \see ConjugateGradient for a linear solver that is more efficient when the
  * linear operator \f$A\f$ is symmetric.
  */
-template <typename Metavariables, typename FieldsTag, typename OptionsGroup>
+template <typename Metavariables, typename FieldsTag, typename OptionsGroup,
+          bool Preconditioned>
 struct Gmres {
   using fields_tag = FieldsTag;
   using options_group = OptionsGroup;
+  static constexpr bool preconditioned = Preconditioned;
 
   /// Apply the linear operator to this tag in each iteration
-  using operand_tag =
+  using operand_tag = std::conditional_t<
+      Preconditioned,
+      db::add_tag_prefix<
+          LinearSolver::Tags::Preconditioned,
+          db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>>,
+      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>>;
+
+  /// Invoke a linear solver on the `operand_tag` sourced by the
+  /// `preconditioner_source_tag` before applying the operator in each step
+  using preconditioner_source_tag =
       db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
 
   /*!
@@ -121,7 +132,7 @@ struct Gmres {
    * first step of the algorithm.
    */
   using initialize_element =
-      gmres_detail::InitializeElement<FieldsTag, OptionsGroup>;
+      gmres_detail::InitializeElement<FieldsTag, OptionsGroup, Preconditioned>;
 
   /*!
    * \brief Reset the linear solver to its initial state.
@@ -154,7 +165,8 @@ struct Gmres {
    *
    * \see `initialize_element`
    */
-  using prepare_solve = gmres_detail::PrepareSolve<FieldsTag, OptionsGroup>;
+  using prepare_solve =
+      gmres_detail::PrepareSolve<FieldsTag, OptionsGroup, Preconditioned>;
 
   // Compile-time interface for observers
   using observed_reduction_data_tags = observers::make_reduction_data_tags<
@@ -171,7 +183,8 @@ struct Gmres {
    *   * `Tags::Next<LinearSolver::Tags::IterationId>`
    *   * `orthogonalization_iteration_id_tag`
    */
-  using prepare_step = gmres_detail::PrepareStep<FieldsTag, OptionsGroup>;
+  using prepare_step =
+      gmres_detail::PrepareStep<FieldsTag, OptionsGroup, Preconditioned>;
 
   /*!
    * \brief Perform an iteration of the GMRES linear solver.
@@ -198,7 +211,8 @@ struct Gmres {
    *   * `basis_history_tag`
    *   * `LinearSolver::Tags::HasConverged`
    */
-  using perform_step = gmres_detail::PerformStep<FieldsTag, OptionsGroup>;
+  using perform_step =
+      gmres_detail::PerformStep<FieldsTag, OptionsGroup, Preconditioned>;
 };
 
 }  // namespace LinearSolver

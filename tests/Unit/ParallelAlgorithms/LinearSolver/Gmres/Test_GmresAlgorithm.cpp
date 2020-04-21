@@ -25,8 +25,9 @@ struct Metavariables {
   static constexpr const char* const help{
       "Test the GMRES linear solver algorithm"};
 
-  using linear_solver =
-      LinearSolver::Gmres<Metavariables, helpers::fields_tag, SerialGmres>;
+  using linear_solver = LinearSolver::Gmres<Metavariables, helpers::fields_tag,
+                                            SerialGmres, false>;
+  using preconditioner = void;
 
   using component_list = helpers::component_list<Metavariables>;
   using element_observation_type = helpers::element_observation_type;

@@ -30,6 +30,7 @@ struct Metavariables {
 
   using linear_solver = LinearSolver::ConjugateGradient<
       Metavariables, typename helpers_distributed::fields_tag, ParallelCg>;
+  using preconditioner = void;
 
   using component_list = helpers_distributed::component_list<Metavariables>;
   using element_observation_type = helpers::element_observation_type;
