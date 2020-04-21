@@ -25,7 +25,7 @@
 #include "Domain/Mesh.hpp"
 #include "Domain/SegmentId.hpp"
 #include "Domain/Tags.hpp"
-#include "Elliptic/DiscontinuousGalerkin/InitializeFluxes.hpp"
+#include "Elliptic/DiscontinuousGalerkin/InitializeFirstOrderOperator.hpp"
 #include "Framework/ActionTesting.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
@@ -54,6 +54,9 @@ using fluxes_tag = db::add_tag_prefix<::Tags::Flux, vars_tag<Dim>,
 template <size_t Dim>
 using div_fluxes_tag = db::add_tag_prefix<::Tags::div, fluxes_tag<Dim>>;
 template <size_t Dim>
+using n_dot_fluxes_tag =
+    db::add_tag_prefix<::Tags::NormalDotFlux, vars_tag<Dim>>;
+template <size_t Dim>
 using inv_jacobian_tag = domain::Tags::InverseJacobianCompute<
     domain::Tags::ElementMap<Dim>,
     domain::Tags::Coordinates<Dim, Frame::Logical>>;
@@ -79,6 +82,14 @@ struct Fluxes {
   void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
 };
 
+struct Sources {
+  using argument_tags = tmpl::list<>;
+  static void apply(const gsl::not_null<Scalar<DataVector>*> source_for_field,
+                    const Scalar<DataVector>& field) {
+    get(*source_for_field) = get(field);
+  }
+};
+
 template <size_t Dim, typename Metavariables>
 struct ElementArray {
   using metavariables = Metavariables;
@@ -88,38 +99,28 @@ struct ElementArray {
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
-          tmpl::list<
-              ActionTesting::InitializeDataBox<
-                  tmpl::list<domain::Tags::InitialRefinementLevels<Dim>,
-                  domain::Tags::InitialExtents<Dim>, vars_tag<Dim>>>,
-              dg::Actions::InitializeDomain<Dim>,
-              Initialization::Actions::AddComputeTags<tmpl::list<
-                  elliptic::Tags::FirstOrderFluxesCompute<
-                      Dim, typename metavariables::system::fluxes,
-                      typename metavariables::system::variables_tag,
-                      typename metavariables::system::primal_variables,
-                      typename metavariables::system::auxiliary_variables>,
-                  ::Tags::DivVariablesCompute<fluxes_tag<Dim>,
-                                              inv_jacobian_tag<Dim>>>>,
-              dg::Actions::InitializeInterfaces<
-                  typename Metavariables::system,
-                  dg::Initialization::slice_tags_to_face<vars_tag<Dim>>,
-                  dg::Initialization::slice_tags_to_exterior<vars_tag<Dim>>,
-                  dg::Initialization::face_compute_tags<>,
-                  dg::Initialization::exterior_compute_tags<>, false>>>,
+          tmpl::list<ActionTesting::InitializeDataBox<tmpl::list<
+                         domain::Tags::InitialRefinementLevels<Dim>,
+                         domain::Tags::InitialExtents<Dim>, vars_tag<Dim>>>,
+                     dg::Actions::InitializeDomain<Dim>,
+                     dg::Actions::InitializeInterfaces<
+                         typename Metavariables::system,
+                         dg::Initialization::slice_tags_to_face<>,
+                         dg::Initialization::slice_tags_to_exterior<>,
+                         dg::Initialization::face_compute_tags<>,
+                         dg::Initialization::exterior_compute_tags<>, false>>>,
 
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Testing,
-          tmpl::list<elliptic::dg::Actions::InitializeFluxes<metavariables>>>>;
+          tmpl::list<elliptic::dg::Actions::InitializeFirstOrderOperator<
+              Dim, Fluxes<Dim>, Sources, vars_tag<Dim>,
+              tmpl::list<ScalarFieldTag>,
+              tmpl::list<AuxiliaryFieldTag<Dim>>>>>>;
 };
 
 template <size_t Dim>
 struct System {
   static constexpr size_t volume_dim = Dim;
-  using variables_tag = vars_tag<Dim>;
-  using primal_variables = tmpl::list<ScalarFieldTag>;
-  using auxiliary_variables = tmpl::list<AuxiliaryFieldTag<Dim>>;
-  using fluxes = Fluxes<Dim>;
   template <typename Tag>
   using magnitude_tag = ::Tags::EuclideanMagnitude<Tag>;
 };
@@ -146,8 +147,55 @@ void check_compute_items(
     return ActionTesting::tag_is_retrievable<
         ElementArray<Dim, Metavariables<Dim>>, tag>(runner, element_id);
   };
+  // Volume items
   CHECK(tag_is_retrievable(
       ::Tags::Flux<ScalarFieldTag, tmpl::size_t<Dim>, Frame::Inertial>{}));
+  CHECK(tag_is_retrievable(::Tags::Flux<AuxiliaryFieldTag<Dim>,
+                                        tmpl::size_t<Dim>, Frame::Inertial>{}));
+  CHECK(tag_is_retrievable(
+      ::Tags::div<
+          ::Tags::Flux<ScalarFieldTag, tmpl::size_t<Dim>, Frame::Inertial>>{}));
+  CHECK(tag_is_retrievable(
+      ::Tags::div<::Tags::Flux<AuxiliaryFieldTag<Dim>, tmpl::size_t<Dim>,
+                               Frame::Inertial>>{}));
+  CHECK(tag_is_retrievable(::Tags::Source<ScalarFieldTag>{}));
+  CHECK(tag_is_retrievable(::Tags::Source<AuxiliaryFieldTag<Dim>>{}));
+  // Items on internal interfaces
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::InternalDirections<Dim>,
+                              vars_tag<Dim>>{}));
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::InternalDirections<Dim>,
+                              fluxes_tag<Dim>>{}));
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::InternalDirections<Dim>,
+                              div_fluxes_tag<Dim>>{}));
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::InternalDirections<Dim>,
+                              n_dot_fluxes_tag<Dim>>{}));
+  // Items on interior boundaries
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::BoundaryDirectionsInterior<Dim>,
+                              vars_tag<Dim>>{}));
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::BoundaryDirectionsInterior<Dim>,
+                              fluxes_tag<Dim>>{}));
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::BoundaryDirectionsInterior<Dim>,
+                              div_fluxes_tag<Dim>>{}));
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::BoundaryDirectionsInterior<Dim>,
+                              n_dot_fluxes_tag<Dim>>{}));
+  // Items on exterior boundaries
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::BoundaryDirectionsExterior<Dim>,
+                              fluxes_tag<Dim>>{}));
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::BoundaryDirectionsExterior<Dim>,
+                              div_fluxes_tag<Dim>>{}));
+  CHECK(tag_is_retrievable(
+      domain::Tags::Interface<domain::Tags::BoundaryDirectionsExterior<Dim>,
+                              n_dot_fluxes_tag<Dim>>{}));
 }
 
 template <size_t Dim>
@@ -165,9 +213,9 @@ void test_initialize_fluxes(const DomainCreator<Dim>& domain_creator,
   ActionTesting::MockRuntimeSystem<metavariables> runner{
       {Fluxes<Dim>{}, domain_creator.create_domain()}};
   ActionTesting::emplace_component_and_initialize<element_array>(
-      &runner, element_id, {domain_creator.initial_refinement_levels(),
-                            std::move(initial_extents), std::move(vars)});
-  ActionTesting::next_action<element_array>(make_not_null(&runner), element_id);
+      &runner, element_id,
+      {domain_creator.initial_refinement_levels(), std::move(initial_extents),
+       std::move(vars)});
   ActionTesting::next_action<element_array>(make_not_null(&runner), element_id);
   ActionTesting::next_action<element_array>(make_not_null(&runner), element_id);
   ActionTesting::set_phase(make_not_null(&runner),
@@ -175,11 +223,25 @@ void test_initialize_fluxes(const DomainCreator<Dim>& domain_creator,
   ActionTesting::next_action<element_array>(make_not_null(&runner), element_id);
 
   check_compute_items(runner, element_id);
+
+  // Check the variables on exterior boundaries exist (for imposing boundary
+  // conditions)
+  const auto& exterior_boundary_vars = ActionTesting::get_databox_tag<
+      element_array,
+      domain::Tags::Interface<domain::Tags::BoundaryDirectionsExterior<Dim>,
+                              vars_tag<Dim>>>(runner, element_id);
+  const auto& exterior_directions = ActionTesting::get_databox_tag<
+      element_array, domain::Tags::BoundaryDirectionsExterior<Dim>>(runner,
+                                                                    element_id);
+  for (const auto& direction : exterior_directions) {
+    CHECK(exterior_boundary_vars.find(direction) !=
+          exterior_boundary_vars.end());
+  }
 }
 
 }  // namespace
 
-SPECTRE_TEST_CASE("Unit.Elliptic.DG.Actions.InitializeFluxes",
+SPECTRE_TEST_CASE("Unit.Elliptic.DG.Actions.InitializeFirstOrderOperator",
                   "[Unit][Elliptic][Actions]") {
   domain::creators::register_derived_with_charm();
   {
