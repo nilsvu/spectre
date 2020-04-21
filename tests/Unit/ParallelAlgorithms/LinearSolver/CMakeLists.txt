@@ -66,3 +66,4 @@ endfunction()
 
 add_subdirectory(ConjugateGradient)
 add_subdirectory(Gmres)
+add_subdirectory(Richardson)
