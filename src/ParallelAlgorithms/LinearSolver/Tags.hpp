@@ -278,6 +278,13 @@ struct ConvergenceCriteria {
 };
 
 template <typename OptionsGroup>
+struct Iterations {
+  using type = size_t;
+  static constexpr OptionString help = "Number of iterations";
+  using group = OptionsGroup;
+};
+
+template <typename OptionsGroup>
 struct Verbosity {
   using type = ::Verbosity;
   static constexpr OptionString help = "Logging verbosity";
@@ -322,6 +329,19 @@ struct ConvergenceCriteria : db::SimpleTag {
       const Convergence::Criteria& convergence_criteria) noexcept {
     return convergence_criteria;
   }
+};
+
+template <typename OptionsGroup>
+struct Iterations : db::SimpleTag {
+  static std::string name() noexcept {
+    return option_name<OptionsGroup>() + "(Iterations)";
+  }
+  using type = size_t;
+
+  static constexpr bool pass_metavariables = false;
+  using option_tags =
+      tmpl::list<LinearSolver::OptionTags::Iterations<OptionsGroup>>;
+  static type create_from_options(const type& value) noexcept { return value; }
 };
 
 template <typename OptionsGroup>
