@@ -250,8 +250,9 @@ struct TestResult {
     const auto& has_converged =
         get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box);
     SPECTRE_PARALLEL_REQUIRE(has_converged);
-    SPECTRE_PARALLEL_REQUIRE(has_converged.reason() ==
-                             Convergence::Reason::AbsoluteResidual);
+    SPECTRE_PARALLEL_REQUIRE(
+        has_converged.reason() == Convergence::Reason::AbsoluteResidual or
+        has_converged.reason() == Convergence::Reason::RelativeResidual);
     const auto& expected_result =
         gsl::at(get<ExpectedResult>(cache), array_index);
     const auto& result = get<ScalarFieldTag>(box).get();

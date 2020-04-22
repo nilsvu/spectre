@@ -160,8 +160,9 @@ struct TestResult {
     const auto& has_converged =
         get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box);
     SPECTRE_PARALLEL_REQUIRE(has_converged);
-    SPECTRE_PARALLEL_REQUIRE(has_converged.reason() ==
-                             Convergence::Reason::AbsoluteResidual);
+    SPECTRE_PARALLEL_REQUIRE(
+        has_converged.reason() == Convergence::Reason::AbsoluteResidual or
+        has_converged.reason() == Convergence::Reason::RelativeResidual);
     const auto& result = get<VectorTag>(box);
     const auto& expected_result = get<ExpectedResult>(cache);
     for (size_t i = 0; i < expected_result.size(); i++) {
