@@ -217,9 +217,9 @@ struct ElementArray {
       Parallel::PhaseActions<
           typename Metavariables::Phase,
           Metavariables::Phase::PerformLinearSolve,
-          tmpl::list<LinearSolver::Actions::TerminateIfConverged<
+          tmpl::list<typename linear_solver::prepare_step,
+                     LinearSolver::Actions::TerminateIfConverged<
                          typename linear_solver::options_group>,
-                     typename linear_solver::prepare_step,
                      ComputeOperatorAction<typename linear_solver::operand_tag>,
                      typename linear_solver::perform_step>>,
 
