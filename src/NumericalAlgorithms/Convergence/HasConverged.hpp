@@ -30,6 +30,9 @@ namespace Convergence {
  * The `initial_residual_magnitude` always refers to the state before the first
  * iteration has begun.
  *
+ * An `iteration_id` of `std::numeric_limits<size_t>::max()` means the iteration
+ * has not yet started, so it is treated as `iteration_id = 0`.
+ *
  * \returns a `Convergence::Reason` if the criteria are met, or
  * `boost::none` otherwise.
  */

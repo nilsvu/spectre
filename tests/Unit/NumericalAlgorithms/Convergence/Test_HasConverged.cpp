@@ -31,6 +31,12 @@ SPECTRE_TEST_CASE("Unit.Numerical.Convergence.HasConverged",
           Convergence::Reason::AbsoluteResidual);
     CHECK(Convergence::criteria_match(criteria, 1, 1., 2.) ==
           Convergence::Reason::RelativeResidual);
+    CHECK(Convergence::criteria_match(criteria,
+                                      std::numeric_limits<size_t>::max(), 1.,
+                                      1.) == boost::none);
+    CHECK(Convergence::criteria_match(
+              {0, 0., 0.5}, std::numeric_limits<size_t>::max(), 1., 1.) ==
+          Convergence::Reason::MaxIterations);
   }
 
   {

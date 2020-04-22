@@ -9,11 +9,12 @@
 
 #include "ErrorHandling/Assert.hpp"
 #include "ErrorHandling/Error.hpp"
+#include "ErrorHandling/ExpectsAndEnsures.hpp"
 
 namespace Convergence {
 
 boost::optional<Reason> criteria_match(
-    const Criteria& criteria, const size_t iteration_id,
+    const Criteria& criteria, size_t iteration_id,
     const double residual_magnitude,
     const double initial_residual_magnitude) noexcept {
   if (residual_magnitude <= criteria.absolute_residual) {
@@ -22,6 +23,9 @@ boost::optional<Reason> criteria_match(
   if (residual_magnitude / initial_residual_magnitude <=
       criteria.relative_residual) {
     return Reason::RelativeResidual;
+  }
+  if (UNLIKELY(iteration_id == std::numeric_limits<size_t>::max())) {
+    iteration_id = 0;
   }
   if (iteration_id >= criteria.max_iterations) {
     return Reason::MaxIterations;
