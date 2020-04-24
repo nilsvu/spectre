@@ -24,6 +24,8 @@
 #include "ParallelAlgorithms/LinearSolver/Schwarz/SubdomainData.hpp"
 #include "Utilities/TMPL.hpp"
 
+#include "Parallel/Printf.hpp"
+
 namespace helpers = LinearSolverAlgorithmTestHelpers;
 namespace helpers_distributed = DistributedLinearSolverAlgorithmTestHelpers;
 
@@ -34,85 +36,76 @@ struct SchwarzSmoother {
       "Options for the iterative Schwarz smoother";
 };
 
+// ---
+// TODO: Split overlap data into fields and extra data
+
 template <size_t Dim>
-struct InitializeElement {
- private:
-  using fields_tag = helpers_distributed::fields_tag;
-  using source_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
-  using operator_applied_to_fields_tag =
-      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
+struct OverlapData {
+  void orient(const OrientationMap<Dim>& /*orientation*/) noexcept {}
+  void pup(PUP::er&) noexcept {}
+  OverlapData& operator+=(const OverlapData<Dim>& /*rhs*/) noexcept {
+    return *this;
+  }
+  OverlapData& operator-=(const OverlapData<Dim>& /*rhs*/) noexcept {
+    return *this;
+  }
+  OverlapData& operator/=(const double /*scalar*/) noexcept { return *this; }
+  template <typename FieldTags>
+  void add_to(const gsl::not_null<Variables<FieldTags>*> /*lhs*/) const
+      noexcept {}
+};
 
- public:
-  using const_global_cache_tags =
-      tmpl::list<helpers_distributed::LinearOperator,
-                 helpers_distributed::Source,
-                 helpers_distributed::ExpectedResult>;
-  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
-            typename ActionList, typename ParallelComponent>
-  static auto apply(db::DataBox<DbTagsList>& box,
-                    const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
-                    const ElementId<Dim>& element_index,
-                    const ActionList /*meta*/,
-                    const ParallelComponent* const /*meta*/) noexcept {
-    int array_index = element_index.segments()[0].index();
-    auto source = db::item_type<source_tag>{
-        gsl::at(get<helpers_distributed::Source>(box), array_index)};
-    auto initial_fields =
-        make_with_value<db::item_type<fields_tag>>(source, 0.);
-    auto operator_applied_to_fields =
-        make_with_value<db::item_type<operator_applied_to_fields_tag>>(
-            source, std::numeric_limits<double>::signaling_NaN());
+template <size_t Dim>
+OverlapData<Dim> operator-(const OverlapData<Dim>& /*lhs*/,
+                           const OverlapData<Dim>& /*rhs*/) noexcept {
+  return {};
+}
 
-    using compute_tags = db::AddComputeTags<>;
-    return std::make_tuple(::Initialization::merge_into_databox<
-                           InitializeElement,
-                           db::AddSimpleTags<fields_tag, source_tag,
-                                             operator_applied_to_fields_tag>,
-                           compute_tags>(
-        std::move(box), std::move(initial_fields), std::move(source),
-        std::move(operator_applied_to_fields)));
+template <size_t Dim>
+OverlapData<Dim> operator*(const double, const OverlapData<Dim>&)noexcept {
+  return {};
+}
+}  // namespace
+
+namespace LinearSolver {
+namespace InnerProductImpls {
+
+template <size_t Dim>
+struct InnerProductImpl<OverlapData<Dim>, OverlapData<Dim>> {
+  static double apply(const OverlapData<Dim>&,
+                      const OverlapData<Dim>&) noexcept {
+    return 0.;
   }
 };
 
-template <typename OptionsGroup>
-struct TestResult {
-  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
-            typename ActionList, typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&, bool> apply(
-      db::DataBox<DbTagsList>& box,
-      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& cache,
-      const ElementId<1>& element_index, const ActionList /*meta*/,
-      const ParallelComponent* const /*meta*/) noexcept {
-    int array_index = element_index.segment_ids()[0].index();
-    const auto& has_converged =
-        get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box);
-    SPECTRE_PARALLEL_REQUIRE(has_converged);
-    SPECTRE_PARALLEL_REQUIRE(has_converged.reason() ==
-                             Convergence::Reason::MaxIterations);
-    const auto& expected_result =
-        gsl::at(get<helpers_distributed::ExpectedResult>(cache), array_index);
-    const auto& result = get(get<helpers_distributed::ScalarFieldTag>(box));
-    for (size_t i = 0; i < expected_result.size(); i++) {
-      SPECTRE_PARALLEL_REQUIRE(result[i] == approx(expected_result[i]));
-    }
-    return {std::move(box), true};
-  }
+}  // namespace InnerProductImpls
+}  // namespace LinearSolver
+
+// ---
+
+namespace {
+
+template <size_t Dim>
+struct CollectOverlapData {
+  using argument_tags = tmpl::list<>;
+  static auto apply() noexcept { return OverlapData<Dim>{}; }
 };
 
+template <size_t Dim>
 struct SubdomainOperator {
-  static constexpr size_t volume_dim = 1;
+  static constexpr size_t volume_dim = Dim;
   using SubdomainDataType = LinearSolver::schwarz_detail::SubdomainData<
-      volume_dim, db::get_variables_tags_list<helpers_distributed::fields_tag>>;
+      volume_dim, db::item_type<helpers_distributed::fields_tag>,
+      OverlapData<volume_dim>>;
+  using collect_overlap_data = CollectOverlapData<Dim>;
 
   using argument_tags =
       tmpl::list<helpers_distributed::LinearOperator, domain::Tags::Element<1>>;
-  static SubdomainDataType apply(
-      const SubdomainDataType& arg,
+  static auto apply(
       const db::item_type<helpers_distributed::LinearOperator>& linear_operator,
-      const Element<1>& element) noexcept {
-    int array_index = element.id().segment_ids()[0].index();
+      const Element<1>& element, const SubdomainDataType& arg) noexcept {
+    size_t array_index = element.id().segment_ids()[0].index();
+    // Parallel::printf("Applying operator on %d...\n", array_index);
     const auto& operator_slice = gsl::at(linear_operator, array_index);
     const size_t num_points = operator_slice.columns();
     const DenseMatrix<double, blaze::columnMajor> subdomain_operator =
@@ -127,67 +120,39 @@ struct SubdomainOperator {
     // Parallel::printf("%d operand: %s\n", array_index, arg.element_data);
     // Parallel::printf("%d operator: %s\n", array_index, subdomain_operator);
     // Parallel::printf("%d applied: %s\n", array_index, result.element_data);
+    result.boundary_data = arg.boundary_data;
     return result;
   }
 };
 
+struct WeightingOperator {
+  using argument_tags = tmpl::list<>;
+  template <typename SubdomainOperatorType>
+  static void apply(
+      const gsl::not_null<SubdomainOperatorType*> /*subdomain_data*/) {}
+};
+
 template <size_t Dim>
 struct Metavariables {
+  static constexpr const char* const help{
+      "Test the Schwarz linear solver algorithm"};
+
   static constexpr size_t volume_dim = Dim;
 
   using linear_solver =
       LinearSolver::Schwarz<Metavariables, helpers_distributed::fields_tag,
-                            SchwarzSmoother, SubdomainOperator>;
+                            SchwarzSmoother, SubdomainOperator<Dim>,
+                            WeightingOperator>;
+  using preconditioner = void;
 
-  using initialization_actions =
-      tmpl::list<dg::Actions::InitializeDomain<volume_dim>,
-                 InitializeElement<Dim>,
-                 typename linear_solver::initialize_element,
-                 typename linear_solver::prepare_solve,
-                 Initialization::Actions::RemoveOptionsAndTerminatePhase>;
-
-  using solve_actions =
-      tmpl::flatten<tmpl::list<typename linear_solver::prepare_step,
-                               LinearSolver::Actions::TerminateIfConverged<
-                                   typename linear_solver::options_group>,
-                               helpers_distributed::ComputeOperatorAction<
-                                   helpers_distributed::fields_tag>,
-                               typename linear_solver::perform_step>>;
-
-  enum class Phase { Initialization, Solve, TestResult, Exit };
-
-  using element_array = elliptic::DgElementArray<
-      Metavariables,
-      tmpl::list<
-          Parallel::PhaseActions<Phase, Phase::Initialization,
-                                 initialization_actions>,
-          Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>,
-          Parallel::PhaseActions<
-              Phase, Phase::TestResult,
-              tmpl::list<TestResult<typename linear_solver::options_group>>>>>;
-
-  using component_list = tmpl::append<tmpl::list<element_array>,
-                                      typename linear_solver::component_list>;
-
-  using observed_reduction_data_tags = tmpl::list<>;
-
-  static constexpr const char* const help{
-      "Test the Schwarz linear solver algorithm"};
+  using Phase = helpers::Phase;
+  using element_observation_type = helpers::element_observation_type;
+  using observed_reduction_data_tags =
+      helpers::observed_reduction_data_tags<Metavariables>;
+  using component_list = helpers_distributed::component_list<Metavariables>;
   static constexpr bool ignore_unrecognized_command_line_options = false;
-
-  static Phase determine_next_phase(
-      const Phase& current_phase,
-      const Parallel::CProxy_ConstGlobalCache<
-          Metavariables>& /*cache_proxy*/) noexcept {
-    switch (current_phase) {
-      case Phase::Initialization:
-        return Phase::Solve;
-      case Phase::Solve:
-        return Phase::TestResult;
-      default:
-        return Phase::Exit;
-    }
-  }
+  static constexpr auto determine_next_phase =
+      helpers::determine_next_phase<Metavariables>;
 };
 
 }  // namespace

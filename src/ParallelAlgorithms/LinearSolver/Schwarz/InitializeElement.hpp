@@ -29,6 +29,8 @@ template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
 struct InitializeElement {
  private:
   using fields_tag = FieldsTag;
+  using operator_applied_to_fields_tag =
+      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
   using source_tag = SourceTag;
   using residual_tag =
       db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
@@ -51,17 +53,25 @@ struct InitializeElement {
                     const ParallelComponent* const /*meta*/) noexcept {
     using compute_tags = db::AddComputeTags<
         LinearSolver::Tags::ResidualCompute<fields_tag, source_tag>,
-        ::Tags::NextCompute<LinearSolver::Tags::IterationId<OptionsGroup>>>;
+        ::Tags::NextCompute<LinearSolver::Tags::IterationId<OptionsGroup>>,
+        domain::Tags::InternalDirections<Dim>>;
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeElement,
-            db::AddSimpleTags<LinearSolver::Tags::IterationId<OptionsGroup>,
-                              LinearSolver::Tags::HasConverged<OptionsGroup>>,
-            compute_tags>(std::move(box),
-                          // The `PrepareSolve` action populates these tags with
-                          // initial values
-                          std::numeric_limits<size_t>::max(),
-                          Convergence::HasConverged{}));
+            db::AddSimpleTags<
+                LinearSolver::Tags::IterationId<OptionsGroup>,
+                LinearSolver::Tags::HasConverged<OptionsGroup>,
+                operator_applied_to_fields_tag,
+                Tags::SubdomainBoundaryData<SubdomainOperator, OptionsGroup>>,
+            compute_tags>(
+            std::move(box),
+            // The `PrepareSolve` action populates these tags with initial
+            // values, except for `operator_applied_to_fields_tag` which is
+            // expected to be updated in every iteration of the algorithm
+            std::numeric_limits<size_t>::max(), Convergence::HasConverged{},
+            db::item_type<operator_applied_to_fields_tag>{},
+            db::item_type<Tags::SubdomainBoundaryData<SubdomainOperator,
+                                                      OptionsGroup>>{}));
   }
 };
 

@@ -8,6 +8,7 @@
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/ElementActions.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/InitializeElement.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/SubdomainActions.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace LinearSolver {
@@ -24,7 +25,7 @@ namespace LinearSolver {
  * 3. Weight result with function and sum over subdomains
  */
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup,
-          typename SubdomainOperator,
+          typename SubdomainOperator, typename WeightingOperator,
           typename SourceTag =
               db::add_tag_prefix<::Tags::FixedSource, FieldsTag>>
 struct Schwarz {
@@ -44,13 +45,17 @@ struct Schwarz {
 
   using prepare_step = schwarz_detail::PrepareStep<FieldsTag, OptionsGroup>;
 
-  using perform_step =
-      tmpl::list<schwarz_detail::SendSubdomainData<FieldsTag, OptionsGroup,
-                                                   SubdomainOperator>,
-                 schwarz_detail::PerformStep<FieldsTag, OptionsGroup,
-                                             SubdomainOperator, SourceTag>,
-                 schwarz_detail::ReceiveOverlapSolution<FieldsTag, OptionsGroup,
-                                                        SubdomainOperator>>;
+  using perform_step = tmpl::list<
+      schwarz_detail::SendSubdomainData<FieldsTag, OptionsGroup,
+                                        SubdomainOperator>,
+      schwarz_detail::ReceiveSubdomainData<FieldsTag, OptionsGroup,
+                                           SubdomainOperator>,
+      schwarz_detail::PerformStep<FieldsTag, OptionsGroup, SubdomainOperator,
+                                  WeightingOperator>,
+      schwarz_detail::SendOverlapSolution<FieldsTag, OptionsGroup,
+                                          SubdomainOperator>,
+      schwarz_detail::ReceiveOverlapSolution<FieldsTag, OptionsGroup,
+                                             SubdomainOperator>>;
 };
 
 }  // namespace LinearSolver

@@ -70,6 +70,14 @@ struct SubdomainSolver : SubdomainSolverBase<OptionsGroup>, db::SimpleTag {
   }
 };
 
+template <typename SubdomainOperator, typename OptionsGroup>
+struct SubdomainBoundaryData : db::SimpleTag {
+  static std::string name() noexcept {
+    return option_name<OptionsGroup>() + "(SubdomainBoundaryData)";
+  }
+  using type = typename SubdomainOperator::SubdomainDataType::BoundaryDataType;
+};
+
 }  // namespace Tags
 }  // namespace schwarz_detail
 }  // namespace LinearSolver

@@ -12,6 +12,7 @@
 #include "Domain/OrientationMapHelpers.hpp"
 #include "Domain/Side.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
+#include "Utilities/ContainerHelpers.hpp"
 #include "Utilities/Math.hpp"
 
 namespace LinearSolver {
