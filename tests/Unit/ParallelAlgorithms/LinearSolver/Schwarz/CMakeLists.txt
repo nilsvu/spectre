@@ -23,10 +23,22 @@ set(LIBRARY "Test_ParallelSchwarz")
 # This code is adapted from Parallel/CMakeLists.txt
 
 add_linear_solver_algorithm_test("DistributedSchwarzAlgorithm")
-
 target_link_libraries(
   Test_DistributedSchwarzAlgorithm
   PUBLIC
   Domain
   )
 
+add_linear_solver_algorithm_test("SchwarzSmoothing")
+target_link_libraries(
+  Test_SchwarzSmoothing
+  PUBLIC
+  CoordinateMaps
+  DiscontinuousGalerkin
+  Domain
+  DomainCreators
+  LinearOperators
+  LinearSolver
+  Poisson
+  PoissonSolutions
+  )
