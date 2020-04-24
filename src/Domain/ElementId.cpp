@@ -90,6 +90,28 @@ std::ostream& operator<<(std::ostream& os,
   return os;
 }
 
+template <size_t Dim>
+bool ElementOrdering<Dim>::operator()(const ElementId<Dim>& lhs,
+                                      const ElementId<Dim>& rhs) const
+    noexcept {
+  if (lhs.block_id() != rhs.block_id()) {
+    return lhs.block_id() < rhs.block_id();
+  }
+  for (size_t d = 0; d < Dim; d++) {
+    const auto& lhs_segment_id = lhs.segment_ids().at(d);
+    const auto& rhs_segment_id = rhs.segment_ids().at(d);
+    if (lhs_segment_id.refinement_level() !=
+        lhs_segment_id.refinement_level()) {
+      return lhs_segment_id.refinement_level() <
+             lhs_segment_id.refinement_level();
+    }
+    if (lhs_segment_id.index() != rhs_segment_id.index()) {
+      return lhs_segment_id.index() < rhs_segment_id.index();
+    }
+  }
+  return false;
+}
+
 // LCOV_EXCL_START
 template <size_t VolumeDim>
 size_t hash_value(const ElementId<VolumeDim>& id) noexcept {
@@ -115,6 +137,7 @@ size_t hash<ElementId<VolumeDim>>::operator()(
 
 #define INSTANTIATION(r, data)                                                 \
   template class ElementId<GET_DIM(data)>;                                     \
+  template class ElementOrdering<GET_DIM(data)>;                               \
   template std::ostream& operator<<(std::ostream&,                             \
                                     const ElementId<GET_DIM(data)>&) noexcept; \
   template size_t hash_value(const ElementId<GET_DIM(data)>&) noexcept;        \
