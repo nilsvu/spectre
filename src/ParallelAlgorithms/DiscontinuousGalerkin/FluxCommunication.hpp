@@ -39,7 +39,8 @@ struct FluxesInboxTag
   static constexpr size_t volume_dim = BoundaryScheme::volume_dim;
 
  public:
-  using temporal_id = db::item_type<typename BoundaryScheme::temporal_id_tag>;
+  using temporal_id =
+      db::const_item_type<typename BoundaryScheme::temporal_id_tag>;
   using type = std::map<
       temporal_id,
       FixedHashMap<
