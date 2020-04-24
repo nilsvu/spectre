@@ -24,8 +24,8 @@ NumericalFlux:
     PenaltyParameter: 30.557749073643905 # p^2 / h
 
 Observers:
-  VolumeFileName: "PoissonProductOfSinusoids2DVolume"
-  ReductionFileName: "PoissonProductOfSinusoids2DReductions"
+  VolumeFileName: "PoissonProductOfSinusoidsPreconditioned2DVolume"
+  ReductionFileName: "PoissonProductOfSinusoidsPreconditioned2DReductions"
 
 LinearSolver:
   GMRES:
@@ -34,6 +34,18 @@ LinearSolver:
       AbsoluteResidual: 1e-10
       RelativeResidual: 1e-5
     Verbosity: Verbose
+
+Preconditioner:
+  Schwarz:
+    Iterations: 3
+    Overlap: 2
+    Verbosity: Verbose
+    SubdomainSolver:
+      ConvergenceCriteria:
+        MaxIterations: 1000
+        AbsoluteResidual: 1e-8
+        RelativeResidual: 1e-8
+      Verbosity: Verbose
 
 EventsAndTriggers:
   ? EveryNIterations:

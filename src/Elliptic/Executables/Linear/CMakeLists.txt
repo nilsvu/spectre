@@ -8,6 +8,7 @@ set(LIBS_TO_LINK
   Informer
   IO
   LinearOperators
+  LinearSolver
   MathFunctions
   Options
   ParallelLinearSolver
