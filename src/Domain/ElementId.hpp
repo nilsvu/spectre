@@ -110,6 +110,14 @@ template <size_t VolumeDim>
 bool operator!=(const ElementId<VolumeDim>& lhs,
                 const ElementId<VolumeDim>& rhs) noexcept;
 
+/// Defines an ordering of elements by block ID first, then by segment
+/// refinement level and last by segment index in each dimension in turn.
+template <size_t Dim>
+struct ElementOrdering {
+  bool operator()(const ElementId<Dim>& lhs, const ElementId<Dim>& rhs) const
+      noexcept;
+};
+
 // ######################################################################
 // INLINE DEFINITIONS
 // ######################################################################
