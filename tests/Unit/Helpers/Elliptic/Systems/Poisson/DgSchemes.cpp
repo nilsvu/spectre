@@ -9,8 +9,10 @@
 #include "DataStructures/SliceVariables.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
+#include "Elliptic/DiscontinuousGalerkin/NumericalFluxes/FirstOrderInternalPenalty.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Poisson/Geometry.hpp"
+#include "Elliptic/Tags.hpp"  // Needed by the numerical flux (for now)
 #include "Helpers/Elliptic/DiscontinuousGalerkin/TestHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/FirstOrder/BoundaryData.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/FirstOrder/BoundaryFlux.hpp"
@@ -27,56 +29,9 @@ namespace helpers = TestHelpers::elliptic::dg;
 namespace TestHelpers {
 namespace Poisson {
 
-namespace {
-// Define a simple central flux here for now. We can switch to the elliptic
-// internal penalty flux once it is made conformant to the
-// `dg::protocols::NumericalFlux` in this PR:
-// https://github.com/sxs-collaboration/spectre/pull/1725
-template <size_t Dim>
-struct CentralFlux : tt::ConformsTo<dg::protocols::NumericalFlux> {
- private:
-  using poisson_system =
-      ::Poisson::FirstOrderSystem<Dim, ::Poisson::Geometry::Euclidean>;
-  using all_fields_tags =
-      db::get_variables_tags_list<typename poisson_system::fields_tag>;
-
- public:
-  using variables_tags = all_fields_tags;
-  using argument_tags =
-      db::wrap_tags_in<::Tags::NormalDotFlux, all_fields_tags>;
-  using package_field_tags = argument_tags;
-  using package_extra_tags = tmpl::list<>;
-  void package_data(
-      const gsl::not_null<Scalar<DataVector>*> packaged_n_dot_field_flux,
-      const gsl::not_null<tnsr::i<DataVector, Dim>*>
-          packaged_n_dot_aux_field_flux,
-      const Scalar<DataVector>& n_dot_field_flux,
-      const tnsr::i<DataVector, Dim> n_dot_aux_field_flux) const noexcept {
-    *packaged_n_dot_field_flux = n_dot_field_flux;
-    *packaged_n_dot_aux_field_flux = n_dot_aux_field_flux;
-  }
-  void operator()(
-      const gsl::not_null<Scalar<DataVector>*> numerical_flux_field,
-      const gsl::not_null<tnsr::i<DataVector, Dim>*> numerical_flux_aux_field,
-      const Scalar<DataVector>& n_dot_field_flux_interior,
-      const tnsr::i<DataVector, Dim> n_dot_aux_field_flux_interior,
-      const Scalar<DataVector>& n_dot_field_flux_exterior,
-      const tnsr::i<DataVector, Dim> n_dot_aux_field_flux_exterior) const
-      noexcept {
-    get(*numerical_flux_field) =
-        0.5 * (get(n_dot_field_flux_interior) - get(n_dot_field_flux_exterior));
-    for (size_t d = 0; d < Dim; d++) {
-      numerical_flux_aux_field->get(d) =
-          0.5 * (n_dot_aux_field_flux_interior.get(d) -
-                 n_dot_aux_field_flux_exterior.get(d));
-    }
-  }
-};
-}  // namespace
-
 template <size_t Dim>
 Matrix strong_first_order_dg_operator_matrix(
-    const DomainCreator<Dim>& domain_creator) {
+    const DomainCreator<Dim>& domain_creator, const double penalty_parameter) {
   using system =
       ::Poisson::FirstOrderSystem<Dim, ::Poisson::Geometry::Euclidean>;
   const typename system::fluxes fluxes_computer{};
@@ -95,21 +50,25 @@ Matrix strong_first_order_dg_operator_matrix(
 
   /// [boundary_scheme]
   // Choose a numerical flux
-  using NumericalFlux = CentralFlux<Dim>;
-  const NumericalFlux numerical_fluxes_computer{};
+  using NumericalFlux =
+      ::elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
+          Dim, ::elliptic::Tags::FluxesComputer<typename system::fluxes>,
+          typename system::primal_fields, typename system::auxiliary_fields>;
+  const NumericalFlux numerical_fluxes_computer{penalty_parameter};
   // Define the boundary scheme
   using BoundaryData = ::dg::FirstOrderScheme::BoundaryData<NumericalFlux>;
   const auto package_boundary_data =
-      [&numerical_fluxes_computer](
+      [&numerical_fluxes_computer, &fluxes_computer](
           const Mesh<Dim - 1>& face_mesh,
-          const tnsr::i<DataVector, Dim>& /*face_normal*/,
+          const tnsr::i<DataVector, Dim>& face_normal,
           const Variables<n_dot_fluxes_tags>& n_dot_fluxes,
-          const Variables<div_fluxes_tags> &
-          /*div_fluxes*/) -> BoundaryData {
+          const Variables<div_fluxes_tags>& div_fluxes) -> BoundaryData {
     return ::dg::FirstOrderScheme::package_boundary_data(
         numerical_fluxes_computer, face_mesh, n_dot_fluxes,
-        get<::Tags::NormalDotFlux<field_tag>>(n_dot_fluxes),
-        get<::Tags::NormalDotFlux<field_gradient_tag>>(n_dot_fluxes));
+        get<::Tags::NormalDotFlux<field_gradient_tag>>(n_dot_fluxes),
+        get<::Tags::div<::Tags::Flux<field_gradient_tag, tmpl::size_t<Dim>,
+                                     Frame::Inertial>>>(div_fluxes),
+        face_normal, fluxes_computer);
   };
   const auto apply_boundary_contribution =
       [&numerical_fluxes_computer](
@@ -151,7 +110,8 @@ Matrix strong_first_order_dg_operator_matrix(
 
 #define INSTANTIATE(_, data)                             \
   template Matrix strong_first_order_dg_operator_matrix( \
-      const DomainCreator<DIM(data)>& domain_creator);
+      const DomainCreator<DIM(data)>& domain_creator,    \
+      double penalty_parameter);
 
 GENERATE_INSTANTIATIONS(INSTANTIATE, (1, 2, 3))
 

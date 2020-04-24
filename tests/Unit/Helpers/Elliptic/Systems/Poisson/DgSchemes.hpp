@@ -5,8 +5,9 @@
 
 #include <cstddef>
 
+#include "DataStructures/Matrix.hpp"
+
 /// \cond
-struct Matrix;
 template <size_t Dim>
 struct DomainCreator;
 /// \endcond
@@ -16,7 +17,7 @@ namespace Poisson {
 
 template <size_t Dim>
 Matrix strong_first_order_dg_operator_matrix(
-    const DomainCreator<Dim>& domain_creator);
+    const DomainCreator<Dim>& domain_creator, double penalty_parameter);
 
 }  // namespace Poisson
 }  // namespace TestHelpers

@@ -10,11 +10,12 @@ set(LIBRARY_SOURCES
   Test_ImposeBoundaryConditions.cpp
   Test_ImposeInhomogeneousBoundaryConditionsOnSource.cpp
   Test_InitializeFirstOrderOperator.cpp
+  Test_StrongFirstOrderScheme.cpp
   )
 
 add_test_library(
   ${LIBRARY}
   "Elliptic/DiscontinuousGalerkin/"
   "${LIBRARY_SOURCES}"
-  "DataStructures;Domain;ErrorHandling"
+  "DataStructures;Domain;ErrorHandling;EllipticDgTestHelpers"
   )
