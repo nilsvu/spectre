@@ -237,6 +237,34 @@ SPECTRE_TEST_CASE("Unit.LinearSolver.Serial.Gmres",
       CHECK(has_converged.num_iterations() == 2);
       CHECK_ITERABLE_APPROX(solution, expected_solution);
     }
+    {
+      INFO("Richardson preconditioner");
+      std::vector<double> recorded_residuals;
+      const double relaxation_parameter = 0.2857142857142857;
+      const auto preconditioner =
+          [&linear_operator,
+           &relaxation_parameter](const DenseVector<double> source) noexcept {
+            DenseVector<double> result(source.size(), 0.);
+            for (size_t i = 0; i < 2; ++i) {
+              result +=
+                  relaxation_parameter * (source - linear_operator(result));
+            }
+            return result;
+          };
+      const auto result = gmres(
+          linear_operator, source, initial_guess, preconditioner,
+          [&recorded_residuals](
+              const Convergence::HasConverged& has_converged) {
+            recorded_residuals.push_back(has_converged.residual_magnitude());
+          });
+      const auto& has_converged = result.first;
+      const auto& solution = result.second;
+      CAPTURE(recorded_residuals);
+      REQUIRE(has_converged);
+      CHECK(has_converged.reason() == Convergence::Reason::AbsoluteResidual);
+      CHECK(has_converged.num_iterations() == 1);
+      CHECK_ITERABLE_APPROX(solution, expected_solution);
+    }
   }
 }
 
