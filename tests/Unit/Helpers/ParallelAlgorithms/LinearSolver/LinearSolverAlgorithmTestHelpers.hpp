@@ -320,10 +320,10 @@ Phase determine_next_phase(const Phase& current_phase,
 
 template <typename Metavariables>
 using component_list =
-    tmpl::append<tmpl::list<ElementArray<Metavariables>,
-                            observers::ObserverWriter<Metavariables>,
-                            OutputCleaner<Metavariables>>,
-                 typename Metavariables::linear_solver::component_list>;
+    tmpl::push_back<typename Metavariables::linear_solver::component_list,
+                    ElementArray<Metavariables>,
+                    observers::ObserverWriter<Metavariables>,
+                    OutputCleaner<Metavariables>>;
 
 template <typename Metavariables>
 using observed_reduction_data_tags = observers::collect_reduction_data_tags<

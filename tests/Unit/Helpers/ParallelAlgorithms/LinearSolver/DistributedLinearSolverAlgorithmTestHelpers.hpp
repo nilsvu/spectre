@@ -343,9 +343,9 @@ struct ElementArray {
 
 template <typename Metavariables>
 using component_list =
-    tmpl::append<tmpl::list<ElementArray<Metavariables>,
-                            observers::ObserverWriter<Metavariables>,
-                            helpers::OutputCleaner<Metavariables>>,
-                 typename Metavariables::linear_solver::component_list>;
+    tmpl::push_back<typename Metavariables::linear_solver::component_list,
+                    ElementArray<Metavariables>,
+                    observers::ObserverWriter<Metavariables>,
+                    helpers::OutputCleaner<Metavariables>>;
 
 }  // namespace DistributedLinearSolverAlgorithmTestHelpers

@@ -43,8 +43,8 @@ function(add_linear_solver_algorithm_test TEST_NAME)
     Boost::program_options
     DataStructures
     ErrorHandling
-    Informer
     IO
+    Informer
     ParallelLinearSolver
     )
 
