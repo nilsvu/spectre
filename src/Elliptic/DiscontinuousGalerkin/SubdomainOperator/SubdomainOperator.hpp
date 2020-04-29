@@ -33,6 +33,7 @@
 #include "ParallelAlgorithms/LinearSolver/Schwarz/SubdomainData.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/SubdomainHelpers.hpp"
 #include "Utilities/TMPL.hpp"
+#include "Utilities/Tuple.hpp"
 
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 
@@ -47,6 +48,7 @@ namespace SubdomainOperator_detail {
 template <typename BoundaryData, size_t Dim,
           typename NumericalFluxesComputerType, typename FluxesComputerType,
           typename NormalDotFluxesTags, typename DivFluxesTags,
+        //   typename... FluxesArgs,
           typename... AuxiliaryFields>
 BoundaryData package_boundary_data(
     const NumericalFluxesComputerType& numerical_fluxes_computer,
@@ -54,14 +56,19 @@ BoundaryData package_boundary_data(
     const tnsr::i<DataVector, Dim>& face_normal,
     const Variables<NormalDotFluxesTags>& n_dot_fluxes,
     const Variables<DivFluxesTags>& div_fluxes,
+    // const std::tuple<FluxesArgs...>& fluxes_args,
     tmpl::list<AuxiliaryFields...> /*meta*/) noexcept {
-  return ::dg::FirstOrderScheme::package_boundary_data(
-      numerical_fluxes_computer, face_mesh, n_dot_fluxes,
-      get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_fluxes)...,
-      get<::Tags::div<
-          ::Tags::Flux<AuxiliaryFields, tmpl::size_t<Dim>, Frame::Inertial>>>(
-          div_fluxes)...,
-      face_normal, fluxes_computer);
+  return std::apply(
+      [&numerical_fluxes_computer, &face_mesh, &n_dot_fluxes, &div_fluxes,
+       &face_normal, &fluxes_computer](const auto&... expanded_fluxes_args) {
+        return ::dg::FirstOrderScheme::package_boundary_data(
+            numerical_fluxes_computer, face_mesh, n_dot_fluxes,
+            get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_fluxes)...,
+            get<::Tags::div<::Tags::Flux<AuxiliaryFields, tmpl::size_t<Dim>,
+                                         Frame::Inertial>>>(div_fluxes)...,
+            face_normal, fluxes_computer, expanded_fluxes_args...);
+      },
+      std::tuple<>{});
 }
 template <size_t Dim, typename FieldsTagsList,
           typename NumericalFluxesComputerType, typename BoundaryData>
@@ -85,6 +92,7 @@ void apply_boundary_contribution(
 template <typename PrimalFields, typename AuxiliaryFields, size_t Dim,
           typename BoundaryData, typename FluxesComputerType,
           typename NumericalFluxesComputerType,
+        //   typename... FluxesArgs,
           typename FieldsTags = tmpl::append<PrimalFields, AuxiliaryFields>,
           typename FluxesTags = db::wrap_tags_in<
               ::Tags::Flux, FieldsTags, tmpl::size_t<Dim>, Frame::Inertial>,
@@ -96,7 +104,8 @@ void exterior_boundary_data(
     const Mesh<Dim - 1>& face_mesh,
     const tnsr::i<DataVector, Dim>& interior_face_normal,
     const FluxesComputerType& fluxes_computer,
-    const NumericalFluxesComputerType& numerical_fluxes_computer) noexcept {
+    const NumericalFluxesComputerType& numerical_fluxes_computer/*,
+    const std::tuple<FluxesArgs...>& fluxes_args*/) noexcept {
   static constexpr size_t volume_dim = Dim;
   // On exterior ("ghost") faces, manufacture boundary data that represent
   // homogeneous Dirichlet boundary conditions
@@ -117,7 +126,9 @@ void exterior_boundary_data(
       numerical_fluxes_computer, fluxes_computer, face_mesh,
       exterior_face_normal, ghost_normal_dot_fluxes,
       // TODO: Is this correct?
-      div_fluxes_on_interior_face, AuxiliaryFields{});
+      div_fluxes_on_interior_face,
+    //   fluxes_args,
+      AuxiliaryFields{});
 }
 
 template <size_t Dim>
@@ -139,7 +150,8 @@ face_normal_and_magnitude(const Mesh<Dim - 1>& face_mesh,
 
 template <typename PrimalFields, typename AuxiliaryFields,
           typename SourcesComputerType, size_t Dim, typename FluxesComputerType,
-          typename NumericalFluxesComputerType, typename SubdomainDataType,
+          typename NumericalFluxesComputerType, typename... FluxesArgs,
+          typename... SourcesArgs, typename SubdomainDataType,
           typename AllFieldsTags = tmpl::append<PrimalFields, AuxiliaryFields>>
 static SubdomainDataType apply_subdomain_operator(
     const Mesh<Dim>& mesh,
@@ -167,6 +179,8 @@ static SubdomainDataType apply_subdomain_operator(
         ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>& mortar_meshes,
     const db::const_item_type<
         ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>& mortar_sizes,
+    const std::tuple<FluxesArgs...>& fluxes_args,
+    const std::tuple<SourcesArgs...>& sources_args,
     const SubdomainDataType& arg) noexcept {
   static constexpr size_t volume_dim = Dim;
   using all_fields_tags = AllFieldsTags;
@@ -188,18 +202,29 @@ static SubdomainDataType apply_subdomain_operator(
   // Since the subdomain operator is called repeatedly for the subdomain solve
   // it could help performance to avoid re-allocating memory by storing the
   // tensor quantities in a buffer.
-//   Parallel::printf("\n\nComputing subdomain operator of:\n%s\n",
-//                    arg.element_data);
+  //   Parallel::printf("\n\nComputing subdomain operator of:\n%s\n",
+  //                    arg.element_data);
   // Compute bulk contribution in central element
-  const auto central_fluxes =
-      elliptic::first_order_fluxes<volume_dim, PrimalFields, AuxiliaryFields>(
-          arg.element_data, fluxes_computer);
+
+  const auto central_fluxes = std::apply(
+      [&arg, &fluxes_computer](const auto&... expanded_fluxes_args) {
+        return elliptic::first_order_fluxes<volume_dim, PrimalFields,
+                                            AuxiliaryFields>(
+            arg.element_data, fluxes_computer, expanded_fluxes_args...);
+      },
+      fluxes_args);
   const auto central_div_fluxes =
       divergence(central_fluxes, mesh, inv_jacobian);
-  elliptic::first_order_operator(
-      make_not_null(&result.element_data), central_div_fluxes,
-      elliptic::first_order_sources<PrimalFields, AuxiliaryFields,
-                                    SourcesComputerType>(arg.element_data));
+  auto central_sources = std::apply(
+      [&arg](const auto&... expanded_sources_args) {
+        return elliptic::first_order_sources<PrimalFields, AuxiliaryFields,
+                                             SourcesComputerType>(
+            arg.element_data, expanded_sources_args...);
+      },
+      sources_args);
+  elliptic::first_order_operator(make_not_null(&result.element_data),
+                                 central_div_fluxes,
+                                 std::move(central_sources));
   // Add boundary contributions
   for (const auto& mortar_id_and_mesh : mortar_meshes) {
     const auto& mortar_id = mortar_id_and_mesh.first;
@@ -268,12 +293,12 @@ static SubdomainDataType apply_subdomain_operator(
       auto neighbor_face_mesh = neighbor_mesh.slice_away(dimension);
       size_t neighbor_face_slice_index =
           index_to_slice_at(neighbor_mesh.extents(), direction_from_neighbor);
-    //   Parallel::printf("slice index: %d\n", neighbor_face_slice_index);
+      //   Parallel::printf("slice index: %d\n", neighbor_face_slice_index);
 
       // Extend the overlap data to the full neighbor mesh by filling it
       // with zeros and adding the overlapping slices
       const auto neighbor_data = overlap_data.extended_field_data();
-    //   Parallel::printf("Extended overlap data: %s\n", neighbor_data);
+      //   Parallel::printf("Extended overlap data: %s\n", neighbor_data);
 
       // Compute the volume contribution in the neighbor from the extended
       // overlap data
@@ -285,8 +310,8 @@ static SubdomainDataType apply_subdomain_operator(
       const auto neighbor_logical_coords = logical_coordinates(neighbor_mesh);
       const auto neighbor_inv_jacobian =
           overlap_data.element_map.inv_jacobian(neighbor_logical_coords);
-    //   Parallel::printf("Inv jac for %s: %s\n", neighbor_id,
-    //                    neighbor_inv_jacobian);
+      //   Parallel::printf("Inv jac for %s: %s\n", neighbor_id,
+      //                    neighbor_inv_jacobian);
       const auto neighbor_div_fluxes =
           divergence(neighbor_fluxes, neighbor_mesh, neighbor_inv_jacobian);
       typename SubdomainDataType::element_data_type neighbor_result_extended{
@@ -295,8 +320,8 @@ static SubdomainDataType apply_subdomain_operator(
           make_not_null(&neighbor_result_extended), neighbor_div_fluxes,
           elliptic::first_order_sources<PrimalFields, AuxiliaryFields,
                                         SourcesComputerType>(neighbor_data));
-    //   Parallel::printf("Extended result on overlap: %s\n",
-    //                    neighbor_result_extended);
+      //   Parallel::printf("Extended result on overlap: %s\n",
+      //                    neighbor_result_extended);
 
       auto neighbor_face_normal_and_magnitude =
           SubdomainOperator_detail::face_normal_and_magnitude(
@@ -337,10 +362,10 @@ static SubdomainDataType apply_subdomain_operator(
           remote_boundary_data, local_boundary_data,
           neighbor_face_normal_and_magnitude.second, neighbor_mesh,
           direction_from_neighbor, mortar_mesh, mortar_size);
-    //   Parallel::printf(
-    //       "Extended result on overlap incl. boundary contrib from central "
-    //       "element: %s\n",
-    //       neighbor_result_extended);
+      //   Parallel::printf(
+      //       "Extended result on overlap incl. boundary contrib from central "
+      //       "element: %s\n",
+      //       neighbor_result_extended);
 
       // Add boundary contributions from the neighbor's neighbors to the
       // extended overlap data. We need only consider faces that share points
@@ -441,9 +466,9 @@ static SubdomainDataType apply_subdomain_operator(
             neighbor_face_direction, neighbor_mortar_mesh,
             neighbor_mortar_size);
       }
-    //   Parallel::printf(
-    //       "Extended result on overlap incl. all boundary contribs: %s\n",
-    //       neighbor_result_extended);
+      //   Parallel::printf(
+      //       "Extended result on overlap incl. all boundary contribs: %s\n",
+      //       neighbor_result_extended);
 
       // Take only the part of the neighbor data that lies within the overlap
       const auto neighbor_result =
@@ -452,7 +477,7 @@ static SubdomainDataType apply_subdomain_operator(
               overlap_data.overlap_extents, direction_from_neighbor);
       // TODO: Fake boundary contributions from the other mortars of the
       // neighbor by filling their data with zeros
-    //   Parallel::printf("Final result on overlap: %s\n", neighbor_result);
+      //   Parallel::printf("Final result on overlap: %s\n", neighbor_result);
 
       // Construct the data that represents the subdomain operator applied to
       // the overlap. We make things easy by copying the operand and changing
@@ -479,6 +504,9 @@ template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
 struct SubdomainOperator {
  private:
   using all_fields_tags = tmpl::append<PrimalFields, AuxiliaryFields>;
+  using FluxesComputerType = db::const_item_type<FluxesComputerTag>;
+  using NumericalFluxesComputerType =
+      db::const_item_type<NumericalFluxesComputerTag>;
 
  public:
   static constexpr size_t volume_dim = Dim;
@@ -489,29 +517,73 @@ struct SubdomainOperator {
       SubdomainOperator_detail::CollectOverlapData<Dim, all_fields_tags,
                                                    OptionsGroup>;
 
-  using argument_tags = tmpl::list<
-      domain::Tags::Mesh<Dim>,
-      domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
-      FluxesComputerTag, NumericalFluxesComputerTag,
-      domain::Tags::Interface<
+  using argument_tags = tmpl::append<
+      tmpl::list<
+          domain::Tags::Mesh<Dim>,
+          domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
+          FluxesComputerTag, NumericalFluxesComputerTag,
+          domain::Tags::Interface<
+              domain::Tags::InternalDirections<Dim>,
+              ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
+          domain::Tags::Interface<
+              domain::Tags::BoundaryDirectionsInterior<Dim>,
+              ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
+          domain::Tags::Interface<
+              domain::Tags::InternalDirections<Dim>,
+              ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
+          domain::Tags::Interface<
+              domain::Tags::BoundaryDirectionsInterior<Dim>,
+              ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
+          ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
+          ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>,
+      typename FluxesComputerType::argument_tags,
+      typename SourcesComputer::argument_tags>;
+
+  template <typename... FluxesAndSourcesArgs>
+  static auto apply(
+      const Mesh<Dim>& mesh,
+      const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
+          inv_jacobian,
+      const FluxesComputerType& fluxes_computer,
+      const NumericalFluxesComputerType& numerical_fluxes_computer,
+      const db::const_item_type<domain::Tags::Interface<
           domain::Tags::InternalDirections<Dim>,
-          ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
-      domain::Tags::Interface<
+          ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>>&
+          internal_face_normals,
+      const db::const_item_type<domain::Tags::Interface<
           domain::Tags::BoundaryDirectionsInterior<Dim>,
-          ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
-      domain::Tags::Interface<
+          ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>>&
+          boundary_face_normals,
+      const db::const_item_type<domain::Tags::Interface<
           domain::Tags::InternalDirections<Dim>,
-          ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
-      domain::Tags::Interface<
+          ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>>&
+          internal_face_normal_magnitudes,
+      const db::const_item_type<domain::Tags::Interface<
           domain::Tags::BoundaryDirectionsInterior<Dim>,
-          ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
-      ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
-      ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>;
-  static constexpr auto apply =
-      &apply_subdomain_operator<PrimalFields, AuxiliaryFields, SourcesComputer,
-                                Dim, db::const_item_type<FluxesComputerTag>,
-                                db::const_item_type<NumericalFluxesComputerTag>,
-                                SubdomainDataType, all_fields_tags>;
+          ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>>&
+          boundary_face_normal_magnitudes,
+      const db::const_item_type<
+          ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>& mortar_meshes,
+      const db::const_item_type<
+          ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>& mortar_sizes,
+      const FluxesAndSourcesArgs&... expanded_fluxes_and_sources_args,
+      const SubdomainDataType& arg) noexcept {
+    const std::tuple<FluxesAndSourcesArgs...> fluxes_and_sources_args{
+        expanded_fluxes_and_sources_args...};
+    return apply_subdomain_operator<PrimalFields, AuxiliaryFields,
+                                    SourcesComputer>(
+        mesh, inv_jacobian, fluxes_computer, numerical_fluxes_computer,
+        internal_face_normals, boundary_face_normals,
+        internal_face_normal_magnitudes, boundary_face_normal_magnitudes,
+        mortar_meshes, mortar_sizes,
+        tuple_head<
+            tmpl::size<typename FluxesComputerType::argument_tags>::value>(
+            fluxes_and_sources_args),
+        tuple_tail<
+            tmpl::size<typename SourcesComputer::argument_tags>::value>(
+            fluxes_and_sources_args),
+        arg);
+  }
 };
 
 }  // namespace dg

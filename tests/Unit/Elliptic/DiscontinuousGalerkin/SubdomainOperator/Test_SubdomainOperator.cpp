@@ -29,6 +29,7 @@
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
+#include "Utilities/Tuple.hpp"
 
 namespace helpers = TestHelpers::elliptic::dg;
 
@@ -36,40 +37,43 @@ namespace {
 
 struct DummyOptionsGroup {};
 
-template <size_t Dim>
-void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
-                             const size_t overlap) noexcept {
-  CAPTURE(Dim);
+template <typename System, typename PackageFluxesArgs,
+          typename PackageSourcesArgs, typename... PrimalFields,
+          typename... AuxiliaryFields>
+void test_subdomain_operator_impl(
+    const DomainCreator<System::volume_dim>& domain_creator,
+    const size_t overlap, const double penalty_parameter,
+    PackageFluxesArgs&& package_fluxes_args,
+    PackageSourcesArgs&& package_sources_args,
+    tmpl::list<PrimalFields...> /*meta*/,
+    tmpl::list<AuxiliaryFields...> /*meta*/) noexcept {
   CAPTURE(overlap);
-  static constexpr size_t volume_dim = Dim;
+  CAPTURE(penalty_parameter);
 
-  // Choose a system
-  using system =
-      Poisson::FirstOrderSystem<volume_dim, Poisson::Geometry::Euclidean>;
-  using Vars = db::item_type<typename system::fields_tag>;
+  using system = System;
+  static constexpr size_t volume_dim = system::volume_dim;
   const typename system::fluxes fluxes_computer{};
-  using fluxes_computer_tag =
-      elliptic::Tags::FluxesComputer<typename system::fluxes>;
-
-  // Choose a numerical flux
-  using NumericalFlux =
-      elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
-          volume_dim, fluxes_computer_tag, typename system::primal_fields,
-          typename system::auxiliary_fields>;
-  const NumericalFlux numerical_fluxes_computer{6.75};  // C=1.5
 
   // Shortcuts for tags
-  using field_tag = Poisson::Tags::Field;
-  using field_gradient_tag =
-      ::Tags::deriv<field_tag, tmpl::size_t<volume_dim>, Frame::Inertial>;
+  using primal_fields = typename system::primal_fields;
+  using auxiliary_fields = typename system::auxiliary_fields;
   using all_fields_tags =
       db::get_variables_tags_list<typename system::fields_tag>;
+  using Vars = db::item_type<typename system::fields_tag>;
+  using fluxes_computer_tag =
+      elliptic::Tags::FluxesComputer<typename system::fluxes>;
   using fluxes_tags =
       db::wrap_tags_in<::Tags::Flux, all_fields_tags, tmpl::size_t<volume_dim>,
                        Frame::Inertial>;
   using div_fluxes_tags = db::wrap_tags_in<::Tags::div, fluxes_tags>;
   using n_dot_fluxes_tags =
       db::wrap_tags_in<::Tags::NormalDotFlux, all_fields_tags>;
+
+  // Choose a numerical flux
+  using NumericalFlux =
+      elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
+          volume_dim, fluxes_computer_tag, primal_fields, auxiliary_fields>;
+  const NumericalFlux numerical_fluxes_computer{penalty_parameter};  // C=1.5
 
   // Setup the elements in the domain
   const auto elements = helpers::create_elements(domain_creator);
@@ -130,8 +134,8 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
   // Above we only filled the central element with ones. Now do the same for the
   // overlaps with its neighbors.
   using SubdomainDataType = LinearSolver::schwarz_detail::SubdomainData<
-      Dim, Variables<all_fields_tags>,
-      elliptic::dg::SubdomainOperator_detail::OverlapData<Dim,
+      volume_dim, Variables<all_fields_tags>,
+      elliptic::dg::SubdomainOperator_detail::OverlapData<volume_dim,
                                                           all_fields_tags>>;
   typename SubdomainDataType::BoundaryDataType subdomain_boundary_data{};
   for (const auto& direction_and_neighbors :
@@ -201,25 +205,33 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
   using BoundaryData = ::dg::FirstOrderScheme::BoundaryData<NumericalFlux>;
   const auto package_boundary_data =
       [&numerical_fluxes_computer, &fluxes_computer](
-          const Mesh<Dim - 1>& face_mesh,
-          const tnsr::i<DataVector, Dim>& face_normal,
+          const Mesh<volume_dim - 1>& face_mesh,
+          const tnsr::i<DataVector, volume_dim>& face_normal,
           const Variables<n_dot_fluxes_tags>& n_dot_fluxes,
-          const Variables<div_fluxes_tags>& div_fluxes) -> BoundaryData {
-    return ::dg::FirstOrderScheme::package_boundary_data(
-        numerical_fluxes_computer, face_mesh, n_dot_fluxes,
-        get<::Tags::NormalDotFlux<field_gradient_tag>>(n_dot_fluxes),
-        get<::Tags::div<::Tags::Flux<field_gradient_tag, tmpl::size_t<Dim>,
-                                     Frame::Inertial>>>(div_fluxes),
-        face_normal, fluxes_computer);
+          const Variables<div_fluxes_tags>& div_fluxes,
+          const auto& fluxes_args) -> BoundaryData {
+    return std::apply(
+        [&numerical_fluxes_computer, &face_mesh, &n_dot_fluxes, &div_fluxes,
+         &face_normal, &fluxes_computer](const auto&... expanded_fluxes_args) {
+          return ::dg::FirstOrderScheme::package_boundary_data(
+              numerical_fluxes_computer, face_mesh, n_dot_fluxes,
+              get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_fluxes)...,
+              get<::Tags::div<::Tags::Flux<
+                  AuxiliaryFields, tmpl::size_t<volume_dim>, Frame::Inertial>>>(
+                  div_fluxes)...,
+              face_normal, fluxes_computer, expanded_fluxes_args...);
+        },
+        fluxes_args);
   };
   const auto apply_boundary_contribution =
       [&numerical_fluxes_computer](
           const auto result, const BoundaryData& local_boundary_data,
           const BoundaryData& remote_boundary_data,
           const Scalar<DataVector>& magnitude_of_face_normal,
-          const Mesh<Dim>& mesh, const ::dg::MortarId<Dim>& mortar_id,
-          const Mesh<Dim - 1>& mortar_mesh,
-          const ::dg::MortarSize<Dim - 1>& mortar_size) {
+          const Mesh<volume_dim>& mesh,
+          const ::dg::MortarId<volume_dim>& mortar_id,
+          const Mesh<volume_dim - 1>& mortar_mesh,
+          const ::dg::MortarSize<volume_dim - 1>& mortar_size) {
         const size_t dimension = mortar_id.first.dimension();
         auto boundary_contribution =
             std::decay_t<decltype(*result)>{dg::FirstOrderScheme::boundary_flux(
@@ -238,9 +250,8 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
     operator_applied_to_workspace[element_id] =
         helpers::apply_first_order_dg_operator<system>(
             element_id, elements, workspace, fluxes_computer,
-            [](const auto&... /* unused */) { return std::tuple<>{}; },
-            [](const auto&... /* unused */) { return std::tuple<>{}; },
-            package_boundary_data, apply_boundary_contribution);
+            package_fluxes_args, package_sources_args, package_boundary_data,
+            apply_boundary_contribution);
   }
 
   // (2) Apply the subdomain operator to the restricted data (as opposed to
@@ -255,7 +266,10 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
           numerical_fluxes_computer, internal_face_normals,
           boundary_face_normals, internal_face_normal_magnitudes,
           boundary_face_normal_magnitudes, central_mortar_meshes,
-          central_mortar_sizes, subdomain_operand);
+          central_mortar_sizes,
+          package_fluxes_args(subdomain_center, central_element),
+          package_sources_args(subdomain_center, central_element),
+          subdomain_operand);
 
   // (3) Check the subdomain operator is equivalent to the full DG operator
   // restricted to the subdomain
@@ -292,23 +306,24 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
       typename system::auxiliary_fields, fluxes_computer_tag,
       typename system::sources, numerical_flux_tag, DummyOptionsGroup>;
   auto box = db::create<db::AddSimpleTags<
-      domain::Tags::Mesh<Dim>,
-      domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
+      domain::Tags::Mesh<volume_dim>,
+      domain::Tags::InverseJacobian<volume_dim, Frame::Logical,
+                                    Frame::Inertial>,
       fluxes_computer_tag, numerical_flux_tag,
       domain::Tags::Interface<
-          domain::Tags::InternalDirections<Dim>,
-          ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
+          domain::Tags::InternalDirections<volume_dim>,
+          ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<volume_dim>>>,
       domain::Tags::Interface<
-          domain::Tags::BoundaryDirectionsInterior<Dim>,
-          ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
+          domain::Tags::BoundaryDirectionsInterior<volume_dim>,
+          ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<volume_dim>>>,
       domain::Tags::Interface<
-          domain::Tags::InternalDirections<Dim>,
-          ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
+          domain::Tags::InternalDirections<volume_dim>,
+          ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<volume_dim>>>,
       domain::Tags::Interface<
-          domain::Tags::BoundaryDirectionsInterior<Dim>,
-          ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
-      ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
-      ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>>(
+          domain::Tags::BoundaryDirectionsInterior<volume_dim>,
+          ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<volume_dim>>>,
+      ::Tags::Mortars<domain::Tags::Mesh<volume_dim - 1>, volume_dim>,
+      ::Tags::Mortars<::Tags::MortarSize<volume_dim - 1>, volume_dim>>>(
       central_element.mesh, central_element.inv_jacobian, fluxes_computer,
       numerical_fluxes_computer, internal_face_normals, boundary_face_normals,
       internal_face_normal_magnitudes, boundary_face_normal_magnitudes,
@@ -323,16 +338,17 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
   const auto overlap_box = db::create_from<
       db::RemoveTags<>,
       db::AddSimpleTags<
-          domain::Tags::ElementMap<Dim>, domain::Tags::Element<Dim>,
+          domain::Tags::ElementMap<volume_dim>,
+          domain::Tags::Element<volume_dim>,
           LinearSolver::schwarz_detail::Tags::Overlap<DummyOptionsGroup>>,
-      db::AddComputeTags<
-          domain::Tags::InternalDirections<Dim>,
-          domain::Tags::InterfaceCompute<domain::Tags::InternalDirections<Dim>,
-                                         domain::Tags::Direction<Dim>>>>(
+      db::AddComputeTags<domain::Tags::InternalDirections<volume_dim>,
+                         domain::Tags::InterfaceCompute<
+                             domain::Tags::InternalDirections<volume_dim>,
+                             domain::Tags::Direction<volume_dim>>>>(
       std::move(box), central_element.element_map, central_element.element,
       size_t{2});
   const auto collected_boundary_data = interface_apply<
-      domain::Tags::InternalDirections<Dim>,
+      domain::Tags::InternalDirections<volume_dim>,
       typename subdomain_operator::collect_overlap_data::argument_tags,
       typename subdomain_operator::collect_overlap_data::volume_tags>(
       typename subdomain_operator::collect_overlap_data{}, overlap_box,
@@ -341,31 +357,64 @@ void test_subdomain_operator(const DomainCreator<Dim>& domain_creator,
   CHECK(collected_boundary_data.size() == subdomain_boundary_data.size());
 }
 
+template <typename System, typename... Args>
+void test_subdomain_operator(Args&&... args) noexcept {
+  test_subdomain_operator_impl<System>(std::forward<Args>(args)...,
+                                       typename System::primal_fields{},
+                                       typename System::auxiliary_fields{});
+}
+
 }  // namespace
 
 SPECTRE_TEST_CASE("Unit.Elliptic.DG.SubdomainOperator", "[Unit][Elliptic]") {
   {
+    INFO("Poisson 1D");
+    using system = Poisson::FirstOrderSystem<1, Poisson::Geometry::Euclidean>;
     const domain::creators::Interval domain_creator{
         {{-2.}}, {{2.}}, {{false}}, {{1}}, {{3}}};
     for (size_t overlap = 1; overlap <= 4; overlap++) {
-      test_subdomain_operator(domain_creator, overlap);
+      test_subdomain_operator<system>(
+          domain_creator, overlap, 6.75,
+          [](const auto&... /*unused*/) { return std::tuple<>{}; },
+          [](const auto&... /*unused*/) { return std::tuple<>{}; });
     }
   }
   {
+    INFO("Poisson 2D");
+    using system = Poisson::FirstOrderSystem<2, Poisson::Geometry::Euclidean>;
     const domain::creators::Rectangle domain_creator{
         {{-2., 0.}}, {{2., 1.}}, {{false, false}}, {{1, 1}}, {{3, 3}}};
     for (size_t overlap = 1; overlap <= 4; overlap++) {
-      test_subdomain_operator(domain_creator, overlap);
+      test_subdomain_operator<system>(
+          domain_creator, overlap, 6.75,
+          [](const auto&... /*unused*/) { return std::tuple<>{}; },
+          [](const auto&... /*unused*/) { return std::tuple<>{}; });
     }
   }
   {
+    INFO("Poisson 3D");
+    using system = Poisson::FirstOrderSystem<3, Poisson::Geometry::Euclidean>;
     const domain::creators::Brick domain_creator{{{-2., 0., -1.}},
                                                  {{2., 1., 1.}},
                                                  {{false, false, false}},
                                                  {{1, 1, 1}},
                                                  {{3, 3, 3}}};
     for (size_t overlap = 1; overlap <= 4; overlap++) {
-      test_subdomain_operator(domain_creator, overlap);
+      test_subdomain_operator<system>(
+          domain_creator, overlap, 6.75,
+          [](const auto&... /*unused*/) { return std::tuple<>{}; },
+          [](const auto&... /*unused*/) { return std::tuple<>{}; });
     }
   }
+  //   {
+  //     using system = Elasticity::FirstOrderSystem<3>;
+  //     const domain::creators::Brick domain_creator{{{-2., 0., -1.}},
+  //                                                  {{2., 1., 1.}},
+  //                                                  {{false, false, false}},
+  //                                                  {{1, 1, 1}},
+  //                                                  {{3, 3, 3}}};
+  //     for (size_t overlap = 1; overlap <= 4; overlap++) {
+  //       test_subdomain_operator<system>(domain_creator, overlap);
+  //     }
+  //   }
 }

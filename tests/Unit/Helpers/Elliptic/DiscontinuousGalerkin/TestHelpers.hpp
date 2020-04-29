@@ -199,8 +199,11 @@ apply_first_order_dg_operator(
         div_fluxes, dg_element.mesh.extents(), dimension, slice_index);
 
     // Assemble local boundary data
-    auto local_boundary_data = package_boundary_data(
-        face_mesh, face_normal, normal_dot_fluxes, div_fluxes_on_face);
+    const auto fluxes_args_on_face =
+        package_fluxes_args(element_id, dg_element, direction);
+    auto local_boundary_data =
+        package_boundary_data(face_mesh, face_normal, normal_dot_fluxes,
+                              div_fluxes_on_face, fluxes_args_on_face);
     if (::dg::needs_projection(face_mesh, mortar_mesh, mortar_size)) {
       local_boundary_data = local_boundary_data.project_to_mortar(
           face_mesh, mortar_mesh, mortar_size);
@@ -226,14 +229,14 @@ apply_first_order_dg_operator(
                                                   AuxiliaryFields>(
                 ghost_vars, fluxes_computer, fluxes_args...);
           },
-          package_fluxes_args(element_id, dg_element, direction));
+          fluxes_args_on_face);
       const auto ghost_normal_dot_fluxes =
           normal_dot_flux<TagsList>(remote_face_normal, ghost_fluxes);
       remote_boundary_data = package_boundary_data(
           face_mesh, remote_face_normal, ghost_normal_dot_fluxes,
           // Using the div_fluxes from the interior here is fine for Dirichlet
           // boundaries
-          div_fluxes_on_face);
+          div_fluxes_on_face, fluxes_args_on_face);
     } else {
       // On internal boundaries, get neighbor data from all_variables
       const auto& neighbor_orientation =
@@ -242,13 +245,15 @@ apply_first_order_dg_operator(
           neighbor_orientation(direction.opposite());
       const auto& neighbor = dg_elements.at(neighbor_id);
       const auto& remote_vars = all_variables.at(neighbor_id);
+      const auto fluxes_args_on_remote_face =
+          package_fluxes_args(neighbor_id, neighbor, direction_from_neighbor);
       const auto remote_fluxes = std::apply(
           [&remote_vars, &fluxes_computer](const auto&... fluxes_args) {
             return ::elliptic::first_order_fluxes<volume_dim, PrimalFields,
                                                   AuxiliaryFields>(
                 remote_vars, fluxes_computer, fluxes_args...);
           },
-          package_fluxes_args(neighbor_id, neighbor, direction_from_neighbor));
+          fluxes_args_on_remote_face);
       const auto remote_div_fluxes_on_face = data_on_slice(
           divergence(remote_fluxes, neighbor.mesh, neighbor.inv_jacobian),
           neighbor.mesh.extents(), direction_from_neighbor.dimension(),
@@ -261,7 +266,7 @@ apply_first_order_dg_operator(
           normal_dot_flux<TagsList>(remote_face_normal, remote_fluxes_on_face);
       remote_boundary_data = package_boundary_data(
           face_mesh, remote_face_normal, remote_normal_dot_fluxes,
-          remote_div_fluxes_on_face);
+          remote_div_fluxes_on_face, fluxes_args_on_remote_face);
       if (::dg::needs_projection(face_mesh, mortar_mesh, mortar_size)) {
         remote_boundary_data = remote_boundary_data.project_to_mortar(
             face_mesh, mortar_mesh, mortar_size);
