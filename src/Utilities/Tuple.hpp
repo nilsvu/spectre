@@ -174,3 +174,30 @@ constexpr inline void tuple_transform(
       tuple, std::forward<N_aryOp>(op),
       std::make_index_sequence<sizeof...(Elements)>{}, args...);
 }
+
+namespace tuple_impl_detail {
+
+template <size_t Start, typename... AllElements, size_t... Is>
+auto slice_impl(const std::tuple<AllElements...>& tuple,
+                std::index_sequence<Is...> /*meta*/) noexcept {
+  return std::make_tuple(get<Is + Start>(tuple)...);
+}
+
+}  // namespace tuple_impl_detail
+
+template <size_t Start, size_t Stop, typename... AllElements>
+auto tuple_slice(const std::tuple<AllElements...>& tuple) noexcept {
+  return tuple_impl_detail::slice_impl<Start>(
+      tuple, std::make_index_sequence<Stop - Start>{});
+}
+
+template <size_t Size, typename... AllElements>
+auto tuple_head(const std::tuple<AllElements...>& tuple) noexcept {
+  return tuple_slice<0, Size>(tuple);
+}
+
+template <size_t Size, typename... AllElements>
+auto tuple_tail(const std::tuple<AllElements...>& tuple) noexcept {
+  static constexpr size_t full_size = sizeof...(AllElements);
+  return tuple_slice<full_size - Size, full_size>(tuple);
+}
