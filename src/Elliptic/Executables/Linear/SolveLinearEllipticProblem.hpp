@@ -166,7 +166,8 @@ struct Metavariables {
   // smoother.
   using subdomain_operator = elliptic::dg::SubdomainOperator<
       volume_dim, primal_variables, auxiliary_variables, fluxes_computer_tag,
-      typename system::sources, normal_dot_numerical_flux,
+      tmpl::list<>, typename system::sources, tmpl::list<>,
+      normal_dot_numerical_flux,
       SolveLinearEllipticProblem::OptionTags::PreconditionerOptions>;
   using subdomain_weighting =
       elliptic::dg::SubdomainOperator_detail::Weighting<volume_dim>;
@@ -250,6 +251,7 @@ struct Metavariables {
   using register_actions = tmpl::list<
       observers::Actions::RegisterWithObservers<observers::RegisterObservers<
           linear_solver_iteration_id, element_observation_type>>,
+      typename preconditioner::register_element,
       // We prepare the linear solve here to avoid adding an extra phase. We
       // can't do that before registration because the `prepare_solve` action
       // may contribute to observers.
