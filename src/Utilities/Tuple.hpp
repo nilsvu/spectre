@@ -201,3 +201,19 @@ auto tuple_tail(const std::tuple<AllElements...>& tuple) noexcept {
   static constexpr size_t full_size = sizeof...(AllElements);
   return tuple_slice<full_size - Size, full_size>(tuple);
 }
+
+namespace tuple_impl_detail {
+
+template <typename Elements>
+struct tuple_from_typelist_impl;
+
+template <typename... Elements>
+struct tuple_from_typelist_impl<tmpl::list<Elements...>> {
+  using type = std::tuple<Elements...>;
+};
+
+}
+
+template <typename Elements>
+using tuple_from_typelist =
+    tmpl::type_from<tuple_impl_detail::tuple_from_typelist_impl<Elements>>;
