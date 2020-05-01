@@ -44,6 +44,13 @@ struct SubdomainData {
   ElementDataType element_data{};
   BoundaryDataType boundary_data{};
 
+  void zero() noexcept {
+    element_data = make_with_value<ElementDataType>(element_data, 0.);
+    for (auto& id_and_overlap_data : boundary_data) {
+      id_and_overlap_data.second.zero();
+    }
+  }
+
   template <typename RhsElementData, typename RhsOverlapData>
   SubdomainData& operator+=(
       const SubdomainData<Dim, RhsElementData, RhsOverlapData>& rhs) noexcept {

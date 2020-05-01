@@ -102,30 +102,51 @@ struct SubdomainOperator {
       OverlapData<volume_dim>>;
   using collect_overlap_data = CollectOverlapData<Dim>;
 
-  using argument_tags =
-      tmpl::list<helpers_distributed::LinearOperator, domain::Tags::Element<1>>;
-  static auto apply(
-      const db::item_type<helpers_distributed::LinearOperator>& linear_operator,
-      const Element<1>& element, const SubdomainDataType& arg) noexcept {
-    size_t array_index = element.id().segment_ids()[0].index();
-    // Parallel::printf("Applying operator on %d...\n", array_index);
-    const auto& operator_slice = gsl::at(linear_operator, array_index);
-    const size_t num_points = operator_slice.columns();
-    const DenseMatrix<double, blaze::columnMajor> subdomain_operator =
-        blaze::submatrix(operator_slice, array_index * num_points, 0,
-                         num_points, num_points);
-    SubdomainDataType result{num_points};
-    // Apply matrix to central element data
-    dgemv_('N', num_points, num_points, 1, subdomain_operator.data(),
-           num_points, arg.element_data.data(), 1, 0,
-           result.element_data.data(), 1);
-    // TODO: Add boundary contributions
-    // Parallel::printf("%d operand: %s\n", array_index, arg.element_data);
-    // Parallel::printf("%d operator: %s\n", array_index, subdomain_operator);
-    // Parallel::printf("%d applied: %s\n", array_index, result.element_data);
-    result.boundary_data = arg.boundary_data;
-    return result;
-  }
+  explicit SubdomainOperator(const size_t central_num_points) noexcept
+      : result_{central_num_points} {}
+
+  const SubdomainDataType& result() const noexcept { return result_; }
+
+  struct volume_operator {
+    using argument_tags = tmpl::list<helpers_distributed::LinearOperator,
+                                     domain::Tags::Element<1>>;
+
+    static void apply(
+        const db::item_type<helpers_distributed::LinearOperator>&
+            linear_operator,
+        const Element<1>& element, const SubdomainDataType& arg,
+        const gsl::not_null<SubdomainOperator*> subdomain_operator) noexcept {
+      size_t array_index = element.id().segment_ids()[0].index();
+      // Parallel::printf("Applying operator on %d...\n", array_index);
+      const auto& operator_slice = gsl::at(linear_operator, array_index);
+      const size_t num_points = operator_slice.columns();
+      const DenseMatrix<double, blaze::columnMajor> subdomain_operator_matrix =
+          blaze::submatrix(operator_slice, array_index * num_points, 0,
+                           num_points, num_points);
+      // Apply matrix to central element data
+      dgemv_('N', num_points, num_points, 1, subdomain_operator_matrix.data(),
+             num_points, arg.element_data.data(), 1, 0,
+             subdomain_operator->result_.element_data.data(), 1);
+      // TODO: Add boundary contributions
+      // Parallel::printf("%d operand: %s\n", array_index, arg.element_data);
+      // Parallel::printf("%d operator: %s\n", array_index, subdomain_operator);
+      // Parallel::printf("%d applied: %s\n", array_index, result.element_data);
+      subdomain_operator->result_.boundary_data = arg.boundary_data;
+    }
+  };
+
+  struct face_operator {
+    using argument_tags = tmpl::list<>;
+
+    int operator()(
+        const SubdomainDataType& /*arg*/,
+        const gsl::not_null<SubdomainOperator*> /*subdomain_operator*/) const
+        noexcept {
+      return 0;
+    }
+  };
+
+  SubdomainDataType result_;
 };
 
 struct WeightingOperator {

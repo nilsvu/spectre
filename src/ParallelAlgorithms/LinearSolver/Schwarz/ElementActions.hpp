@@ -55,7 +55,8 @@ struct InitializeElement {
             InitializeElement,
             db::AddSimpleTags<
                 Tags::SubdomainBoundaryData<SubdomainOperator, OptionsGroup>>,
-            db::AddComputeTags<domain::Tags::InternalDirections<Dim>>>(
+            db::AddComputeTags<domain::Tags::InternalDirections<Dim>,
+                               domain::Tags::BoundaryDirectionsInterior<Dim>>>(
             std::move(box),
             db::item_type<Tags::SubdomainBoundaryData<SubdomainOperator,
                                                       OptionsGroup>>{}));
@@ -218,17 +219,34 @@ struct SolveSubdomain {
     const SubdomainDataType residual_subdomain{
         typename SubdomainDataType::element_data_type(get<residual_tag>(box)),
         get<Tags::SubdomainBoundaryData<SubdomainOperator, OptionsGroup>>(box)};
+    auto subdomain_solve_initial_guess = residual_subdomain;
+    // TODO: Test what initial guess works best
+    // subdomain_solve_initial_guess.zero();
 
     const auto& subdomain_solver =
         get<Tags::SubdomainSolverBase<OptionsGroup>>(box);
+    const size_t center_num_points =
+        get<domain::Tags::Mesh<Dim>>(box).number_of_grid_points();
+    SubdomainOperator subdomain_operator{center_num_points};
     auto subdomain_solve_result = subdomain_solver(
-        [&box](const SubdomainDataType& arg) noexcept {
-          return db::apply<SubdomainOperator>(box, arg);
+        [&box, &subdomain_operator](const SubdomainDataType& arg) noexcept {
+          db::apply<typename SubdomainOperator::volume_operator>(
+              box, arg, make_not_null(&subdomain_operator));
+          interface_apply<
+              domain::Tags::InternalDirections<Dim>,
+              typename SubdomainOperator::face_operator::argument_tags,
+              get_volume_tags<typename SubdomainOperator::face_operator>>(
+              typename SubdomainOperator::face_operator{}, box, arg,
+              make_not_null(&subdomain_operator));
+          interface_apply<
+              domain::Tags::BoundaryDirectionsInterior<Dim>,
+              typename SubdomainOperator::face_operator::argument_tags,
+              get_volume_tags<typename SubdomainOperator::face_operator>>(
+              typename SubdomainOperator::face_operator{}, box, arg,
+              make_not_null(&subdomain_operator));
+          return subdomain_operator.result();
         },
-        residual_subdomain,
-        // Using the residual as initial guess so not iterating the
-        // subdomain solver at all is the identity operation
-        residual_subdomain);
+        residual_subdomain, std::move(subdomain_solve_initial_guess));
     const auto& subdomain_solve_has_converged = subdomain_solve_result.first;
     auto& subdomain_solution = subdomain_solve_result.second;
     if (not subdomain_solve_has_converged or

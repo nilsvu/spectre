@@ -11,5 +11,5 @@ add_test_library(
   ${LIBRARY}
   "Elliptic/DiscontinuousGalerkin/SubdomainOperator"
   "${LIBRARY_SOURCES}"
-  "DataStructures;Domain;ErrorHandling;EllipticDgTestHelpers;Poisson"
+  "ConstitutiveRelations;DataStructures;Domain;ErrorHandling;Elasticity;EllipticDgTestHelpers;Poisson"
   )

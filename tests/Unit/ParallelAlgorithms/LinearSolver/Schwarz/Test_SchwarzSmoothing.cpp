@@ -56,6 +56,7 @@
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Utilities/TMPL.hpp"
 
+#include "Framework/TestingFramework.hpp"
 #include "Parallel/Printf.hpp"
 #include "ParallelAlgorithms/LinearSolver/Richardson/Richardson.hpp"
 
@@ -65,6 +66,25 @@ struct SchwarzSmoother {
   static constexpr OptionString help =
       "Options for the iterative Schwarz smoother";
 };
+
+namespace OptionTags {
+struct ErrorTolerance {
+  using type = double;
+  static constexpr OptionString help =
+      "Pointwise tolerance for the error to the analytic solution";
+};
+}  // namespace OptionTags
+namespace Tags {
+struct ErrorTolerance : db::SimpleTag {
+  using type = double;
+
+  static constexpr bool pass_metavariables = false;
+  using option_tags = tmpl::list<OptionTags::ErrorTolerance>;
+  static type create_from_options(const type& option_value) noexcept {
+    return option_value;
+  }
+};
+}  // namespace Tags
 
 struct InitializeRandomInitialData {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -96,6 +116,48 @@ struct InitializeRandomInitialData {
   }
 };
 
+struct TestResult {
+  using const_global_cache_tags = tmpl::list<Tags::ErrorTolerance>;
+
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            size_t Dim, typename ActionList, typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&> apply(
+      db::DataBox<DbTagsList>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      const ElementId<Dim>& element_id, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    using system = typename Metavariables::system;
+    using fields_tag = typename system::fields_tag;
+    using all_fields_tags = db::get_variables_tags_list<fields_tag>;
+
+    const double tolerance = get<Tags::ErrorTolerance>(box);
+
+    tmpl::for_each<all_fields_tags>([&box, &tolerance,
+                                     &element_id](auto tag_v) {
+      using tag = tmpl::type_from<decltype(tag_v)>;
+      const auto& tensor = get<tag>(box);
+      const auto& analytic_solution = get<::Tags::Analytic<tag>>(box);
+      Parallel::printf(
+          "Result for " + db::tag_name<tag>() + " on element %s:\n%s\n",
+          element_id, tensor);
+      for (size_t i = 0; i < tensor.size(); ++i) {
+        const DataVector error = abs(tensor[i] - analytic_solution[i]);
+        for (size_t j = 0; j < error.size(); ++j) {
+          if (error[j] > tolerance) {
+            Parallel::printf(db::tag_name<tag>() +
+                                 " on element %s exceeds tolerance %e: %e\n",
+                             element_id, tolerance, error[j]);
+          }
+          SPECTRE_PARALLEL_REQUIRE(error[j] <= tolerance);
+        }
+      }
+    });
+
+    return {std::move(box)};
+  }
+};
+
 template <size_t Dim>
 struct Metavariables {
   static constexpr const char* const help{
@@ -113,13 +175,13 @@ struct Metavariables {
 
   // Choose a simple analytic solution
   using analytic_solution = Poisson::Solutions::ProductOfSinusoids<Dim>;
-  using analytic_solution_tag = Tags::AnalyticSolution<analytic_solution>;
+  using analytic_solution_tag = ::Tags::AnalyticSolution<analytic_solution>;
 
   // Use the analytic solution to impose boundary conditions
   using boundary_conditions = analytic_solution;
 
   // Choose a numerical flux
-  using normal_dot_numerical_flux = Tags::NumericalFlux<
+  using normal_dot_numerical_flux = ::Tags::NumericalFlux<
       elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
           volume_dim, fluxes_computer_tag, primal_fields, auxiliary_fields>>;
 
@@ -132,14 +194,13 @@ struct Metavariables {
   // Set up the Schwarz smoother
   using subdomain_operator = elliptic::dg::SubdomainOperator<
       volume_dim, primal_fields, auxiliary_fields, fluxes_computer_tag,
-      typename system::sources, normal_dot_numerical_flux, SchwarzSmoother>;
+      tmpl::list<>, typename system::sources, tmpl::list<>,
+      normal_dot_numerical_flux, SchwarzSmoother>;
   using weighting_operator =
       elliptic::dg::SubdomainOperator_detail::Weighting<volume_dim>;
   using linear_solver =
       LinearSolver::Schwarz<Metavariables, fields_tag, SchwarzSmoother,
                             subdomain_operator, weighting_operator>;
-  //   using linear_solver = LinearSolver::Richardson<fields_tag,
-  //   SchwarzSmoother>;
   using preconditioner = void;
 
   // Set up observations
@@ -162,10 +223,16 @@ struct Metavariables {
   using const_global_cache_tags =
       tmpl::list<analytic_solution_tag, fluxes_computer_tag,
                  normal_dot_numerical_flux,
-                 Tags::EventsAndTriggers<events, triggers>>;
+                 ::Tags::EventsAndTriggers<events, triggers>>;
 
   // Define the phases of the executable
-  enum class Phase { Initialization, RegisterWithObserver, Smooth, Exit };
+  enum class Phase {
+    Initialization,
+    RegisterWithObserver,
+    Smooth,
+    TestResult,
+    Exit
+  };
 
   using initialization_actions = tmpl::list<
       // Domain geometry
@@ -211,25 +278,32 @@ struct Metavariables {
   using register_actions = tmpl::list<
       observers::Actions::RegisterWithObservers<observers::RegisterObservers<
           linear_solver_iteration_id, element_observation_type>>,
+      typename linear_solver::register_element,
       // We prepare the linear solve here to avoid adding an extra phase. We
       // can't do that before registration because the `prepare_solve` action
       // may contribute to observers.
       build_linear_operator_actions, typename linear_solver::prepare_solve,
       Parallel::Actions::TerminatePhase>;
 
-  using smooth_actions = tmpl::list<
-      typename linear_solver::prepare_step, Actions::RunEventsAndTriggers,
-      LinearSolver::Actions::TerminateIfConverged<
-          typename linear_solver::options_group>,
-      build_linear_operator_actions, typename linear_solver::perform_step>;
+  using smooth_actions = tmpl::list<Actions::RunEventsAndTriggers,
+                                    LinearSolver::Actions::TerminateIfConverged<
+                                        typename linear_solver::options_group>,
+                                    typename linear_solver::prepare_step,
+                                    build_linear_operator_actions,
+                                    typename linear_solver::perform_step>;
+
+  using test_actions =
+      tmpl::list<TestResult, Parallel::Actions::TerminatePhase>;
 
   using dg_element_array = elliptic::DgElementArray<
       Metavariables,
-      tmpl::list<Parallel::PhaseActions<Phase, Phase::Initialization,
-                                        initialization_actions>,
-                 Parallel::PhaseActions<Phase, Phase::RegisterWithObserver,
-                                        register_actions>,
-                 Parallel::PhaseActions<Phase, Phase::Smooth, smooth_actions>>>;
+      tmpl::list<
+          Parallel::PhaseActions<Phase, Phase::Initialization,
+                                 initialization_actions>,
+          Parallel::PhaseActions<Phase, Phase::RegisterWithObserver,
+                                 register_actions>,
+          Parallel::PhaseActions<Phase, Phase::Smooth, smooth_actions>,
+          Parallel::PhaseActions<Phase, Phase::TestResult, test_actions>>>;
 
   using component_list = tmpl::flatten<
       tmpl::list<dg_element_array, typename linear_solver::component_list,
@@ -247,6 +321,8 @@ struct Metavariables {
       case Phase::RegisterWithObserver:
         return Phase::Smooth;
       case Phase::Smooth:
+        return Phase::TestResult;
+      case Phase::TestResult:
         return Phase::Exit;
       case Phase::Exit:
         ERROR(
@@ -264,7 +340,7 @@ struct Metavariables {
 
 }  // namespace
 
-using metavariables = Metavariables<2>;
+using metavariables = Metavariables<1>;
 
 static const std::vector<void (*)()> charm_init_node_funcs{
     &setup_error_handling, &domain::creators::register_derived_with_charm,
