@@ -316,6 +316,7 @@ using register_actions = tmpl::list<
         LinearSolver::Tags::IterationId<
             typename LinearSolverType::options_group>,
         typename Metavariables::element_observation_type>>,
+    typename LinearSolverType::register_element,
     typename LinearSolverType::prepare_solve,
     Parallel::Actions::TerminatePhase>;
 
