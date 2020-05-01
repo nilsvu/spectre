@@ -41,6 +41,9 @@ struct Schwarz {
                  schwarz_detail::InitializeElement<FieldsTag, OptionsGroup,
                                                    SubdomainOperator>>;
 
+  using register_element =
+      async_solvers_detail::RegisterElement<FieldsTag, OptionsGroup, SourceTag>;
+
   using prepare_solve =
       async_solvers_detail::PrepareSolve<FieldsTag, OptionsGroup, SourceTag>;
 

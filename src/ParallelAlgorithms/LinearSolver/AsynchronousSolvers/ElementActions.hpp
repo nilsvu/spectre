@@ -42,6 +42,9 @@ using reduction_data = Parallel::ReductionData<
     // Residual
     Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>;
 
+template <typename OptionsGroup>
+struct ElementObservationType {};
+
 template <typename FieldsTag, typename OptionsGroup, typename DbTagsList,
           typename Metavariables, typename ArrayIndex>
 void contribute_to_residual_observation(
@@ -63,8 +66,8 @@ void contribute_to_residual_observation(
            .ckLocalBranch();
   Parallel::simple_action<observers::Actions::ContributeReductionData>(
       local_observer,
-      observers::ObservationId(
-          iteration_id, typename Metavariables::element_observation_type{}),
+      observers::ObservationId(iteration_id,
+                               ElementObservationType<OptionsGroup>{}),
       std::string{"/" + option_name<OptionsGroup>() + "Residuals"},
       std::vector<std::string>{"Iteration", "Residual"},
       reduction_data{iteration_id, residual_magnitude_square});
@@ -130,6 +133,26 @@ struct InitializeElement {
             db::item_type<operator_applied_to_fields_tag>{}));
   }
 };
+
+template <typename OptionsGroup>
+struct RegisterObservers {
+  template <typename ParallelComponent, typename DbTagsList,
+            typename ArrayIndex>
+  static std::pair<observers::TypeOfObservation, observers::ObservationId>
+  register_info(const db::DataBox<DbTagsList>& box,
+                const ArrayIndex& /*array_index*/) noexcept {
+    return {
+        observers::TypeOfObservation::Reduction,
+        observers::ObservationId{
+            static_cast<double>(
+                db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box)),
+            ElementObservationType<OptionsGroup>{}}};
+  }
+};
+
+template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
+using RegisterElement =
+    observers::Actions::RegisterWithObservers<RegisterObservers<OptionsGroup>>;
 
 template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
 struct PrepareSolve {
