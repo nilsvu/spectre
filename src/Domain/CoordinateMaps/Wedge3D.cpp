@@ -10,7 +10,6 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Domain/OrientationMap.hpp"
 #include "ErrorHandling/Assert.hpp"
-#include "Parallel/PupStlCpp11.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/DereferenceWrapper.hpp"
 #include "Utilities/EqualWithinRoundoff.hpp"

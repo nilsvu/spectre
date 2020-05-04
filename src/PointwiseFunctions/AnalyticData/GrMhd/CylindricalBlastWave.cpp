@@ -9,7 +9,6 @@
 
 #include "DataStructures/DataVector.hpp"     // IWYU pragma: keep
 #include "DataStructures/Tensor/Tensor.hpp"  // IWYU pragma: keep
-#include "Parallel/PupStlCpp11.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
 #include "Utilities/ConstantExpressions.hpp"  // IWYU pragma: keep
 #include "Utilities/GenerateInstantiations.hpp"

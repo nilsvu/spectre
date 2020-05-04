@@ -7,7 +7,6 @@
 #include <limits>
 #include <ostream>
 
-#include "Parallel/PupStlCpp11.hpp"  // IWYU pragma: keep
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/Gsl.hpp"

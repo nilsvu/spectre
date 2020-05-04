@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <pup.h>
 
-#include "Parallel/PupStlCpp11.hpp"
 #include "Utilities/StdArrayHelpers.hpp"
 
 namespace intrp {

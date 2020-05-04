@@ -10,7 +10,6 @@
 
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
-#include "Parallel/PupStlCpp11.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
