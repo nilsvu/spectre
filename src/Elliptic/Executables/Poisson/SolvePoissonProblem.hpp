@@ -63,7 +63,7 @@
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
 
-namespace SolveLinearEllipticProblem {
+namespace SolvePoissonProblem {
 namespace OptionTags {
 
 struct LinearSolverGroup {
@@ -124,7 +124,7 @@ struct CombinedIterationId : db::ComputeTag {
   template <typename Tag>
   using step_prefix = LinearSolver::Tags::OperatorAppliedTo<Tag>;
 };
-}  // namespace SolveLinearEllipticProblem
+}  // namespace SolvePoissonProblem
 
 struct PreconditioningLabel {};
 struct PrepareLinearSolveLabel {};
@@ -142,7 +142,7 @@ struct Metavariables {
   static constexpr bool massive_operator = true;
 
   static constexpr OptionString help{
-      "Find the solution to a linear elliptic problem.\n"
+      "Find the solution to a Poisson problem.\n"
       "Linear solver: GMRES\n"
       "Numerical flux: FirstOrderInternalPenaltyFlux"};
 
@@ -159,7 +159,7 @@ struct Metavariables {
   // not positive-definite for the first-order system.
   using linear_solver = LinearSolver::gmres::Gmres<
       Metavariables, typename system::fields_tag,
-      SolveLinearEllipticProblem::OptionTags::GmresGroup,
+      SolvePoissonProblem::OptionTags::GmresGroup,
       true
       // ,false
       ,
@@ -194,7 +194,7 @@ struct Metavariables {
   using preconditioner = LinearSolver::multigrid::Multigrid<
       Metavariables, linear_operand_tag,
       // typename system::fields_tag,
-      SolveLinearEllipticProblem::OptionTags::MultigridGroup,
+      SolvePoissonProblem::OptionTags::MultigridGroup,
       typename linear_solver::preconditioner_source_tag>;
   using preconditioner_iteration_id =
       LinearSolver::Tags::IterationId<typename preconditioner::options_group>;
@@ -216,12 +216,12 @@ struct Metavariables {
       volume_dim, primal_variables, auxiliary_variables, fluxes_computer_tag,
       tmpl::list<>, typename system::sources, tmpl::list<>,
       normal_dot_numerical_flux,
-      SolveLinearEllipticProblem::OptionTags::PreSchwarzGroup, tmpl::list<>,
+      SolvePoissonProblem::OptionTags::PreSchwarzGroup, tmpl::list<>,
       massive_operator>;
   using pre_smoother = LinearSolver::Schwarz::Schwarz<
       Metavariables, typename preconditioner::smooth_fields_tag,
       // linear_operand_tag,
-      SolveLinearEllipticProblem::OptionTags::PreSchwarzGroup,
+      SolvePoissonProblem::OptionTags::PreSchwarzGroup,
       pre_smoother_subdomain_operator,
       typename preconditioner::smooth_source_tag>;
   using pre_smoother_iteration_id =
@@ -234,17 +234,17 @@ struct Metavariables {
       volume_dim, primal_variables, auxiliary_variables, fluxes_computer_tag,
       tmpl::list<>, typename system::sources, tmpl::list<>,
       normal_dot_numerical_flux,
-      SolveLinearEllipticProblem::OptionTags::PostSchwarzGroup, tmpl::list<>,
+      SolvePoissonProblem::OptionTags::PostSchwarzGroup, tmpl::list<>,
       massive_operator>;
   using post_smoother = LinearSolver::Schwarz::Schwarz<
       Metavariables, typename preconditioner::smooth_fields_tag,
-      SolveLinearEllipticProblem::OptionTags::PostSchwarzGroup,
+      SolvePoissonProblem::OptionTags::PostSchwarzGroup,
       post_smoother_subdomain_operator,
       typename preconditioner::smooth_source_tag>;
   using post_smoother_iteration_id =
       LinearSolver::Tags::IterationId<typename post_smoother::options_group>;
 
-  using combined_iteration_id = SolveLinearEllipticProblem::CombinedIterationId<
+  using combined_iteration_id = SolvePoissonProblem::CombinedIterationId<
       linear_solver_iteration_id, preconditioner_iteration_id,
       pre_smoother_iteration_id, post_smoother_iteration_id>;
 
