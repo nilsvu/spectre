@@ -1,0 +1,80 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: EvolveKerrSchild
+# Check: parse;execute
+# Timeout: 8
+# ExpectedOutput:
+#   GhKerrSchildReductionData.h5
+#   GhKerrSchildVolumeData0.h5
+
+Evolution:
+  InitialTime: 0.0
+  InitialTimeStep: 0.01
+  TimeStepper:
+    AdamsBashforthN:
+      Order: 1
+
+DomainCreator:
+    Shell:
+      InnerRadius: 1.9
+      OuterRadius: 2.3
+      InitialRefinement: 0
+      InitialGridPoints: [5, 5]
+      UseEquiangularMap: true
+      AspectRatio: 1.0
+      UseLogarithmicMap: true
+      RadialBlockLayers: 1
+
+AnalyticSolution:
+  KerrSchild:
+    Mass: 1.0
+    Spin: [0.0, 0.0, 0.0]
+    Center: [0.0, 0.0, 0.0]
+
+EvolutionSystem:
+  GeneralizedHarmonic:
+    Gauge:
+      RollOnStartTime: 100000.0
+      RollOnTimeWindow: 100.0
+      SpatialDecayWidth: 50.0
+
+NumericalFlux:
+  UpwindFlux:
+
+EventsAndTriggers:
+  ? EveryNSlabs:
+      N: 2
+      Offset: 0
+  : - ObserveErrorNorms
+  ? EveryNSlabs:
+      N: 5
+      Offset: 0
+  : - ObserveFields
+  ? EveryNSlabs:
+      N: 5
+      Offset: 2
+  : - AhA
+  ? SpecifiedSlabs:
+      Slabs: [3]
+  : - Completion
+
+Observers:
+  VolumeFileName: "GhKerrSchildNumericIDVolumeData"
+  ReductionFileName: "GhKerrSchildNumericIDReductionData"
+
+ApparentHorizons:
+  AhA:
+    InitialGuess:
+      Lmax: 4
+      Radius: 2.2
+      Center: [0.0, 0.0, 0.0]
+    FastFlow:
+      Flow: Fast
+    Verbosity: Verbose
+
+Importers:
+  NumericInitialData:
+    FileName: GhKerrSchildVolumeData0.h5
+    Subgroup: element_data
+    ObservationValue: 0.
