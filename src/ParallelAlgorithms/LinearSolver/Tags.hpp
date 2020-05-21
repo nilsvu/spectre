@@ -274,7 +274,7 @@ struct HasConvergedByIterationsCompute
       tmpl::list<LinearSolver::Tags::Iterations<OptionsGroup>,
                  LinearSolver::Tags::IterationId<OptionsGroup>>;
   static Convergence::HasConverged function(
-      const size_t& iterations, const size_t iteration_id) noexcept {
+      const size_t iterations, const size_t iteration_id) noexcept {
     return {{iterations, 0., 0.}, iteration_id, 1., 1.};
   }
 };
@@ -360,7 +360,7 @@ struct Iterations : db::SimpleTag {
   static constexpr bool pass_metavariables = false;
   using option_tags =
       tmpl::list<LinearSolver::OptionTags::Iterations<OptionsGroup>>;
-  static size_t create_from_options(const size_t& iterations) noexcept {
+  static size_t create_from_options(const size_t iterations) noexcept {
     return iterations;
   }
 };
