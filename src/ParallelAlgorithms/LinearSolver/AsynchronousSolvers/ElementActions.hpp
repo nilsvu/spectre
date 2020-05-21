@@ -33,8 +33,9 @@ class TaggedTuple;
 }  // namespace tuples
 /// \endcond
 
-namespace LinearSolver {
-namespace async_solvers_detail {
+/// Functionality shared between parallel linear solvers that have no global
+/// synchronization points
+namespace LinearSolver::async_solvers {
 
 using reduction_data = Parallel::ReductionData<
     // Iteration
@@ -232,5 +233,4 @@ struct CompleteStep {
   }
 };
 
-}  // namespace async_solvers_detail
-}  // namespace LinearSolver
+}  // namespace LinearSolver::async_solvers

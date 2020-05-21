@@ -26,7 +26,8 @@ struct Metavariables {
       "Test the Richardson linear solver algorithm"};
 
   using linear_solver =
-      LinearSolver::Richardson<helpers::fields_tag, SerialRichardson>;
+      LinearSolver::Richardson::Richardson<helpers::fields_tag,
+                                           SerialRichardson>;
 
   using component_list = helpers::component_list<Metavariables>;
   using observed_reduction_data_tags =

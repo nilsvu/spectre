@@ -7,6 +7,7 @@
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "Options/Options.hpp"
 #include "ParallelAlgorithms/LinearSolver/AsynchronousSolvers/ElementActions.hpp"
+#include "ParallelAlgorithms/LinearSolver/Richardson/Tags.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -21,31 +22,12 @@ struct ConstGlobalCache;
 }  // namespace Parallel
 /// \endcond
 
-namespace LinearSolver {
+/// Items related to the Richardson linear solver
+///
+/// \see `LinearSolver::Richardson::Richardson`
+namespace LinearSolver::Richardson {
 
-namespace richardson_detail {
-
-namespace OptionTags {
-template <typename OptionsGroup>
-struct RelaxationParameter {
-  using type = double;
-  using group = OptionsGroup;
-  static constexpr OptionString help =
-      "The weight for the residual in the scheme";
-};
-}  // namespace OptionTags
-
-namespace Tags {
-template <typename OptionsGroup>
-struct RelaxationParameter : db::SimpleTag {
-  using type = double;
-  static constexpr bool pass_metavariables = false;
-  using option_tags = tmpl::list<OptionTags::RelaxationParameter<OptionsGroup>>;
-  static double create_from_options(const double value) noexcept {
-    return value;
-  }
-};
-}  // namespace Tags
+namespace detail {
 
 template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
 struct UpdateFields {
@@ -55,7 +37,7 @@ struct UpdateFields {
 
  public:
   using const_global_cache_tags =
-      tmpl::list<richardson_detail::Tags::RelaxationParameter<OptionsGroup>>;
+      tmpl::list<Tags::RelaxationParameter<OptionsGroup>>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
@@ -75,12 +57,12 @@ struct UpdateFields {
           *fields += relaxation_parameter * residual;
         },
         get<residual_tag>(box),
-        get<richardson_detail::Tags::RelaxationParameter<OptionsGroup>>(box));
+        get<Tags::RelaxationParameter<OptionsGroup>>(box));
     return {std::move(box)};
   }
 };
 
-}  // namespace richardson_detail
+}  // namespace detail
 
 /*!
  * \ingroup LinearSolverGroup
@@ -97,7 +79,7 @@ struct UpdateFields {
  * x_{k+1} = x_k + \omega \left(b - Ax\right)
  * \f]
  *
- * where \f$omega\f$ is a _relaxation parameter_ that weights the residuum.
+ * where \f$\omega\f$ is a _relaxation parameter_ that weights the residual.
  *
  * The scheme converges if the spectral radius (i.e. the largest absolute
  * eigenvalue) of the iteration operator \f$G=1-\omega A\f$ is smaller than one.
@@ -122,17 +104,15 @@ struct Richardson {
   using operand_tag = fields_tag;
   using component_list = tmpl::list<>;
   using observed_reduction_data_tags = observers::make_reduction_data_tags<
-      tmpl::list<async_solvers_detail::reduction_data>>;
+      tmpl::list<async_solvers::reduction_data>>;
   using initialize_element =
-      async_solvers_detail::InitializeElement<FieldsTag, OptionsGroup,
-                                              SourceTag>;
+      async_solvers::InitializeElement<FieldsTag, OptionsGroup, SourceTag>;
   using register_element =
-      async_solvers_detail::RegisterElement<FieldsTag, OptionsGroup, SourceTag>;
+      async_solvers::RegisterElement<FieldsTag, OptionsGroup, SourceTag>;
   using prepare_solve =
-      async_solvers_detail::PrepareSolve<FieldsTag, OptionsGroup, SourceTag>;
-  using prepare_step =
-      richardson_detail::UpdateFields<FieldsTag, OptionsGroup, SourceTag>;
+      async_solvers::PrepareSolve<FieldsTag, OptionsGroup, SourceTag>;
+  using prepare_step = detail::UpdateFields<FieldsTag, OptionsGroup, SourceTag>;
   using perform_step =
-      async_solvers_detail::CompleteStep<FieldsTag, OptionsGroup, SourceTag>;
+      async_solvers::CompleteStep<FieldsTag, OptionsGroup, SourceTag>;
 };
-}  // namespace LinearSolver
+}  // namespace LinearSolver::Richardson
