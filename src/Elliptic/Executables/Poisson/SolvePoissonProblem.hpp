@@ -9,6 +9,7 @@
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
+#include "Elliptic/Actions/InitializeBoundaryConditions.hpp"
 #include "Elliptic/Actions/InitializeFields.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
 #include "Elliptic/Actions/InitializeLinearOperator.hpp"
@@ -323,6 +324,7 @@ struct Metavariables {
           dg::Initialization::slice_tags_to_exterior<>,
           dg::Initialization::face_compute_tags<>,
           dg::Initialization::exterior_compute_tags<>, false, false>,
+      elliptic::Actions::InitializeBoundaryConditions<analytic_solution_tag>,
       elliptic::Actions::InitializeFields,
       elliptic::Actions::InitializeFixedSources,
       typename linear_solver::initialize_element,
@@ -330,9 +332,11 @@ struct Metavariables {
       typename pre_smoother::initialize_element,
       typename post_smoother::initialize_element,
       elliptic::dg::Actions::InitializeSubdomain<
-          volume_dim, typename pre_smoother::options_group>,
+          volume_dim, typename pre_smoother::options_group,
+          analytic_solution_tag>,
       elliptic::dg::Actions::InitializeSubdomain<
-          volume_dim, typename post_smoother::options_group>,
+          volume_dim, typename post_smoother::options_group,
+          analytic_solution_tag>,
       ::Initialization::Actions::AddComputeTags<tmpl::list<
           combined_iteration_id
           //, LinearSolver::Schwarz::Tags::SummedIntrudingOverlapWeights<
@@ -355,8 +359,8 @@ struct Metavariables {
       Actions::MutateApply<elliptic::FirstOrderOperator<
           volume_dim, LinearSolver::Tags::OperatorAppliedTo, linear_operand_tag,
           massive_operator>>,
-      elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
-          linear_operand_tag, primal_variables>,
+      elliptic::dg::Actions::ImposeHomogeneousBoundaryConditions<
+          linear_operand_tag, primal_variables, auxiliary_variables>,
       dg::Actions::CollectDataForFluxes<
           boundary_scheme,
           domain::Tags::BoundaryDirectionsInterior<volume_dim>>,
