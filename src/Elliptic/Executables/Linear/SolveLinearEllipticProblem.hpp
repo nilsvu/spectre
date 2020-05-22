@@ -170,7 +170,7 @@ struct Metavariables {
       Actions::MutateApply<elliptic::FirstOrderOperator<
           volume_dim, LinearSolver::Tags::OperatorAppliedTo,
           linear_operand_tag>>,
-      elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
+      elliptic::dg::Actions::ImposeHomogeneousBoundaryConditions<
           linear_operand_tag, primal_variables>,
       dg::Actions::CollectDataForFluxes<
           boundary_scheme,
