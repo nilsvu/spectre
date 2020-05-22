@@ -8,6 +8,8 @@
 
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Domain/Structure/Direction.hpp"
+#include "Elliptic/BoundaryConditions.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "ErrorHandling/Error.hpp"
 #include "Options/Options.hpp"
@@ -178,6 +180,17 @@ class HalfSpaceMirror {
       }
     }
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
+  }
+
+  static elliptic::BoundaryCondition boundary_condition_type(
+      const tnsr::I<DataVector, 3>& /*x*/, const Direction<3>& direction) {
+    // Impose Dirichlet conditions on the side of the mirror that faces away
+    // from the laser
+    if (direction == Direction<3>::upper_zeta()) {
+      return elliptic::BoundaryCondition::Dirichlet;
+    } else {
+      return elliptic::BoundaryCondition::Neumann;
+    }
   }
 
   // clang-tidy: no pass by reference

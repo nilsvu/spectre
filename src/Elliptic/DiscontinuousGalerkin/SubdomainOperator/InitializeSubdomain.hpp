@@ -12,10 +12,13 @@
 #include "Domain/CreateInitialElement.hpp"
 #include "Domain/Domain.hpp"
 #include "Domain/ElementMap.hpp"
+#include "Domain/LogicalCoordinates.hpp"
 #include "Domain/Structure/CreateInitialMesh.hpp"
+#include "Domain/Structure/DirectionMap.hpp"
 #include "Domain/Structure/Element.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/BoundaryConditions.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
@@ -42,7 +45,8 @@ namespace elliptic::dg::Actions {
 // TODO: Are h-refined mortars weighted correctly?
 // TODO: Keep in mind that the weighting operation should preserve symmetry of
 // the linear operator
-template <size_t Dim, typename OptionsGroup>
+template <size_t Dim, typename OptionsGroup,
+          typename BoundaryConditionsProviderTag>
 struct InitializeSubdomain {
   using initialization_tags =
       tmpl::list<domain::Tags::InitialExtents<Dim>,
@@ -75,6 +79,8 @@ struct InitializeSubdomain {
     const auto& domain = db::get<domain::Tags::Domain<Dim>>(box);
     const auto& max_overlap =
         get<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>(box);
+    const auto& boundary_conditions_provider =
+        db::get<BoundaryConditionsProviderTag>(box);
 
     overlaps<Mesh<Dim>> overlap_meshes{};
     overlaps<size_t> overlap_extents{};
@@ -84,6 +90,8 @@ struct InitializeSubdomain {
         overlap_mortar_sizes{};
     overlaps<tnsr::I<DataVector, Dim, Frame::Inertial>>
         overlap_inertial_coords{};
+    overlaps<std::unordered_map<Direction<Dim>, elliptic::BoundaryCondition>>
+        overlap_boundary_conditions{};
 
     const auto& element = db::get<domain::Tags::Element<Dim>>(box);
     for (const auto& direction_and_neighbors : element.neighbors()) {
@@ -141,6 +149,8 @@ struct InitializeSubdomain {
                                   neighbor_neighbors.orientation()));
           }
         }
+        std::unordered_map<Direction<Dim>, elliptic::BoundaryCondition>
+            neighbor_boundary_conditions{};
         for (const auto& neighbor_direction : neighbor.external_boundaries()) {
           const auto neighbor_mortar_id = std::make_pair(
               neighbor_direction, ElementId<Dim>::external_boundary_id());
@@ -150,11 +160,21 @@ struct InitializeSubdomain {
           neighbor_mortar_sizes.emplace(
               neighbor_mortar_id,
               make_array<Dim - 1>(Spectral::MortarSize::Full));
+          neighbor_boundary_conditions.emplace(
+              neighbor_direction,
+              boundary_conditions_provider.boundary_condition_type(
+                  overlap_element_maps.at(overlap_id)(
+                      interface_logical_coordinates(
+                          neighbor_mortar_meshes.at(neighbor_mortar_id),
+                          neighbor_direction)),
+                  neighbor_direction));
         }
         overlap_mortar_meshes.emplace(overlap_id,
                                       std::move(neighbor_mortar_meshes));
         overlap_mortar_sizes.emplace(overlap_id,
                                      std::move(neighbor_mortar_sizes));
+        overlap_boundary_conditions.emplace(
+            overlap_id, std::move(neighbor_boundary_conditions));
         auto neighbor_inertial_coords = overlap_element_maps.at(overlap_id)(
             logical_coordinates(neighbor_mesh));
         overlap_inertial_coords.emplace(overlap_id,
@@ -171,11 +191,15 @@ struct InitializeSubdomain {
                 overlaps_tag<domain::Tags::ElementMap<Dim>>,
                 overlaps_tag<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>,
                 overlaps_tag<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>,
-                overlaps_tag<domain::Tags::Coordinates<Dim, Frame::Inertial>>>>(
+                overlaps_tag<domain::Tags::Coordinates<Dim, Frame::Inertial>>,
+                overlaps_tag<domain::Tags::Interface<
+                    domain::Tags::BoundaryDirectionsExterior<Dim>,
+                    elliptic::Tags::BoundaryCondition>>>>(
             std::move(box), std::move(overlap_meshes),
             std::move(overlap_extents), std::move(overlap_element_maps),
             std::move(overlap_mortar_meshes), std::move(overlap_mortar_sizes),
-            std::move(overlap_inertial_coords)));
+            std::move(overlap_inertial_coords),
+            std::move(overlap_boundary_conditions)));
   }
 
   template <

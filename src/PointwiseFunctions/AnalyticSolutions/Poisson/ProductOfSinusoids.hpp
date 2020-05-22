@@ -9,7 +9,9 @@
 
 #include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
 #include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
-#include "Elliptic/Systems/Poisson/Tags.hpp"    // IWYU pragma: keep
+#include "Domain/Structure/Direction.hpp"
+#include "Elliptic/BoundaryConditions.hpp"
+#include "Elliptic/Systems/Poisson/Tags.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "Utilities/TMPL.hpp"
@@ -79,6 +81,15 @@ class ProductOfSinusoids {
                   "The generic template will recurse infinitely if only one "
                   "tag is being retrieved.");
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
+  }
+
+  static elliptic::BoundaryCondition boundary_condition_type(
+      const tnsr::I<DataVector, Dim>& /*x*/, const Direction<Dim>& direction) {
+    if (direction == Direction<Dim>::upper_xi()) {
+      return elliptic::BoundaryCondition::Neumann;
+    } else {
+      return elliptic::BoundaryCondition::Dirichlet;
+    }
   }
 
   // clang-tidy: no pass by reference

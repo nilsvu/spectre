@@ -76,16 +76,24 @@ struct InitializeFirstOrderOperator {
   using exterior_tags = tmpl::list<
       // On exterior (ghost) boundary faces we compute the fluxes from the
       // data that is being set there to impose boundary conditions. Then, we
-      // compute their normal-dot-fluxes. The flux divergences are sliced from
-      // the volume.
+      // compute their normal-dot-fluxes.
       domain::Tags::InterfaceCompute<
           domain::Tags::BoundaryDirectionsExterior<volume_dim>,
           fluxes_compute_tag>,
       domain::Tags::InterfaceCompute<
           domain::Tags::BoundaryDirectionsExterior<volume_dim>,
           ::Tags::NormalDotFluxCompute<vars_tag, volume_dim, Frame::Inertial>>,
-      domain::Tags::Slice<domain::Tags::BoundaryDirectionsExterior<volume_dim>,
-                          div_fluxes_tag>>;
+      // We impose the auxiliary constraint equation div(F_v) = v on exterior
+      // (ghost) faces so that numerical fluxes that use div(F_v) instead of the
+      // auxiliary fields v work with Neumann boundary conditions where we set
+      // v_ext = -v_int such that avg(v) = 0. By imposing the auxiliary
+      // constraint on these faces we have avg(div(F_v)) = (v_ext +
+      // div(F_v_int)) / 2 = (div(F_v_int) - v_int) / 2 on these faces that
+      // converges to zero as well.
+      domain::Tags::InterfaceCompute<
+          domain::Tags::BoundaryDirectionsExterior<volume_dim>,
+          elliptic::Tags::ImposeAuxiliaryConstraint<volume_dim,
+                                                    AuxiliaryVariables>>>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,

@@ -67,5 +67,40 @@ struct FirstOrderSourcesCompute
   }
 };
 
+template <size_t Dim, typename AuxiliaryVariables>
+struct ImposeAuxiliaryConstraint;
+
+template <size_t Dim, typename... AuxiliaryVariables>
+struct ImposeAuxiliaryConstraint<Dim, tmpl::list<AuxiliaryVariables...>>
+    : ::Tags::Variables<db::wrap_tags_in<
+          ::Tags::div,
+          db::wrap_tags_in<::Tags::Flux, tmpl::list<AuxiliaryVariables...>,
+                           tmpl::size_t<Dim>, Frame::Inertial>>>,
+      db::ComputeTag {
+  using auxiliary_variables = tmpl::list<AuxiliaryVariables...>;
+  using base = ::Tags::Variables<db::wrap_tags_in<
+      ::Tags::div, db::wrap_tags_in<::Tags::Flux, auxiliary_variables,
+                                    tmpl::size_t<Dim>, Frame::Inertial>>>;
+  using argument_tags =
+      tmpl::push_front<auxiliary_variables, domain::Tags::Mesh<Dim - 1>>;
+  using return_type = db::item_type<base>;
+
+  static void function(
+      const gsl::not_null<return_type*> div_aux_fluxes,
+      const Mesh<Dim - 1>& mesh,
+      const typename AuxiliaryVariables::type&... aux_vars) noexcept {
+    *div_aux_fluxes = return_type{mesh.number_of_grid_points()};
+    const auto helper = [](const auto div_aux_flux,
+                           const auto& aux_var) noexcept {
+      *div_aux_flux = aux_var;
+    };
+    EXPAND_PACK_LEFT_TO_RIGHT(helper(
+        make_not_null(
+            &get<::Tags::div<::Tags::Flux<AuxiliaryVariables, tmpl::size_t<Dim>,
+                                          Frame::Inertial>>>(*div_aux_fluxes)),
+        aux_vars));
+  }
+};
+
 }  // namespace Tags
 }  // namespace elliptic
