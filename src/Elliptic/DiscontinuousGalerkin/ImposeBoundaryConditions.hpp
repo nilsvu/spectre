@@ -86,7 +86,8 @@ namespace Actions {
  * - Modifies:
  *   - `exterior<VariablesTag>`
  */
-template <typename VariablesTag, typename BoundaryConditionTags>
+template <typename VariablesTag, typename PrimalFields,
+          typename AuxiliaryFields>
 struct ImposeHomogeneousBoundaryConditions {
   template <typename DbTags, typename... InboxTags, typename Metavariables,
             size_t Dim, typename ActionList, typename ParallelComponent>
@@ -105,16 +106,34 @@ struct ImposeHomogeneousBoundaryConditions {
                exterior_boundary_vars,
            const db::const_item_type<domain::Tags::Interface<
                domain::Tags::BoundaryDirectionsInterior<Dim>, VariablesTag>>&
-               interior_vars) noexcept {
+               interior_vars,
+           const std::unordered_map<Direction<Dim>,
+                                    elliptic::BoundaryCondition>&
+               boundary_condition_types) noexcept {
           for (auto& exterior_direction_and_vars : *exterior_boundary_vars) {
             auto& direction = exterior_direction_and_vars.first;
-            homogeneous_boundary_conditions<BoundaryConditionTags>(
-                make_not_null(&exterior_direction_and_vars.second),
-                interior_vars.at(direction));
+            switch (boundary_condition_types.at(direction)) {
+              case elliptic::BoundaryCondition::Dirichlet:
+                homogeneous_boundary_conditions<PrimalFields>(
+                    make_not_null(&exterior_direction_and_vars.second),
+                    interior_vars.at(direction));
+                break;
+              case elliptic::BoundaryCondition::Neumann:
+                Parallel::printf("interior: %s\n", interior_vars.at(direction));
+                homogeneous_boundary_conditions<AuxiliaryFields>(
+                    make_not_null(&exterior_direction_and_vars.second),
+                    interior_vars.at(direction));
+                Parallel::printf("exterior: %s\n",
+                                 exterior_direction_and_vars.second);
+                break;
+            }
           }
         },
         get<domain::Tags::Interface<
-            domain::Tags::BoundaryDirectionsInterior<Dim>, VariablesTag>>(box));
+            domain::Tags::BoundaryDirectionsInterior<Dim>, VariablesTag>>(box),
+        get<domain::Tags::Interface<
+            domain::Tags::BoundaryDirectionsExterior<Dim>,
+            elliptic::Tags::BoundaryCondition>>(box));
 
     return std::forward_as_tuple(std::move(box));
   }

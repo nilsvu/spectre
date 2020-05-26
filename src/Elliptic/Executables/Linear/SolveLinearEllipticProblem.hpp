@@ -9,6 +9,7 @@
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
+#include "Elliptic/Actions/InitializeBoundaryConditions.hpp"
 #include "Elliptic/Actions/InitializeSystem.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeBoundaryConditions.hpp"
@@ -151,6 +152,7 @@ struct Metavariables {
           dg::Initialization::slice_tags_to_exterior<>,
           dg::Initialization::face_compute_tags<>,
           dg::Initialization::exterior_compute_tags<>, false, false>,
+      elliptic::Actions::InitializeBoundaryConditions<analytic_solution_tag>,
       typename linear_solver::initialize_element,
       elliptic::Actions::InitializeSystem,
       elliptic::Actions::InitializeAnalyticSolution<analytic_solution_tag,
@@ -171,7 +173,7 @@ struct Metavariables {
           volume_dim, LinearSolver::Tags::OperatorAppliedTo,
           linear_operand_tag>>,
       elliptic::dg::Actions::ImposeHomogeneousBoundaryConditions<
-          linear_operand_tag, primal_variables>,
+          linear_operand_tag, primal_variables, auxiliary_variables>,
       dg::Actions::CollectDataForFluxes<
           boundary_scheme,
           domain::Tags::BoundaryDirectionsInterior<volume_dim>>,

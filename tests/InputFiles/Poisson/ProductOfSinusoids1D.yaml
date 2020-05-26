@@ -16,12 +16,12 @@ DomainCreator:
     LowerBound: [0]
     UpperBound: [3.141592653589793]
     IsPeriodicIn: [false]
-    InitialRefinement: [1]
-    InitialGridPoints: [3]
+    InitialRefinement: [2]
+    InitialGridPoints: [4]
 
 NumericalFlux:
   InternalPenalty:
-    PenaltyParameter: 5.729577951308232 # p^2 / h
+    PenaltyParameter: 30.5577490736 # p^2 / h
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids1DVolume"
@@ -29,9 +29,9 @@ Observers:
 
 LinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 1
-    AbsoluteResidual: 0
-    RelativeResidual: 0
+    MaxIterations: 100
+    AbsoluteResidual: 1e-14
+    RelativeResidual: 1e-8
   Verbosity: Verbose
 
 EventsAndTriggers:

@@ -399,6 +399,26 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
         assemble_dirichlet_penalty(FieldTags{}, numerical_flux_for_fields));
   }
 
+  template <typename... FluxesArgs>
+  void compute_neumann_boundary(
+      const gsl::not_null<db::item_type<::Tags::NormalDotNumericalFlux<
+          FieldTags>>*>... numerical_flux_for_fields,
+      const gsl::not_null<db::item_type<::Tags::NormalDotNumericalFlux<
+          AuxiliaryFieldTags>>*>... /*numerical_flux_for_auxiliary_fields*/,
+      const db::const_item_type<FieldTags>&... neumann_n_dot_fluxes,
+      const tnsr::i<DataVector, Dim,
+                    Frame::Inertial>& /*interface_unit_normal*/,
+      const FluxesComputer& /*fluxes_computer*/,
+      const FluxesArgs&... /*fluxes_args*/) const noexcept {
+    const auto assemble_neumann_contribution =
+        [](const auto numerical_flux_for_field,
+           const auto& neumann_n_dot_flux) noexcept {
+          *numerical_flux_for_field = neumann_n_dot_flux;
+        };
+    EXPAND_PACK_LEFT_TO_RIGHT(assemble_neumann_contribution(
+        numerical_flux_for_fields, neumann_n_dot_fluxes));
+  }
+
  private:
   double penalty_parameter_ = std::numeric_limits<double>::signaling_NaN();
 };
