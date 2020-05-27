@@ -13,3 +13,8 @@ add_test_library(
   "${LIBRARY_SOURCES}"
   "DataStructures;Poisson;PoissonDgTestHelpers;Utilities"
   )
+
+spectre_add_python_bindings_test(
+  "Unit.Poisson.DgSchemes.Python.FirstOrder"
+  "Test_FirstOrder.py"
+  "Unit;Elliptic")
