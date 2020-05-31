@@ -61,7 +61,8 @@ Matrix first_order_operator_matrix(const DomainCreator<Dim>& domain_creator,
           const Mesh<Dim - 1>& face_mesh,
           const tnsr::i<DataVector, Dim>& face_normal,
           const Variables<n_dot_fluxes_tags>& n_dot_fluxes,
-          const Variables<div_fluxes_tags>& div_fluxes) -> BoundaryData {
+          const Variables<div_fluxes_tags>& div_fluxes,
+          const std::tuple<>& /*fluxes_args*/) -> BoundaryData {
     return ::dg::FirstOrderScheme::package_boundary_data(
         numerical_fluxes_computer, face_mesh, n_dot_fluxes,
         get<::Tags::NormalDotFlux<field_gradient_tag>>(n_dot_fluxes),
