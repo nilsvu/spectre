@@ -21,6 +21,7 @@
 #include "Domain/Creators/AlignedLattice.hpp"
 #include "Domain/Creators/Brick.hpp"
 #include "Domain/Creators/Cylinder.hpp"
+#include "Domain/Creators/CylindricalMirror.hpp"
 #include "Domain/Creators/Disk.hpp"
 #include "Domain/Creators/DomainCreator.hpp"
 #include "Domain/Creators/FrustalCloak.hpp"
