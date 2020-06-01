@@ -11,6 +11,7 @@ set(LIBRARY_SOURCES
   BinaryCompactObject.cpp
   Brick.cpp
   Cylinder.cpp
+  CylindricalMirror.cpp
   Disk.cpp
   FrustalCloak.cpp
   Interval.cpp
