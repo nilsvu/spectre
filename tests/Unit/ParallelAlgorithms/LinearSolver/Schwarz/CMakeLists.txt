@@ -27,4 +27,22 @@ target_link_libraries(
   ParallelSchwarz
 )
 
+add_distributed_linear_solver_algorithm_test("SchwarzSmoothing")
+target_link_libraries(
+  Test_SchwarzSmoothing
+  PRIVATE
+  CoordinateMaps
+  DiscontinuousGalerkin
+  Domain
+  DomainCreators
+  DomainStructure
+  EllipticDg
+  EllipticDgSubdomainOperator
+  LinearOperators
+  LinearSolver
+  ParallelSchwarz
+  Poisson
+  PoissonSolutions
+  )
+
 add_subdirectory(Actions)
