@@ -11,6 +11,7 @@ set(LIBRARY_SOURCES
   Test_BinaryCompactObject.cpp
   Test_Brick.cpp
   Test_Cylinder.cpp
+  Test_CylindricalMirror.cpp
   Test_Disk.cpp
   Test_FrustalCloak.cpp
   Test_Interval.cpp
