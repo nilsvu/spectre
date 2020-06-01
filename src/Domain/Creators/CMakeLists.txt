@@ -12,6 +12,7 @@ spectre_target_sources(
   BinaryCompactObject.cpp
   Brick.cpp
   Cylinder.cpp
+  CylindricalMirror.cpp
   Disk.cpp
   FrustalCloak.cpp
   Interval.cpp
