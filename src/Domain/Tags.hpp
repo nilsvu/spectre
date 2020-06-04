@@ -109,6 +109,14 @@ struct Mesh : db::SimpleTag {
 
 /// \ingroup DataBoxTagsGroup
 /// \ingroup ComputationalDomainGroup
+/// \brief The number of grid points in each dimension
+template <size_t VolumeDim>
+struct Extents : db::SimpleTag {
+  using type = ::Index<VolumeDim>;
+};
+
+/// \ingroup DataBoxTagsGroup
+/// \ingroup ComputationalDomainGroup
 /// The coordinate map from logical to grid coordinate
 template <size_t VolumeDim, typename TargetFrame = Frame::Inertial>
 struct ElementMap : db::SimpleTag {
