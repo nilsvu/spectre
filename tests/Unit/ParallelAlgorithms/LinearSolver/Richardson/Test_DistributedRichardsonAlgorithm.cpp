@@ -26,6 +26,7 @@ struct ParallelRichardson {
 struct Metavariables {
   static constexpr const char* const help{
       "Test the Richardson linear solver algorithm on multiple elements"};
+  static constexpr size_t volume_dim = 1;
 
   using linear_solver = LinearSolver::Richardson::Richardson<
       typename helpers_distributed::fields_tag, ParallelRichardson>;

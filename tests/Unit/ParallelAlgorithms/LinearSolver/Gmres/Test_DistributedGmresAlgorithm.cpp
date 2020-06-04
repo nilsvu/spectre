@@ -26,6 +26,7 @@ struct ParallelGmres {
 struct Metavariables {
   static constexpr const char* const help{
       "Test the GMRES linear solver algorithm on multiple elements"};
+  static constexpr size_t volume_dim = 1;
 
   using linear_solver =
       LinearSolver::gmres::Gmres<Metavariables, helpers_distributed::fields_tag,

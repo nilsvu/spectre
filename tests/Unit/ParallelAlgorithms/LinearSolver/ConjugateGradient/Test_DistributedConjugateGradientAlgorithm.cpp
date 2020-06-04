@@ -27,6 +27,7 @@ struct Metavariables {
   static constexpr const char* const help{
       "Test the conjugate gradient linear solver algorithm on multiple "
       "elements"};
+  static constexpr size_t volume_dim = 1;
 
   using linear_solver = LinearSolver::cg::ConjugateGradient<
       Metavariables, typename helpers_distributed::fields_tag, ParallelCg>;
