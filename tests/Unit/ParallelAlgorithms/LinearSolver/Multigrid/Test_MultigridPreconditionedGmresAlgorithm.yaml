@@ -1,0 +1,69 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# The test problem being solved here is a DG-discretized 1D Poisson equation
+# -u''(x) = f(x) on the interval [0, pi] with source f(x)=sin(x) and homogeneous
+# Dirichlet boundary conditions such that the solution is u(x)=sin(x) as well.
+#
+# Details:
+# - Domain decomposition: 2 elements with 3 LGL grid-points each on finest mesh
+# - "Primal" DG formulation (no auxiliary variable)
+# - Multiplied by mass matrix and no mass-lumping. Note that whether or not the
+#   operator is DG-massive is relevant for the multigrid restriction operation.
+# - Internal penalty flux with sigma = 1.5 * (N_points - 1)^2 / h
+
+DomainCreator:
+  Interval:
+    LowerBound: [0]
+    UpperBound: [1]
+    IsPeriodicIn: [false]
+    InitialRefinement: [1]
+    InitialGridPoints: [3]
+
+LinearOperator:
+  - [[[ 5.305164769729845,  0.848826363156775, -0.742723067762178],
+      [ 0.848826363156775,  3.395305452627101, -0.424413181578388],
+      [-0.742723067762178, -0.424413181578388,  3.395305452627101],
+      [ 0.318309886183791, -1.273239544735163, -1.909859317102744],
+      [ 0.               ,  0.               , -1.273239544735163],
+      [ 0.               ,  0.               ,  0.318309886183791]],
+    [[ 0.318309886183791,  0.               ,  0.               ],
+      [-1.273239544735163,  0.               ,  0.               ],
+      [-1.909859317102744, -1.273239544735163,  0.318309886183791],
+      [ 3.395305452627101, -0.424413181578388, -0.742723067762178],
+      [-0.424413181578388,  3.395305452627101,  0.848826363156775],
+      [-0.742723067762178,  0.848826363156775,  5.305164769729845]]]
+  - [[[ 2.65258238,  0.42441318, -0.53051648],
+       [ 0.42441318,  1.69765273,  0.42441318],
+       [-0.53051648,  0.42441318,  2.65258238]]]
+
+Source:
+  - [0.                , 0.740480489693061, 0.2617993877991494]
+  - [0.2617993877991494, 0.740480489693061, 0.                ]
+
+# ExpectedResult:
+#   - [-0.0363482510397858,  0.7235793356729757,  0.9928055333486293]
+#   - [ 0.9928055333486292,  0.7235793356729758, -0.0363482510397858]
+
+Observers:
+  VolumeFileName: "Test_MultigridPreconditionedAlgorithm_Volume"
+  ReductionFileName: "Test_MultigridPreconditionedAlgorithm_Reductions"
+
+KrylovSolver:
+  ConvergenceCriteria:
+    MaxIterations: 10
+    AbsoluteResidual: 1e-14
+    RelativeResidual: 1e-10
+  Verbosity: Debug
+
+MultigridSolver:
+  Iterations: 1
+  Verbosity: Debug
+  CoarsestGridPoints: 3
+
+RichardsonSmoother:
+  Iterations: 20
+  RelaxationParameter: 0.2916330767929102
+  Verbosity: Debug
+
+# ConvergenceReason: MaxIterations
