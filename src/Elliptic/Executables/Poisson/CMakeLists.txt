@@ -11,6 +11,8 @@ set(LIBS_TO_LINK
   MathFunctions
   Options
   ParallelLinearSolver
+  ParallelMultigrid
+  ParallelSchwarz
   Poisson
   Utilities
   )
