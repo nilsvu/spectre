@@ -109,12 +109,12 @@ struct InitializeElement {
       tmpl::list<LinearSolver::Tags::Iterations<OptionsGroup>>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
-            typename ArrayIndex, typename ActionList,
+            size_t Dim, typename ActionList,
             typename ParallelComponent>
   static auto apply(db::DataBox<DbTagsList>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
                     const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
-                    const ArrayIndex& /*array_index*/,
+                    const ElementId<Dim>& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
     return std::make_tuple(
@@ -126,14 +126,17 @@ struct InitializeElement {
             db::AddComputeTags<
                 LinearSolver::Tags::ResidualCompute<fields_tag, source_tag>,
                 LinearSolver::Tags::HasConvergedByIterationsCompute<
-                    OptionsGroup>>>(
+                    OptionsGroup>>,
+            ::Initialization::MergePolicy::Overwrite>(
             std::move(box),
             // The `PrepareSolve` action populates these tags with initial
             // values, except for `operator_applied_to_fields_tag` which is
             // expected to be updated in every iteration of the algorithm
             std::numeric_limits<size_t>::max(),
             std::numeric_limits<double>::signaling_NaN(),
-            db::item_type<operator_applied_to_fields_tag>{}));
+            db::item_type<operator_applied_to_fields_tag>{
+                db::get<domain::Tags::Mesh<Dim>>(box)
+                    .number_of_grid_points()}));
   }
 };
 
