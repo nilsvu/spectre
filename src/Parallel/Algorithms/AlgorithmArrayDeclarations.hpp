@@ -46,6 +46,10 @@ struct Array {
             typename SpectreArrayIndex>
   using ckindex = CkIndex_AlgorithmArray<ParallelComponent,
                                          SpectreArrayIndex>;
+
+  template <typename ParallelComponent, typename SpectreArrayIndex>
+  using cproxy_section =
+      CProxySection_AlgorithmArray<ParallelComponent, SpectreArrayIndex>;
 };
 }  // namespace Algorithms
 }  // namespace Parallel

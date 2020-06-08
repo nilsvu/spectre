@@ -28,6 +28,7 @@
 #include "Parallel/NodeLock.hpp"
 #include "Parallel/ParallelComponentHelpers.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"
+#include "Parallel/SectionReductionMessage.hpp"
 #include "Parallel/SimpleActionVisitation.hpp"
 #include "Parallel/TypeTraits.hpp"
 #include "Utilities/BoostHelpers.hpp"
@@ -40,6 +41,8 @@
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 #include "Utilities/TypeTraits.hpp"
+
+#include "Parallel/Printf.hpp"
 
 // IWYU pragma: no_include <array>  // for tuple_size
 
@@ -60,6 +63,13 @@ namespace Parallel {
 template <typename ParallelComponent, typename PhaseDepActionList>
 class AlgorithmImpl;
 /// \endcond
+
+namespace detail {
+template <typename SectionIdTag>
+struct SectionCookiesTag {
+  using type = std::unordered_map<typename SectionIdTag::type, CkSectionInfo>;
+};
+}  // namespace detail
 
 /*!
  * \ingroup ParallelGroup
@@ -147,6 +157,7 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>
   using metavariables = typename ParallelComponent::metavariables;
   /// List off all the Tags that can be received into the Inbox
   using inbox_tags_list = Parallel::get_inbox_tags<all_actions_list>;
+  using section_id_tags = Parallel::get_section_id_tags<ParallelComponent>;
   /// The type of the object used to identify the element of the array, group
   /// or nodegroup spatially. The default should be an `int`.
   using array_index = typename get_array_index<
@@ -199,6 +210,33 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>
    */
   template <typename Action, typename Arg>
   void reduction_action(Arg arg) noexcept;
+
+  template <typename ContributeToReduction, typename SectionProxy,
+            typename TargetProxy, typename DataType, typename SectionIdTag>
+  void contribute_to_section_reduction(
+      SectionReductionMessage<SectionProxy, TargetProxy, DataType,
+                              SectionIdTag>* msg) {
+    auto& section_cookie =
+        get<detail::SectionCookiesTag<SectionIdTag>>(section_cookies_)
+            .insert({msg->section_id, msg->section_proxy.ckGetSectionInfo()})
+            .first->second;
+    // When sending the message to a single element it is not a multicast, so
+    // the section cookie can't be updated. This probably breaks the reductions
+    // when elements migrate.
+    // See:
+    // https://charm.readthedocs.io/en/latest/charm++/manual.html#section-operations-with-migrating-elements
+    // https://github.com/UIUC-PPL/charm/blob/99cda7a11108f503b89dc847b58e62bc74267440/src/ck-core/ckmulticast.C#L1180
+    // if (msg->gpe() == -1) {
+    //   Parallel::printf(
+    //       "Warning: Probably not updating section cookie because message was
+    //       " "not sent by multicast.\n");
+    // }
+    // Try to update section cookie
+    CkGetSectionInfo(section_cookie, msg);
+    // Parallel::printf("Contributing to reduction #%d\n",
+    //                  section_cookie.get_redNo());
+    ContributeToReduction::apply(msg->data, msg->target_proxy, section_cookie);
+  }
 
   /// \brief Explicitly call the action `Action`. If the returned DataBox type
   /// is not one of the types of the algorithm then a compilation error occurs.
@@ -385,6 +423,10 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>
   make_boost_variant_over<variant_boxes> box_;
   tuples::tagged_tuple_from_typelist<inbox_tags_list> inboxes_{};
   array_index array_index_;
+
+  tuples::tagged_tuple_from_typelist<tmpl::transform<
+      section_id_tags, tmpl::bind<detail::SectionCookiesTag, tmpl::_1>>>
+      section_cookies_{};
 };
 
 ////////////////////////////////////////////////////////////////
