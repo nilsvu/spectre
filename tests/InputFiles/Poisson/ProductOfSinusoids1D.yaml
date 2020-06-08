@@ -16,8 +16,8 @@ DomainCreator:
     LowerBound: [0]
     UpperBound: [3.141592653589793]
     IsPeriodicIn: [false]
-    InitialRefinement: [1]
-    InitialGridPoints: [3]
+    InitialRefinement: [3]
+    InitialGridPoints: [4]
 
 NumericalFlux:
   InternalPenalty:
@@ -28,11 +28,43 @@ Observers:
   ReductionFileName: "PoissonProductOfSinusoids1DReductions"
 
 LinearSolver:
-  ConvergenceCriteria:
-    MaxIterations: 1
-    AbsoluteResidual: 0
-    RelativeResidual: 0
-  Verbosity: Verbose
+  GMRES:
+    ConvergenceCriteria:
+      MaxIterations: 2
+      RelativeResidual: 1e-8
+      AbsoluteResidual: 1e-15
+    Verbosity: Verbose
+  
+  Preconditioner:
+    Multigrid:
+      Iterations: 2
+      Verbosity: Verbose
+
+    PreSmoother:
+      Schwarz:
+        MaxOverlap: 2
+        Iterations: 2
+        Verbosity: Quiet
+        SubdomainSolver:
+          ConvergenceCriteria:
+            MaxIterations: 100
+            RelativeResidual: 1.e-5
+            AbsoluteResidual: 1.e-10
+          Verbosity: Quiet
+          Restart: 0
+
+    PostSmoother:
+      Schwarz:
+        MaxOverlap: 2
+        Iterations: 2
+        Verbosity: Quiet
+        SubdomainSolver:
+          ConvergenceCriteria:
+            MaxIterations: 100
+            RelativeResidual: 1.e-5
+            AbsoluteResidual: 1.e-10
+          Verbosity: Quiet
+          Restart: 0
 
 EventsAndTriggers:
   ? EveryNIterations:
