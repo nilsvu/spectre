@@ -20,7 +20,7 @@ DomainCreator:
     UpperBound: [3.141592653589793, 3.141592653589793, 3.141592653589793]
     IsPeriodicIn: [false, false, false]
     InitialRefinement: [1, 1, 1]
-    InitialGridPoints: [2, 2, 2]
+    InitialGridPoints: [4, 4, 4]
     TimeDependence: None
 
 NumericalFlux:
@@ -32,18 +32,39 @@ Observers:
   ReductionFileName: "PoissonProductOfSinusoids3DReductions"
 
 LinearSolver:
-  ConvergenceCriteria:
-    MaxIterations: 1
-    AbsoluteResidual: 0
-    RelativeResidual: 0
-  Verbosity: Verbose
+  GMRES:
+    ConvergenceCriteria:
+      MaxIterations: 100
+      RelativeResidual: 1.e-8
+      AbsoluteResidual: 1.e-15
+    Verbosity: Quiet
+
+  Preconditioner:
+    Multigrid:
+      Iterations: 1
+      CoarsestGridPoints: 12
+      Verbosity: Quiet
+
+    Smoother:
+      Schwarz:
+        MaxOverlap: 2
+        Iterations: 2
+        Verbosity: Quiet
+        SubdomainSolver:
+          ExplicitInverse:
+             DisableResets: False
 
 EventsAndTriggers:
   ? EveryNIterations:
       N: 1
       Offset: 0
+      MultigridLevel: 0
   : - ObserveErrorNorms:
         SubfileName: Errors
-    - ObserveFields:
+  ? EveryNIterations:
+      N: 1
+      Offset: 0
+      MultigridLevel: 0
+  : - ObserveFields:
         SubfileName: VolumeData
         VariablesToObserve: [Field, deriv(Field)]
