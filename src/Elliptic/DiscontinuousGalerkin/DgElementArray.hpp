@@ -17,10 +17,49 @@
 #include "Parallel/ConstGlobalCache.hpp"
 #include "Parallel/Info.hpp"
 #include "Parallel/ParallelComponentHelpers.hpp"
+#include "Utilities/Numeric.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
 namespace elliptic {
+
+namespace DgElementArray_detail {
+
+template <size_t Dim>
+struct DefaultElementsAllocator {
+  template <typename ParallelComponent>
+  using array_allocation_tags =
+      tmpl::list<domain::Tags::InitialRefinementLevels<Dim>>;
+
+  template <typename ParallelComponent, typename Metavariables,
+            typename... InitializationTags>
+  static void apply(
+      Parallel::CProxy_ConstGlobalCache<Metavariables>& global_cache,
+      const tuples::TaggedTuple<InitializationTags...>&
+          initialization_items) noexcept {
+    auto& local_cache = *(global_cache.ckLocalBranch());
+    auto& element_array =
+        Parallel::get_parallel_component<ParallelComponent>(local_cache);
+    const auto& domain = Parallel::get<domain::Tags::Domain<Dim>>(local_cache);
+    const auto& initial_refinement_levels =
+        get<domain::Tags::InitialRefinementLevels<Dim>>(initialization_items);
+    for (const auto& block : domain.blocks()) {
+      const std::vector<ElementId<Dim>> element_ids = initial_element_ids(
+          block.id(), initial_refinement_levels[block.id()]);
+      int which_proc = 0;
+      const int number_of_procs = Parallel::number_of_procs();
+      for (size_t i = 0; i < element_ids.size(); ++i) {
+        element_array(element_ids[i])
+            .insert(global_cache, initialization_items, which_proc);
+        which_proc = which_proc + 1 == number_of_procs ? 0 : which_proc + 1;
+      }
+    }
+    element_array.doneInserting();
+  }
+};
+
+}  // namespace DgElementArray_detail
+
 /*!
  * \brief The parallel component responsible for managing the DG elements that
  * compose the computational domain
@@ -33,7 +72,9 @@ namespace elliptic {
  * likely diverge in the future, for instance to support a multigrid domain.
  *
  */
-template <class Metavariables, class PhaseDepActionList>
+template <typename Metavariables, typename PhaseDepActionList,
+          typename ElementsAllocator = DgElementArray_detail::
+              DefaultElementsAllocator<Metavariables::volume_dim>>
 struct DgElementArray {
   static constexpr size_t volume_dim = Metavariables::volume_dim;
 
@@ -45,7 +86,8 @@ struct DgElementArray {
   using const_global_cache_tags = tmpl::list<domain::Tags::Domain<volume_dim>>;
 
   using array_allocation_tags =
-      tmpl::list<domain::Tags::InitialRefinementLevels<volume_dim>>;
+      typename ElementsAllocator::template array_allocation_tags<
+          DgElementArray>;
 
   using initialization_tags = Parallel::get_initialization_tags<
       Parallel::get_initialization_actions_list<phase_dependent_action_list>,
@@ -54,7 +96,10 @@ struct DgElementArray {
   static void allocate_array(
       Parallel::CProxy_ConstGlobalCache<Metavariables>& global_cache,
       const tuples::tagged_tuple_from_typelist<initialization_tags>&
-          initialization_items) noexcept;
+          initialization_items) noexcept {
+    ElementsAllocator::template apply<DgElementArray>(global_cache,
+                                                      initialization_items);
+  }
 
   static void execute_next_phase(
       const typename Metavariables::Phase next_phase,
@@ -65,31 +110,4 @@ struct DgElementArray {
   }
 };
 
-template <class Metavariables, class PhaseDepActionList>
-void DgElementArray<Metavariables, PhaseDepActionList>::allocate_array(
-    Parallel::CProxy_ConstGlobalCache<Metavariables>& global_cache,
-    const tuples::tagged_tuple_from_typelist<initialization_tags>&
-        initialization_items) noexcept {
-  auto& local_cache = *(global_cache.ckLocalBranch());
-  auto& dg_element_array =
-      Parallel::get_parallel_component<DgElementArray>(local_cache);
-  const auto& domain =
-      Parallel::get<domain::Tags::Domain<volume_dim>>(local_cache);
-  const auto& initial_refinement_levels =
-      get<domain::Tags::InitialRefinementLevels<volume_dim>>(
-          initialization_items);
-  for (const auto& block : domain.blocks()) {
-    const auto initial_ref_levs = initial_refinement_levels[block.id()];
-    const std::vector<ElementId<volume_dim>> element_ids =
-        initial_element_ids(block.id(), initial_ref_levs);
-    int which_proc = 0;
-    const int number_of_procs = Parallel::number_of_procs();
-    for (size_t i = 0; i < element_ids.size(); ++i) {
-      dg_element_array(ElementId<volume_dim>(element_ids[i]))
-          .insert(global_cache, initialization_items, which_proc);
-      which_proc = which_proc + 1 == number_of_procs ? 0 : which_proc + 1;
-    }
-  }
-  dg_element_array.doneInserting();
-}
 }  // namespace elliptic

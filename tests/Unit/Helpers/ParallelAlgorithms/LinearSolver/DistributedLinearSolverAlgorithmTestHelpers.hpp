@@ -46,11 +46,14 @@
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "ParallelAlgorithms/LinearSolver/Actions/TerminateIfConverged.hpp"
+#include "ParallelAlgorithms/LinearSolver/Multigrid/Tags.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/Blas.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
+
+#include "Parallel/Printf.hpp"
 
 namespace helpers = LinearSolverAlgorithmTestHelpers;
 
@@ -65,7 +68,7 @@ namespace OptionTags {
 // DG discretization, M is the number of collocation points per element.
 struct LinearOperator {
   static constexpr OptionString help = "The linear operator A to invert.";
-  using type = std::vector<DenseMatrix<double, blaze::columnMajor>>;
+  using type = std::vector<std::vector<DenseMatrix<double, blaze::columnMajor>>>;
 };
 // Both of the following options expect a list of N vectors that have a size of
 // M each, so that they constitute a vector of total size N*M (see above).
@@ -80,14 +83,11 @@ struct ExpectedResult {
 }  // namespace OptionTags
 
 struct LinearOperator : db::SimpleTag {
-  using type = std::vector<DenseMatrix<double, blaze::columnMajor>>;
+  using type = std::vector<std::vector<DenseMatrix<double, blaze::columnMajor>>>;
   using option_tags = tmpl::list<OptionTags::LinearOperator>;
 
   static constexpr bool pass_metavariables = false;
-  static std::vector<DenseMatrix<double, blaze::columnMajor>>
-  create_from_options(
-      const std::vector<DenseMatrix<double, blaze::columnMajor>>&
-          linear_operator) noexcept {
+  static type create_from_options(const type& linear_operator) noexcept {
     return linear_operator;
   }
 };
@@ -147,21 +147,25 @@ struct CollectOperatorAction;
 template <typename OperandTag>
 struct ComputeOperatorAction {
   using const_global_cache_tags = tmpl::list<LinearOperator>;
+  using local_operator_applied_to_operand_tag =
+      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, OperandTag>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ActionList, typename ParallelComponent>
   static std::tuple<db::DataBox<DbTagsList>&&, bool> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& cache,
+      Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ElementId<1>& element_id,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ActionList /*meta*/,
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ParallelComponent* const /*meta*/) noexcept {
+    const size_t mg_lev =
+        db::get<LinearSolver::multigrid::Tags::MultigridLevel>(box);
     const size_t element_index = get_index(element_id);
-    const auto& operator_matrices = get<LinearOperator>(box);
+    const auto& operator_matrices = get<LinearOperator>(box)[mg_lev];
     const auto number_of_elements = operator_matrices.size();
     const auto& linear_operator = gsl::at(operator_matrices, element_index);
     const auto number_of_grid_points = linear_operator.columns();
@@ -169,16 +173,34 @@ struct ComputeOperatorAction {
 
     db::item_type<OperandTag> operator_applied_to_operand{
         number_of_grid_points * number_of_elements};
+    // Parallel::printf("%s operand: %s\n", element_id,
+    //                  operand);
     dgemv_('N', linear_operator.rows(), linear_operator.columns(), 1,
            linear_operator.data(), linear_operator.spacing(), operand.data(), 1,
            0, operator_applied_to_operand.data(), 1);
+    // Parallel::printf("%s operator_applied_to_operand: %s\n", element_id,
+    //                  operator_applied_to_operand);
 
-    Parallel::contribute_to_reduction<CollectOperatorAction<OperandTag>>(
-        Parallel::ReductionData<
-            Parallel::ReductionDatum<db::item_type<OperandTag>, funcl::Plus<>>>{
-            operator_applied_to_operand},
-        Parallel::get_parallel_component<ParallelComponent>(cache)[element_id],
-        Parallel::get_parallel_component<ParallelComponent>(cache));
+    // Parallel::contribute_to_reduction<CollectOperatorAction<OperandTag>>(
+    //     Parallel::ReductionData<
+    //         Parallel::ReductionDatum<db::item_type<OperandTag>,
+    //         funcl::Plus<>>>{ operator_applied_to_operand},
+    //     Parallel::get_parallel_component<ParallelComponent>(cache)[element_id],
+    //     Parallel::get_parallel_component<ParallelComponent>(cache));
+    // Parallel::printf("%s contribute to section reduction\n", element_id);
+    db::mutate<LinearSolver::multigrid::Tags::ArraySectionBase<
+        LinearSolver::multigrid::Tags::MultigridLevel>>(
+        make_not_null(&box), [&operator_applied_to_operand, &element_id,
+                              &mg_lev](const auto section) {
+          Parallel::contribute_to_section_reduction<
+              ParallelComponent, CollectOperatorAction<OperandTag>>(
+              Parallel::ReductionData<
+                  Parallel::ReductionDatum<db::item_type<OperandTag>,
+                                           funcl::Plus<>>,
+                  Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>>{
+                  operator_applied_to_operand, mg_lev},
+              (*section)[element_id], *section, *section, mg_lev);
+        });
 
     // Terminate algorithm for now. The reduction will be broadcast to the
     // next action which is responsible for restarting the algorithm.
@@ -195,15 +217,24 @@ struct CollectOperatorAction {
             typename Metavariables, typename ScalarFieldOperandTag,
             Requires<tmpl::list_contains_v<
                 DbTagsList, local_operator_applied_to_operand_tag>> = nullptr>
-  static void apply(db::DataBox<DbTagsList>& box,
-                    const Parallel::ConstGlobalCache<Metavariables>& cache,
-                    const ElementId<1>& element_id,
-                    const Variables<tmpl::list<ScalarFieldOperandTag>>&
-                        Ap_global_data) noexcept {
+  static void apply(
+      db::DataBox<DbTagsList>& box,
+      Parallel::ConstGlobalCache<Metavariables>& cache,
+      const ElementId<1>& element_id,
+      const Variables<tmpl::list<ScalarFieldOperandTag>>& Ap_global_data,
+      const size_t broadcasting_mg_lev) noexcept {
+    // FIXME: We're receiving broadcasts also from reductions over other
+    // sections for some reason
+    const size_t mg_lev =
+        db::get<LinearSolver::multigrid::Tags::MultigridLevel>(box);
+    if (mg_lev != broadcasting_mg_lev) {
+      // Parallel::printf("Received broadcast on other MG level, ignoring.\n");
+      return;
+    }
     const size_t element_index = get_index(element_id);
     // This could be generalized to work on the Variables instead of the
     // Scalar, but it's only for the purpose of this test.
-    const auto number_of_grid_points = get<LinearOperator>(box)[0].columns();
+    const auto number_of_grid_points = get<LinearOperator>(box)[mg_lev][0].columns();
     const auto& Ap_global = get<ScalarFieldOperandTag>(Ap_global_data).get();
     DataVector Ap_local{number_of_grid_points};
     std::copy(Ap_global.begin() +
@@ -270,14 +301,17 @@ struct InitializeElement {
                     const ElementId<1>& element_id, const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
     const size_t element_index = get_index(element_id);
-    const auto& source = gsl::at(get<Source>(box), element_index);
-    const size_t num_points = source.size();
+    const int mg_lev = element_id.segment_ids()[0].refinement_level();
+    const auto& source = mg_lev == 1 ? db::item_type<sources_tag>(gsl::at(
+                                           get<Source>(box), element_index))
+                                     : db::item_type<sources_tag>{};
+    const size_t num_points =
+        db::get<domain::Tags::Mesh<1>>(box).number_of_grid_points();
 
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeElement, db::AddSimpleTags<fields_tag, sources_tag>>(
-            std::move(box), db::item_type<fields_tag>{num_points, 0.},
-            db::item_type<sources_tag>{source}));
+            std::move(box), db::item_type<fields_tag>{num_points, 0.}, source));
   }
 };
 
