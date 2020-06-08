@@ -37,6 +37,8 @@
 #include "Utilities/TaggedTuple.hpp"
 #include "Utilities/TypeTraits.hpp"
 
+#include "Parallel/Printf.hpp"
+
 // IWYU pragma: no_include <array>  // for tuple_size
 
 // IWYU pragma: no_include "Parallel/Algorithm.hpp"  // Include... ourself?
@@ -191,6 +193,32 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>> {
    */
   template <typename Action, typename Arg>
   void reduction_action(Arg arg) noexcept;
+
+  template <typename ContributeToReduction, typename SectionProxy,
+            typename TargetProxy, typename DataType>
+  void contribute_to_section_reduction(
+      SectionReductionMessage<SectionProxy, TargetProxy, DataType>* msg) {
+    auto& section_cookie =
+        section_cookies_
+            .insert({msg->section_id, msg->section_proxy.ckGetSectionInfo()})
+            .first->second;
+    // When sending the message to a single element it is not a multicast, so
+    // the section cookie can't be updated. This probably breaks the reductions
+    // when elements migrate.
+    // See:
+    // https://charm.readthedocs.io/en/latest/charm++/manual.html#section-operations-with-migrating-elements
+    // https://github.com/UIUC-PPL/charm/blob/99cda7a11108f503b89dc847b58e62bc74267440/src/ck-core/ckmulticast.C#L1180
+    // if (msg->gpe() == -1) {
+    //   Parallel::printf(
+    //       "Warning: Probably not updating section cookie because message was
+    //       " "not sent by multicast.\n");
+    // }
+    // Try to update section cookie
+    CkGetSectionInfo(section_cookie, msg);
+    // Parallel::printf("Contributing to reduction #%d\n",
+    //                  section_cookie.get_redNo());
+    ContributeToReduction::apply(msg->data, msg->target_proxy, section_cookie);
+  }
 
   /// \brief Explicitly call the action `Action`. If the returned DataBox type
   /// is not one of the types of the algorithm then a compilation error occurs.
@@ -376,6 +404,7 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>> {
   make_boost_variant_over<variant_boxes> box_;
   tuples::tagged_tuple_from_typelist<inbox_tags_list> inboxes_{};
   array_index array_index_;
+  std::unordered_map<size_t, CkSectionInfo> section_cookies_;
 };
 
 ////////////////////////////////////////////////////////////////

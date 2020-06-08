@@ -17,6 +17,8 @@
 template <size_t MaxSize, class Key, class ValueType, class Hash,
           class KeyEqual>
 class FixedHashMap;
+template <typename SectionProxy, typename TargetProxy, typename ReductionData>
+struct SectionReductionMessage;
 /// \endcond
 
 namespace Parallel {
@@ -482,6 +484,45 @@ struct RegisterReductionAction : RegistrationHelper {
   static bool registrar;
 };
 
+template <typename ParallelComponent, typename ContributeToReduction, typename TargetProxy,
+          typename ReductionType>
+struct RegisterMessage : RegistrationHelper {
+  using chare_type = typename ParallelComponent::chare_type;
+  using charm_type = charm_types_with_parameters<
+      ParallelComponent,
+      typename get_array_index<chare_type>::template f<ParallelComponent>>;
+  using cproxy = typename charm_type::cproxy;
+  using cproxy_section = typename charm_type::cproxy_section;
+  using ckindex = typename charm_type::ckindex;
+  using algorithm = typename charm_type::algorithm;
+
+  RegisterMessage() = default;
+  RegisterMessage(const RegisterMessage&) = default;
+  RegisterMessage& operator=(const RegisterMessage&) = default;
+  RegisterMessage(RegisterMessage&&) = default;
+  RegisterMessage& operator=(RegisterMessage&&) = default;
+  ~RegisterMessage() override = default;
+
+  void register_with_charm() const noexcept override {
+    static bool done_registration{false};
+    if (done_registration) {
+      return;  // LCOV_EXCL_LINE
+    }
+    done_registration = true;
+    ckindex::template idx_contribute_to_section_reduction<
+        ContributeToReduction, cproxy_section, TargetProxy, ReductionType>(
+        static_cast<void (algorithm::*)(
+            SectionReductionMessage<cproxy_section, TargetProxy,
+                                    ReductionType>*)>(nullptr));
+  }
+
+  std::string name() const noexcept override {
+    return get_template_parameters_as_string<RegisterMessage>();
+  }
+
+  static bool registrar;
+};
+
 /*!
  * \ingroup CharmExtensionsGroup
  * \brief Function that adds a pointer to a specific derived class to the
@@ -578,6 +619,15 @@ bool Parallel::charmxx::RegisterReductionAction<
     ParallelComponent, Action, ReductionType>::registrar =  // NOLINT
     Parallel::charmxx::register_func_with_charm<
         RegisterReductionAction<ParallelComponent, Action, ReductionType>>();
+
+template <typename ParallelComponent, typename ContributeToReduction,
+          typename TargetProxy, typename ReductionType>
+bool Parallel::charmxx::RegisterMessage<ParallelComponent,
+                                        ContributeToReduction, TargetProxy,
+                                        ReductionType>::registrar =  // NOLINT
+    Parallel::charmxx::register_func_with_charm<
+        RegisterMessage<ParallelComponent, ContributeToReduction, TargetProxy,
+                        ReductionType>>();
 
 /// \cond
 class CkReductionMsg;

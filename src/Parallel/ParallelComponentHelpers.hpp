@@ -233,6 +233,9 @@ struct charm_types_with_parameters {
   using cproxy =
       typename ParallelComponent::chare_type::template cproxy<ParallelComponent,
                                                               Args...>;
+  using cproxy_section =
+      typename ParallelComponent::chare_type::template cproxy_section<ParallelComponent,
+                                                              Args...>;
   using cbase =
       typename ParallelComponent::chare_type::template cbase<ParallelComponent,
                                                              Args...>;
