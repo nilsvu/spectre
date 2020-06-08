@@ -14,6 +14,8 @@
 #include "Utilities/Requires.hpp"
 #include "Utilities/TypeTraits.hpp"
 
+#include "Parallel/Printf.hpp"
+
 namespace Parallel {
 /// \cond
 template <class... Ts>
@@ -258,4 +260,51 @@ void contribute_to_reduction(ReductionData<Ts...> reduction_data,
               &ReductionData<Ts...>::combine)),
       callback);
 }
+
+template <typename Action, typename SectionProxy>
+struct ContributeToSectionReductionImpl {
+  template <typename TargetProxy, typename... Ts>
+  static void apply(ReductionData<Ts...> reduction_data,
+                    const TargetProxy& target_component,
+                    CkSectionInfo& section_cookie) noexcept {
+    // Parallel::printf("Received a message! Data: %d\n",
+    //                  get<0>(reduction_data.data()));
+    (void)Parallel::charmxx::RegisterReducerFunction<
+        &ReductionData<Ts...>::combine>::registrar;
+    CkCallback callback(
+        TargetProxy::index_t::template redn_wrapper_reduction_action<
+            Action, std::decay_t<ReductionData<Ts...>>>(nullptr),
+        target_component);
+    SectionProxy::contribute(
+        static_cast<int>(reduction_data.size()), reduction_data.packed().get(),
+        Parallel::charmxx::charm_reducer_functions.at(
+            std::hash<Parallel::charmxx::ReducerFunctions>{}(
+                &ReductionData<Ts...>::combine)),
+        section_cookie, callback);
+    // Parallel::printf("Contributed the data.\n");
+  };
+};
+
+template <class Action, class ParallelComponent, class SectionIdTag,
+          class SenderProxy, class TargetProxy, typename SectionProxy,
+          class... Ts>
+void contribute_to_reduction(
+    ReductionData<Ts...> reduction_data, SenderProxy&& sender_component,
+    const TargetProxy& target_component, const SectionProxy& section,
+    const typename SectionIdTag::type& section_id) noexcept {
+  using contribute_impl =
+      ContributeToSectionReductionImpl<Action, SectionProxy>;
+  (void)Parallel::charmxx::RegisterMessage<ParallelComponent, contribute_impl,
+                                           TargetProxy, ReductionData<Ts...>,
+                                           SectionIdTag>::registrar;
+  // Dispatch to a ckmulticast message
+  SectionReductionMessage<SectionProxy, TargetProxy, ReductionData<Ts...>,
+                          SectionIdTag>* msg =
+      new SectionReductionMessage<SectionProxy, TargetProxy,
+                                  ReductionData<Ts...>, SectionIdTag>(
+          section, section_id, target_component, reduction_data);
+  sender_component.template contribute_to_section_reduction<contribute_impl>(
+      msg);
+}
+
 }  // namespace Parallel
