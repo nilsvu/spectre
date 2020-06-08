@@ -17,9 +17,11 @@ def create_interface_file(args):
              "  include \"Utilities/TaggedTuple.hpp\";\n" \
              "  include \"Parallel/GlobalCache.decl.h\";\n" \
              "\n" \
-             "  template <typename ParallelComponent,\n" \
-             "            typename SpectreArrayIndex>\n" \
              % args['algorithm_name']
+    if args['algorithm_type'] == 'array':
+        ci_str += "  template <typename SectionProxy, typename TargetProxy, typename DataType, typename SectionId> message SectionReductionMessage;\n"
+    ci_str += "  template <typename ParallelComponent,\n" \
+              "            typename SpectreArrayIndex>\n"
     # The chare type needs to be checked
     if args['algorithm_type'] == "array":
         ci_str += "  array [SpectreArrayIndex]"
@@ -52,6 +54,8 @@ def create_interface_file(args):
               "    entry void start_phase(\n" \
               "         typename ParallelComponent::metavariables::Phase);\n" \
               "\n" % (args['algorithm_name'], args['algorithm_name'])
+    if args['algorithm_type'] == 'array':
+        ci_str += "    template <typename ContributeToReduction, typename SectionProxy, typename TargetProxy, typename DataType, typename SectionId> entry void contribute_to_section_reduction(SectionReductionMessage<SectionProxy, TargetProxy, DataType, SectionId>* msg);\n"
 
     if args['algorithm_type'] == "nodegroup":
         ci_str += "    template <typename Action, typename... Args>\n" \
@@ -93,10 +97,16 @@ def create_header_file(args):
                  "#endif\n" \
                  "\n#pragma once\n" \
                  "\n" \
-                 "#include \"Parallel/Algorithm.hpp\"\n" \
-                 "#include \"Parallel/ArrayIndex.hpp\"\n\n" \
+                 "#include \"Parallel/ArrayIndex.hpp\"\n"\
                  "#include \"Algorithms/Algorithm%s.decl.h\"\n\n" % \
                  args['algorithm_name']
+    if args['algorithm_type'] == 'array':
+        header_str += """
+        #include "Parallel/SectionReductionMessage.hpp"
+        """
+
+    header_str +="#include \"Parallel/Algorithm.hpp\"\n"
+
     # Write "ChareType" struct
     header_str += \
         "namespace Parallel {\n" \
@@ -120,13 +130,23 @@ def create_header_file(args):
         "  template <typename ParallelComponent,\n" \
         "            typename SpectreArrayIndex>\n" \
         "  using ckindex = CkIndex_Algorithm%s<ParallelComponent,\n" \
-        "                             SpectreArrayIndex>;\n" \
-        "};\n" \
-        "}  // namespace Algorithms\n" \
-        "}  // namespace Parallel\n\n" % \
+        "                             SpectreArrayIndex>;\n" % \
         (args['algorithm_name'], args['algorithm_name'],
          args['algorithm_name'], args['algorithm_name'],
          args['algorithm_name'])
+    if args['algorithm_type'] == 'chare':
+        header_str += "  template <typename ParallelComponent,\n" \
+        "            typename SpectreArrayIndex>\n" \
+        " using cproxy_section = void;\n"
+    else:
+        header_str += "  template <typename ParallelComponent,\n" \
+        "            typename SpectreArrayIndex>\n" \
+        " using cproxy_section = CProxySection_Algorithm%s<\n" \
+        "   ParallelComponent, SpectreArrayIndex>;\n" % \
+        args['algorithm_name']
+    header_str +="};\n" \
+        "}  // namespace Algorithms\n" \
+        "}  // namespace Parallel\n\n"
     # Write Algorithm class
     header_str += \
         "template <typename ParallelComponent,\n" \
