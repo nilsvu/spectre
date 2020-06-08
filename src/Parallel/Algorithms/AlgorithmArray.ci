@@ -5,6 +5,10 @@ module AlgorithmArray {
   include "Utilities/TaggedTuple.hpp";
   include "Parallel/GlobalCache.decl.h";
 
+  template <typename SectionProxy, typename TargetProxy, typename DataType,
+            typename SectionId>
+  message SectionReductionMessage;
+
   // note: the array index here is a hack to use our own types in the chare
   // array index. The way the ci file is parsed as of charm++ 6.10.2 is such
   // that:
@@ -42,6 +46,11 @@ module AlgorithmArray {
     template <typename ReceiveTag, typename ReceiveData_t>
     entry void receive_data(typename ReceiveTag::temporal_id&, ReceiveData_t&,
                             bool enable_if_disabled = false);
+
+    template <typename ContributeToReduction, typename SectionProxy,
+              typename TargetProxy, typename DataType, typename SectionId>
+    entry void contribute_to_section_reduction(SectionReductionMessage<
+      SectionProxy, TargetProxy, DataType, SectionId>* msg);
 
     entry void set_terminate(bool);
   }
