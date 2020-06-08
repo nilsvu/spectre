@@ -31,6 +31,24 @@ using get_inbox_tags = tmpl::remove_duplicates<tmpl::join<tmpl::transform<
     ActionsList, detail::get_inbox_tags_from_action<tmpl::_1>>>>;
 
 namespace detail {
+template <class ParallelComponent, class = std::void_t<>>
+struct get_section_id_tags_impl {
+  using type = tmpl::list<>;
+};
+
+template <class ParallelComponent>
+struct get_section_id_tags_impl<
+    ParallelComponent,
+    std::void_t<typename ParallelComponent::section_id_tags>> {
+  using type = typename ParallelComponent::section_id_tags;
+};
+}  // namespace detail
+
+template <class ParallelComponent>
+using get_section_id_tags =
+    typename detail::get_section_id_tags_impl<ParallelComponent>::type;
+
+namespace detail {
 // ParallelStruct is a metavariables, component, or action struct
 template <class ParallelStruct, class = std::void_t<>>
 struct get_const_global_cache_tags_from_parallel_struct {
@@ -345,6 +363,9 @@ struct charm_types_with_parameters {
   using cproxy =
       typename ParallelComponent::chare_type::template cproxy<ParallelComponent,
                                                               Args...>;
+  using cproxy_section =
+      typename ParallelComponent::chare_type::template cproxy_section<
+          ParallelComponent, Args...>;
   using cbase =
       typename ParallelComponent::chare_type::template cbase<ParallelComponent,
                                                              Args...>;
