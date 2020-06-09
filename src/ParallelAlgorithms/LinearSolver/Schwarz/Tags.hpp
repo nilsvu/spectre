@@ -179,7 +179,7 @@ struct ElementWeightCompute : db::ComputeTag, Weight<OptionsGroup> {
       const size_t max_overlap) noexcept {
     // For max_overlap > 0 all overlaps will have non-zero extents, so we don't
     // need to check their extents individually
-    if (LIKELY(max_overlap > 0)) {
+    if (LIKELY(max_overlap > 0 && element.number_of_neighbors() > 0)) {
       *element_weight =
           make_with_value<return_type>(mesh.number_of_grid_points(), 0.);
       for (const auto& direction_and_neighbors : element.neighbors()) {
