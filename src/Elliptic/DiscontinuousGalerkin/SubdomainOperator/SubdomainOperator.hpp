@@ -57,17 +57,19 @@ template <typename BoundaryData, size_t Dim,
           typename... FluxesArgs, typename... AuxiliaryFields>
 BoundaryData package_boundary_data(
     const NumericalFluxesComputerType& numerical_fluxes_computer,
-    const FluxesComputerType& fluxes_computer, const Mesh<Dim - 1>& face_mesh,
+    const FluxesComputerType& fluxes_computer, const Mesh<Dim>& volume_mesh,
+    const Direction<Dim>& direction, const Mesh<Dim - 1>& face_mesh,
     const tnsr::i<DataVector, Dim>& face_normal,
+    const Scalar<DataVector>& face_normal_magnitude,
     const Variables<NormalDotFluxesTags>& n_dot_fluxes,
     const Variables<DivFluxesTags>& div_fluxes,
     const std::tuple<FluxesArgs...>& fluxes_args,
     tmpl::list<AuxiliaryFields...> /*meta*/) noexcept {
   return std::apply(
-      [&numerical_fluxes_computer, &face_mesh, &n_dot_fluxes, &div_fluxes,
-       &face_normal, &fluxes_computer](const auto&... expanded_fluxes_args) {
+      [&](const auto&... expanded_fluxes_args) {
         return ::dg::FirstOrderScheme::package_boundary_data(
             numerical_fluxes_computer, face_mesh, n_dot_fluxes,
+            volume_mesh, direction, face_normal_magnitude,
             get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_fluxes)...,
             get<::Tags::div<::Tags::Flux<AuxiliaryFields, tmpl::size_t<Dim>,
                                          Frame::Inertial>>>(div_fluxes)...,
@@ -105,8 +107,10 @@ void exterior_boundary_data(
     const gsl::not_null<BoundaryData*> boundary_data,
     const Variables<FieldsTags>& vars_on_interior_face,
     const Variables<DivFluxesTags>& div_fluxes_on_interior_face,
+    const Mesh<Dim>& volume_mesh, const Direction<Dim>& interior_direction,
     const Mesh<Dim - 1>& face_mesh,
     const tnsr::i<DataVector, Dim>& interior_face_normal,
+    const Scalar<DataVector>& interior_face_normal_magnitude,
     const FluxesComputerType& fluxes_computer,
     const NumericalFluxesComputerType& numerical_fluxes_computer,
     const std::tuple<FluxesArgs...>& fluxes_args) noexcept {
@@ -131,8 +135,9 @@ void exterior_boundary_data(
   const auto ghost_normal_dot_fluxes =
       normal_dot_flux<FieldsTags>(exterior_face_normal, ghost_fluxes);
   *boundary_data = package_boundary_data<BoundaryData>(
-      numerical_fluxes_computer, fluxes_computer, face_mesh,
-      exterior_face_normal, ghost_normal_dot_fluxes,
+      numerical_fluxes_computer, fluxes_computer, volume_mesh,
+      interior_direction.opposite(), face_mesh, exterior_face_normal,
+      interior_face_normal_magnitude, ghost_normal_dot_fluxes,
       // TODO: Is this correct?
       div_fluxes_on_interior_face, fluxes_args, AuxiliaryFields{});
 }
@@ -329,7 +334,8 @@ static void apply_subdomain_face(
   // Assemble local boundary data
   const auto local_boundary_data_on_face =
       SubdomainOperator_detail::package_boundary_data<BoundaryData>(
-          numerical_fluxes_computer, fluxes_computer, face_mesh, face_normal,
+          numerical_fluxes_computer, fluxes_computer, mesh, direction,
+          face_mesh, face_normal, magnitude_of_face_normal,
           normal_dot_central_fluxes, central_div_fluxes_on_face, fluxes_args,
           AuxiliaryFields{});
 
@@ -363,8 +369,9 @@ static void apply_subdomain_face(
       SubdomainOperator_detail::exterior_boundary_data<PrimalFields,
                                                        AuxiliaryFields>(
           make_not_null(&remote_boundary_data), central_vars_on_face,
-          central_div_fluxes_on_face, face_mesh, face_normal, fluxes_computer,
-          numerical_fluxes_computer, fluxes_args);
+          central_div_fluxes_on_face, mesh, direction, face_mesh, face_normal,
+          magnitude_of_face_normal, fluxes_computer, numerical_fluxes_computer,
+          fluxes_args);
       // No projections necessary since exterior mortars cover the full face
     } else {
       // On internal boundaries, get neighbor data from the operand.
@@ -464,8 +471,10 @@ static void apply_subdomain_face(
           all_overlap_fluxes_args);
       remote_boundary_data =
           SubdomainOperator_detail::package_boundary_data<BoundaryData>(
-              numerical_fluxes_computer, fluxes_computer, neighbor_face_mesh,
+              numerical_fluxes_computer, fluxes_computer, neighbor_mesh,
+              direction_from_neighbor, neighbor_face_mesh,
               neighbor_face_normal_and_magnitude.first,
+              neighbor_face_normal_and_magnitude.second,
               neighbor_normal_dot_fluxes, neighbor_div_fluxes_on_face,
               neighbor_fluxes_args_on_face, AuxiliaryFields{});
       // TODO: does the mortar mesh and size need orientation?
@@ -547,8 +556,10 @@ static void apply_subdomain_face(
             all_overlap_fluxes_args);
         auto neighbor_local_boundary_data =
             SubdomainOperator_detail::package_boundary_data<BoundaryData>(
-                numerical_fluxes_computer, fluxes_computer, neighbor_face_mesh,
+                numerical_fluxes_computer, fluxes_computer, neighbor_mesh,
+                neighbor_face_direction, neighbor_face_mesh,
                 neighbor_face_normal_and_magnitude.first,
+                neighbor_face_normal_and_magnitude.second,
                 neighbor_normal_dot_fluxes, neighbor_div_fluxes_on_face,
                 neighbor_fluxes_args_on_face, AuxiliaryFields{});
         // BoundaryData neighbor_local_boundary_data;
@@ -574,8 +585,10 @@ static void apply_subdomain_face(
           SubdomainOperator_detail::exterior_boundary_data<PrimalFields,
                                                            AuxiliaryFields>(
               make_not_null(&neighbor_remote_boundary_data), neighbor_face_data,
-              neighbor_div_fluxes_on_face, neighbor_face_mesh,
-              neighbor_face_normal_and_magnitude.first, fluxes_computer,
+              neighbor_div_fluxes_on_face, neighbor_mesh,
+              neighbor_face_direction, neighbor_face_mesh,
+              neighbor_face_normal_and_magnitude.first,
+              neighbor_face_normal_and_magnitude.second, fluxes_computer,
               numerical_fluxes_computer, neighbor_fluxes_args_on_face);
         } else {
           // Assume the data on the neighbor's neighbor is zero.
@@ -591,10 +604,13 @@ static void apply_subdomain_face(
           for (size_t d = 0; d < volume_dim; d++) {
             neighbor_remote_face_normal.get(d) *= -1.;
           }
+          // TODO: Get the neighbor's neighbor mesh and face normal magnitude
           neighbor_remote_boundary_data =
               SubdomainOperator_detail::package_boundary_data<BoundaryData>(
-                  numerical_fluxes_computer, fluxes_computer,
-                  neighbor_face_mesh, neighbor_remote_face_normal,
+                  numerical_fluxes_computer, fluxes_computer, neighbor_mesh,
+                  neighbor_face_direction.opposite(), neighbor_face_mesh,
+                  neighbor_remote_face_normal,
+                  neighbor_face_normal_and_magnitude.second,
                   db::item_type<n_dot_fluxes_tag>{neighbor_face_num_points, 0.},
                   db::item_type<div_fluxes_tag>{neighbor_face_num_points, 0.},
                   // TODO: make sure using these args is fine
