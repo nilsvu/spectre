@@ -33,6 +33,7 @@ set(LIBRARY_SOURCES
   SegmentId.cpp
   Side.cpp
   SizeOfElement.cpp
+  SurfaceJacobian.cpp
   Tags.cpp
   TagsTimeDependent.cpp
   )
