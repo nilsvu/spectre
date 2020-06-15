@@ -85,7 +85,21 @@ struct PrepareSolve {
         Parallel::get_parallel_component<
             ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
 
-    prepare_preconditioning(box, std::bool_constant<Preconditioned>{});
+    if constexpr (Preconditioned) {
+      using preconditioned_operand_tag =
+          db::add_tag_prefix<LinearSolver::Tags::Preconditioned, operand_tag>;
+      using preconditioned_basis_history_tag =
+          LinearSolver::Tags::KrylovSubspaceBasis<preconditioned_operand_tag>;
+
+      db::mutate<preconditioned_basis_history_tag>(
+          make_not_null(&box),
+          [](const gsl::not_null<
+              db::item_type<preconditioned_basis_history_tag>*>
+                 preconditioned_basis_history) noexcept {
+            *preconditioned_basis_history =
+                db::item_type<preconditioned_basis_history_tag>{};
+          });
+    }
 
     return {
         std::move(box),
@@ -94,30 +108,6 @@ struct PrepareSolve {
         // action, which is responsible for restarting the algorithm.
         true};
   }
-
- private:
-  template <typename DbTagsList>
-  static void prepare_preconditioning(
-      db::DataBox<DbTagsList>& box,
-      std::true_type /* preconditioning_enabled */) noexcept {
-    using preconditioned_operand_tag =
-        db::add_tag_prefix<LinearSolver::Tags::Preconditioned, operand_tag>;
-    using preconditioned_basis_history_tag =
-        LinearSolver::Tags::KrylovSubspaceBasis<preconditioned_operand_tag>;
-
-    db::mutate<preconditioned_basis_history_tag>(
-        make_not_null(&box),
-        [](const gsl::not_null<db::item_type<preconditioned_basis_history_tag>*>
-               preconditioned_basis_history) noexcept {
-          *preconditioned_basis_history =
-              db::item_type<preconditioned_basis_history_tag>{};
-        });
-  }
-
-  template <typename DbTagsList>
-  static void prepare_preconditioning(
-      const db::DataBox<DbTagsList>& /*box*/,
-      std::false_type /* preconditioning_disabled */) noexcept {}
 };
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned>

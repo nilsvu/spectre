@@ -73,32 +73,20 @@ struct InitializeElement {
         std::numeric_limits<size_t>::max(), db::item_type<basis_history_tag>{},
         Convergence::HasConverged{});
 
-    auto preconditioning_box = initialize_preconditioning(
-        std::move(initial_box), std::bool_constant<Preconditioned>{});
+    if constexpr (not Preconditioned) {
+      return std::make_tuple(std::move(initial_box));
+    } else {
+      using preconditioned_basis_history_tag =
+          LinearSolver::Tags::KrylovSubspaceBasis<preconditioned_operand_tag>;
 
-    return std::make_tuple(std::move(preconditioning_box));
-  }
-
- private:
-  template <typename DbTagsList>
-  static auto initialize_preconditioning(
-      db::DataBox<DbTagsList>&& box,
-      std::true_type /* preconditioning_enabled */) noexcept {
-    using preconditioned_basis_history_tag =
-        LinearSolver::Tags::KrylovSubspaceBasis<preconditioned_operand_tag>;
-
-    return ::Initialization::merge_into_databox<
-        InitializeElement, db::AddSimpleTags<preconditioned_basis_history_tag,
-                                             preconditioned_operand_tag>>(
-        std::move(box), db::item_type<preconditioned_basis_history_tag>{},
-        db::item_type<preconditioned_operand_tag>{});
-  }
-
-  template <typename DbTagsList>
-  static db::DataBox<DbTagsList> initialize_preconditioning(
-      db::DataBox<DbTagsList>&& box,
-      std::false_type /* preconditioning_disabled */) noexcept {
-    return std::move(box);
+      return std::make_tuple(::Initialization::merge_into_databox<
+                             InitializeElement,
+                             db::AddSimpleTags<preconditioned_basis_history_tag,
+                                               preconditioned_operand_tag>>(
+          std::move(initial_box),
+          db::item_type<preconditioned_basis_history_tag>{},
+          db::item_type<preconditioned_operand_tag>{}));
+    }
   }
 };
 
