@@ -52,8 +52,7 @@ struct UpdateFields {
     db::mutate<FieldsTag>(
         make_not_null(&box),
         [](const gsl::not_null<db::item_type<FieldsTag>*> fields,
-           const db::const_item_type<residual_tag>& residual,
-           const double relaxation_parameter) noexcept {
+           const auto& residual, const double relaxation_parameter) noexcept {
           *fields += relaxation_parameter * residual;
         },
         get<residual_tag>(box),

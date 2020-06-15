@@ -64,9 +64,8 @@ struct PrepareSolve {
         [](const gsl::not_null<size_t*> iteration_id,
            const gsl::not_null<db::item_type<operand_tag>*> operand,
            const gsl::not_null<db::item_type<residual_tag>*> residual,
-           const db::item_type<source_tag>& source,
-           const db::item_type<operator_applied_to_fields_tag>&
-               operator_applied_to_fields) noexcept {
+           const auto& source,
+           const auto& operator_applied_to_fields) noexcept {
           *iteration_id = 0;
           *operand = source - operator_applied_to_fields;
           *residual = *operand;
@@ -204,8 +203,7 @@ struct UpdateFieldValues {
         make_not_null(&box),
         [alpha](const gsl::not_null<db::item_type<residual_tag>*> r,
                 const gsl::not_null<db::item_type<fields_tag>*> x,
-                const db::const_item_type<operand_tag>& p,
-                const db::const_item_type<operator_tag>& Ap) noexcept {
+                const auto& p, const auto& Ap) noexcept {
           *x += alpha * p;
           *r -= alpha * Ap;
         },
@@ -256,7 +254,7 @@ struct UpdateOperand {
             const gsl::not_null<db::item_type<operand_tag>*> p,
             const gsl::not_null<size_t*> iteration_id,
             const gsl::not_null<Convergence::HasConverged*> local_has_converged,
-            const db::const_item_type<residual_tag>& r) noexcept {
+            const auto& r) noexcept {
           *p = r + res_ratio * *p;
           ++(*iteration_id);
           *local_has_converged = has_converged;

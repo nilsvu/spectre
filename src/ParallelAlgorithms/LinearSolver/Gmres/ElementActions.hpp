@@ -66,10 +66,8 @@ struct PrepareSolve {
            const gsl::not_null<db::item_type<initial_fields_tag>*>
                initial_fields,
            const gsl::not_null<db::item_type<basis_history_tag>*> basis_history,
-           const db::item_type<source_tag>& source,
-           const db::item_type<operator_applied_to_fields_tag>&
-               operator_applied_to_fields,
-           const db::item_type<fields_tag>& fields) noexcept {
+           const auto& source, const auto& operator_applied_to_fields,
+           const auto& fields) noexcept {
           *iteration_id = 0;
           *operand = source - operator_applied_to_fields;
           *initial_fields = fields;
@@ -195,7 +193,7 @@ struct PrepareStep {
         make_not_null(&box),
         [](const gsl::not_null<db::item_type<preconditioned_operand_tag>*>
                preconditioned_operand,
-           const db::const_item_type<operand_tag>& operand) noexcept {
+           const auto& operand) noexcept {
           // Start the preconditioner at zero because we have no reason to
           // expect the remaining residual to have a particular form.
           // Another possibility would be to start the preconditioner with an
@@ -253,7 +251,7 @@ struct PerformStep {
         make_not_null(&box),
         [](const gsl::not_null<db::item_type<operand_tag>*> operand,
            const gsl::not_null<size_t*> orthogonalization_iteration_id,
-           const db::const_item_type<operator_tag>& operator_action) noexcept {
+           const auto& operator_action) noexcept {
           *operand = db::item_type<operand_tag>(operator_action);
           *orthogonalization_iteration_id = 0;
         },
@@ -286,8 +284,7 @@ struct PerformStep {
         make_not_null(&box),
         [](const gsl::not_null<db::item_type<preconditioned_basis_history_tag>*>
                preconditioned_basis_history,
-           const db::const_item_type<preconditioned_operand_tag>&
-               preconditioned_operand) noexcept {
+           const auto& preconditioned_operand) noexcept {
           preconditioned_basis_history->push_back(preconditioned_operand);
         },
         get<preconditioned_operand_tag>(box));
@@ -332,8 +329,7 @@ struct OrthogonalizeOperand {
         [orthogonalization](
             const gsl::not_null<db::item_type<operand_tag>*> operand,
             const gsl::not_null<size_t*> orthogonalization_iteration_id,
-            const db::const_item_type<basis_history_tag>&
-                basis_history) noexcept {
+            const auto& basis_history) noexcept {
           *operand -= orthogonalization *
                       gsl::at(basis_history, *orthogonalization_iteration_id);
           ++(*orthogonalization_iteration_id);
@@ -416,9 +412,8 @@ struct NormalizeOperandAndUpdateField {
             const gsl::not_null<db::item_type<fields_tag>*> field,
             const gsl::not_null<size_t*> iteration_id,
             const gsl::not_null<Convergence::HasConverged*> local_has_converged,
-            const db::const_item_type<initial_fields_tag>& initial_field,
-            const db::item_type<preconditioned_basis_history_tag>&
-                preconditioned_basis_history) noexcept {
+            const auto& initial_field,
+            const auto& preconditioned_basis_history) noexcept {
           // Avoid an FPE if the new operand norm is exactly zero. In that case
           // the problem is solved and the algorithm will terminate (see
           // Proposition 9.3 in \cite Saad2003). Since there will be no next
