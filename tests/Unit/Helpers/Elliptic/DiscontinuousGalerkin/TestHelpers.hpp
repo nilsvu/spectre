@@ -22,6 +22,7 @@
 #include "Domain/FaceNormal.hpp"
 #include "Domain/IndexToSliceAt.hpp"
 #include "Domain/Mesh.hpp"
+#include "Domain/SurfaceJacobian.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeBoundaryConditions.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
@@ -103,9 +104,10 @@ struct TestTag : db::SimpleTag {
  *
  * \snippet Helpers/Elliptic/Systems/Poisson/DgSchemes.cpp boundary_scheme
  */
-template <typename System, typename TagsList, typename PackageFluxesArgs,
-          typename PackageSourcesArgs, typename PackageBoundaryData,
-          typename ApplyBoundaryContribution, size_t Dim = System::volume_dim,
+template <typename System, bool MassiveOperator, typename TagsList,
+          typename PackageFluxesArgs, typename PackageSourcesArgs,
+          typename PackageBoundaryData, typename ApplyBoundaryContribution,
+          size_t Dim = System::volume_dim,
           typename PrimalFields = typename System::primal_fields,
           typename AuxiliaryFields = typename System::auxiliary_fields,
           typename FluxesComputer = typename System::fluxes,
@@ -153,7 +155,16 @@ apply_first_order_dg_operator(
       package_sources_args(element_id, dg_element));
 
   // Compute bulk contribution in central element
-  ::elliptic::first_order_operator(make_not_null(&result), div_fluxes, sources);
+  if constexpr (MassiveOperator) {
+    const auto jac =
+        dg_element.element_map.jacobian(logical_coordinates(dg_element.mesh));
+    const auto det_jac = determinant(jac);
+    ::elliptic::first_order_operator_massive(make_not_null(&result), div_fluxes,
+                                             sources, dg_element.mesh, det_jac);
+  } else {
+    ::elliptic::first_order_operator(make_not_null(&result), div_fluxes,
+                                     sources);
+  }
 
   // Setup mortars
   const auto mortars = create_mortars(element_id, dg_elements);
@@ -187,6 +198,8 @@ apply_first_order_dg_operator(
     for (size_t d = 0; d < volume_dim; d++) {
       face_normal.get(d) /= get(magnitude_of_face_normal);
     }
+    const auto surface_jacobian = domain::surface_jacobian(
+        dg_element.element_map, face_mesh, direction, magnitude_of_face_normal);
 
     // Compute normal dot fluxes
     const auto fluxes_on_face = data_on_slice(fluxes, dg_element.mesh.extents(),
@@ -281,7 +294,7 @@ apply_first_order_dg_operator(
     apply_boundary_contribution(
         make_not_null(&result), std::move(local_boundary_data),
         std::move(remote_boundary_data), magnitude_of_face_normal,
-        dg_element.mesh, mortar_id, mortar_mesh, mortar_size);
+        surface_jacobian, dg_element.mesh, mortar_id, mortar_mesh, mortar_size);
   }
   return result;
 }

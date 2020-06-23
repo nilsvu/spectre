@@ -18,6 +18,7 @@
 #include "Domain/Creators/RotatedRectangles.hpp"
 #include "Domain/FaceNormal.hpp"
 #include "Domain/InterfaceHelpers.hpp"
+#include "Domain/SurfaceJacobian.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/DiscontinuousGalerkin/NumericalFluxes/FirstOrderInternalPenalty.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
@@ -29,6 +30,7 @@
 #include "Helpers/DataStructures/MakeWithRandomValues.hpp"
 #include "Helpers/Elliptic/DiscontinuousGalerkin/TestHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/FirstOrder/BoundaryFlux.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/LiftFlux.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/SimpleBoundaryData.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
@@ -50,8 +52,9 @@ struct DummyOptionsGroup {};
 template <typename System, typename FluxesArgsTags,
           typename FluxesArgsVolumeTags, typename FluxesArgsTagsFromCenter,
           typename SourcesArgsTags, typename SourcesArgsVolumeTags,
-          typename PackageFluxesArgs, typename PackageSourcesArgs,
-          typename... PrimalFields, typename... AuxiliaryFields>
+          bool MassiveOperator, typename PackageFluxesArgs,
+          typename PackageSourcesArgs, typename... PrimalFields,
+          typename... AuxiliaryFields>
 void test_subdomain_operator_impl(
     const DomainCreator<System::volume_dim>& domain_creator,
     const size_t overlap, const double penalty_parameter,
@@ -126,6 +129,10 @@ void test_subdomain_operator_impl(
       internal_face_normal_magnitudes;
   std::unordered_map<Direction<volume_dim>, Scalar<DataVector>>
       boundary_face_normal_magnitudes;
+  std::unordered_map<Direction<volume_dim>, Scalar<DataVector>>
+      internal_surface_jacobians;
+  std::unordered_map<Direction<volume_dim>, Scalar<DataVector>>
+      boundary_surface_jacobians;
   dg::MortarMap<volume_dim, Mesh<volume_dim - 1>> central_mortar_meshes;
   dg::MortarMap<volume_dim, dg::MortarSize<volume_dim - 1>>
       central_mortar_sizes;
@@ -134,20 +141,24 @@ void test_subdomain_operator_impl(
     const auto& mortar_mesh_and_size = mortar.second;
     const auto& direction = mortar_id.first;
     const size_t dimension = direction.dimension();
-    auto face_normal =
-        unnormalized_face_normal(central_element.mesh.slice_away(dimension),
-                                 central_element.element_map, direction);
+    const auto face_mesh = central_element.mesh.slice_away(dimension);
+    auto face_normal = unnormalized_face_normal(
+        face_mesh, central_element.element_map, direction);
     // TODO: Use system's magnitude
     auto normal_magnitude = magnitude(face_normal);
     for (size_t d = 0; d < volume_dim; d++) {
       face_normal.get(d) /= get(normal_magnitude);
     }
+    auto surface_jacobian = domain::surface_jacobian(
+        central_element.element_map, face_mesh, direction, normal_magnitude);
     if (mortar_id.second == ElementId<volume_dim>::external_boundary_id()) {
       boundary_face_normals[direction] = std::move(face_normal);
       boundary_face_normal_magnitudes[direction] = std::move(normal_magnitude);
+      boundary_surface_jacobians[direction] = std::move(surface_jacobian);
     } else {
       internal_face_normals[direction] = std::move(face_normal);
       internal_face_normal_magnitudes[direction] = std::move(normal_magnitude);
+      internal_surface_jacobians[direction] = std::move(surface_jacobian);
     }
     central_mortar_meshes[mortar_id] = mortar_mesh_and_size.first;
     central_mortar_sizes[mortar_id] = mortar_mesh_and_size.second;
@@ -248,6 +259,8 @@ void test_subdomain_operator_impl(
   const auto all_overlap_sources_args =
       package_sources_args(subdomain_center, elements, overlap);
 
+  CAPTURE(subdomain_data);
+
   // (1) Apply the full DG operator
   // We use the StrongFirstOrder scheme, so we'll need the n.F on the boundaries
   // and the data needed by the numerical flux.
@@ -277,17 +290,25 @@ void test_subdomain_operator_impl(
           const auto result, const BoundaryData& local_boundary_data,
           const BoundaryData& remote_boundary_data,
           const Scalar<DataVector>& magnitude_of_face_normal,
+          const Scalar<DataVector>& surface_jacobian,
           const Mesh<volume_dim>& mesh,
           const ::dg::MortarId<volume_dim>& mortar_id,
           const Mesh<volume_dim - 1>& mortar_mesh,
           const ::dg::MortarSize<volume_dim - 1>& mortar_size) {
         const size_t dimension = mortar_id.first.dimension();
-        auto boundary_contribution =
-            std::decay_t<decltype(*result)>{dg::FirstOrderScheme::boundary_flux(
-                local_boundary_data, remote_boundary_data,
-                numerical_fluxes_computer, magnitude_of_face_normal,
-                mesh.extents(dimension), mesh.slice_away(dimension),
-                mortar_mesh, mortar_size)};
+        auto boundary_contribution = dg::FirstOrderScheme::boundary_flux(
+            local_boundary_data, remote_boundary_data,
+            numerical_fluxes_computer, mesh.slice_away(dimension), mortar_mesh,
+            mortar_size);
+        if constexpr (MassiveOperator) {
+          boundary_contribution = ::dg::lift_flux_massive_no_mass_lumping(
+              boundary_contribution, mesh.slice_away(dimension),
+              surface_jacobian);
+        } else {
+          boundary_contribution =
+              ::dg::lift_flux(boundary_contribution, mesh.extents(dimension),
+                              magnitude_of_face_normal);
+        }
         add_slice_to_data(result, std::move(boundary_contribution),
                           mesh.extents(), dimension,
                           index_to_slice_at(mesh.extents(), mortar_id.first));
@@ -297,7 +318,7 @@ void test_subdomain_operator_impl(
   for (const auto& id_and_element : elements) {
     const auto& element_id = id_and_element.first;
     operator_applied_to_workspace[element_id] =
-        helpers::apply_first_order_dg_operator<system>(
+        helpers::apply_first_order_dg_operator<system, MassiveOperator>(
             element_id, elements, workspace, fluxes_computer,
             package_fluxes_args, package_sources_args, package_boundary_data,
             apply_boundary_contribution);
@@ -309,25 +330,28 @@ void test_subdomain_operator_impl(
   Variables<fluxes_tags> central_fluxes_buffer{center_num_points};
   Variables<div_fluxes_tags> central_div_fluxes_buffer{center_num_points};
   SubdomainDataType subdomain_result{center_num_points};
-  elliptic::dg::apply_subdomain_center_volume<typename system::primal_fields,
-                                              typename system::auxiliary_fields,
-                                              typename system::sources>(
+  const auto det_jacobian = determinant(central_element.element_map.jacobian(
+      logical_coordinates(central_element.mesh)));
+  elliptic::dg::apply_subdomain_center_volume<
+      typename system::primal_fields, typename system::auxiliary_fields,
+      typename system::sources, MassiveOperator>(
       make_not_null(&subdomain_result.element_data),
       make_not_null(&central_fluxes_buffer),
       make_not_null(&central_div_fluxes_buffer), fluxes_computer,
-      central_element.mesh, central_element.inv_jacobian,
+      central_element.mesh, det_jacobian, central_element.inv_jacobian,
       package_fluxes_args(subdomain_center, central_element),
       package_sources_args(subdomain_center, central_element),
       subdomain_data.element_data);
   for (const auto& direction_and_face_normal : internal_face_normals) {
     const auto& direction = direction_and_face_normal.first;
-    elliptic::dg::apply_subdomain_face<typename system::primal_fields,
-                                       typename system::auxiliary_fields,
-                                       typename system::sources>(
+    elliptic::dg::apply_subdomain_face<
+        typename system::primal_fields, typename system::auxiliary_fields,
+        typename system::sources, MassiveOperator>(
         make_not_null(&subdomain_result), central_element.element,
         central_element.mesh, fluxes_computer, numerical_fluxes_computer,
         direction, direction_and_face_normal.second,
-        internal_face_normal_magnitudes.at(direction), central_mortar_meshes,
+        internal_face_normal_magnitudes.at(direction),
+        internal_surface_jacobians.at(direction), central_mortar_meshes,
         central_mortar_sizes, all_overlap_extents, all_overlap_meshes,
         all_overlap_element_maps, all_overlap_mortar_meshes,
         all_overlap_mortar_sizes,
@@ -337,13 +361,14 @@ void test_subdomain_operator_impl(
   }
   for (const auto& direction_and_face_normal : boundary_face_normals) {
     const auto& direction = direction_and_face_normal.first;
-    elliptic::dg::apply_subdomain_face<typename system::primal_fields,
-                                       typename system::auxiliary_fields,
-                                       typename system::sources>(
+    elliptic::dg::apply_subdomain_face<
+        typename system::primal_fields, typename system::auxiliary_fields,
+        typename system::sources, MassiveOperator>(
         make_not_null(&subdomain_result), central_element.element,
         central_element.mesh, fluxes_computer, numerical_fluxes_computer,
         direction, direction_and_face_normal.second,
-        boundary_face_normal_magnitudes.at(direction), central_mortar_meshes,
+        boundary_face_normal_magnitudes.at(direction),
+        boundary_surface_jacobians.at(direction), central_mortar_meshes,
         central_mortar_sizes, all_overlap_extents, all_overlap_meshes,
         all_overlap_element_maps, all_overlap_mortar_meshes,
         all_overlap_mortar_sizes,
@@ -384,10 +409,11 @@ void test_subdomain_operator_impl(
       volume_dim, typename system::primal_fields,
       typename system::auxiliary_fields, fluxes_computer_tag, FluxesArgs,
       typename system::sources, SourcesArgs, numerical_flux_tag,
-      DummyOptionsGroup, FluxesArgsTagsFromCenter>;
+      DummyOptionsGroup, FluxesArgsTagsFromCenter, MassiveOperator>;
   auto initial_box = db::create<
       db::AddSimpleTags<
           domain::Tags::Element<volume_dim>, domain::Tags::Mesh<volume_dim>,
+          domain::Tags::DetJacobian<Frame::Logical, Frame::Inertial>,
           domain::Tags::InverseJacobian<volume_dim, Frame::Logical,
                                         Frame::Inertial>,
           fluxes_computer_tag, numerical_flux_tag,
@@ -407,6 +433,12 @@ void test_subdomain_operator_impl(
               domain::Tags::BoundaryDirectionsInterior<volume_dim>,
               ::Tags::Magnitude<
                   domain::Tags::UnnormalizedFaceNormal<volume_dim>>>,
+          domain::Tags::Interface<
+              domain::Tags::InternalDirections<volume_dim>,
+              domain::Tags::SurfaceJacobian<Frame::Logical, Frame::Inertial>>,
+          domain::Tags::Interface<
+              domain::Tags::BoundaryDirectionsInterior<volume_dim>,
+              domain::Tags::SurfaceJacobian<Frame::Logical, Frame::Inertial>>,
           ::Tags::Mortars<domain::Tags::Mesh<volume_dim - 1>, volume_dim>,
           ::Tags::Mortars<::Tags::MortarSize<volume_dim - 1>, volume_dim>,
           LinearSolver::Schwarz::Tags::Overlaps<
@@ -431,10 +463,11 @@ void test_subdomain_operator_impl(
           domain::Tags::InterfaceCompute<
               domain::Tags::BoundaryDirectionsInterior<volume_dim>,
               domain::Tags::Direction<volume_dim>>>>(
-      central_element.element, central_element.mesh,
+      central_element.element, central_element.mesh, det_jacobian,
       central_element.inv_jacobian, fluxes_computer, numerical_fluxes_computer,
       internal_face_normals, boundary_face_normals,
       internal_face_normal_magnitudes, boundary_face_normal_magnitudes,
+      internal_surface_jacobians, boundary_surface_jacobians,
       central_mortar_meshes, central_mortar_sizes,
       std::move(all_overlap_extents), std::move(all_overlap_meshes),
       std::move(all_overlap_element_maps), std::move(all_overlap_mortar_meshes),
@@ -558,11 +591,11 @@ void test_subdomain_operator_impl(
 template <typename System, typename FluxesArgsTags,
           typename FluxesArgsVolumeTags, typename FluxesArgsTagsFromCenter,
           typename SourcesArgsTags, typename SourcesArgsVolumeTags,
-          typename... Args>
+          bool MassiveOperator, typename... Args>
 void test_subdomain_operator(Args&&... args) noexcept {
   test_subdomain_operator_impl<System, FluxesArgsTags, FluxesArgsVolumeTags,
                                FluxesArgsTagsFromCenter, SourcesArgsTags,
-                               SourcesArgsVolumeTags>(
+                               SourcesArgsVolumeTags, MassiveOperator>(
       std::forward<Args>(args)..., typename System::primal_fields{},
       typename System::auxiliary_fields{});
 }
@@ -575,7 +608,12 @@ void test_subdomain_operator_poisson(const DomainCreator<Dim>& domain_creator,
   using system = Poisson::FirstOrderSystem<Dim, Poisson::Geometry::Euclidean>;
   for (size_t overlap = 1; overlap <= 4; overlap++) {
     test_subdomain_operator<system, tmpl::list<>, tmpl::list<>, tmpl::list<>,
-                            tmpl::list<>, tmpl::list<>>(
+                            tmpl::list<>, tmpl::list<>, true>(
+        domain_creator, overlap, penalty_parameter,
+        [](const auto&... /*unused*/) { return std::tuple<>{}; },
+        [](const auto&... /*unused*/) { return std::tuple<>{}; });
+    test_subdomain_operator<system, tmpl::list<>, tmpl::list<>, tmpl::list<>,
+                            tmpl::list<>, tmpl::list<>, false>(
         domain_creator, overlap, penalty_parameter,
         [](const auto&... /*unused*/) { return std::tuple<>{}; },
         [](const auto&... /*unused*/) { return std::tuple<>{}; });
@@ -634,7 +672,7 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.SubdomainOperator", "[Unit][Elliptic]") {
           tmpl::list<::Elasticity::Tags::ConstitutiveRelation<
               ConstitutiveRelationType>>,
           tmpl::list<::Elasticity::Tags::ConstitutiveRelationBase>,
-          tmpl::list<>, tmpl::list<>>(
+          tmpl::list<>, tmpl::list<>, false>(
           domain_creator, overlap, 6.75,
           make_overloader(
               [&constitutive_relation](
