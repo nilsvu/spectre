@@ -38,6 +38,9 @@
 #include "Utilities/TupleFromTypelist.hpp"
 #include "Utilities/TupleSlice.hpp"
 
+#include "Domain/SurfaceJacobian.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/LiftFlux.hpp"
+#include "NumericalAlgorithms/LinearOperators/Mass.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TaggedTuple.hpp"
@@ -77,23 +80,33 @@ BoundaryData package_boundary_data(
       },
       fluxes_args);
 }
-template <size_t Dim, typename FieldsTagsList,
+template <bool MassiveOperator, size_t Dim, typename FieldsTagsList,
           typename NumericalFluxesComputerType, typename BoundaryData>
 void apply_boundary_contribution(
     const gsl::not_null<Variables<FieldsTagsList>*> result,
     const NumericalFluxesComputerType& numerical_fluxes_computer,
     const BoundaryData& local_boundary_data,
     const BoundaryData& remote_boundary_data,
-    const Scalar<DataVector>& magnitude_of_face_normal, const Mesh<Dim>& mesh,
+    const Scalar<DataVector>& magnitude_of_face_normal,
+    const Scalar<DataVector>& surface_jacobian, const Mesh<Dim>& mesh,
     const Direction<Dim>& direction, const Mesh<Dim - 1>& mortar_mesh,
     const ::dg::MortarSize<Dim - 1>& mortar_size) noexcept {
   const size_t dimension = direction.dimension();
   auto boundary_contribution = ::dg::FirstOrderScheme::boundary_flux(
       local_boundary_data, remote_boundary_data, numerical_fluxes_computer,
-      magnitude_of_face_normal, mesh.extents(dimension),
       mesh.slice_away(dimension), mortar_mesh, mortar_size);
-  add_slice_to_data(result, std::move(boundary_contribution), mesh.extents(),
-                    dimension, index_to_slice_at(mesh.extents(), direction));
+  auto lifted_flux = [&]() noexcept {
+    if constexpr (MassiveOperator) {
+      return ::dg::lift_flux_massive_no_mass_lumping(
+          std::move(boundary_contribution), mesh.slice_away(dimension),
+          surface_jacobian);
+    } else {
+      return ::dg::lift_flux(std::move(boundary_contribution),
+                             mesh.extents(dimension), magnitude_of_face_normal);
+    }
+  }();
+  add_slice_to_data(result, std::move(lifted_flux), mesh.extents(), dimension,
+                    index_to_slice_at(mesh.extents(), direction));
 }
 
 template <typename PrimalFields, typename AuxiliaryFields, size_t Dim,
@@ -219,9 +232,10 @@ decltype(auto) unmap_overlap_arg(
 
 // Compute bulk contribution in central element
 template <typename PrimalFields, typename AuxiliaryFields,
-          typename SourcesComputer, typename ResultTagsList,
-          typename ArgTagsList, typename FluxesComputer, size_t Dim,
-          typename... FluxesArgs, typename... SourcesArgs,
+          typename SourcesComputer, bool MassiveOperator,
+          typename ResultTagsList, typename ArgTagsList,
+          typename FluxesComputer, size_t Dim, typename... FluxesArgs,
+          typename... SourcesArgs,
           typename AllFields = tmpl::append<PrimalFields, AuxiliaryFields>,
           typename FluxesTags = db::wrap_tags_in<
               ::Tags::Flux, AllFields, tmpl::size_t<Dim>, Frame::Inertial>>
@@ -231,6 +245,7 @@ void apply_subdomain_center_volume(
     const gsl::not_null<Variables<db::wrap_tags_in<::Tags::div, FluxesTags>>*>
         div_fluxes,
     const FluxesComputer& fluxes_computer, const Mesh<Dim>& mesh,
+    const Scalar<DataVector>& det_jacobian,
     const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
         inv_jacobian,
     const std::tuple<FluxesArgs...>& fluxes_args,
@@ -255,16 +270,22 @@ void apply_subdomain_center_volume(
             Variables<AllFields>(arg_element_data), expanded_sources_args...);
       },
       sources_args);
-  elliptic::first_order_operator(result_element_data, *div_fluxes,
-                                 std::move(sources));
+  if constexpr (MassiveOperator) {
+    elliptic::first_order_operator_massive(result_element_data, *div_fluxes,
+                                           std::move(sources), mesh,
+                                           det_jacobian);
+  } else {
+    elliptic::first_order_operator(result_element_data, *div_fluxes,
+                                   std::move(sources));
+  }
 }
 
 // Add boundary contributions
 template <typename PrimalFields, typename AuxiliaryFields,
-          typename SourcesComputerType, size_t Dim, typename FluxesComputerType,
-          typename NumericalFluxesComputerType, typename... FluxesArgs,
-          typename... OverlapFluxesArgs, typename... OverlapSourcesArgs,
-          typename ResultTags, typename ArgTags,
+          typename SourcesComputerType, bool MassiveOperator, size_t Dim,
+          typename FluxesComputerType, typename NumericalFluxesComputerType,
+          typename... FluxesArgs, typename... OverlapFluxesArgs,
+          typename... OverlapSourcesArgs, typename ResultTags, typename ArgTags,
           typename AllFieldsTags = tmpl::append<PrimalFields, AuxiliaryFields>>
 static void apply_subdomain_face(
     const gsl::not_null<
@@ -276,6 +297,7 @@ static void apply_subdomain_face(
     const Direction<Dim>& direction,
     const tnsr::i<DataVector, Dim>& face_normal,
     const Scalar<DataVector>& magnitude_of_face_normal,
+    const Scalar<DataVector>& surface_jacobian,
     const db::const_item_type<
         ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>& mortar_meshes,
     const db::const_item_type<
@@ -415,6 +437,10 @@ static void apply_subdomain_face(
       const auto neighbor_inv_jacobian =
           all_overlap_element_maps.at(mortar_id).inv_jacobian(
               neighbor_logical_coords);
+      const auto neighbor_jacobian =
+          all_overlap_element_maps.at(mortar_id).jacobian(
+              neighbor_logical_coords);
+      const auto neighbor_det_jacobian = determinant(neighbor_jacobian);
       // Parallel::printf("Inv jac for %s: %s\n", neighbor_id,
       //                  neighbor_inv_jacobian);
       const auto neighbor_div_fluxes =
@@ -431,9 +457,15 @@ static void apply_subdomain_face(
                     expanded_overlap_sources_args, mortar_id)...);
           },
           all_overlap_sources_args);
-      elliptic::first_order_operator(make_not_null(&neighbor_result_extended),
-                                     neighbor_div_fluxes,
-                                     std::move(neighbor_sources));
+      if constexpr (MassiveOperator) {
+        elliptic::first_order_operator_massive(
+            make_not_null(&neighbor_result_extended), neighbor_div_fluxes,
+            std::move(neighbor_sources), neighbor_mesh, neighbor_det_jacobian);
+      } else {
+        elliptic::first_order_operator(make_not_null(&neighbor_result_extended),
+                                       neighbor_div_fluxes,
+                                       std::move(neighbor_sources));
+      }
       // Parallel::printf("Extended result on overlap: %s\n",
       //                  neighbor_result_extended);
 
@@ -441,6 +473,9 @@ static void apply_subdomain_face(
           SubdomainOperator_detail::face_normal_and_magnitude(
               neighbor_face_mesh, all_overlap_element_maps.at(mortar_id),
               direction_from_neighbor);
+      auto neighbor_surface_jacobian = domain::surface_jacobian(
+          all_overlap_element_maps.at(mortar_id), neighbor_face_mesh,
+          direction_from_neighbor, neighbor_face_normal_and_magnitude.second);
       for (size_t d = 0; d < volume_dim; d++) {
         // Only holds for aligned elements
         // TODO: mirror transform the face_normal to the neighbor?
@@ -495,11 +530,11 @@ static void apply_subdomain_face(
         reoriented_local_boundary_data.orient_on_slice(mortar_mesh.extents(),
                                                        dimension, orientation);
       }
-      SubdomainOperator_detail::apply_boundary_contribution(
+      SubdomainOperator_detail::apply_boundary_contribution<MassiveOperator>(
           make_not_null(&neighbor_result_extended), numerical_fluxes_computer,
           remote_boundary_data, std::move(reoriented_local_boundary_data),
-          neighbor_face_normal_and_magnitude.second, neighbor_mesh,
-          direction_from_neighbor, mortar_mesh, mortar_size);
+          neighbor_face_normal_and_magnitude.second, neighbor_surface_jacobian,
+          neighbor_mesh, direction_from_neighbor, mortar_mesh, mortar_size);
       //   Parallel::printf(
       //       "Extended result on overlap incl. boundary contrib from central "
       //       "element: %s\n",
@@ -535,6 +570,9 @@ static void apply_subdomain_face(
             SubdomainOperator_detail::face_normal_and_magnitude(
                 neighbor_face_mesh, all_overlap_element_maps.at(mortar_id),
                 neighbor_face_direction);
+        neighbor_surface_jacobian = domain::surface_jacobian(
+            all_overlap_element_maps.at(mortar_id), neighbor_face_mesh,
+            neighbor_face_direction, neighbor_face_normal_and_magnitude.second);
 
         neighbor_fluxes_on_face =
             data_on_slice(neighbor_fluxes, neighbor_mesh.extents(),
@@ -616,12 +654,12 @@ static void apply_subdomain_face(
                   // TODO: make sure using these args is fine
                   neighbor_fluxes_args_on_face, AuxiliaryFields{});
         }
-        SubdomainOperator_detail::apply_boundary_contribution(
+        SubdomainOperator_detail::apply_boundary_contribution<MassiveOperator>(
             make_not_null(&neighbor_result_extended), numerical_fluxes_computer,
             neighbor_local_boundary_data, neighbor_remote_boundary_data,
-            neighbor_face_normal_and_magnitude.second, neighbor_mesh,
-            neighbor_face_direction, neighbor_mortar_mesh,
-            neighbor_mortar_size);
+            neighbor_face_normal_and_magnitude.second,
+            neighbor_surface_jacobian, neighbor_mesh, neighbor_face_direction,
+            neighbor_mortar_mesh, neighbor_mortar_size);
       }
       //   Parallel::printf(
       //       "Extended result on overlap incl. all boundary contribs: %s\n",
@@ -649,10 +687,11 @@ static void apply_subdomain_face(
     }
 
     // Apply the boundary contribution to the central element
-    SubdomainOperator_detail::apply_boundary_contribution(
+    SubdomainOperator_detail::apply_boundary_contribution<MassiveOperator>(
         make_not_null(&result->element_data), numerical_fluxes_computer,
         local_boundary_data, std::move(remote_boundary_data),
-        magnitude_of_face_normal, mesh, direction, mortar_mesh, mortar_size);
+        magnitude_of_face_normal, surface_jacobian, mesh, direction,
+        mortar_mesh, mortar_size);
   }
 }
 
@@ -668,7 +707,7 @@ template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
           typename FluxesComputerTag, typename FluxesArgs,
           typename SourcesComputer, typename SourcesArgs,
           typename NumericalFluxesComputerTag, typename OptionsGroup,
-          typename FluxesArgsTagsFromCenter>
+          typename FluxesArgsTagsFromCenter, bool MassiveOperator>
 struct SubdomainOperator {
  private:
   using all_fields_tags = tmpl::append<PrimalFields, AuxiliaryFields>;
@@ -702,16 +741,17 @@ struct SubdomainOperator {
                 db::item_type<div_fluxes_tag>{element_num_points}} {}
 
   struct element_operator {
-    using argument_tags =
-        tmpl::append<tmpl::list<domain::Tags::Mesh<Dim>,
-                                domain::Tags::InverseJacobian<
-                                    Dim, Frame::Logical, Frame::Inertial>,
-                                FluxesComputerTag>,
-                     fluxes_args_tags, sources_args_tags>;
+    using argument_tags = tmpl::append<
+        tmpl::list<
+            domain::Tags::Mesh<Dim>,
+            domain::Tags::DetJacobian<Frame::Logical, Frame::Inertial>,
+            domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
+            FluxesComputerTag>,
+        fluxes_args_tags, sources_args_tags>;
 
     template <typename... RemainingArgs>
     static void apply(
-        const Mesh<Dim>& mesh,
+        const Mesh<Dim>& mesh, const Scalar<DataVector>& det_jacobian,
         const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
             inv_jacobian,
         const FluxesComputerType& fluxes_computer,
@@ -723,11 +763,11 @@ struct SubdomainOperator {
       const auto& subdomain_operator =
           get<sizeof...(RemainingArgs) - 1>(remaining_args);
       apply_subdomain_center_volume<PrimalFields, AuxiliaryFields,
-                                    SourcesComputer>(
+                                    SourcesComputer, MassiveOperator>(
           make_not_null(&(result->element_data)),
           make_not_null(&get<fluxes_tag>(subdomain_operator->buffer_)),
           make_not_null(&get<div_fluxes_tag>(subdomain_operator->buffer_)),
-          fluxes_computer, mesh, inv_jacobian,
+          fluxes_computer, mesh, det_jacobian, inv_jacobian,
           tuple_head<num_fluxes_args>(remaining_args),
           tuple_slice<num_fluxes_args, num_fluxes_args + num_sources_args>(
               remaining_args),
@@ -749,6 +789,7 @@ struct SubdomainOperator {
             domain::Tags::Direction<Dim>,
             ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>,
             ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>,
+            domain::Tags::SurfaceJacobian<Frame::Logical, Frame::Inertial>,
             ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
             ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>,
             overlaps_tag<domain::Tags::Extents<Dim>>,
@@ -781,6 +822,7 @@ struct SubdomainOperator {
         const Direction<Dim>& direction,
         const tnsr::i<DataVector, Dim>& face_normal,
         const Scalar<DataVector>& face_normal_magnitude,
+        const Scalar<DataVector>& surface_jacobian,
         const db::const_item_type<
             ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>& mortar_meshes,
         const db::const_item_type<
@@ -800,10 +842,11 @@ struct SubdomainOperator {
       const auto& result = get<sizeof...(RemainingArgs) - 2>(remaining_args);
       const auto& subdomain_operator =
           get<sizeof...(RemainingArgs) - 1>(remaining_args);
-      apply_subdomain_face<PrimalFields, AuxiliaryFields, SourcesComputer>(
+      apply_subdomain_face<PrimalFields, AuxiliaryFields, SourcesComputer,
+                           MassiveOperator>(
           result, element, mesh, fluxes_computer, numerical_fluxes_computer,
-          direction, face_normal, face_normal_magnitude, mortar_meshes,
-          mortar_sizes, all_overlap_extents, all_overlap_meshes,
+          direction, face_normal, face_normal_magnitude, surface_jacobian,
+          mortar_meshes, mortar_sizes, all_overlap_extents, all_overlap_meshes,
           all_overlap_element_maps, all_overlap_mortar_meshes,
           all_overlap_mortar_sizes, tuple_head<num_fluxes_args>(remaining_args),
           tuple_slice<num_fluxes_args, 2 * num_fluxes_args>(remaining_args),

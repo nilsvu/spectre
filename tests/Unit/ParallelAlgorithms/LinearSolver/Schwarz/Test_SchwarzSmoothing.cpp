@@ -13,7 +13,6 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
-#include "Elliptic/Actions/InitializeSystem.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeBoundaryConditions.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
@@ -165,6 +164,8 @@ struct Metavariables {
 
   static constexpr size_t volume_dim = Dim;
 
+  static constexpr bool massive_operator = true;
+
   // Choose a first-order Poisson system
   using system = Poisson::FirstOrderSystem<Dim, Poisson::Geometry::Euclidean>;
   using fields_tag = typename system::fields_tag;
@@ -189,13 +190,15 @@ struct Metavariables {
   using linear_solver_iteration_id =
       LinearSolver::Tags::IterationId<SchwarzSmoother>;
   using boundary_scheme = dg::FirstOrderScheme::FirstOrderScheme<
-      Dim, fields_tag, normal_dot_numerical_flux, linear_solver_iteration_id>;
+      Dim, fields_tag, normal_dot_numerical_flux, linear_solver_iteration_id,
+      massive_operator>;
 
   // Set up the Schwarz smoother
   using subdomain_operator = elliptic::dg::SubdomainOperator<
       volume_dim, primal_fields, auxiliary_fields, fluxes_computer_tag,
       tmpl::list<>, typename system::sources, tmpl::list<>,
-      normal_dot_numerical_flux, SchwarzSmoother, tmpl::list<>>;
+      normal_dot_numerical_flux, SchwarzSmoother, tmpl::list<>,
+      massive_operator>;
   using linear_solver =
       LinearSolver::Schwarz::Schwarz<Metavariables, fields_tag, SchwarzSmoother,
                                      subdomain_operator>;
@@ -204,7 +207,7 @@ struct Metavariables {
   // Set up observations
   using system_fields = db::get_variables_tags_list<fields_tag>;
   using observe_fields = tmpl::append<
-      system_fields,
+      system_fields, db::wrap_tags_in<::Tags::FixedSource, system_fields>,
       db::wrap_tags_in<LinearSolver::Tags::Residual, system_fields>,
       tmpl::list<LinearSolver::Schwarz::Tags::Weight<SchwarzSmoother>,
                  LinearSolver::Schwarz::Tags::SummedIntrudingOverlapWeights<
@@ -276,7 +279,8 @@ struct Metavariables {
           boundary_scheme, domain::Tags::InternalDirections<volume_dim>>,
       dg::Actions::SendDataForFluxes<boundary_scheme>,
       Actions::MutateApply<elliptic::FirstOrderOperator<
-          volume_dim, LinearSolver::Tags::OperatorAppliedTo, fields_tag>>,
+          volume_dim, LinearSolver::Tags::OperatorAppliedTo, fields_tag,
+          massive_operator>>,
       elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
           fields_tag, primal_fields>,
       dg::Actions::CollectDataForFluxes<
@@ -350,7 +354,7 @@ struct Metavariables {
 
 }  // namespace
 
-using metavariables = Metavariables<3>;
+using metavariables = Metavariables<2>;
 
 static const std::vector<void (*)()> charm_init_node_funcs{
     &setup_error_handling, &domain::creators::register_derived_with_charm,
