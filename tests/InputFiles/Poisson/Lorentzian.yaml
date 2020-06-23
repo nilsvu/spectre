@@ -1,0 +1,67 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+AnalyticSolution:
+  Lorentzian:
+
+DomainCreator:
+  Sphere:
+    InnerRadius: 0.5
+    OuterRadius: 2
+    InitialRefinement: 1
+    InitialGridPoints: [4, 4]
+    UseEquiangularMap: False
+
+NumericalFlux:
+  InternalPenalty:
+    PenaltyParameter: 1.
+
+Observers:
+  VolumeFileName: "Lorentzian3DVolume"
+  ReductionFileName: "Lorentzian3DReductions"
+
+LinearSolver:
+  GMRES:
+    ConvergenceCriteria:
+      MaxIterations: 10
+      AbsoluteResidual: 1.e-15
+      RelativeResidual: 1.e-5
+    MinResidualReduction: 0
+    Verbosity: Verbose
+
+  Preconditioner:
+    Multigrid:
+      Iterations: 1
+      Verbosity: Verbose
+
+    PreSmoother:
+      Schwarz:
+        MaxOverlap: 2
+        Iterations: 2
+        Verbosity: Quiet
+        SubdomainSolver:
+          ConvergenceCriteria:
+            MaxIterations: 500
+            RelativeResidual: 1.e-3
+            AbsoluteResidual: 1.e-10
+          Verbosity: Quiet
+          Restart: 0
+
+    PostSmoother:
+      Schwarz:
+        MaxOverlap: 2
+        Iterations: 2
+        Verbosity: Quiet
+        SubdomainSolver:
+          ConvergenceCriteria:
+            MaxIterations: 500
+            RelativeResidual: 1.e-3
+            AbsoluteResidual: 1.e-10
+          Verbosity: Quiet
+          Restart: 0
+
+EventsAndTriggers:
+  ? EveryNIterations:
+      N: 1
+  : - ObserveErrorNorms
+    - ObserveFields

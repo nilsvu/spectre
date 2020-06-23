@@ -223,6 +223,16 @@ struct KrylovSubspaceBasis : db::PrefixTag, db::SimpleTag {
   using tag = Tag;
 };
 
+template <typename OptionsGroup>
+struct ResidualMagnitudeHistory : db::SimpleTag {
+  using type = std::vector<double>;
+};
+
+template <typename OptionsGroup>
+struct RunPreconditioner : db::SimpleTag {
+  using type = bool;
+};
+
 /// Indicates the `Tag` is related to preconditioning of the linear solve
 template <typename Tag>
 struct Preconditioned : db::PrefixTag, db::SimpleTag {
@@ -316,6 +326,21 @@ struct Verbosity {
   static type default_value() noexcept { return ::Verbosity::Quiet; }
 };
 
+template <typename OptionsGroup>
+struct MinResidualReduction {
+  static constexpr OptionString help =
+      "Skip preconditioning while unpreconditioned iterations reduce the "
+      "residual by this factor or further. '1' means any residual reduction is "
+      "sufficient, i.e. never run the preconditioner. '0' means no residual "
+      "reduction is sufficient, i.e. always run the preconditioner. A "
+      "reasonable value of e.g. '0.5' means the preconditioning is skipped "
+      "while unpreconditioned iterations at least halve the residual.";
+  using type = double;
+  using group = OptionsGroup;
+  static double upper_bound() noexcept { return 1.; }
+  static double lower_bound() noexcept { return 0.; }
+};
+
 }  // namespace OptionTags
 
 namespace Tags {
@@ -384,6 +409,21 @@ struct Verbosity : db::SimpleTag {
   static ::Verbosity create_from_options(
       const ::Verbosity& verbosity) noexcept {
     return verbosity;
+  }
+};
+
+template <typename OptionsGroup>
+struct MinResidualReduction : db::SimpleTag {
+  static std::string name() noexcept {
+    return "MinResidualReduction(" + option_name<OptionsGroup>() + ")";
+  }
+  using type = double;
+  using option_tags =
+      tmpl::list<LinearSolver::OptionTags::MinResidualReduction<OptionsGroup>>;
+
+  static constexpr bool pass_metavariables = false;
+  static double create_from_options(const double value) noexcept {
+    return value;
   }
 };
 }  // namespace Tags

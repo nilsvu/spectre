@@ -376,6 +376,8 @@ struct Metavariables {
   struct dummylabel {};
   struct dummylabel2 {};
   struct dummylabel3 {};
+  struct dummylabel4 {};
+  struct dummylabel5 {};
   using register_actions = tmpl::list<
       ::Actions::If<
           LinearSolver::multigrid::Tags::IsFinestLevel,
@@ -398,41 +400,48 @@ struct Metavariables {
       ::Actions::If<LinearSolver::multigrid::Tags::IsFinestLevel,
                     tmpl::list<LinearSolver::Actions::TerminateIfConverged<
                                    typename linear_solver::options_group>,
-                               typename linear_solver::prepare_step
-                               //  ,build_linear_operator_actions
-                               >,
+                               typename linear_solver::prepare_step,
+                               ::Actions::Unless<
+                                   LinearSolver::Tags::RunPreconditioner<
+                                       typename linear_solver::options_group>,
+                                   build_linear_operator_actions, dummylabel5>>,
                     PrepareLinearSolverStepLabel>,
-      typename preconditioner::prepare_solve,
-      // If preconditioning is disabled, make it the identity operation
       ::Actions::If<
-          LinearSolver::Tags::HasConverged<
-              typename preconditioner::options_group>,
-          tmpl::list<::Actions::Copy<typename preconditioner::source_tag,
-                                     typename preconditioner::fields_tag>,
-                     build_linear_operator_actions>,
-          dummylabel3>,
-      // Run preconditioner
-      ::Actions::RepeatUntil<
-          LinearSolver::Tags::HasConverged<
-              typename preconditioner::options_group>,
+          LinearSolver::Tags::RunPreconditioner<
+              typename linear_solver::options_group>,
           tmpl::list<
-              // typename linear_solver::prepare_step,
-              // build_linear_operator_actions,
-              // typename linear_solver::perform_step//,
-              typename preconditioner::prepare_step_down,
-              smooth_actions<pre_smoother,
-                             LinearSolver::multigrid::VcycleDownLabel>,
-              build_linear_operator_actions,
-              typename preconditioner::perform_step_down,
-              typename preconditioner::prepare_step_up,
-              smooth_actions<post_smoother,
-                             LinearSolver::multigrid::VcycleUpLabel>,
-              build_linear_operator_actions,
-              typename preconditioner::perform_step_up
-              //  ,Actions::RunEventsAndTriggers
-              >  //,
-          ,
-          PreconditioningLabel>,
+              typename preconditioner::prepare_solve,
+              // If preconditioning is disabled, make it the identity operation
+              ::Actions::If<LinearSolver::Tags::HasConverged<
+                                typename preconditioner::options_group>,
+                            tmpl::list<::Actions::Copy<
+                                           typename preconditioner::source_tag,
+                                           typename preconditioner::fields_tag>,
+                                       build_linear_operator_actions>,
+                            dummylabel3>,
+              // Run preconditioner
+              ::Actions::RepeatUntil<
+                  LinearSolver::Tags::HasConverged<
+                      typename preconditioner::options_group>,
+                  tmpl::list<
+                      // typename linear_solver::prepare_step,
+                      // build_linear_operator_actions,
+                      // typename linear_solver::perform_step//,
+                      typename preconditioner::prepare_step_down,
+                      smooth_actions<pre_smoother,
+                                     LinearSolver::multigrid::VcycleDownLabel>,
+                      build_linear_operator_actions,
+                      typename preconditioner::perform_step_down,
+                      typename preconditioner::prepare_step_up,
+                      smooth_actions<post_smoother,
+                                     LinearSolver::multigrid::VcycleUpLabel>,
+                      build_linear_operator_actions,
+                      typename preconditioner::perform_step_up
+                      //  ,Actions::RunEventsAndTriggers
+                      >  //,
+                  ,
+                  PreconditioningLabel>>,
+          dummylabel4>,
       ::Actions::If<LinearSolver::multigrid::Tags::IsFinestLevel,
                     tmpl::list<
                         // build_linear_operator_actions,

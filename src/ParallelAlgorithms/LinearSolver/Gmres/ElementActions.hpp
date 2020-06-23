@@ -62,13 +62,15 @@ struct PrepareSolve {
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>, operand_tag,
-               initial_fields_tag, basis_history_tag>(
+               initial_fields_tag, basis_history_tag,
+               LinearSolver::Tags::ResidualMagnitudeHistory<OptionsGroup>>(
         make_not_null(&box),
         [](const gsl::not_null<size_t*> iteration_id,
            const gsl::not_null<db::item_type<operand_tag>*> operand,
            const gsl::not_null<db::item_type<initial_fields_tag>*>
                initial_fields,
            const gsl::not_null<db::item_type<basis_history_tag>*> basis_history,
+           const auto residual_magnitude_history,
            const db::item_type<source_tag>& source,
            const db::item_type<operator_applied_to_fields_tag>&
                operator_applied_to_fields,
@@ -77,6 +79,7 @@ struct PrepareSolve {
           *operand = source - operator_applied_to_fields;
           *initial_fields = fields;
           *basis_history = db::item_type<basis_history_tag>{};
+          *residual_magnitude_history = std::vector<double>{};
         },
         get<source_tag>(box), get<operator_applied_to_fields_tag>(box),
         get<fields_tag>(box));
@@ -178,16 +181,19 @@ struct NormalizeInitialOperand {
       }
     }
     db::mutate<operand_tag, basis_history_tag,
+               LinearSolver::Tags::ResidualMagnitudeHistory<OptionsGroup>,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
         [residual_magnitude, &has_converged](
             const gsl::not_null<db::item_type<operand_tag>*> operand,
             const gsl::not_null<db::item_type<basis_history_tag>*>
                 basis_history,
+            const auto residual_magnitude_history,
             const gsl::not_null<Convergence::HasConverged*>
                 local_has_converged) noexcept {
           *operand /= residual_magnitude;
           basis_history->push_back(*operand);
+          residual_magnitude_history->push_back(residual_magnitude);
           *local_has_converged = has_converged;
         });
 
@@ -199,6 +205,9 @@ struct NormalizeInitialOperand {
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned>
 struct PrepareStep {
+  using const_global_cache_tags =
+      tmpl::list<LinearSolver::Tags::MinResidualReduction<OptionsGroup>>;
+
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
@@ -223,22 +232,50 @@ struct PrepareStep {
     using preconditioned_operand_tag =
         db::add_tag_prefix<LinearSolver::Tags::Preconditioned, operand_tag>;
 
+    db::mutate<LinearSolver::Tags::RunPreconditioner<OptionsGroup>>(
+        make_not_null(&box),
+        [](const auto run_preconditioner,
+           const auto& residual_magnitude_history,
+           const auto& min_residual_reduction) noexcept {
+          const size_t num_residuals = residual_magnitude_history.size();
+          if (num_residuals < 2) {
+            // Don't precondition the initial step. First try to take an
+            // unpreconditioned step to see if it reduces the residual
+            // sufficiently
+            *run_preconditioner = false;
+          } else {
+            *run_preconditioner =
+                (residual_magnitude_history[num_residuals - 1] /
+                 residual_magnitude_history[num_residuals - 2]) >
+                min_residual_reduction;
+          }
+        },
+        db::get<LinearSolver::Tags::ResidualMagnitudeHistory<OptionsGroup>>(
+            box),
+        db::get<LinearSolver::Tags::MinResidualReduction<OptionsGroup>>(box));
+
     db::mutate<preconditioned_operand_tag>(
         make_not_null(&box),
         [](const gsl::not_null<db::item_type<preconditioned_operand_tag>*>
                preconditioned_operand,
-           const db::const_item_type<operand_tag>& operand) noexcept {
-          // Start the preconditioner at zero because we have no reason to
-          // expect the remaining residual to have a particular form.
-          // Another possibility would be to start the preconditioner with an
-          // initial guess equal to its source, so not running the
-          // preconditioner at all means it is the identity, but that approach
-          // appears to yield worse results.
-          *preconditioned_operand =
-              make_with_value<db::item_type<preconditioned_operand_tag>>(
-                  operand, 0.);
+           const db::const_item_type<operand_tag>& operand,
+           const bool run_preconditioner) noexcept {
+          if (run_preconditioner) {
+            // Start the preconditioner at zero because we have no reason to
+            // expect the remaining residual to have a particular form.
+            // Another possibility would be to start the preconditioner with an
+            // initial guess equal to its source, so not running the
+            // preconditioner at all means it is the identity, but that approach
+            // appears to yield worse results.
+            *preconditioned_operand =
+                make_with_value<db::item_type<preconditioned_operand_tag>>(
+                    operand, 0.);
+          } else {
+            *preconditioned_operand = operand;
+          }
         },
-        get<operand_tag>(box));
+        get<operand_tag>(box),
+        db::get<LinearSolver::Tags::RunPreconditioner<OptionsGroup>>(box));
   }
 
   template <typename DbTagsList>
@@ -527,7 +564,8 @@ struct NormalizeOperandAndUpdateField {
     }
     db::mutate<operand_tag, basis_history_tag, fields_tag,
                LinearSolver::Tags::IterationId<OptionsGroup>,
-               LinearSolver::Tags::HasConverged<OptionsGroup>>(
+               LinearSolver::Tags::HasConverged<OptionsGroup>,
+               LinearSolver::Tags::ResidualMagnitudeHistory<OptionsGroup>>(
         make_not_null(&box),
         [normalization, &minres, &has_converged](
             const gsl::not_null<db::item_type<operand_tag>*> operand,
@@ -536,6 +574,7 @@ struct NormalizeOperandAndUpdateField {
             const gsl::not_null<db::item_type<fields_tag>*> field,
             const gsl::not_null<size_t*> iteration_id,
             const gsl::not_null<Convergence::HasConverged*> local_has_converged,
+            const auto residual_magnitude_history,
             const db::const_item_type<initial_fields_tag>& initial_field,
             const db::item_type<preconditioned_basis_history_tag>&
                 preconditioned_basis_history) noexcept {
@@ -553,6 +592,8 @@ struct NormalizeOperandAndUpdateField {
           }
           ++(*iteration_id);
           *local_has_converged = has_converged;
+          residual_magnitude_history->push_back(
+              has_converged.residual_magnitude());
         },
         get<initial_fields_tag>(box),
         get<preconditioned_basis_history_tag>(box));

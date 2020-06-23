@@ -56,11 +56,13 @@ struct InitializeElement {
                     const ParallelComponent* const /*meta*/) noexcept {
     auto initial_box = ::Initialization::merge_into_databox<
         InitializeElement,
-        db::AddSimpleTags<LinearSolver::Tags::IterationId<OptionsGroup>,
-                          initial_fields_tag, operator_applied_to_fields_tag,
-                          operand_tag, operator_applied_to_operand_tag,
-                          orthogonalization_iteration_id_tag, basis_history_tag,
-                          LinearSolver::Tags::HasConverged<OptionsGroup>>>(
+        db::AddSimpleTags<
+            LinearSolver::Tags::IterationId<OptionsGroup>, initial_fields_tag,
+            operator_applied_to_fields_tag, operand_tag,
+            operator_applied_to_operand_tag, orthogonalization_iteration_id_tag,
+            basis_history_tag, LinearSolver::Tags::HasConverged<OptionsGroup>,
+            LinearSolver::Tags::ResidualMagnitudeHistory<OptionsGroup>,
+            LinearSolver::Tags::RunPreconditioner<OptionsGroup>>>(
         std::move(box),
         // The `PrepareSolve` action populates these tags with initial values,
         // except for `operator_applied_to_fields_tag` which is expected to be
@@ -71,7 +73,7 @@ struct InitializeElement {
         db::item_type<operand_tag>{},
         db::item_type<operator_applied_to_operand_tag>{},
         std::numeric_limits<size_t>::max(), db::item_type<basis_history_tag>{},
-        Convergence::HasConverged{});
+        Convergence::HasConverged{}, std::vector<double>{}, true);
 
     auto preconditioning_box = initialize_preconditioning(
         std::move(initial_box), std::bool_constant<Preconditioned>{});
