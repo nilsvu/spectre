@@ -80,7 +80,7 @@ namespace LinearSolver::gmres {
  * linear operator \f$A\f$ is symmetric.
  */
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup,
-          bool Preconditioned>
+          bool Preconditioned, typename ArraySectionIdTag = void>
 struct Gmres {
   using fields_tag = FieldsTag;
   using options_group = OptionsGroup;
@@ -115,16 +115,19 @@ struct Gmres {
 
   template <typename ApplyOperatorActions, typename Label = OptionsGroup>
   using solve = tmpl::list<
-      detail::PrepareSolve<FieldsTag, OptionsGroup, Preconditioned, Label>,
+      detail::PrepareSolve<FieldsTag, OptionsGroup, Preconditioned, Label,
+                           ArraySectionIdTag>,
       detail::NormalizeInitialOperand<FieldsTag, OptionsGroup, Preconditioned,
-                                      Label>,
-      detail::PrepareStep<FieldsTag, OptionsGroup, Preconditioned, Label>,
+                                      Label, ArraySectionIdTag>,
+      detail::PrepareStep<FieldsTag, OptionsGroup, Preconditioned, Label,
+                          ArraySectionIdTag>,
       ApplyOperatorActions,
-      detail::PerformStep<FieldsTag, OptionsGroup, Preconditioned, Label>,
+      detail::PerformStep<FieldsTag, OptionsGroup, Preconditioned, Label,
+                          ArraySectionIdTag>,
       detail::OrthogonalizeOperand<FieldsTag, OptionsGroup, Preconditioned,
-                                   Label>,
-      detail::NormalizeOperandAndUpdateField<FieldsTag, OptionsGroup,
-                                             Preconditioned, Label>>;
+                                   Label, ArraySectionIdTag>,
+      detail::NormalizeOperandAndUpdateField<
+          FieldsTag, OptionsGroup, Preconditioned, Label, ArraySectionIdTag>>;
 };
 
 }  // namespace LinearSolver::gmres
