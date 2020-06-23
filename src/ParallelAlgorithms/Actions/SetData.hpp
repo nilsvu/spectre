@@ -55,4 +55,25 @@ struct SetData<tmpl::list<Tags...>> {
 };
 /// \endcond
 
+template <typename SourceTag, typename TargetTag>
+struct Copy {
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&> apply(
+      db::DataBox<DbTagsList>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    db::mutate<TargetTag>(
+        make_not_null(&box),
+        [](const auto target, const auto& source) noexcept {
+          *target = source;
+        },
+        db::get<SourceTag>(box));
+    return {std::move(box)};
+  }
+};
+
 }  // namespace Actions
