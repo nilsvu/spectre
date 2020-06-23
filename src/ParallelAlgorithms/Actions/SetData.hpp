@@ -45,14 +45,33 @@ struct SetData<tmpl::list<Tags...>> {
                     tuples::TaggedTuple<Tags...> data) noexcept {
     tmpl::for_each<tmpl::list<Tags...>>([&box, &data](auto tag_v) noexcept {
       using tag = tmpl::type_from<decltype(tag_v)>;
-      db::mutate<tag>(
-          make_not_null(&box), [&data](const gsl::not_null<typename tag::type*>
-                                           value) noexcept {
-            *value = std::move(tuples::get<tag>(data));
-          });
+      db::mutate<tag>(make_not_null(&box), [&data](const auto value) noexcept {
+        *value = std::move(tuples::get<tag>(data));
+      });
     });
   }
 };
 /// \endcond
+
+template <typename SourceTag, typename TargetTag>
+struct Copy {
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&> apply(
+      db::DataBox<DbTagsList>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
+      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    db::mutate<TargetTag>(
+        make_not_null(&box),
+        [](const auto target, const auto& source) noexcept {
+          *target = source;
+        },
+        db::get<SourceTag>(box));
+    return {std::move(box)};
+  }
+};
 
 }  // namespace Actions
