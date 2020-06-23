@@ -74,7 +74,7 @@ namespace LinearSolver::gmres {
  * linear operator \f$A\f$ is symmetric.
  */
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup,
-          bool Preconditioned>
+          bool Preconditioned, typename ArraySectionTag = void>
 struct Gmres {
   using fields_tag = FieldsTag;
   using options_group = OptionsGroup;
@@ -180,8 +180,8 @@ struct Gmres {
    *
    * \see `initialize_element`
    */
-  using prepare_solve =
-      detail::PrepareSolve<FieldsTag, OptionsGroup, Preconditioned>;
+  using prepare_solve = detail::PrepareSolve<FieldsTag, OptionsGroup,
+                                             Preconditioned, ArraySectionTag>;
 
   // Compile-time interface for observers
   using observed_reduction_data_tags = observers::make_reduction_data_tags<
@@ -226,8 +226,8 @@ struct Gmres {
    *   * `basis_history_tag`
    *   * `LinearSolver::Tags::HasConverged`
    */
-  using perform_step =
-      detail::PerformStep<FieldsTag, OptionsGroup, Preconditioned>;
+  using perform_step = detail::PerformStep<FieldsTag, OptionsGroup,
+                                           Preconditioned, ArraySectionTag>;
 };
 
 }  // namespace LinearSolver::gmres

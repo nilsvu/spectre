@@ -21,6 +21,8 @@
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/Requires.hpp"
 
+#include "ParallelAlgorithms/LinearSolver/Multigrid/Tags.hpp"
+
 /// \cond
 namespace tuples {
 template <typename...>
@@ -34,7 +36,8 @@ struct ResidualMonitor;
 
 namespace LinearSolver::gmres::detail {
 
-template <typename FieldsTag, typename OptionsGroup, bool Preconditioned>
+template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
+          typename ArraySectionTag>
 struct PrepareSolve {
  private:
   using fields_tag = FieldsTag;
@@ -78,14 +81,37 @@ struct PrepareSolve {
         get<source_tag>(box), get<operator_applied_to_fields_tag>(box),
         get<fields_tag>(box));
 
-    Parallel::contribute_to_reduction<InitializeResidualMagnitude<
-        FieldsTag, OptionsGroup, Preconditioned, ParallelComponent>>(
-        Parallel::ReductionData<
-            Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>{
-            inner_product(get<operand_tag>(box), get<operand_tag>(box))},
-        Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
-        Parallel::get_parallel_component<
-            ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+    if constexpr (std::is_same_v<ArraySectionTag, void>) {
+      Parallel::contribute_to_reduction<
+          InitializeResidualMagnitude<FieldsTag, OptionsGroup, Preconditioned,
+                                      ArraySectionTag, ParallelComponent>>(
+          Parallel::ReductionData<
+              Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>{
+              inner_product(get<operand_tag>(box), get<operand_tag>(box))},
+          Parallel::get_parallel_component<ParallelComponent>(
+              cache)[array_index],
+          Parallel::get_parallel_component<
+              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+    } else {
+      db::mutate<ArraySectionTag>(
+          make_not_null(&box),
+          [&](const auto section, const auto& operand) {
+            Parallel::contribute_to_section_reduction<
+                ParallelComponent, InitializeResidualMagnitude<
+                                       FieldsTag, OptionsGroup, Preconditioned,
+                                       ArraySectionTag, ParallelComponent>>(
+                Parallel::ReductionData<Parallel::ReductionDatum<
+                    double, funcl::Plus<>, funcl::Sqrt<>>>{
+                    inner_product(operand, operand)},
+                Parallel::get_parallel_component<ParallelComponent>(
+                    cache)[array_index],
+                Parallel::get_parallel_component<
+                    ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(
+                    cache),
+                *section, 0);  // TODO: handle section id
+          },
+          get<operand_tag>(box));
+    }
 
     prepare_preconditioning(box, std::bool_constant<Preconditioned>{});
 
@@ -122,7 +148,8 @@ struct PrepareSolve {
       std::false_type /* preconditioning_disabled */) noexcept {}
 };
 
-template <typename FieldsTag, typename OptionsGroup, bool Preconditioned>
+template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
+          typename ArraySectionTag>
 struct NormalizeInitialOperand {
  private:
   using fields_tag = FieldsTag;
@@ -145,6 +172,11 @@ struct NormalizeInitialOperand {
                     const ArrayIndex& array_index,
                     const double residual_magnitude,
                     const Convergence::HasConverged& has_converged) noexcept {
+    if constexpr (not std::is_same_v<ArraySectionTag, void>) {
+      if (db::get<LinearSolver::multigrid::Tags::MultigridLevel>(box) != 0) {
+        return;
+      }
+    }
     db::mutate<operand_tag, basis_history_tag,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
@@ -215,7 +247,8 @@ struct PrepareStep {
       std::false_type /* preconditioning_disabled */) noexcept {}
 };
 
-template <typename FieldsTag, typename OptionsGroup, bool Preconditioned>
+template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
+          typename ArraySectionTag>
 struct PerformStep {
  private:
   using fields_tag = FieldsTag;
@@ -259,15 +292,38 @@ struct PerformStep {
         },
         get<operator_tag>(box));
 
-    Parallel::contribute_to_reduction<StoreOrthogonalization<
-        FieldsTag, OptionsGroup, Preconditioned, ParallelComponent>>(
-        Parallel::ReductionData<
-            Parallel::ReductionDatum<double, funcl::Plus<>>>{inner_product(
-            get<basis_history_tag>(box)[0], get<operand_tag>(box))},
-        Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
-        Parallel::get_parallel_component<
-            ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
-
+    if constexpr (std::is_same_v<ArraySectionTag, void>) {
+      Parallel::contribute_to_reduction<
+          StoreOrthogonalization<FieldsTag, OptionsGroup, Preconditioned,
+                                 ArraySectionTag, ParallelComponent>>(
+          Parallel::ReductionData<
+              Parallel::ReductionDatum<double, funcl::Plus<>>>{inner_product(
+              get<basis_history_tag>(box)[0], get<operand_tag>(box))},
+          Parallel::get_parallel_component<ParallelComponent>(
+              cache)[array_index],
+          Parallel::get_parallel_component<
+              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+    } else {
+      db::mutate<ArraySectionTag>(
+          make_not_null(&box),
+          [&](const auto section, const auto& basis_history,
+              const auto& operand) {
+            Parallel::contribute_to_section_reduction<
+                ParallelComponent,
+                StoreOrthogonalization<FieldsTag, OptionsGroup, Preconditioned,
+                                       ArraySectionTag, ParallelComponent>>(
+                Parallel::ReductionData<
+                    Parallel::ReductionDatum<double, funcl::Plus<>>>{
+                    inner_product(basis_history[0], operand)},
+                Parallel::get_parallel_component<ParallelComponent>(
+                    cache)[array_index],
+                Parallel::get_parallel_component<
+                    ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(
+                    cache),
+                *section, 0);
+          },
+          get<basis_history_tag>(box), get<operand_tag>(box));
+    }
     // Terminate algorithm for now. The `ResidualMonitor` will receive the
     // reduction that is performed above and then broadcast to the following
     // action, which is responsible for restarting the algorithm.
@@ -299,7 +355,8 @@ struct PerformStep {
       std::false_type /* preconditioning_disabled */) noexcept {}
 };
 
-template <typename FieldsTag, typename OptionsGroup, bool Preconditioned>
+template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
+          typename ArraySectionTag>
 struct OrthogonalizeOperand {
  private:
   using fields_tag = FieldsTag;
@@ -327,6 +384,11 @@ struct OrthogonalizeOperand {
                     Parallel::ConstGlobalCache<Metavariables>& cache,
                     const ArrayIndex& array_index,
                     const double orthogonalization) noexcept {
+    if constexpr (not std::is_same_v<ArraySectionTag, void>) {
+      if (db::get<LinearSolver::multigrid::Tags::MultigridLevel>(box) != 0) {
+        return;
+      }
+    }
     db::mutate<operand_tag, orthogonalization_iteration_id_tag>(
         make_not_null(&box),
         [orthogonalization](
@@ -346,32 +408,85 @@ struct OrthogonalizeOperand {
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
 
     if (next_orthogonalization_iteration_id <= iteration_id) {
-      Parallel::contribute_to_reduction<StoreOrthogonalization<
-          FieldsTag, OptionsGroup, Preconditioned, ParallelComponent>>(
-          Parallel::ReductionData<
-              Parallel::ReductionDatum<double, funcl::Plus<>>>{
-              inner_product(gsl::at(get<basis_history_tag>(box),
-                                    next_orthogonalization_iteration_id),
-                            get<operand_tag>(box))},
-          Parallel::get_parallel_component<ParallelComponent>(
-              cache)[array_index],
-          Parallel::get_parallel_component<
-              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+      if constexpr (std::is_same_v<ArraySectionTag, void>) {
+        Parallel::contribute_to_reduction<
+            StoreOrthogonalization<FieldsTag, OptionsGroup, Preconditioned,
+                                   ArraySectionTag, ParallelComponent>>(
+            Parallel::ReductionData<
+                Parallel::ReductionDatum<double, funcl::Plus<>>>{
+                inner_product(gsl::at(get<basis_history_tag>(box),
+                                      next_orthogonalization_iteration_id),
+                              get<operand_tag>(box))},
+            Parallel::get_parallel_component<ParallelComponent>(
+                cache)[array_index],
+            Parallel::get_parallel_component<
+                ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(
+                cache));
+      } else {
+        db::mutate<ArraySectionTag>(
+            make_not_null(&box),
+            [&](const auto section, const auto& basis_history,
+                const auto& operand) {
+              Parallel::contribute_to_section_reduction<
+                  ParallelComponent,
+                  StoreOrthogonalization<FieldsTag, OptionsGroup,
+                                         Preconditioned, ArraySectionTag,
+                                         ParallelComponent>>(
+                  Parallel::ReductionData<
+                      Parallel::ReductionDatum<double, funcl::Plus<>>>{
+                      inner_product(
+                          gsl::at(basis_history,
+                                  next_orthogonalization_iteration_id),
+                          operand)},
+                  Parallel::get_parallel_component<ParallelComponent>(
+                      cache)[array_index],
+                  Parallel::get_parallel_component<
+                      ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(
+                      cache),
+                  *section, 0);
+            },
+            get<basis_history_tag>(box), get<operand_tag>(box));
+      }
     } else {
-      Parallel::contribute_to_reduction<StoreFinalOrthogonalization<
-          FieldsTag, OptionsGroup, Preconditioned, ParallelComponent>>(
-          Parallel::ReductionData<
-              Parallel::ReductionDatum<double, funcl::Plus<>>>{
-              inner_product(get<operand_tag>(box), get<operand_tag>(box))},
-          Parallel::get_parallel_component<ParallelComponent>(
-              cache)[array_index],
-          Parallel::get_parallel_component<
-              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+      if constexpr (std::is_same_v<ArraySectionTag, void>) {
+        Parallel::contribute_to_reduction<
+            StoreFinalOrthogonalization<FieldsTag, OptionsGroup, Preconditioned,
+                                        ArraySectionTag, ParallelComponent>>(
+            Parallel::ReductionData<
+                Parallel::ReductionDatum<double, funcl::Plus<>>>{
+                inner_product(get<operand_tag>(box), get<operand_tag>(box))},
+            Parallel::get_parallel_component<ParallelComponent>(
+                cache)[array_index],
+            Parallel::get_parallel_component<
+                ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(
+                cache));
+      } else {
+        db::mutate<ArraySectionTag>(
+            make_not_null(&box),
+            [&](const auto section, const auto& operand) {
+              Parallel::contribute_to_section_reduction<
+                  ParallelComponent,
+                  StoreFinalOrthogonalization<FieldsTag, OptionsGroup,
+                                              Preconditioned, ArraySectionTag,
+                                              ParallelComponent>>(
+                  Parallel::ReductionData<
+                      Parallel::ReductionDatum<double, funcl::Plus<>>>{
+                      inner_product(operand, operand)},
+                  Parallel::get_parallel_component<ParallelComponent>(
+                      cache)[array_index],
+                  Parallel::get_parallel_component<
+                      ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(
+                      cache),
+                  *section, 0);
+            },
+            get<operand_tag>(box));
+      }
     }
   }
 };
 
-template <typename FieldsTag, typename OptionsGroup, bool Preconditioned>
+template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
+          typename ArraySectionTag>
 struct NormalizeOperandAndUpdateField {
  private:
   using fields_tag = FieldsTag;
@@ -405,6 +520,11 @@ struct NormalizeOperandAndUpdateField {
                     const ArrayIndex& array_index, const double normalization,
                     const DenseVector<double>& minres,
                     const Convergence::HasConverged& has_converged) noexcept {
+    if constexpr (not std::is_same_v<ArraySectionTag, void>) {
+      if (db::get<LinearSolver::multigrid::Tags::MultigridLevel>(box) != 0) {
+        return;
+      }
+    }
     db::mutate<operand_tag, basis_history_tag, fields_tag,
                LinearSolver::Tags::IterationId<OptionsGroup>,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
