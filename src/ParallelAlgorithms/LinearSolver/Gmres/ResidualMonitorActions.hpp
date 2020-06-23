@@ -26,11 +26,14 @@ template <typename...>
 class TaggedTuple;
 }  // namespace tuples
 namespace LinearSolver::gmres::detail {
-template <typename FieldsTag, typename OptionsGroup, bool Preconditioned>
+template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
+          typename ArraySectionTag>
 struct NormalizeInitialOperand;
-template <typename FieldsTag, typename OptionsGroup, bool Preconditioned>
+template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
+          typename ArraySectionTag>
 struct OrthogonalizeOperand;
-template <typename FieldsTag, typename OptionsGroup, bool Preconditioned>
+template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
+          typename ArraySectionTag>
 struct NormalizeOperandAndUpdateField;
 }  // namespace LinearSolver::gmres::detail
 /// \endcond
@@ -38,7 +41,7 @@ struct NormalizeOperandAndUpdateField;
 namespace LinearSolver::gmres::detail {
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename BroadcastTarget>
+          typename ArraySectionTag, typename BroadcastTarget>
 struct InitializeResidualMagnitude {
  private:
   using fields_tag = FieldsTag;
@@ -108,15 +111,15 @@ struct InitializeResidualMagnitude {
                        has_converged);
     }
 
-    Parallel::simple_action<
-        NormalizeInitialOperand<FieldsTag, OptionsGroup, Preconditioned>>(
+    Parallel::simple_action<NormalizeInitialOperand<
+        FieldsTag, OptionsGroup, Preconditioned, ArraySectionTag>>(
         Parallel::get_parallel_component<BroadcastTarget>(cache),
         residual_magnitude, has_converged);
   }
 };
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename BroadcastTarget>
+          typename ArraySectionTag, typename BroadcastTarget>
 struct StoreOrthogonalization {
  private:
   using fields_tag = FieldsTag;
@@ -151,15 +154,15 @@ struct StoreOrthogonalization {
         },
         get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
 
-    Parallel::simple_action<
-        OrthogonalizeOperand<FieldsTag, OptionsGroup, Preconditioned>>(
+    Parallel::simple_action<OrthogonalizeOperand<
+        FieldsTag, OptionsGroup, Preconditioned, ArraySectionTag>>(
         Parallel::get_parallel_component<BroadcastTarget>(cache),
         orthogonalization);
   }
 };
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename BroadcastTarget>
+          typename ArraySectionTag, typename BroadcastTarget>
 struct StoreFinalOrthogonalization {
  private:
   using fields_tag = FieldsTag;
@@ -275,7 +278,7 @@ struct StoreFinalOrthogonalization {
     }
 
     Parallel::simple_action<NormalizeOperandAndUpdateField<
-        FieldsTag, OptionsGroup, Preconditioned>>(
+        FieldsTag, OptionsGroup, Preconditioned, ArraySectionTag>>(
         Parallel::get_parallel_component<BroadcastTarget>(cache),
         sqrt(orthogonalization), minres, has_converged);
   }
