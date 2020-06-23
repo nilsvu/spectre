@@ -61,11 +61,8 @@ struct PrepareSolve {
     db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>, operand_tag,
                initial_fields_tag, basis_history_tag>(
         make_not_null(&box),
-        [](const gsl::not_null<size_t*> iteration_id,
-           const gsl::not_null<db::item_type<operand_tag>*> operand,
-           const gsl::not_null<db::item_type<initial_fields_tag>*>
-               initial_fields,
-           const gsl::not_null<db::item_type<basis_history_tag>*> basis_history,
+        [](const gsl::not_null<size_t*> iteration_id, const auto operand,
+           const auto initial_fields, const auto basis_history,
            const auto& source, const auto& operator_applied_to_fields,
            const auto& fields) noexcept {
           *iteration_id = 0;
@@ -93,9 +90,7 @@ struct PrepareSolve {
 
       db::mutate<preconditioned_basis_history_tag>(
           make_not_null(&box),
-          [](const gsl::not_null<
-              db::item_type<preconditioned_basis_history_tag>*>
-                 preconditioned_basis_history) noexcept {
+          [](const auto preconditioned_basis_history) noexcept {
             *preconditioned_basis_history =
                 db::item_type<preconditioned_basis_history_tag>{};
           });
@@ -135,13 +130,10 @@ struct NormalizeInitialOperand {
                     const Convergence::HasConverged& has_converged) noexcept {
     db::mutate<operand_tag, basis_history_tag,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
-        make_not_null(&box),
-        [residual_magnitude, &has_converged](
-            const gsl::not_null<db::item_type<operand_tag>*> operand,
-            const gsl::not_null<db::item_type<basis_history_tag>*>
-                basis_history,
-            const gsl::not_null<Convergence::HasConverged*>
-                local_has_converged) noexcept {
+        make_not_null(&box), [residual_magnitude, &has_converged](
+                                 const auto operand, const auto basis_history,
+                                 const gsl::not_null<Convergence::HasConverged*>
+                                     local_has_converged) noexcept {
           *operand /= residual_magnitude;
           basis_history->push_back(*operand);
           *local_has_converged = has_converged;
@@ -181,9 +173,7 @@ struct PrepareStep {
 
     db::mutate<preconditioned_operand_tag>(
         make_not_null(&box),
-        [](const gsl::not_null<db::item_type<preconditioned_operand_tag>*>
-               preconditioned_operand,
-           const auto& operand) noexcept {
+        [](const auto preconditioned_operand, const auto& operand) noexcept {
           // Start the preconditioner at zero because we have no reason to
           // expect the remaining residual to have a particular form.
           // Another possibility would be to start the preconditioner with an
@@ -239,7 +229,7 @@ struct PerformStep {
 
     db::mutate<operand_tag, orthogonalization_iteration_id_tag>(
         make_not_null(&box),
-        [](const gsl::not_null<db::item_type<operand_tag>*> operand,
+        [](const auto operand,
            const gsl::not_null<size_t*> orthogonalization_iteration_id,
            const auto& operator_action) noexcept {
           *operand = db::item_type<operand_tag>(operator_action);
@@ -272,8 +262,7 @@ struct PerformStep {
 
     db::mutate<preconditioned_basis_history_tag>(
         make_not_null(&box),
-        [](const gsl::not_null<db::item_type<preconditioned_basis_history_tag>*>
-               preconditioned_basis_history,
+        [](const auto preconditioned_basis_history,
            const auto& preconditioned_operand) noexcept {
           preconditioned_basis_history->push_back(preconditioned_operand);
         },
@@ -317,7 +306,7 @@ struct OrthogonalizeOperand {
     db::mutate<operand_tag, orthogonalization_iteration_id_tag>(
         make_not_null(&box),
         [orthogonalization](
-            const gsl::not_null<db::item_type<operand_tag>*> operand,
+            const auto operand,
             const gsl::not_null<size_t*> orthogonalization_iteration_id,
             const auto& basis_history) noexcept {
           *operand -= orthogonalization *
@@ -396,10 +385,7 @@ struct NormalizeOperandAndUpdateField {
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
         [normalization, &minres, &has_converged](
-            const gsl::not_null<db::item_type<operand_tag>*> operand,
-            const gsl::not_null<db::item_type<basis_history_tag>*>
-                basis_history,
-            const gsl::not_null<db::item_type<fields_tag>*> field,
+            const auto operand, const auto basis_history, const auto field,
             const gsl::not_null<size_t*> iteration_id,
             const gsl::not_null<Convergence::HasConverged*> local_has_converged,
             const auto& initial_field,

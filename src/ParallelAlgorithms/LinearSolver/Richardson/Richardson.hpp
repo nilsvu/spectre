@@ -51,8 +51,8 @@ struct UpdateFields {
     // Update the solution fields according to the Richardson scheme
     db::mutate<FieldsTag>(
         make_not_null(&box),
-        [](const gsl::not_null<db::item_type<FieldsTag>*> fields,
-           const auto& residual, const double relaxation_parameter) noexcept {
+        [](const auto fields, const auto& residual,
+           const double relaxation_parameter) noexcept {
           *fields += relaxation_parameter * residual;
         },
         get<residual_tag>(box),
