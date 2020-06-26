@@ -53,10 +53,12 @@ EventsAndTriggers:
   ? EveryNSlabs:
       N: 3
       Offset: 5
-  : - ObserveErrorNorms
+  : - ObserveErrorNorms:
+        SubfileName: Errors
   ? SpecifiedSlabs:
       Slabs: [0, 100]
   : - ObserveFields:
+        SubfileName: VolumeData
         VariablesToObserve: ["Psi"]
   ? SpecifiedSlabs:
       Slabs: [100]
