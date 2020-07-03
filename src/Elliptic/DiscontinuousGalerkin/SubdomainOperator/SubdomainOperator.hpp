@@ -71,8 +71,8 @@ BoundaryData package_boundary_data(
   return std::apply(
       [&](const auto&... expanded_fluxes_args) {
         return ::dg::FirstOrderScheme::package_boundary_data(
-            numerical_fluxes_computer, face_mesh, n_dot_fluxes,
-            volume_mesh, direction, face_normal_magnitude,
+            numerical_fluxes_computer, face_mesh, n_dot_fluxes, volume_mesh,
+            direction, face_normal_magnitude,
             get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_fluxes)...,
             get<::Tags::div<::Tags::Flux<AuxiliaryFields, tmpl::size_t<Dim>,
                                          Frame::Inertial>>>(div_fluxes)...,
@@ -228,6 +228,18 @@ decltype(auto) unmap_overlap_arg(
   return arg;
 }
 
+template <size_t Dim, typename... Args>
+decltype(auto) unmap_overlap_args(
+    const std::tuple<Args...>& overlap_args,
+    const LinearSolver::Schwarz::OverlapId<Dim>& overlap_id) noexcept {
+  return std::apply(
+      [&](const auto&... expanded_overlap_args) noexcept {
+        return std::make_tuple(
+            unmap_overlap_arg(expanded_overlap_args, overlap_id)...);
+      },
+      overlap_args);
+};
+
 }  // namespace SubdomainOperator_detail
 
 // Compute bulk contribution in central element
@@ -239,7 +251,7 @@ template <typename PrimalFields, typename AuxiliaryFields,
           typename AllFields = tmpl::append<PrimalFields, AuxiliaryFields>,
           typename FluxesTags = db::wrap_tags_in<
               ::Tags::Flux, AllFields, tmpl::size_t<Dim>, Frame::Inertial>>
-void apply_subdomain_center_volume(
+void apply_operator_volume(
     const gsl::not_null<Variables<ResultTagsList>*> result_element_data,
     const gsl::not_null<Variables<FluxesTags>*> fluxes,
     const gsl::not_null<Variables<db::wrap_tags_in<::Tags::div, FluxesTags>>*>
@@ -253,8 +265,7 @@ void apply_subdomain_center_volume(
     const Variables<ArgTagsList>& arg_element_data) noexcept {
   // Compute volume fluxes
   std::apply(
-      [&fluxes, &arg_element_data,
-       &fluxes_computer](const auto&... expanded_fluxes_args) {
+      [&](const auto&... expanded_fluxes_args) {
         elliptic::first_order_fluxes<Dim, PrimalFields, AuxiliaryFields>(
             fluxes, Variables<AllFields>(arg_element_data), fluxes_computer,
             expanded_fluxes_args...);
@@ -264,7 +275,7 @@ void apply_subdomain_center_volume(
   *div_fluxes = divergence(*fluxes, mesh, inv_jacobian);
   // Compute volume sources
   auto sources = std::apply(
-      [&arg_element_data](const auto&... expanded_sources_args) {
+      [&](const auto&... expanded_sources_args) {
         return elliptic::first_order_sources<PrimalFields, AuxiliaryFields,
                                              SourcesComputer>(
             Variables<AllFields>(arg_element_data), expanded_sources_args...);
@@ -281,7 +292,7 @@ void apply_subdomain_center_volume(
 }
 
 // Add boundary contributions
-template <typename PrimalFields, typename AuxiliaryFields,
+template <typename Directions, typename PrimalFields, typename AuxiliaryFields,
           typename SourcesComputerType, bool MassiveOperator, size_t Dim,
           typename FluxesComputerType, typename NumericalFluxesComputerType,
           typename... FluxesArgs, typename... OverlapFluxesArgs,
@@ -335,7 +346,8 @@ static void apply_subdomain_face(
       db::add_tag_prefix<::Tags::Flux, vars_tag, tmpl::size_t<volume_dim>,
                          Frame::Inertial>;
   using div_fluxes_tag = db::add_tag_prefix<::Tags::div, fluxes_tag>;
-  using n_dot_fluxes_tag = db::add_tag_prefix<::Tags::NormalDotFlux, vars_tag>;
+  //   using n_dot_fluxes_tag = db::add_tag_prefix<::Tags::NormalDotFlux,
+  //   vars_tag>;
   using BoundaryData =
       ::dg::FirstOrderScheme::BoundaryData<NumericalFluxesComputerType>;
 
@@ -353,245 +365,181 @@ static void apply_subdomain_face(
   const auto central_div_fluxes_on_face =
       data_on_slice(central_div_fluxes, mesh.extents(), dimension, slice_index);
 
-  // Assemble local boundary data
-  const auto local_boundary_data_on_face =
+  // Assemble boundary data
+  const auto center_boundary_data_on_face =
       SubdomainOperator_detail::package_boundary_data<BoundaryData>(
           numerical_fluxes_computer, fluxes_computer, mesh, direction,
           face_mesh, face_normal, magnitude_of_face_normal,
           normal_dot_central_fluxes, central_div_fluxes_on_face, fluxes_args,
           AuxiliaryFields{});
 
-  // Iterate over mortars in this directions
-  for (const auto& mortar_id_and_mesh : mortar_meshes) {
-    const auto& mortar_id = mortar_id_and_mesh.first;
-    const auto& mortar_mesh = mortar_id_and_mesh.second;
-    const auto& mortar_size = mortar_sizes.at(mortar_id);
-    const auto& local_direction = mortar_id.first;
-    const auto& neighbor_id = mortar_id.second;
-    if (local_direction != direction) {
-      continue;
-    }
-
-    const bool is_boundary =
-        neighbor_id == ElementId<volume_dim>::external_boundary_id();
-
-    // Project local boundary data to mortar
-    const auto local_boundary_data =
-        ::dg::needs_projection(face_mesh, mortar_mesh, mortar_size)
-            ? local_boundary_data_on_face.project_to_mortar(
-                  face_mesh, mortar_mesh, mortar_size)
-            : local_boundary_data_on_face;
-
-    // Assemble remote boundary data
+  constexpr bool is_boundary =
+      std::is_same_v<Directions, domain::Tags::BoundaryDirectionsInterior<Dim>>;
+  if constexpr (is_boundary) {
+    const auto central_vars_on_face = Variables<all_fields_tags>(data_on_slice(
+        arg.element_data, mesh.extents(), dimension, slice_index));
     BoundaryData remote_boundary_data;
-    if (is_boundary) {
-      const auto central_vars_on_face =
-          Variables<all_fields_tags>(data_on_slice(
-              arg.element_data, mesh.extents(), dimension, slice_index));
-      SubdomainOperator_detail::exterior_boundary_data<PrimalFields,
-                                                       AuxiliaryFields>(
-          make_not_null(&remote_boundary_data), central_vars_on_face,
-          central_div_fluxes_on_face, mesh, direction, face_mesh, face_normal,
-          magnitude_of_face_normal, fluxes_computer, numerical_fluxes_computer,
-          fluxes_args);
-      // No projections necessary since exterior mortars cover the full face
-    } else {
-      // On internal boundaries, get neighbor data from the operand.
-      // Note that data on overlaps is oriented according to the neighbor that
-      // it is on, as is all geometric information that we have on the neighbor.
-      // Only when data cross element boundaries do we need to re-orient.
-      const auto& orientation = element.neighbors().at(direction).orientation();
-      const auto direction_from_neighbor = orientation(direction.opposite());
-      const size_t dimension_in_neighbor = direction_from_neighbor.dimension();
-      //   Parallel::printf("> Internal mortar %s:\n", mortar_id);
-      const auto& overlap_data = arg.overlap_data.at(mortar_id);
-      //   Parallel::printf("Overlap data: %s\n", overlap_data);
-      const auto& neighbor_mesh = all_overlap_meshes.at(mortar_id);
-      auto neighbor_face_mesh = neighbor_mesh.slice_away(dimension_in_neighbor);
-      size_t neighbor_face_slice_index =
-          index_to_slice_at(neighbor_mesh.extents(), direction_from_neighbor);
-      // Parallel::printf("slice index: %d\n", neighbor_face_slice_index);
+    SubdomainOperator_detail::exterior_boundary_data<PrimalFields,
+                                                     AuxiliaryFields>(
+        make_not_null(&remote_boundary_data), central_vars_on_face,
+        central_div_fluxes_on_face, mesh, direction, face_mesh, face_normal,
+        magnitude_of_face_normal, fluxes_computer, numerical_fluxes_computer,
+        fluxes_args);
+    // No projections necessary since exterior mortars cover the full face
+    SubdomainOperator_detail::apply_boundary_contribution<MassiveOperator>(
+        make_not_null(&result->element_data), numerical_fluxes_computer,
+        center_boundary_data_on_face, std::move(remote_boundary_data),
+        magnitude_of_face_normal, surface_jacobian, mesh, direction, face_mesh,
+        make_array<Dim - 1>(Spectral::MortarSize::Full));
+  } else {
+    const auto& neighbors = element.neighbors().at(direction);
+    const auto& orientation = neighbors.orientation();
+    const auto overlap_direction_in_neighbor =
+        orientation(direction.opposite());
+    const size_t overlap_dimension_in_neighbor =
+        overlap_direction_in_neighbor.dimension();
+
+    // Iterate over all neighbors in this direction, computing their neighbor
+    // volume operator and all boundary contributions within the subdomain.
+    // Note that data on overlaps is oriented according to the neighbor that
+    // it is on, as is all geometric information that we have on the neighbor.
+    // Only when data cross element boundaries do we need to re-orient.
+    std::unordered_map<
+        std::pair<ElementId<Dim>, ::dg::MortarId<Dim>>, BoundaryData,
+        boost::hash<std::pair<ElementId<Dim>, ::dg::MortarId<Dim>>>>
+        neighbors_boundary_data{};
+    std::unordered_map<ElementId<Dim>, typename SubdomainDataType::ElementData>
+        neighbor_results_extended{};
+    std::unordered_map<std::pair<ElementId<Dim>, Direction<Dim>>,
+                       Scalar<DataVector>,
+                       boost::hash<std::pair<ElementId<Dim>, Direction<Dim>>>>
+        neighbor_face_normal_magnitudes{};
+    std::unordered_map<std::pair<ElementId<Dim>, Direction<Dim>>,
+                       Scalar<DataVector>,
+                       boost::hash<std::pair<ElementId<Dim>, Direction<Dim>>>>
+        neighbor_surface_jacobians{};
+    for (const auto& neighbor_id : neighbors) {
+      const auto overlap_id = std::make_pair(direction, neighbor_id);
+      const auto& mortar_id = overlap_id;
+      const auto& overlap_data = arg.overlap_data.at(overlap_id);
+      const auto& overlap_extents = all_overlap_extents.at(overlap_id);
+      const auto& neighbor_mesh = all_overlap_meshes.at(overlap_id);
 
       // Extend the overlap data to the full neighbor mesh by filling it
       // with zeros and adding the overlapping slices
       const auto neighbor_data = Variables<all_fields_tags>(
           LinearSolver::Schwarz::extended_overlap_data(
-              overlap_data, neighbor_mesh.extents(),
-              all_overlap_extents.at(mortar_id), direction_from_neighbor));
-      // Parallel::printf("Extended overlap data: %s\n", neighbor_data);
+              overlap_data, neighbor_mesh.extents(), overlap_extents,
+              overlap_direction_in_neighbor));
+
+      // TODO: These could be cached in the databox
+      const auto& neighbor_element_map =
+          all_overlap_element_maps.at(overlap_id);
+      const auto neighbor_logical_coords = logical_coordinates(neighbor_mesh);
+      const auto neighbor_inv_jacobian =
+          neighbor_element_map.inv_jacobian(neighbor_logical_coords);
+      const auto neighbor_jacobian =
+          neighbor_element_map.jacobian(neighbor_logical_coords);
+      const auto neighbor_det_jacobian = determinant(neighbor_jacobian);
+
+      // TODO: avoid allocations by buffering these
+      const size_t neighbor_num_points = neighbor_mesh.number_of_grid_points();
+      neighbor_results_extended.emplace(neighbor_id, neighbor_num_points);
+      auto& neighbor_result_extended =
+          neighbor_results_extended.at(neighbor_id);
+      typename fluxes_tag::type neighbor_fluxes{neighbor_num_points};
+      typename div_fluxes_tag::type neighbor_div_fluxes{neighbor_num_points};
 
       // Compute the volume contribution in the neighbor from the extended
       // overlap data
-      const auto neighbor_fluxes = std::apply(
-          [&neighbor_data, &fluxes_computer,
-           &mortar_id](const auto&... expanded_overlap_fluxes_args) noexcept {
-            return ::elliptic::first_order_fluxes<volume_dim, PrimalFields,
-                                                  AuxiliaryFields>(
-                neighbor_data, fluxes_computer,
-                SubdomainOperator_detail::unmap_overlap_arg(
-                    expanded_overlap_fluxes_args, mortar_id)...);
-          },
-          all_overlap_fluxes_args);
-      // TODO: These could be cached in the databox
-      const auto neighbor_logical_coords = logical_coordinates(neighbor_mesh);
-      const auto neighbor_inv_jacobian =
-          all_overlap_element_maps.at(mortar_id).inv_jacobian(
-              neighbor_logical_coords);
-      const auto neighbor_jacobian =
-          all_overlap_element_maps.at(mortar_id).jacobian(
-              neighbor_logical_coords);
-      const auto neighbor_det_jacobian = determinant(neighbor_jacobian);
-      // Parallel::printf("Inv jac for %s: %s\n", neighbor_id,
-      //                  neighbor_inv_jacobian);
-      const auto neighbor_div_fluxes =
-          divergence(neighbor_fluxes, neighbor_mesh, neighbor_inv_jacobian);
-      typename SubdomainDataType::ElementData neighbor_result_extended{
-          neighbor_mesh.number_of_grid_points()};
-      auto neighbor_sources = std::apply(
-          [&neighbor_data,
-           &mortar_id](const auto&... expanded_overlap_sources_args) noexcept {
-            return elliptic::first_order_sources<PrimalFields, AuxiliaryFields,
-                                                 SourcesComputerType>(
-                neighbor_data,
-                SubdomainOperator_detail::unmap_overlap_arg(
-                    expanded_overlap_sources_args, mortar_id)...);
-          },
-          all_overlap_sources_args);
-      if constexpr (MassiveOperator) {
-        elliptic::first_order_operator_massive(
-            make_not_null(&neighbor_result_extended), neighbor_div_fluxes,
-            std::move(neighbor_sources), neighbor_mesh, neighbor_det_jacobian);
-      } else {
-        elliptic::first_order_operator(make_not_null(&neighbor_result_extended),
-                                       neighbor_div_fluxes,
-                                       std::move(neighbor_sources));
-      }
-      // Parallel::printf("Extended result on overlap: %s\n",
-      //                  neighbor_result_extended);
+      const auto neighbor_fluxes_args =
+          SubdomainOperator_detail::unmap_overlap_args(all_overlap_fluxes_args,
+                                                       overlap_id);
+      const auto neighbor_sources_args =
+          SubdomainOperator_detail::unmap_overlap_args(all_overlap_sources_args,
+                                                       overlap_id);
+      apply_operator_volume<PrimalFields, AuxiliaryFields, SourcesComputerType,
+                            MassiveOperator>(
+          make_not_null(&neighbor_result_extended),
+          make_not_null(&neighbor_fluxes), make_not_null(&neighbor_div_fluxes),
+          fluxes_computer, neighbor_mesh, neighbor_det_jacobian,
+          neighbor_inv_jacobian, neighbor_fluxes_args, neighbor_sources_args,
+          neighbor_data);
 
-      auto neighbor_face_normal_and_magnitude =
-          SubdomainOperator_detail::face_normal_and_magnitude(
-              neighbor_face_mesh, all_overlap_element_maps.at(mortar_id),
-              direction_from_neighbor);
-      auto neighbor_surface_jacobian = domain::surface_jacobian(
-          all_overlap_element_maps.at(mortar_id), neighbor_face_mesh,
-          direction_from_neighbor, neighbor_face_normal_and_magnitude.second);
-      for (size_t d = 0; d < volume_dim; d++) {
-        // Only holds for aligned elements
-        // TODO: mirror transform the face_normal to the neighbor?
-        // ASSERT(neighbor_face_normal_and_magnitude.first.get(d) ==
-        //            -1. * face_normal.get(d),
-        //        "Face normals should be opposite");
-      }
-      //   ASSERT(get(neighbor_face_normal_and_magnitude.second) ==
-      //              get(magnitude_of_face_normal),
-      //          "Face normals magnitudes should be the same");
-
-      auto neighbor_fluxes_on_face =
-          data_on_slice(neighbor_fluxes, neighbor_mesh.extents(),
-                        dimension_in_neighbor, neighbor_face_slice_index);
-      auto neighbor_div_fluxes_on_face =
-          data_on_slice(neighbor_div_fluxes, neighbor_mesh.extents(),
-                        dimension_in_neighbor, neighbor_face_slice_index);
-      auto neighbor_normal_dot_fluxes = normal_dot_flux<all_fields_tags>(
-          neighbor_face_normal_and_magnitude.first, neighbor_fluxes_on_face);
-      auto neighbor_fluxes_args_on_face = std::apply(
-          [&mortar_id, &neighbor_mesh, direction_from_neighbor](
-              const auto&... expanded_overlap_fluxes_args) noexcept {
-            return std::make_tuple(SubdomainOperator_detail::slice_arg_to_face(
-                SubdomainOperator_detail::unmap_overlap_arg(
-                    expanded_overlap_fluxes_args, mortar_id),
-                neighbor_mesh.extents(), direction_from_neighbor)...);
-          },
-          all_overlap_fluxes_args);
-      remote_boundary_data =
-          SubdomainOperator_detail::package_boundary_data<BoundaryData>(
-              numerical_fluxes_computer, fluxes_computer, neighbor_mesh,
-              direction_from_neighbor, neighbor_face_mesh,
-              neighbor_face_normal_and_magnitude.first,
-              neighbor_face_normal_and_magnitude.second,
-              neighbor_normal_dot_fluxes, neighbor_div_fluxes_on_face,
-              neighbor_fluxes_args_on_face, AuxiliaryFields{});
-      // TODO: does the mortar mesh and size need orientation?
-      // TODO: is the mortar mesh and size correct for hp-refinement?
-      // It's probably easiest to just communicate all mortar meshes and sizes,
-      // since we need the perpendicular ones anyway.
-      if (::dg::needs_projection(neighbor_face_mesh, mortar_mesh,
-                                 mortar_size)) {
-        remote_boundary_data = remote_boundary_data.project_to_mortar(
-            neighbor_face_mesh, mortar_mesh, mortar_size);
-      }
-
-      // Apply the boundary contribution to the neighbor overlap
-      // We need to orient the mortar data from the central element to the
-      // neighbor since it crosses an element boundary here.
-      auto reoriented_local_boundary_data = local_boundary_data;
-      if (not orientation.is_aligned()) {
-        reoriented_local_boundary_data.orient_on_slice(mortar_mesh.extents(),
-                                                       dimension, orientation);
-      }
-      SubdomainOperator_detail::apply_boundary_contribution<MassiveOperator>(
-          make_not_null(&neighbor_result_extended), numerical_fluxes_computer,
-          remote_boundary_data, std::move(reoriented_local_boundary_data),
-          neighbor_face_normal_and_magnitude.second, neighbor_surface_jacobian,
-          neighbor_mesh, direction_from_neighbor, mortar_mesh, mortar_size);
-      //   Parallel::printf(
-      //       "Extended result on overlap incl. boundary contrib from central "
-      //       "element: %s\n",
-      //       neighbor_result_extended);
-
-      // Add boundary contributions from the neighbor's neighbors to the
-      // extended overlap data. We need only consider faces that share points
-      // with the overlap region.
-      for (const auto& neighbor_mortar_id_and_mesh :
-           all_overlap_mortar_meshes.at(mortar_id)) {
+      // Iterate over the neighbor's mortars to compute boundary data. For the
+      // mortars to the subdomain center, to external boundaries and to elements
+      // that are not part of the subdomain we can handle the boundary
+      // contribution to the neighbor and to the potential other element right
+      // away. For mortars to other neighbors within the subdomain we cache the
+      // boundary data and handle the boundary contribution in the second pass
+      // over the same mortar.
+      const auto& neighbor_mortar_meshes =
+          all_overlap_mortar_meshes.at(overlap_id);
+      const auto& neighbor_mortar_sizes =
+          all_overlap_mortar_sizes.at(overlap_id);
+      // One of the iterations of the loop will go over the mortar with the
+      // central element, so we need the projected data
+      const auto& mortar_mesh = mortar_meshes.at(mortar_id);
+      const auto& mortar_size = mortar_sizes.at(mortar_id);
+      auto center_boundary_data =
+          ::dg::needs_projection(face_mesh, mortar_mesh, mortar_size)
+              ? center_boundary_data_on_face.project_to_mortar(
+                    face_mesh, mortar_mesh, mortar_size)
+              : center_boundary_data_on_face;
+      for (const auto& neighbor_mortar_id_and_mesh : neighbor_mortar_meshes) {
         const auto& neighbor_mortar_id = neighbor_mortar_id_and_mesh.first;
         const auto& neighbor_face_direction = neighbor_mortar_id.first;
-        if (neighbor_face_direction.dimension() ==
-            direction_from_neighbor.dimension()) {
+        // We can skip neighbor mortars that face away from the subdomain center
+        // because they only contribute to points on the face, which are never
+        // part of the subdomain (see LinearSolver::Schwarz::overlap_extents).
+        if (neighbor_face_direction ==
+            overlap_direction_in_neighbor.opposite()) {
           continue;
         }
-        const auto& neighbors_neighbor_id = neighbor_mortar_id.second;
-        const bool neighbor_face_is_boundary =
-            neighbors_neighbor_id ==
-            ElementId<volume_dim>::external_boundary_id();
+
+        // Compute the boundary data on the neighbor's local side of the mortar
         const size_t neighbor_face_dimension =
             neighbor_face_direction.dimension();
-        neighbor_face_slice_index =
+        const size_t neighbor_face_slice_index =
             index_to_slice_at(neighbor_mesh.extents(), neighbor_face_direction);
-        neighbor_face_mesh = neighbor_mesh.slice_away(neighbor_face_dimension);
-        const auto& neighbor_face_num_points =
-            neighbor_face_mesh.number_of_grid_points();
+        const auto neighbor_face_mesh =
+            neighbor_mesh.slice_away(neighbor_face_dimension);
         const auto& neighbor_mortar_mesh = neighbor_mortar_id_and_mesh.second;
         const auto& neighbor_mortar_size =
-            all_overlap_mortar_sizes.at(mortar_id).at(neighbor_mortar_id);
-
-        neighbor_face_normal_and_magnitude =
+            neighbor_mortar_sizes.at(neighbor_mortar_id);
+        // TODO: these can be cached in the DataBox
+        const auto neighbor_face_normal_and_magnitude =
             SubdomainOperator_detail::face_normal_and_magnitude(
-                neighbor_face_mesh, all_overlap_element_maps.at(mortar_id),
+                neighbor_face_mesh, neighbor_element_map,
                 neighbor_face_direction);
-        neighbor_surface_jacobian = domain::surface_jacobian(
-            all_overlap_element_maps.at(mortar_id), neighbor_face_mesh,
-            neighbor_face_direction, neighbor_face_normal_and_magnitude.second);
-
-        neighbor_fluxes_on_face =
+        const auto neighbor_surface_jacobian = domain::surface_jacobian(
+            neighbor_element_map, neighbor_face_mesh, neighbor_face_direction,
+            neighbor_face_normal_and_magnitude.second);
+        neighbor_face_normal_magnitudes.insert_or_assign(
+            std::make_pair(neighbor_id, neighbor_face_direction),
+            neighbor_face_normal_and_magnitude.second);
+        neighbor_surface_jacobians.insert_or_assign(
+            std::make_pair(neighbor_id, neighbor_face_direction),
+            neighbor_surface_jacobian);
+        // TODO: buffer these to reduce allocations?
+        const auto neighbor_fluxes_on_face =
             data_on_slice(neighbor_fluxes, neighbor_mesh.extents(),
                           neighbor_face_dimension, neighbor_face_slice_index);
-        neighbor_div_fluxes_on_face =
+        const auto neighbor_div_fluxes_on_face =
             data_on_slice(neighbor_div_fluxes, neighbor_mesh.extents(),
                           neighbor_face_dimension, neighbor_face_slice_index);
-        neighbor_normal_dot_fluxes = normal_dot_flux<all_fields_tags>(
-            neighbor_face_normal_and_magnitude.first, neighbor_fluxes_on_face);
-        neighbor_fluxes_args_on_face = std::apply(
-            [&neighbor_mesh, &mortar_id, &neighbor_face_direction](
-                const auto&... expanded_overlap_fluxes_args) noexcept {
+        const auto neighbor_normal_dot_fluxes =
+            normal_dot_flux<all_fields_tags>(
+                neighbor_face_normal_and_magnitude.first,
+                neighbor_fluxes_on_face);
+        const auto neighbor_fluxes_args_on_face = std::apply(
+            [&](const auto&... expanded_neighbor_fluxes_args) noexcept {
               return std::make_tuple(
                   SubdomainOperator_detail::slice_arg_to_face(
-                      SubdomainOperator_detail::unmap_overlap_arg(
-                          expanded_overlap_fluxes_args, mortar_id),
-                      neighbor_mesh.extents(), neighbor_face_direction)...);
+                      expanded_neighbor_fluxes_args, neighbor_mesh.extents(),
+                      neighbor_face_direction)...);
             },
-            all_overlap_fluxes_args);
+            neighbor_fluxes_args);
         auto neighbor_local_boundary_data =
             SubdomainOperator_detail::package_boundary_data<BoundaryData>(
                 numerical_fluxes_computer, fluxes_computer, neighbor_mesh,
@@ -600,13 +548,6 @@ static void apply_subdomain_face(
                 neighbor_face_normal_and_magnitude.second,
                 neighbor_normal_dot_fluxes, neighbor_div_fluxes_on_face,
                 neighbor_fluxes_args_on_face, AuxiliaryFields{});
-        // BoundaryData neighbor_local_boundary_data;
-        // SubdomainOperator_detail::interior_boundary_data<PrimalFields,
-        //                                                  AuxiliaryFields>(
-        //     make_not_null(&neighbor_local_boundary_data), neighbor_mesh,
-        //     neighbor_fluxes, neighbor_div_fluxes, neighbor_face_direction,
-        //     neighbor_face_normal_and_magnitude.first, fluxes_computer,
-        //     numerical_fluxes_computer);
         if (::dg::needs_projection(neighbor_face_mesh, neighbor_mortar_mesh,
                                    neighbor_mortar_size)) {
           neighbor_local_boundary_data =
@@ -615,8 +556,35 @@ static void apply_subdomain_face(
                   neighbor_mortar_size);
         }
 
+        // Decide what to do based on what's on the other side of the mortar
+        const auto& neighbors_neighbor_id = neighbor_mortar_id.second;
         BoundaryData neighbor_remote_boundary_data;
-        if (neighbor_face_is_boundary) {
+        if (neighbors_neighbor_id == element.id()) {
+          // This is the mortar to the subdomain center. We apply the boundary
+          // contribution both to the subdomain center and to the neighbor.
+          // First, apply the boundary contribution to the central element
+          auto reoriented_neighbor_boundary_data = neighbor_local_boundary_data;
+          if (not orientation.is_aligned()) {
+            reoriented_neighbor_boundary_data.orient_on_slice(
+                neighbor_mortar_mesh.extents(), overlap_dimension_in_neighbor,
+                orientation.inverse_map());
+          }
+          SubdomainOperator_detail::apply_boundary_contribution<
+              MassiveOperator>(make_not_null(&result->element_data),
+                               numerical_fluxes_computer, center_boundary_data,
+                               std::move(reoriented_neighbor_boundary_data),
+                               magnitude_of_face_normal, surface_jacobian, mesh,
+                               direction, mortar_mesh, mortar_size);
+          // Second, prepare applying the boundary contribution to the neighbor
+          neighbor_remote_boundary_data = center_boundary_data;
+          if (not orientation.is_aligned()) {
+            neighbor_remote_boundary_data.orient_on_slice(
+                mortar_mesh.extents(), dimension, orientation);
+          }
+        } else if (neighbors_neighbor_id ==
+                   ElementId<volume_dim>::external_boundary_id()) {
+          // This is an external boundary of the neighbor. We apply the boundary
+          // contribution directly to the neighbor.
           const auto neighbor_face_data =
               data_on_slice(neighbor_data, neighbor_mesh.extents(),
                             neighbor_face_dimension, neighbor_face_slice_index);
@@ -629,30 +597,87 @@ static void apply_subdomain_face(
               neighbor_face_normal_and_magnitude.second, fluxes_computer,
               numerical_fluxes_computer, neighbor_fluxes_args_on_face);
         } else {
-          // Assume the data on the neighbor's neighbor is zero.
+          // This is an internal boundary to another element, which may or may
+          // not overlap with the subdomain.
+          const auto neighbors_neighbor_overlap_id =
+              std::make_pair(direction, neighbors_neighbor_id);
+          if (arg.overlap_data.count(neighbors_neighbor_overlap_id) > 0) {
+            // The neighbor's neighbor overlaps with the subdomain, so we can
+            // retrieve data from it. We store the data on one side of the
+            // mortar in a cache, so when encountering this mortar the second
+            // time (from its other side) we apply the boundary contributions to
+            // both sides.
+            //
+            // Note that the other element is guaranteed be another neighbor of
+            // the subdomain center in the same direction, so both neighbors
+            // have the same orientation and we don't need to re-orient
+            // anything.
+            const auto direction_from_neighbors_neighbor =
+                neighbor_face_direction.opposite();
+            const auto mortar_id_from_neighbors_neighbor =
+                std::make_pair(direction_from_neighbors_neighbor, neighbor_id);
+            const auto found_neighbors_neighbor_boundary_data =
+                neighbors_boundary_data.find(std::make_pair(
+                    neighbors_neighbor_id, mortar_id_from_neighbors_neighbor));
+            if (found_neighbors_neighbor_boundary_data ==
+                neighbors_boundary_data.end()) {
+              neighbors_boundary_data[std::make_pair(neighbor_id,
+                                                     neighbor_mortar_id)] =
+                  neighbor_local_boundary_data;
 
-          // TODO: Make sure this works with h-refinement.. we know the
-          // data on mortars to other neighbors in the same direction, so it
-          // shouldn't be zero.
+              // Skip applying the boundary contribution from this mortar
+              // because we don't have the remote data available yet. We apply
+              // the boundary contribution when re-visiting this mortar from the
+              // other side.
+              continue;
 
-          // The normal is probably irrelevant in this case, but we compute it
-          // to be safe.
-          auto neighbor_remote_face_normal =
-              neighbor_face_normal_and_magnitude.first;
-          for (size_t d = 0; d < volume_dim; d++) {
-            neighbor_remote_face_normal.get(d) *= -1.;
+            } else {
+              neighbor_remote_boundary_data =
+                  std::move(found_neighbors_neighbor_boundary_data->second);
+              neighbors_boundary_data.erase(
+                  found_neighbors_neighbor_boundary_data->first);
+
+              // Apply the boundary contribution also to the other side of the
+              // mortar that we had previously skipped
+              SubdomainOperator_detail::apply_boundary_contribution<
+                  MassiveOperator>(
+                  make_not_null(
+                      &neighbor_results_extended.at(neighbors_neighbor_id)),
+                  numerical_fluxes_computer, neighbor_remote_boundary_data,
+                  neighbor_local_boundary_data,
+                  neighbor_face_normal_magnitudes.at(
+                      std::pair(neighbors_neighbor_id,
+                                direction_from_neighbors_neighbor)),
+                  neighbor_surface_jacobians.at(
+                      std::pair(neighbors_neighbor_id,
+                                direction_from_neighbors_neighbor)),
+                  all_overlap_meshes.at(neighbors_neighbor_overlap_id),
+                  direction_from_neighbors_neighbor,
+                  all_overlap_mortar_meshes.at(neighbors_neighbor_overlap_id)
+                      .at(mortar_id_from_neighbors_neighbor),
+                  all_overlap_mortar_sizes.at(neighbors_neighbor_overlap_id)
+                      .at(mortar_id_from_neighbors_neighbor));
+            }
+          } else {
+            // The neighbor's neighbor does not overlap with the subdomain, so
+            // we assume the data on it is zero. We constructing zero data on
+            // the mortar mesh directly so we don't have to project
+            //
+            // Caveat: When computing the penalty for the numerical flux here we
+            // don't take the geometry of the neighbor's neighbor into account.
+            // We just use the polynomial degree and the element size
+            // perpendicular to the face from the neighbor. This leads to an
+            // inconsistency between the subdomain operator and the full
+            // operator applied to the domain where non-subdomain points are
+            // zeroed.
+            //
+            // TODO: We might remedy this inconsistency by keeping track of the
+            // geometry of all neighbor's neighbors, which wouldn't be too
+            // difficult because the geometry only changes with AMR.
+            numerical_fluxes_computer.package_zero_data(
+                make_not_null(&neighbor_remote_boundary_data),
+                neighbor_mortar_mesh.number_of_grid_points());
           }
-          // TODO: Get the neighbor's neighbor mesh and face normal magnitude
-          neighbor_remote_boundary_data =
-              SubdomainOperator_detail::package_boundary_data<BoundaryData>(
-                  numerical_fluxes_computer, fluxes_computer, neighbor_mesh,
-                  neighbor_face_direction.opposite(), neighbor_face_mesh,
-                  neighbor_remote_face_normal,
-                  neighbor_face_normal_and_magnitude.second,
-                  db::item_type<n_dot_fluxes_tag>{neighbor_face_num_points, 0.},
-                  db::item_type<div_fluxes_tag>{neighbor_face_num_points, 0.},
-                  // TODO: make sure using these args is fine
-                  neighbor_fluxes_args_on_face, AuxiliaryFields{});
         }
         SubdomainOperator_detail::apply_boundary_contribution<MassiveOperator>(
             make_not_null(&neighbor_result_extended), numerical_fluxes_computer,
@@ -661,37 +686,23 @@ static void apply_subdomain_face(
             neighbor_surface_jacobian, neighbor_mesh, neighbor_face_direction,
             neighbor_mortar_mesh, neighbor_mortar_size);
       }
-      //   Parallel::printf(
-      //       "Extended result on overlap incl. all boundary contribs: %s\n",
-      //       neighbor_result_extended);
-
-      // Take only the part of the neighbor data that lies within the overlap
-      const auto neighbor_result = LinearSolver::Schwarz::data_on_overlap(
-          neighbor_result_extended, neighbor_mesh.extents(),
-          all_overlap_extents.at(mortar_id), direction_from_neighbor);
-      // TODO: Fake boundary contributions from the other mortars of the
-      // neighbor by filling their data with zeros
-      //   Parallel::printf("Final result on overlap: %s\n", neighbor_result);
-
-      result->overlap_data.insert_or_assign(mortar_id,
-                                            std::move(neighbor_result));
-
-      // Prepare applying the boundary contribution to the central element
-      // We need to orient the mortar data from the neighbor to the central
-      // element since it crosses an element boundary here.
-      if (not orientation.is_aligned()) {
-        remote_boundary_data.orient_on_slice(mortar_mesh.extents(),
-                                             dimension_in_neighbor,
-                                             orientation.inverse_map());
-      }
     }
-
-    // Apply the boundary contribution to the central element
-    SubdomainOperator_detail::apply_boundary_contribution<MassiveOperator>(
-        make_not_null(&result->element_data), numerical_fluxes_computer,
-        local_boundary_data, std::move(remote_boundary_data),
-        magnitude_of_face_normal, surface_jacobian, mesh, direction,
-        mortar_mesh, mortar_size);
+    // Take only the part of the neighbor data that lies within the overlap
+    //
+    // TODO: Better store the data restricted to the overlap directly in the
+    // result and apply boundary contributions directly to the restricted data.
+    // That removes the need for this loop.
+    for (const auto& neighbor_id_and_result : neighbor_results_extended) {
+      const auto& neighbor_id = neighbor_id_and_result.first;
+      const auto overlap_id = std::make_pair(direction, neighbor_id);
+      const auto& neighbor_mesh = all_overlap_meshes.at(overlap_id);
+      const auto& overlap_extents = all_overlap_extents.at(overlap_id);
+      auto neighbor_result = LinearSolver::Schwarz::data_on_overlap(
+          neighbor_id_and_result.second, neighbor_mesh.extents(),
+          overlap_extents, overlap_direction_in_neighbor);
+      result->overlap_data.insert_or_assign(overlap_id,
+                                            std::move(neighbor_result));
+    }
   }
 }
 
@@ -762,8 +773,8 @@ struct SubdomainOperator {
       const auto& result = get<sizeof...(RemainingArgs) - 2>(remaining_args);
       const auto& subdomain_operator =
           get<sizeof...(RemainingArgs) - 1>(remaining_args);
-      apply_subdomain_center_volume<PrimalFields, AuxiliaryFields,
-                                    SourcesComputer, MassiveOperator>(
+      apply_operator_volume<PrimalFields, AuxiliaryFields, SourcesComputer,
+                            MassiveOperator>(
           make_not_null(&(result->element_data)),
           make_not_null(&get<fluxes_tag>(subdomain_operator->buffer_)),
           make_not_null(&get<div_fluxes_tag>(subdomain_operator->buffer_)),
@@ -842,8 +853,8 @@ struct SubdomainOperator {
       const auto& result = get<sizeof...(RemainingArgs) - 2>(remaining_args);
       const auto& subdomain_operator =
           get<sizeof...(RemainingArgs) - 1>(remaining_args);
-      apply_subdomain_face<PrimalFields, AuxiliaryFields, SourcesComputer,
-                           MassiveOperator>(
+      apply_subdomain_face<Directions, PrimalFields, AuxiliaryFields,
+                           SourcesComputer, MassiveOperator>(
           result, element, mesh, fluxes_computer, numerical_fluxes_computer,
           direction, face_normal, face_normal_magnitude, surface_jacobian,
           mortar_meshes, mortar_sizes, all_overlap_extents, all_overlap_meshes,

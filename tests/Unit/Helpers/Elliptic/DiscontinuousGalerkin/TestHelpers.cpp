@@ -89,18 +89,20 @@ create_mortars(const ElementId<VolumeDim>& element_id,
   for (const auto& direction_and_neighbors : dg_element.element.neighbors()) {
     const auto& direction = direction_and_neighbors.first;
     const auto& neighbors = direction_and_neighbors.second;
+    const auto& orientation = neighbors.orientation();
     const size_t dimension = direction.dimension();
     const auto face_mesh = dg_element.mesh.slice_away(dimension);
-    for (const auto& neighbor : neighbors) {
-      ::dg::MortarId<VolumeDim> mortar_id{direction, neighbor};
+    for (const auto& neighbor_id : neighbors) {
+      ::dg::MortarId<VolumeDim> mortar_id{direction, neighbor_id};
+      const auto& neighbor = dg_elements.at(neighbor_id);
+      const auto oriented_neighbor_face_mesh =
+          orientation(neighbor.mesh).slice_away(dimension);
       mortars.emplace(
           std::move(mortar_id),
           std::make_pair(
-              ::dg::mortar_mesh(face_mesh,
-                                dg_elements.at(neighbor).mesh.slice_away(
-                                    direction.dimension())),
-              ::dg::mortar_size(element_id, neighbor, dimension,
-                                neighbors.orientation())));
+              ::dg::mortar_mesh(face_mesh, oriented_neighbor_face_mesh),
+              ::dg::mortar_size(element_id, neighbor_id, dimension,
+                                orientation)));
     }
   }
   for (const auto& direction : dg_element.element.external_boundaries()) {

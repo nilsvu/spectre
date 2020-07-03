@@ -64,6 +64,7 @@ void test_subdomain_operator_impl(
     tmpl::list<AuxiliaryFields...> /*meta*/) noexcept {
   CAPTURE(overlap);
   CAPTURE(penalty_parameter);
+  CAPTURE(MassiveOperator);
 
   MAKE_GENERATOR(gen);
   UniformCustomDistribution<double> dist{-1., 1.};
@@ -267,16 +268,19 @@ void test_subdomain_operator_impl(
   using BoundaryData = ::dg::FirstOrderScheme::BoundaryData<NumericalFlux>;
   const auto package_boundary_data =
       [&numerical_fluxes_computer, &fluxes_computer](
-          const Mesh<volume_dim - 1>& face_mesh,
+          const Mesh<volume_dim>& volume_mesh,
+          const Direction<volume_dim>& direction,
           const tnsr::i<DataVector, volume_dim>& face_normal,
+          const Scalar<DataVector>& face_normal_magnitude,
           const Variables<n_dot_fluxes_tags>& n_dot_fluxes,
           const Variables<div_fluxes_tags>& div_fluxes,
           const auto& fluxes_args) -> BoundaryData {
     return std::apply(
-        [&numerical_fluxes_computer, &face_mesh, &n_dot_fluxes, &div_fluxes,
-         &face_normal, &fluxes_computer](const auto&... expanded_fluxes_args) {
+        [&](const auto&... expanded_fluxes_args) {
+          const auto face_mesh = volume_mesh.slice_away(direction.dimension());
           return ::dg::FirstOrderScheme::package_boundary_data(
-              numerical_fluxes_computer, face_mesh, n_dot_fluxes,
+              numerical_fluxes_computer, face_mesh, n_dot_fluxes, volume_mesh,
+              direction, face_normal_magnitude,
               get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_fluxes)...,
               get<::Tags::div<::Tags::Flux<
                   AuxiliaryFields, tmpl::size_t<volume_dim>, Frame::Inertial>>>(
@@ -332,7 +336,7 @@ void test_subdomain_operator_impl(
   SubdomainDataType subdomain_result{center_num_points};
   const auto det_jacobian = determinant(central_element.element_map.jacobian(
       logical_coordinates(central_element.mesh)));
-  elliptic::dg::apply_subdomain_center_volume<
+  elliptic::dg::apply_operator_volume<
       typename system::primal_fields, typename system::auxiliary_fields,
       typename system::sources, MassiveOperator>(
       make_not_null(&subdomain_result.element_data),
@@ -345,6 +349,7 @@ void test_subdomain_operator_impl(
   for (const auto& direction_and_face_normal : internal_face_normals) {
     const auto& direction = direction_and_face_normal.first;
     elliptic::dg::apply_subdomain_face<
+        domain::Tags::InternalDirections<volume_dim>,
         typename system::primal_fields, typename system::auxiliary_fields,
         typename system::sources, MassiveOperator>(
         make_not_null(&subdomain_result), central_element.element,
@@ -362,6 +367,7 @@ void test_subdomain_operator_impl(
   for (const auto& direction_and_face_normal : boundary_face_normals) {
     const auto& direction = direction_and_face_normal.first;
     elliptic::dg::apply_subdomain_face<
+        domain::Tags::BoundaryDirectionsInterior<volume_dim>,
         typename system::primal_fields, typename system::auxiliary_fields,
         typename system::sources, MassiveOperator>(
         make_not_null(&subdomain_result), central_element.element,
@@ -627,31 +633,56 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.SubdomainOperator", "[Unit][Elliptic]") {
     INFO("Aligned elements");
     const domain::creators::Interval domain_creator_1d{
         {{-2.}}, {{2.}}, {{false}}, {{1}}, {{3}}};
-    test_subdomain_operator_poisson(domain_creator_1d, 6.75);
+    test_subdomain_operator_poisson(domain_creator_1d, 1.);
     const domain::creators::Rectangle domain_creator_2d{
         {{-2., 0.}}, {{2., 1.}}, {{false, false}}, {{1, 1}}, {{3, 3}}};
-    test_subdomain_operator_poisson(domain_creator_2d, 6.75);
+    test_subdomain_operator_poisson(domain_creator_2d, 1.);
     const domain::creators::Brick domain_creator_3d{{{-2., 0., -1.}},
                                                     {{2., 1., 1.}},
                                                     {{false, false, false}},
                                                     {{1, 1, 1}},
                                                     {{3, 3, 3}}};
-    test_subdomain_operator_poisson(domain_creator_3d, 6.75);
+    test_subdomain_operator_poisson(domain_creator_3d, 1.);
   }
   {
     INFO("Rotated elements");
     const domain::creators::RotatedIntervals domain_creator_1d{
         {{-2.}}, {{0.}}, {{2.}}, {{false}}, {{0}}, {{{{3, 3}}}}};
-    test_subdomain_operator_poisson(domain_creator_1d, 6.75);
+    test_subdomain_operator_poisson(domain_creator_1d, 1.);
     const domain::creators::RotatedRectangles domain_creator_2d{
         {{-2., 0.}},      {{0., 0.5}}, {{2., 1.}},
         {{false, false}}, {{0, 0}},    {{{{3, 3}}, {{3, 3}}}}};
-    test_subdomain_operator_poisson(domain_creator_2d, 6.75);
+    test_subdomain_operator_poisson(domain_creator_2d, 1.);
     const domain::creators::RotatedBricks domain_creator_3d{
         {{-2., 0., -1.}}, {{0., 0.5, 0.}},
         {{2., 1., 1.}},   {{false, false, false}},
         {{1, 1, 1}},      {{{{3, 3}}, {{3, 3}}, {{3, 3}}}}};
-    test_subdomain_operator_poisson(domain_creator_3d, 6.75);
+    test_subdomain_operator_poisson(domain_creator_3d, 1.);
+  }
+  {
+    INFO("Refined elements");
+    const domain::creators::AlignedLattice<1> domain_creator_1d{
+        {{{-2., 0., 2.}}},       {{false}}, {{0}}, {{3}}, {},
+        {{{{0}}, {{1}}, {{4}}}}, {}};
+    test_subdomain_operator_poisson(domain_creator_1d, 1.);
+    const domain::creators::AlignedLattice<2> domain_creator_2d{
+        {{{-2., 0., 2.}, {-2., 0., 2.}}},
+        {{false, false}},
+        {{0, 0}},
+        {{3, 3}},
+        {{{{1, 0}}, {{2, 1}}, {{0, 1}}}},
+        {{{{0, 0}}, {{1, 1}}, {{4, 3}}}},
+        {}};
+    test_subdomain_operator_poisson(domain_creator_2d, 1.);
+    const domain::creators::AlignedLattice<3> domain_creator_3d{
+        {{{-2., 0., 2.}, {-2., 0., 2.}, {-2., 0., 2.}}},
+        {{false, false, false}},
+        {{0, 0, 0}},
+        {{3, 3, 3}},
+        {{{{1, 0, 0}}, {{2, 1, 1}}, {{0, 1, 1}}}},
+        {{{{0, 0, 0}}, {{1, 1, 1}}, {{4, 3, 2}}}},
+        {}};
+    test_subdomain_operator_poisson(domain_creator_3d, 1.);
   }
   {
     using system = Elasticity::FirstOrderSystem<3>;
