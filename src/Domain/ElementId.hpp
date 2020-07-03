@@ -59,11 +59,11 @@ class ElementId {
   ~ElementId() noexcept = default;
 
   /// Create the ElementId of the root Element of a Block.
-  explicit ElementId(size_t block_id) noexcept;
+  explicit ElementId(size_t block_id, size_t grid_index = 0) noexcept;
 
   /// Create an arbitrary ElementId.
-  ElementId(size_t block_id,
-            std::array<SegmentId, VolumeDim> segment_ids) noexcept;
+  ElementId(size_t block_id, std::array<SegmentId, VolumeDim> segment_ids,
+            size_t grid_index = 0) noexcept;
 
   ElementId<VolumeDim> id_of_child(size_t dim, Side side) const noexcept;
 
@@ -78,6 +78,17 @@ class ElementId {
                     }),
         "Not all of the `SegmentId`s inside `ElementId` have same `BlockId`.");
     return segment_ids_[0].block_id();
+  }
+
+  size_t grid_index() const noexcept {
+    ASSERT(alg::all_of(segment_ids_,
+                       [this](const SegmentId& current_id) noexcept {
+                         return current_id.grid_index() ==
+                                segment_ids_[0].grid_index();
+                       }),
+           "Not all of the `SegmentId`s inside `ElementId` have same "
+           "`grid_index`.");
+    return segment_ids_[0].grid_index();
   }
 
   const std::array<SegmentId, VolumeDim>& segment_ids() const noexcept {
