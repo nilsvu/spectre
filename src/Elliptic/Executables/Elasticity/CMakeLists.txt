@@ -7,6 +7,7 @@ set(LIBS_TO_LINK
   DiscontinuousGalerkin
   DomainCreators
   Elasticity
+  ElasticPotentialEnergy
   Informer
   IO
   LinearOperators
@@ -32,5 +33,14 @@ add_elasticity_executable(
   "Elasticity::FirstOrderSystem<2>"
   Elasticity::Solutions::BentBeam
   Elasticity::Solutions::BentBeam
+  "ElasticitySolutions"
+  )
+
+# Elasticity system with for half space mirror solution
+add_elasticity_executable(
+  HalfSpaceMirror
+  "Elasticity::FirstOrderSystem<3>"
+  Elasticity::Solutions::HalfSpaceMirror
+  Elasticity::Solutions::HalfSpaceMirror
   "ElasticitySolutions"
   )

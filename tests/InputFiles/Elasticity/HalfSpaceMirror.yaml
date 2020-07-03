@@ -1,0 +1,116 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveHalfSpaceMirror
+# Check: parse;execute
+# ExpectedOutput:
+#   ElasticitySolveHalfSpaceMirrorReductions.h5
+#   ElasticitySolveHalfSpaceMirrorVolume0.h5
+
+AnalyticSolution:
+  HalfSpaceMirror:
+    BeamWidth: 0.177
+    IntegrationIntervals: 500
+    Material:
+      # Fused Silica
+      BulkModulus: 36.36363636363637
+      ShearModulus: 30.76923076923077
+
+DomainCreator:
+  CylindricalMirror:
+    PartitionInRadius: [0.08,0.8,3,9.2,30]
+    PartitionInZ: [0,0.2,0.6,2,8,30]
+    RefLevSquare: [0,0,0,0,0]
+    RefLevRadius: [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
+    RefLevTheta: [[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]
+    RefLevZ: [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]]
+    UseEquiangularMap: true
+    #cutoff: 1.e-03
+    # GridPointsSquare: [[2,2],[2,2],[2,2],[2,2],[2,2]]
+    # GridPointsRadius: [[3,2,2,2],[2,2,2,2],[2,2,2,2],[2,2,2,2],[2,2,2,2]]
+    # GridPointsTheta: [[2,2,2,2],[2,2,2,2],[2,2,2,2],[2,2,2,2],[2,2,2,2]]
+    # GridPointsZ: [[2,2,2,2,2],[2,2,2,2,2],[2,2,2,2,2],[2,2,2,2,2],[2,2,2,2,2]]
+    #cutoff: 1.e-04
+    #GridPointsSquare: [[3,3],[3,3],[2,2],[2,2],[2,2]]
+    #GridPointsRadius: [[3,3,2,2],[2,2,2,2],[2,3,2,2],[2,2,2,2],[2,2,2,2]]
+    #GridPointsTheta: [[2,2,2,2],[2,2,2,2],[2,2,2,2],[2,2,2,2],[2,2,2,2]]
+    #GridPointsZ: [[3,3,2,2,2],[2,3,2,2,2],[2,3,2,2,2],[2,2,3,2,2],[2,2,2,2,2]]
+    #cutoff: 1.e-05
+    GridPointsSquare: [[4,4],[4,4],[3,3],[2,2],[2,2]]
+    GridPointsRadius: [[3,4,2,2],[2,4,3,2],[2,4,3,2],[2,2,3,2],[2,2,2,2]]
+    GridPointsTheta: [[2,2,2,2],[2,2,2,2],[2,2,2,2],[2,2,2,2],[2,2,2,2]]
+    GridPointsZ: [[4,4,2,2,2],[2,4,2,2,2],[2,4,3,2,2],[2,2,4,3,2],[2,2,2,3,3]]
+    #cutoff: 1.e-06
+    #GridPointsSquare: [[5,5],[5,5],[4,4],[3,3],[2,2]]
+    #GridPointsRadius: [[3,5,3,3],[2,5,4,3],[2,4,4,3],[2,2,4,3],[2,2,2,3]]
+    #GridPointsTheta: [[2,2,2,2],[2,2,2,2],[2,2,2,2],[2,2,2,2],[2,2,2,2]]
+    #GridPointsZ: [[5,5,3,2,2],[2,4,2,2,2],[2,5,3,2,2],[2,3,5,3,2],[2,2,3,4,3]]
+    #cutoff: 1.e-07
+    #GridPointsSquare: [[5,5],[5,5],[5,5],[3,3],[2,2]]
+    #GridPointsRadius: [[3,6,5,4],[2,6,5,4],[2,5,5,4],[2,2,5,5],[2,2,2,4]]
+    #GridPointsTheta: [[2,2,2,2],[2,2,2,2],[2,3,2,2],[2,3,3,2],[2,2,2,2]]
+    #GridPointsZ: [[6,5,3,2,2],[2,5,2,3,2],[2,6,3,3,2],[2,3,6,3,2],[2,2,3,5,3]]
+    #cutoff: 1.e-08
+    #GridPointsSquare: [[5,5],[6,6],[6,6],[4,4],[3,3]]
+    #GridPointsRadius: [[3,7,6,5],[2,8,6,5],[2,5,6,5],[2,2,5,6],[2,2,2,4]]
+    #GridPointsTheta: [[2,2,2,2],[2,2,2,2],[2,4,2,2],[2,4,4,2],[2,2,4,3]]
+    #GridPointsZ: [[6,6,3,3,2],[2,6,2,3,2],[2,7,3,4,3],[3,4,7,3,2],[2,3,4,6,4]]
+    #cutoff: 1.e-09
+    #GridPointsSquare: [[5,5],[7,7],[7,7],[5,5],[4,4]]
+    #GridPointsRadius: [[3,8,7,6],[2,9,7,6],[2,5,7,6],[2,2,5,7],[2,2,2,4]]
+    #GridPointsTheta: [[2,2,2,2],[2,2,2,2],[2,4,2,2],[2,4,4,2],[2,4,4,4]]
+    #GridPointsZ: [[7,7,3,3,2],[2,6,2,3,g3],[2,8,3,4,3],[3,4,8,3,2],[2,3,4,7,4]]
+    #cutoff: 1.e-10
+    #GridPointsSquare: [[5,5],[7,7],[8,8],[6,6],[5,5]]
+    #GridPointsRadius: [[3,10,8,7],[2,9,8,7],[2,5,8,7],[2,2,5,8],[2,2,2,4]]
+    #GridPointsTheta: [[2,2,2,2],[2,2,2,2],[2,5,2,2],[2,5,5,2],[2,4,4,4]]
+    #GridPointsZ: [[8,8,3,3,3],[2,7,2,3,3],[2,9,3,4,3],[3,4,9,3,2],[3,3,4,8,4]]
+    #cutoff: 1.e-11
+    #GridPointsSquare: [[5,5],[7,7],[8,8],[7,7],[6,6]]
+    #GridPointsRadius: [[3,11,9,8],[2,10,8,8],[2,5,9,8],[2,2,5,9],[2,2,2,4]]
+    #GridPointsTheta: [[2,2,2,2],[2,2,2,2],[2,6,2,2],[2,6,5,2],[2,5,5,5]]
+    #GridPointsZ: [[8,8,3,3,3],[2,8,2,3,3],[2,9,3,4,3],[3,4,9,3,2],[3,3,4,9,4]]
+    #cutoff: 1.e-12
+    #GridPointsSquare: [[5,5],[7,7],[9,9],[8,8],[6,6]]
+    #GridPointsRadius: [[3,12,10,9],[2,11,9,9],[2,5,10,9],[2,2,5,9],[2,2,2,4]]
+    #GridPointsTheta: [[2,2,2,2],[2,2,2,2],[2,6,2,2],[2,6,6,2],[2,5,6,6]]
+    #GridPointsZ: [[9,9,3,3,3],[2,9,2,3,3],[2,10,3,4,3],[3,4,9,3,2],[3,3,4,9,4]]
+
+#Layered:
+#  LayerBoundaries: [a, b, c]
+#  Materials:
+#    - IsotropicHomogeneous:
+#        ShearModulus:
+#        BulkModulus:
+#    - CubicCrystal:
+#        C11:
+#        C12:
+#        C22:
+
+
+NumericalFlux:
+  InternalPenalty:
+    PenaltyParameter: 1.5
+
+Observers:
+  VolumeFileName: "HalfSpaceMirrorVolume"
+  ReductionFileName: "HalfSpaceMirrorReductions"
+LinearSolver:
+  ConvergenceCriteria:
+    MaxIterations: 3000
+    AbsoluteResidual: 1e-12
+    RelativeResidual: 0
+  Verbosity: Verbose
+
+EventsAndTriggers:
+  ? EveryNIterations:
+      N: 50
+  : - ObserveFields
+  ? EveryNIterations:
+      Offset: 0
+      N: 50
+  : - ObserveErrorNorms
+  ? EveryNIterations:
+      Offset: 25
+      N: 50
+  :  - ObserveVolumeIntegrals

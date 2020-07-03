@@ -17,6 +17,7 @@
 #include "Elliptic/DiscontinuousGalerkin/NumericalFluxes/FirstOrderInternalPenalty.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
+#include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Elliptic/Triggers/EveryNIterations.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
@@ -41,13 +42,17 @@
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeMortars.hpp"
 #include "ParallelAlgorithms/Events/ObserveErrorNorms.hpp"
 #include "ParallelAlgorithms/Events/ObserveFields.hpp"
+#include "ParallelAlgorithms/Events/ObserveVolumeIntegrals.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/Actions/RunEventsAndTriggers.hpp"
+#include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Actions/TerminateIfConverged.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/BentBeam.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Elasticity/HalfSpaceMirror.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "PointwiseFunctions/Elasticity/PotentialEnergy.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -123,13 +128,17 @@ struct Metavariables {
   // (public for use by the Charm++ registration code)
   using observe_fields =
       db::get_variables_tags_list<typename system::fields_tag>;
-  using analytic_solution_fields = observe_fields;
-  using events =
-      tmpl::list<dg::Events::Registrars::ObserveFields<
-                     volume_dim, linear_solver_iteration_id, observe_fields,
-                     analytic_solution_fields>,
-                 dg::Events::Registrars::ObserveErrorNorms<
-                     linear_solver_iteration_id, analytic_solution_fields>>;
+  using analytic_solution_fields =
+      db::get_variables_tags_list<typename system::fields_tag>;
+  using events = tmpl::list<
+      dg::Events::Registrars::ObserveFields<
+          volume_dim, linear_solver_iteration_id, observe_fields,
+          analytic_solution_fields>,
+      dg::Events::Registrars::ObserveErrorNorms<linear_solver_iteration_id,
+                                                analytic_solution_fields>,
+      dg::Events::Registrars::ObserveVolumeIntegrals<
+          volume_dim, linear_solver_iteration_id,
+          tmpl::list<Elasticity::Tags::PotentialEnergyDensity<volume_dim>>>>;
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       linear_solver_iteration_id>>;
 
@@ -158,6 +167,8 @@ struct Metavariables {
           dg::Initialization::exterior_compute_tags<>, false, false>,
       typename linear_solver::initialize_element,
       elliptic::Actions::InitializeSystem,
+      Initialization::Actions::AddComputeTags<tmpl::list<
+          Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>>>,
       elliptic::Actions::InitializeAnalyticSolution<analytic_solution_tag,
                                                     analytic_solution_fields>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
