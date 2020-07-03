@@ -63,8 +63,8 @@ class SegmentId {
  public:
   static constexpr size_t block_id_bits = 7;
   static constexpr size_t refinement_bits = 5;
-  static constexpr size_t max_refinement_level = 20;
-  static_assert(block_id_bits + refinement_bits + max_refinement_level ==
+  static constexpr size_t max_refinement_level = 15;
+  static_assert(block_id_bits + 2 * refinement_bits + max_refinement_level ==
                     8 * sizeof(int),
                 "Bit representation requires padding or is too large");
   static_assert(two_to_the(refinement_bits) >= max_refinement_level,
@@ -117,7 +117,8 @@ class SegmentId {
   template <size_t VolumeDim>
   friend class ElementId;
 
-  SegmentId(size_t block_id, size_t refinement_level, size_t index) noexcept;
+  SegmentId(size_t block_id, size_t refinement_level, size_t index,
+            size_t grid_index) noexcept;
   size_t block_id() const noexcept { return block_id_; }
   void set_block_id(const size_t block_id) noexcept {
     ASSERT(block_id < two_to_the(block_id_bits),
@@ -125,10 +126,15 @@ class SegmentId {
                                       << two_to_the(block_id_bits) - 1);
     block_id_ = block_id;
   }
+  size_t grid_index() const noexcept { return grid_index_; }
+  void set_grid_index(const size_t grid_index) noexcept {
+    grid_index_ = grid_index;
+  }
 
   unsigned block_id_ : block_id_bits;
   unsigned refinement_level_ : refinement_bits;
   unsigned index_ : max_refinement_level;
+  unsigned grid_index_ : refinement_bits;
 };
 
 /// \cond
