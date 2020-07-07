@@ -90,7 +90,7 @@ void test_fluxes_and_sources() {
   Variables<db::wrap_tags_in<::Tags::Flux, all_fields, tmpl::size_t<Dim>,
                              Frame::Inertial>>
       fluxes{num_points};
-  elliptic::first_order_fluxes<Dim, primal_fields, auxiliary_fields>(
+  elliptic::first_order_fluxes<primal_fields, auxiliary_fields>(
       make_not_null(&fluxes), vars, fluxes_computer, 3.);
   // Check return-by-ref and return-by-value functions are equal
   CHECK(fluxes ==

@@ -12,36 +12,48 @@
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
+#include "Utilities/TupleSlice.hpp"
 
 namespace elliptic {
 
+
 namespace first_order_operator_detail {
 
-template <size_t Dim, typename PrimalFields, typename AuxiliaryFields>
-struct FirstOrderFluxesImpl;
+template <typename... Fluxes, typename... Vars, typename FluxesComputer,
+          typename... FluxesArgs>
+void fluxes_dispatch(
+    const std::tuple<gsl::not_null<Fluxes*>...>& fluxes,
+    const std::tuple<Vars...>& vars, const FluxesComputer& fluxes_computer,
+    const FluxesArgs&... fluxes_args) noexcept {
+  std::apply(
+      [&](const auto... expanded_fluxes) noexcept {
+        std::apply(
+            [&](const auto&... expanded_vars) noexcept {
+              fluxes_computer.apply(expanded_fluxes..., fluxes_args...,
+                                    expanded_vars...);
+            },
+            vars);
+      },
+      fluxes);
+}
 
-template <size_t Dim, typename... PrimalFields, typename... AuxiliaryFields>
-struct FirstOrderFluxesImpl<Dim, tmpl::list<PrimalFields...>,
-                            tmpl::list<AuxiliaryFields...>> {
-  template <typename VarsTags, typename FluxesComputer, typename... FluxesArgs>
-  static constexpr void apply(
-      const gsl::not_null<Variables<db::wrap_tags_in<
-          ::Tags::Flux, VarsTags, tmpl::size_t<Dim>, Frame::Inertial>>*>
-          fluxes,
-      const Variables<VarsTags>& vars, const FluxesComputer& fluxes_computer,
-      const FluxesArgs&... fluxes_args) noexcept {
-    // Compute fluxes for primal fields
-    fluxes_computer.apply(
-        make_not_null(&get<::Tags::Flux<PrimalFields, tmpl::size_t<Dim>,
-                                        Frame::Inertial>>(*fluxes))...,
-        fluxes_args..., get<AuxiliaryFields>(vars)...);
-    // Compute fluxes for auxiliary fields
-    fluxes_computer.apply(
-        make_not_null(&get<::Tags::Flux<AuxiliaryFields, tmpl::size_t<Dim>,
-                                        Frame::Inertial>>(*fluxes))...,
-        fluxes_args..., get<PrimalFields>(vars)...);
-  }
-};
+template <size_t NumPrimalFields, size_t NumAuxiliaryFields, typename... Fluxes,
+          typename... Vars, typename FluxesComputer, typename... FluxesArgs>
+void fluxes_impl(
+    const std::tuple<gsl::not_null<Fluxes*>...>& fluxes,
+    const std::tuple<Vars...>& vars, const FluxesComputer& fluxes_computer,
+    const FluxesArgs&... fluxes_args) noexcept {
+  const auto primal_fluxes = tuple_head<NumPrimalFields>(fluxes);
+  const auto auxiliary_fluxes = tuple_tail<NumAuxiliaryFields>(fluxes);
+  const auto primal_vars = tuple_head<NumPrimalFields>(vars);
+  const auto auxiliary_vars = tuple_tail<NumAuxiliaryFields>(vars);
+  // Compute fluxes for primal fields
+  fluxes_dispatch(primal_fluxes, auxiliary_vars, fluxes_computer,
+                  fluxes_args...);
+  // Compute fluxes for auxiliary fields
+  fluxes_dispatch(auxiliary_fluxes, primal_vars, fluxes_computer,
+                  fluxes_args...);
+}
 
 template <typename PrimalFields, typename AuxiliaryFields,
           typename SourcesComputer>
@@ -65,7 +77,7 @@ struct FirstOrderSourcesImpl<tmpl::list<PrimalFields...>,
     // Compute sources for auxiliary fields. They are just the auxiliary field
     // values.
     tmpl::for_each<tmpl::list<AuxiliaryFields...>>(
-        [&sources, &vars ](const auto auxiliary_field_tag_v) noexcept {
+        [&sources, &vars](const auto auxiliary_field_tag_v) noexcept {
           using auxiliary_field_tag =
               tmpl::type_from<decltype(auxiliary_field_tag_v)>;
           get<::Tags::Source<auxiliary_field_tag>>(*sources) =
@@ -83,18 +95,18 @@ struct FirstOrderSourcesImpl<tmpl::list<PrimalFields...>,
  *
  * \see `elliptic::first_order_operator`
  */
-template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
-          typename VarsTags, typename FluxesComputer, typename... FluxesArgs>
+template <typename PrimalFields, typename AuxiliaryFields,
+          typename... FluxesTags, typename... VarsTags, typename FluxesComputer,
+          typename... FluxesArgs>
 void first_order_fluxes(
-    gsl::not_null<Variables<db::wrap_tags_in<
-        ::Tags::Flux, VarsTags, tmpl::size_t<Dim>, Frame::Inertial>>*>
-        fluxes,
-    const Variables<VarsTags>& vars, const FluxesComputer& fluxes_computer,
+    const gsl::not_null<Variables<tmpl::list<FluxesTags...>>*> fluxes,
+    const Variables<tmpl::list<VarsTags...>>& vars,
+    const FluxesComputer& fluxes_computer,
     const FluxesArgs&... fluxes_args) noexcept {
-  first_order_operator_detail::FirstOrderFluxesImpl<
-      Dim, PrimalFields, AuxiliaryFields>::apply(std::move(fluxes), vars,
-                                                 fluxes_computer,
-                                                 fluxes_args...);
+  first_order_operator_detail::fluxes_impl<tmpl::size<PrimalFields>::value,
+                                           tmpl::size<AuxiliaryFields>::value>(
+      std::make_tuple(make_not_null(&get<FluxesTags>(*fluxes))...),
+      std::make_tuple(get<VarsTags>(vars)...), fluxes_computer, fluxes_args...);
 }
 
 template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
@@ -105,10 +117,8 @@ auto first_order_fluxes(const Variables<VarsTags>& vars,
   Variables<db::wrap_tags_in<::Tags::Flux, VarsTags, tmpl::size_t<Dim>,
                              Frame::Inertial>>
       fluxes{vars.number_of_grid_points()};
-  first_order_operator_detail::FirstOrderFluxesImpl<
-      Dim, PrimalFields, AuxiliaryFields>::apply(make_not_null(&fluxes), vars,
-                                                 fluxes_computer,
-                                                 fluxes_args...);
+  first_order_fluxes<PrimalFields, AuxiliaryFields>(
+      make_not_null(&fluxes), vars, fluxes_computer, fluxes_args...);
   return fluxes;
 }
 // @}
@@ -146,6 +156,7 @@ auto first_order_sources(const Variables<VarsTags>& vars,
 }
 // @}
 
+// @{
 /*!
  * \brief Compute the bulk contribution to the operator represented by the
  * `OperatorTags`.
@@ -164,6 +175,45 @@ void first_order_operator(
     const Variables<SourcesTags>& sources) noexcept {
   *operator_applied_to_vars = sources - div_fluxes;
 }
+
+// Compute bulk contribution in central element
+template <typename PrimalFields, typename AuxiliaryFields,
+          typename SourcesComputer, typename OperatorTags, typename FluxesTags,
+          typename DivFluxesTags, typename VarsTags, size_t Dim,
+          typename FluxesComputer, typename... FluxesArgs,
+          typename... SourcesArgs>
+void first_order_operator(
+    const gsl::not_null<Variables<OperatorTags>*> operator_applied_to_vars,
+    const gsl::not_null<Variables<FluxesTags>*> fluxes,
+    const gsl::not_null<Variables<DivFluxesTags>*> div_fluxes,
+    const Variables<VarsTags>& vars, const Mesh<Dim>& mesh,
+    const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
+        inv_jacobian,
+    const FluxesComputer& fluxes_computer,
+    const std::tuple<FluxesArgs...>& fluxes_args,
+    const std::tuple<SourcesArgs...>& sources_args) noexcept {
+  // Compute volume fluxes
+  std::apply(
+      [&](const auto&... expanded_fluxes_args) {
+        first_order_fluxes<PrimalFields, AuxiliaryFields>(
+            fluxes, vars, fluxes_computer, expanded_fluxes_args...);
+      },
+      fluxes_args);
+  // Compute divergence of volume fluxes
+  divergence(div_fluxes, *fluxes, mesh, inv_jacobian);
+  // Compute volume sources
+  auto sources = std::apply(
+      [&](const auto&... expanded_sources_args) {
+        return first_order_sources<PrimalFields, AuxiliaryFields,
+                                   SourcesComputer>(vars,
+                                                    expanded_sources_args...);
+      },
+      sources_args);
+  // Assemble operator from div_fluxes and sources
+  first_order_operator(operator_applied_to_vars, *div_fluxes,
+                       std::move(sources));
+}
+// @}
 
 /*!
  * \brief Mutating DataBox invokable to compute the bulk contribution to the
