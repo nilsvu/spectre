@@ -4,14 +4,21 @@
 #pragma once
 
 #include <cstddef>
+#include <tuple>
 
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Tensor/TypeAliases.hpp"
 #include "DataStructures/Variables.hpp"
-#include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
+
+/// \cond
+template <size_t Dim>
+struct Mesh;
+/// \endcond
 
 namespace elliptic {
 
@@ -146,6 +153,7 @@ auto first_order_sources(const Variables<VarsTags>& vars,
 }
 // @}
 
+// @{
 /*!
  * \brief Compute the bulk contribution to the operator represented by the
  * `OperatorTags`.
@@ -164,6 +172,44 @@ void first_order_operator(
     const Variables<SourcesTags>& sources) noexcept {
   *operator_applied_to_vars = sources - div_fluxes;
 }
+
+template <typename PrimalFields, typename AuxiliaryFields,
+          typename SourcesComputer, typename OperatorTags, typename FluxesTags,
+          typename DivFluxesTags, typename VarsTags, size_t Dim,
+          typename FluxesComputer, typename... FluxesArgs,
+          typename... SourcesArgs>
+void first_order_operator(
+    const gsl::not_null<Variables<OperatorTags>*> operator_applied_to_vars,
+    const gsl::not_null<Variables<FluxesTags>*> fluxes,
+    const gsl::not_null<Variables<DivFluxesTags>*> div_fluxes,
+    const Variables<VarsTags>& vars, const Mesh<Dim>& mesh,
+    const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
+        inv_jacobian,
+    const FluxesComputer& fluxes_computer,
+    const std::tuple<FluxesArgs...>& fluxes_args,
+    const std::tuple<SourcesArgs...>& sources_args) noexcept {
+  // Compute volume fluxes
+  std::apply(
+      [&](const auto&... expanded_fluxes_args) {
+        first_order_fluxes<Dim, PrimalFields, AuxiliaryFields>(
+            fluxes, vars, fluxes_computer, expanded_fluxes_args...);
+      },
+      fluxes_args);
+  // Compute divergence of volume fluxes
+  divergence(div_fluxes, *fluxes, mesh, inv_jacobian);
+  // Compute volume sources
+  auto sources = std::apply(
+      [&](const auto&... expanded_sources_args) {
+        return first_order_sources<PrimalFields, AuxiliaryFields,
+                                   SourcesComputer>(vars,
+                                                    expanded_sources_args...);
+      },
+      sources_args);
+  // Assemble operator from div_fluxes and sources
+  first_order_operator(operator_applied_to_vars, *div_fluxes,
+                       std::move(sources));
+}
+// @}
 
 /*!
  * \brief Mutating DataBox invokable to compute the bulk contribution to the
@@ -209,10 +255,12 @@ struct FirstOrderOperator {
  public:
   using return_tags = tmpl::list<operator_tag>;
   using argument_tags = tmpl::list<div_fluxes_tag, sources_tag>;
-  static constexpr auto apply =
-      &first_order_operator<db::get_variables_tags_list<operator_tag>,
-                            db::get_variables_tags_list<div_fluxes_tag>,
-                            db::get_variables_tags_list<sources_tag>>;
+  static constexpr auto apply = static_cast<void (*)(
+      const gsl::not_null<Variables<db::get_variables_tags_list<operator_tag>>*>
+          operator_applied_to_vars,
+      const Variables<db::get_variables_tags_list<div_fluxes_tag>>& div_fluxes,
+      const Variables<db::get_variables_tags_list<sources_tag>>&
+          sources) noexcept>(&first_order_operator);
 };
 
 }  // namespace elliptic
