@@ -9,7 +9,9 @@
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
-#include "Elliptic/Actions/InitializeSystem.hpp"
+#include "Elliptic/Actions/InitializeFields.hpp"
+#include "Elliptic/Actions/InitializeFixedSources.hpp"
+#include "Elliptic/Actions/InitializeLinearOperator.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeBoundaryConditions.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
@@ -74,6 +76,8 @@ struct Metavariables {
   using initial_guess = InitialGuess;
   using boundary_conditions = BoundaryConditions;
 
+  static constexpr bool massive_operator = false;
+
   static constexpr OptionString help{
       "Find the solution to a linear elasticity problem.\n"
       "Linear solver: GMRES\n"
@@ -96,9 +100,9 @@ struct Metavariables {
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
-  using linear_solver = LinearSolver::Gmres<
+  using linear_solver = LinearSolver::gmres::Gmres<
       Metavariables, typename system::fields_tag,
-      SolveElasticityProblem::OptionTags::LinearSolverGroup>;
+      SolveElasticityProblem::OptionTags::LinearSolverGroup, false>;
   using linear_solver_iteration_id =
       LinearSolver::Tags::IterationId<typename linear_solver::options_group>;
   // For the GMRES linear solver we need to apply the DG operator to its
@@ -119,10 +123,9 @@ struct Metavariables {
   // Specify the DG boundary scheme. We use the strong first-order scheme here
   // that only requires us to compute normals dotted into the first-order
   // fluxes.
-  using boundary_scheme =
-      dg::FirstOrderScheme::FirstOrderScheme<volume_dim, linear_operand_tag,
-                                             normal_dot_numerical_flux,
-                                             linear_solver_iteration_id>;
+  using boundary_scheme = dg::FirstOrderScheme::FirstOrderScheme<
+      volume_dim, linear_operand_tag, normal_dot_numerical_flux,
+      linear_solver_iteration_id, massive_operator>;
 
   // Collect events and triggers
   // (public for use by the Charm++ registration code)
@@ -165,8 +168,9 @@ struct Metavariables {
           dg::Initialization::face_compute_tags<
               domain::Tags::BoundaryCoordinates<volume_dim>>,
           dg::Initialization::exterior_compute_tags<>, false, false>,
+      elliptic::Actions::InitializeFields,
+      elliptic::Actions::InitializeFixedSources,
       typename linear_solver::initialize_element,
-      elliptic::Actions::InitializeSystem,
       Initialization::Actions::AddComputeTags<tmpl::list<
           Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>>>,
       elliptic::Actions::InitializeAnalyticSolution<analytic_solution_tag,
@@ -184,8 +188,8 @@ struct Metavariables {
           boundary_scheme, domain::Tags::InternalDirections<volume_dim>>,
       dg::Actions::SendDataForFluxes<boundary_scheme>,
       Actions::MutateApply<elliptic::FirstOrderOperator<
-          volume_dim, LinearSolver::Tags::OperatorAppliedTo,
-          linear_operand_tag>>,
+          volume_dim, LinearSolver::Tags::OperatorAppliedTo, linear_operand_tag,
+          massive_operator>>,
       elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
           linear_operand_tag, primal_variables>,
       dg::Actions::CollectDataForFluxes<
@@ -200,6 +204,7 @@ struct Metavariables {
       // We prepare the linear solve here to avoid adding an extra phase. We
       // can't do that before registration because the `prepare_solve` action
       // may contribute to observers.
+      elliptic::Actions::InitializeLinearOperator,
       typename linear_solver::prepare_solve, Parallel::Actions::TerminatePhase>;
 
   using solve_actions = tmpl::list<Actions::RunEventsAndTriggers,
