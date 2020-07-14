@@ -13,6 +13,7 @@ set(LIBS_TO_LINK
   LinearOperators
   Options
   ParallelLinearSolver
+  ParallelMultigrid
   Utilities
   )
 

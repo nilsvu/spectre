@@ -17,6 +17,8 @@
 #include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
 #include "Elliptic/DiscontinuousGalerkin/InitializeFirstOrderOperator.hpp"
 #include "Elliptic/DiscontinuousGalerkin/NumericalFluxes/FirstOrderInternalPenalty.hpp"
+#include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/InitializeSubdomain.hpp"
+#include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
@@ -30,6 +32,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/FirstOrder/FirstOrderScheme.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
+#include "Parallel/Actions/Goto.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "Parallel/InitializationFunctions.hpp"
@@ -37,6 +40,7 @@
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
 #include "ParallelAlgorithms/Actions/MutateApply.hpp"
+#include "ParallelAlgorithms/Actions/SetData.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/CollectDataForFluxes.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/FluxCommunication.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
@@ -50,6 +54,9 @@
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Actions/TerminateIfConverged.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
+#include "ParallelAlgorithms/LinearSolver/Multigrid/ElementsAllocator.hpp"
+#include "ParallelAlgorithms/LinearSolver/Multigrid/Multigrid.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/BentBeam.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/HalfSpaceMirror.hpp"
@@ -63,10 +70,69 @@ namespace OptionTags {
 struct LinearSolverGroup {
   static std::string name() noexcept { return "LinearSolver"; }
   static constexpr OptionString help =
-      "Options for the iterative linear solver";
+      "The iterative Krylov-subspace linear solver";
+};
+struct GmresGroup {
+  static std::string name() noexcept { return "GMRES"; }
+  static constexpr OptionString help = "Options for the GMRES linear solver";
+  using group = LinearSolverGroup;
+};
+struct PreconditionerGroup {
+  static std::string name() noexcept { return "Preconditioner"; }
+  static constexpr OptionString help =
+      "The preconditioner for the linear solver";
+  using group = LinearSolverGroup;
+};
+struct MultigridGroup {
+  static std::string name() noexcept { return "Multigrid"; }
+  static constexpr OptionString help =
+      "Options for the multigrid preconditioner";
+  using group = PreconditionerGroup;
+};
+struct PreSmootherGroup {
+  static std::string name() noexcept { return "PreSmoother"; }
+  static constexpr OptionString help =
+      "The smoother going down (coarsening) the multigrid V-cycle";
+  using group = PreconditionerGroup;
+};
+struct PreSchwarzGroup {
+  static std::string name() noexcept { return "Schwarz"; }
+  static constexpr OptionString help =
+      "Options for the Schwarz solver used for pre-smoothing.";
+  using group = PreSmootherGroup;
+};
+struct PostSmootherGroup {
+  static std::string name() noexcept { return "PostSmoother"; }
+  static constexpr OptionString help =
+      "The smoother going up (refining) the multigrid V-cycle";
+  using group = PreconditionerGroup;
+};
+struct PostSchwarzGroup {
+  static std::string name() noexcept { return "Schwarz"; }
+  static constexpr OptionString help =
+      "Options for the Schwarz solver used for post-smoothing";
+  using group = PostSmootherGroup;
 };
 }  // namespace OptionTags
+template <typename... Tags>
+struct CombinedIterationId : db::ComputeTag {
+  static std::string name() noexcept { return "CombinedIterationId"; }
+  using argument_tags = tmpl::list<Tags...>;
+  static tuples::TaggedTuple<Tags...> function(
+      const db::const_item_type<Tags>&... components) noexcept {
+    return {components...};
+  }
+  template <typename Tag>
+  using step_prefix = LinearSolver::Tags::OperatorAppliedTo<Tag>;
+};
 }  // namespace SolveElasticityProblem
+
+struct RegisterWithObserversLabel {};
+struct PreconditionerDisabledLabel {};
+struct PreconditioningLabel {};
+struct PrepareLinearSolveLabel {};
+struct PrepareLinearSolverStepLabel {};
+struct PerformLinearSolverStepLabel {};
 
 /// \cond
 template <typename System, typename InitialGuess, typename BoundaryConditions>
@@ -102,37 +168,90 @@ struct Metavariables {
   // not positive-definite for the first-order system.
   using linear_solver = LinearSolver::gmres::Gmres<
       Metavariables, typename system::fields_tag,
-      SolveElasticityProblem::OptionTags::LinearSolverGroup, false>;
+      SolveElasticityProblem::OptionTags::GmresGroup, true,
+      LinearSolver::multigrid::Tags::ArraySectionBase<
+          LinearSolver::multigrid::Tags::MultigridLevel>>;
   using linear_solver_iteration_id =
       LinearSolver::Tags::IterationId<typename linear_solver::options_group>;
   // For the GMRES linear solver we need to apply the DG operator to its
   // internal "operand" in every iteration of the algorithm.
-  using linear_operand_tag = db::add_tag_prefix<LinearSolver::Tags::Operand,
-                                                typename system::fields_tag>;
-  using primal_variables = db::wrap_tags_in<LinearSolver::Tags::Operand,
-                                            typename system::primal_fields>;
+  using linear_operand_tag = typename linear_solver::operand_tag;
+  using primal_variables =
+      db::wrap_tags_in<LinearSolver::Tags::Preconditioned,
+                       db::wrap_tags_in<LinearSolver::Tags::Operand,
+                                        typename system::primal_fields>>;
   using auxiliary_variables =
-      db::wrap_tags_in<LinearSolver::Tags::Operand,
-                       typename system::auxiliary_fields>;
+      db::wrap_tags_in<LinearSolver::Tags::Preconditioned,
+                       db::wrap_tags_in<LinearSolver::Tags::Operand,
+                                        typename system::auxiliary_fields>>;
+  static_assert(
+      std::is_same_v<db::get_variables_tags_list<linear_operand_tag>,
+                     tmpl::append<primal_variables, auxiliary_variables>>,
+      "The primal and auxiliary variables must compose the linear operand (in "
+      "the correct order)");
+
+  using preconditioner = LinearSolver::multigrid::Multigrid<
+      Metavariables, linear_operand_tag,
+      SolveElasticityProblem::OptionTags::MultigridGroup,
+      typename linear_solver::preconditioner_source_tag>;
+  using preconditioner_iteration_id =
+      LinearSolver::Tags::IterationId<typename preconditioner::options_group>;
 
   // Parse numerical flux parameters from the input file to store in the cache.
   using normal_dot_numerical_flux = Tags::NumericalFlux<
       elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
           volume_dim, fluxes_computer_tag, primal_variables,
           auxiliary_variables>>;
+
+  using pre_smoother_subdomain_operator = elliptic::dg::SubdomainOperator<
+      volume_dim, primal_variables, auxiliary_variables, fluxes_computer_tag,
+      tmpl::list<>, typename system::sources, tmpl::list<>,
+      normal_dot_numerical_flux,
+      SolveElasticityProblem::OptionTags::PreSchwarzGroup,
+      tmpl::list<::Elasticity::Tags::ConstitutiveRelationBase>,
+      massive_operator>;
+  using pre_smoother = LinearSolver::Schwarz::Schwarz<
+      Metavariables, typename preconditioner::smooth_fields_tag,
+      SolveElasticityProblem::OptionTags::PreSchwarzGroup,
+      pre_smoother_subdomain_operator,
+      typename preconditioner::smooth_source_tag>;
+  using pre_smoother_iteration_id =
+      LinearSolver::Tags::IterationId<typename pre_smoother::options_group>;
+
+  using post_smoother_subdomain_operator = elliptic::dg::SubdomainOperator<
+      volume_dim, primal_variables, auxiliary_variables, fluxes_computer_tag,
+      tmpl::list<>, typename system::sources, tmpl::list<>,
+      normal_dot_numerical_flux,
+      SolveElasticityProblem::OptionTags::PostSchwarzGroup,
+      tmpl::list<::Elasticity::Tags::ConstitutiveRelationBase>,
+      massive_operator>;
+  using post_smoother = LinearSolver::Schwarz::Schwarz<
+      Metavariables, typename preconditioner::smooth_fields_tag,
+      SolveElasticityProblem::OptionTags::PostSchwarzGroup,
+      post_smoother_subdomain_operator,
+      typename preconditioner::smooth_source_tag>;
+  using post_smoother_iteration_id =
+      LinearSolver::Tags::IterationId<typename post_smoother::options_group>;
+
+  using combined_iteration_id = SolveElasticityProblem::CombinedIterationId<
+      linear_solver_iteration_id, preconditioner_iteration_id,
+      pre_smoother_iteration_id, post_smoother_iteration_id>;
+
   // Specify the DG boundary scheme. We use the strong first-order scheme here
   // that only requires us to compute normals dotted into the first-order
   // fluxes.
   using boundary_scheme = dg::FirstOrderScheme::FirstOrderScheme<
       volume_dim, linear_operand_tag, normal_dot_numerical_flux,
-      linear_solver_iteration_id, massive_operator>;
+      combined_iteration_id, massive_operator>;
 
   // Collect events and triggers
   // (public for use by the Charm++ registration code)
+  using system_fields =
+      db::get_variables_tags_list<typename system::fields_tag>;
   using observe_fields =
-      db::get_variables_tags_list<typename system::fields_tag>;
-  using analytic_solution_fields =
-      db::get_variables_tags_list<typename system::fields_tag>;
+      tmpl::push_back<system_fields,
+                      Elasticity::Tags::PotentialEnergyDensity<volume_dim>>;
+  using analytic_solution_fields = system_fields;
   using events = tmpl::list<
       dg::Events::Registrars::ObserveFields<
           volume_dim, linear_solver_iteration_id, observe_fields,
@@ -154,8 +273,9 @@ struct Metavariables {
   // Collect all reduction tags for observers
   struct element_observation_type {};
   using observed_reduction_data_tags =
-      observers::collect_reduction_data_tags<tmpl::flatten<tmpl::list<
-          typename Event<events>::creatable_classes, linear_solver>>>;
+      observers::collect_reduction_data_tags<tmpl::flatten<
+          tmpl::list<typename Event<events>::creatable_classes, linear_solver,
+                     preconditioner, pre_smoother, post_smoother>>>;
 
   // Specify all global synchronization points.
   enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
@@ -171,8 +291,16 @@ struct Metavariables {
       elliptic::Actions::InitializeFields,
       elliptic::Actions::InitializeFixedSources,
       typename linear_solver::initialize_element,
+      typename preconditioner::initialize_element,
+      typename pre_smoother::initialize_element,
+      typename post_smoother::initialize_element,
+      elliptic::dg::Actions::InitializeSubdomain<
+          volume_dim, typename pre_smoother::options_group>,
+      elliptic::dg::Actions::InitializeSubdomain<
+          volume_dim, typename post_smoother::options_group>,
       Initialization::Actions::AddComputeTags<tmpl::list<
-          Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>>>,
+          Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>,
+          combined_iteration_id>>,
       elliptic::Actions::InitializeAnalyticSolution<analytic_solution_tag,
                                                     analytic_solution_fields>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
@@ -198,21 +326,66 @@ struct Metavariables {
       dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
       Actions::MutateApply<boundary_scheme>>;
 
+  template <typename Smoother, typename LabelTag>
+  using smooth_actions = tmpl::list<
+      build_linear_operator_actions, typename Smoother::prepare_solve,
+      ::Actions::RepeatUntil<
+          LinearSolver::Tags::HasConverged<typename Smoother::options_group>,
+          tmpl::list<typename Smoother::prepare_step,
+                     build_linear_operator_actions,
+                     typename Smoother::perform_step>,
+          LabelTag>>;
+
   using register_actions = tmpl::list<
-      observers::Actions::RegisterWithObservers<observers::RegisterObservers<
-          linear_solver_iteration_id, element_observation_type>>,
+      ::Actions::If<
+          LinearSolver::multigrid::Tags::IsFinestLevel,
+          tmpl::list<observers::Actions::RegisterWithObservers<
+              observers::RegisterObservers<linear_solver_iteration_id,
+                                           element_observation_type>>>,
+          RegisterWithObserversLabel>,
       // We prepare the linear solve here to avoid adding an extra phase. We
       // can't do that before registration because the `prepare_solve` action
       // may contribute to observers.
       elliptic::Actions::InitializeLinearOperator,
-      typename linear_solver::prepare_solve, Parallel::Actions::TerminatePhase>;
+      ::Actions::If<LinearSolver::multigrid::Tags::IsFinestLevel,
+                    tmpl::list<typename linear_solver::prepare_solve>,
+                    PrepareLinearSolveLabel>,
+      Parallel::Actions::TerminatePhase>;
 
-  using solve_actions = tmpl::list<Actions::RunEventsAndTriggers,
-                                   LinearSolver::Actions::TerminateIfConverged<
-                                       typename linear_solver::options_group>,
-                                   typename linear_solver::prepare_step,
-                                   build_linear_operator_actions,
-                                   typename linear_solver::perform_step>;
+  using solve_actions = tmpl::list<
+      ::Actions::If<LinearSolver::multigrid::Tags::IsFinestLevel,
+                    tmpl::list<Actions::RunEventsAndTriggers,
+                               LinearSolver::Actions::TerminateIfConverged<
+                                   typename linear_solver::options_group>,
+                               typename linear_solver::prepare_step>,
+                    PrepareLinearSolverStepLabel>,
+      typename preconditioner::prepare_solve,
+      // If preconditioning is disabled, make it the identity operation
+      ::Actions::If<
+          LinearSolver::Tags::HasConverged<
+              typename preconditioner::options_group>,
+          tmpl::list<::Actions::Copy<typename preconditioner::source_tag,
+                                     typename preconditioner::fields_tag>,
+                     build_linear_operator_actions>,
+          PreconditionerDisabledLabel>,
+      // Run preconditioner
+      ::Actions::RepeatUntil<
+          LinearSolver::Tags::HasConverged<
+              typename preconditioner::options_group>,
+          tmpl::list<typename preconditioner::prepare_step_down,
+                     smooth_actions<pre_smoother,
+                                    LinearSolver::multigrid::VcycleDownLabel>,
+                     build_linear_operator_actions,
+                     typename preconditioner::perform_step_down,
+                     typename preconditioner::prepare_step_up,
+                     smooth_actions<post_smoother,
+                                    LinearSolver::multigrid::VcycleUpLabel>,
+                     build_linear_operator_actions,
+                     typename preconditioner::perform_step_up>,
+          PreconditioningLabel>,
+      ::Actions::If<LinearSolver::multigrid::Tags::IsFinestLevel,
+                    tmpl::list<typename linear_solver::perform_step>,
+                    PerformLinearSolverStepLabel>>;
 
   using dg_element_array = elliptic::DgElementArray<
       Metavariables,
@@ -220,11 +393,16 @@ struct Metavariables {
                                         initialization_actions>,
                  Parallel::PhaseActions<Phase, Phase::RegisterWithObserver,
                                         register_actions>,
-                 Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>>>;
+                 Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>>,
+      LinearSolver::multigrid::ElementsAllocator<
+          volume_dim, typename preconditioner::options_group>>;
 
   // Specify all parallel components that will execute actions at some point.
   using component_list = tmpl::flatten<
       tmpl::list<dg_element_array, typename linear_solver::component_list,
+                 typename preconditioner::component_list,
+                 typename pre_smoother::component_list,
+                 typename post_smoother::component_list,
                  observers::Observer<Metavariables>,
                  observers::ObserverWriter<Metavariables>>>;
 

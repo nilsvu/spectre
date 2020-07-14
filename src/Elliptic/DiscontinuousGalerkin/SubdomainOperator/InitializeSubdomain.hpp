@@ -22,6 +22,7 @@
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Parallel/ConstGlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/OverlapHelpers.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Tags.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
@@ -80,6 +81,8 @@ struct InitializeSubdomain {
     overlaps<::dg::MortarMap<Dim, Mesh<Dim - 1>>> overlap_mortar_meshes{};
     overlaps<::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>>
         overlap_mortar_sizes{};
+    overlaps<tnsr::I<DataVector, Dim, Frame::Inertial>>
+        overlap_inertial_coords{};
 
     const auto& element = db::get<domain::Tags::Element<Dim>>(box);
     for (const auto& direction_and_neighbors : element.neighbors()) {
@@ -151,6 +154,10 @@ struct InitializeSubdomain {
                                       std::move(neighbor_mortar_meshes));
         overlap_mortar_sizes.emplace(overlap_id,
                                      std::move(neighbor_mortar_sizes));
+        auto neighbor_inertial_coords = overlap_element_maps.at(overlap_id)(
+            logical_coordinates(neighbor_mesh));
+        overlap_inertial_coords.emplace(overlap_id,
+                                        std::move(neighbor_inertial_coords));
       }
     }
 
@@ -162,11 +169,12 @@ struct InitializeSubdomain {
                 overlaps_tag<domain::Tags::Extents<Dim>>,
                 overlaps_tag<domain::Tags::ElementMap<Dim>>,
                 overlaps_tag<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>,
-                overlaps_tag<
-                    ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>>>(
+                overlaps_tag<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>,
+                overlaps_tag<domain::Tags::Coordinates<Dim, Frame::Inertial>>>>(
             std::move(box), std::move(overlap_meshes),
             std::move(overlap_extents), std::move(overlap_element_maps),
-            std::move(overlap_mortar_meshes), std::move(overlap_mortar_sizes)));
+            std::move(overlap_mortar_meshes), std::move(overlap_mortar_sizes),
+            std::move(overlap_inertial_coords)));
   }
 
   template <
