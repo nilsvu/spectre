@@ -343,9 +343,12 @@ struct SolveSubdomain {
                    static_cast<int>(
                        get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
                    static_cast<int>(::Verbosity::Verbose))) {
-      Parallel::printf("%s Subdomain solver converged in %zu iterations.\n",
-                       element_id,
-                       subdomain_solve_has_converged.num_iterations());
+      Parallel::printf(
+          "%s Subdomain solver converged in %zu iterations (%s): %e -> %e \n",
+          element_id, subdomain_solve_has_converged.num_iterations(),
+          subdomain_solve_has_converged.reason(),
+          subdomain_solve_has_converged.initial_residual_magnitude(),
+          subdomain_solve_has_converged.residual_magnitude());
     }
 
     // Apply weighting
