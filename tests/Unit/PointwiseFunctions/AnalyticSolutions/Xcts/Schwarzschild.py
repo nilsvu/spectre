@@ -52,6 +52,50 @@ def shift_strain_isotropic(x):
     return np.zeros((3, 3))
 
 
+# Painleve-Gullstrand coordinates
+
+
+def conformal_spatial_metric_painleve_gullstrand(x):
+    return np.identity(3)
+
+
+def extrinsic_curvature_trace_painleve_gullstrand(x):
+    r = np.linalg.norm(x)
+    return 1.5 * sqrt(2. / r**3)
+
+
+def extrinsic_curvature_trace_gradient_painleve_gullstrand(x):
+    r = np.linalg.norm(x)
+    return -4.5 * sqrt(0.5 / r**5) * x / r
+
+
+def conformal_factor_painleve_gullstrand(x):
+    return 1.
+
+
+def conformal_factor_gradient_painleve_gullstrand(x):
+    return np.zeros(3)
+
+
+def lapse_times_conformal_factor_painleve_gullstrand(x):
+    return 1.
+
+
+def lapse_times_conformal_factor_gradient_painleve_gullstrand(x):
+    return np.zeros(3)
+
+
+def shift_painleve_gullstrand(x):
+    r = np.linalg.norm(x)
+    return sqrt(2. / r) * x / r
+
+
+def shift_strain_painleve_gullstrand(x):
+    r = np.linalg.norm(x)
+    return (sqrt(2. / r**3) *
+            (np.identity(3) - 1.5 * np.tensordot(x, x, axes=0) / r**2))
+
+
 # Matter sources
 
 
