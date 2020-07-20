@@ -50,6 +50,9 @@ void verify_solution(
     const double tolerance,
     const std::tuple<FluxesArgs...>& fluxes_args = std::tuple<>{},
     const std::tuple<SourcesArgs...>& sources_args = std::tuple<>{}) {
+  CAPTURE(mesh);
+  CAPTURE(tolerance);
+
   using all_fields = typename System::fields_tag::tags_list;
   using primal_fields = typename System::primal_fields;
   using auxiliary_fields = typename System::auxiliary_fields;
