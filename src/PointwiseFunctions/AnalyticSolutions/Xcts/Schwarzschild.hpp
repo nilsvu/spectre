@@ -86,6 +86,63 @@ enum class SchwarzschildCoordinates {
    * \f$r=2M\f$.
    */
   PainleveGullstrand,
+
+  /*!
+   * \brief Kerr-Schild (or ingoing Eddington-Finkelstein) coordinates with an
+   * isotropic radial transformation
+   *
+   * These coordinates arise from the Kerr-Schild coordinates (see e.g. Table
+   * 2.1 in \cite BaumgarteShapiro) by a radial transformation that makes the
+   * spatial metric conformally flat, just like the `Isotropic` coordinate
+   * system makes the canonical Schwarzschild metric conformally flat. The
+   * transformation from the "areal" Kerr-Schild radius \f$r\f$ to the
+   * "isotropic" Kerr-Schild radius \f$\bar{r}\f$ is
+   *
+   * \f{equation}\label{eq:radial transform}
+   * \bar{r}=\frac{r}{4}\left(1+\sqrt{1+\frac{2M}{r}}\right)^2
+   * e^{2-2\sqrt{1+2M/r}}
+   * \f}
+   *
+   * (Eq. (7.34) in \cite Pfeiffer2005zm). In the isotropic radius the spatial
+   * metric is conformally flat \f$\gamma_{ij}=\psi^4 \eta_{ij}\f$ with the
+   * conformal factor
+   *
+   * \f{equation}
+   * \psi=\sqrt{\frac{r}{\bar{r}}}=\frac{2e^{\sqrt{1+2M/r}-1}}{1+\sqrt{1+2M/r}}
+   * \f}
+   *
+   * (Eq. (7.35) in \cite Pfeiffer2005zm). The lapse and shift in these
+   * coordinates are
+   *
+   * \f{align}
+   * \alpha=\left(1+\frac{2M}{r(\bar{r})}\right)^{-1/2} \\
+   * \beta^i=\frac{2M}{r(\bar{r})}\frac{\alpha}{\psi^2} l^i
+   * \f}
+   *
+   * where we need to numerically invert the radial transformation
+   * (\ref{eq:radial transform}) to find the areal radius \f$r\f$ at the given
+   * isotropic radius \f$\bar{r}\f$ and where
+   * \f$l^i=l_i=\frac{x^i}{\bar{r}}\f$ in Cartesian coordinates or
+   * \f$l^i=l_i=\left(1,0,0\right)\f$ in spherical polar coordinates. Note that
+   * these are the (isotropic) Cartesian coordinates that define the isotropic
+   * radius \f$\bar{r}^2=x^2+y^2+z^2\f$.
+   *
+   * The extrinsic curvature is a scalar under the radial transformation
+   * (\ref{eq:radial transform}) and therefore is
+   *
+   * \f{equation}
+   * K=\frac{2M\alpha^3}{r(\bar{r})^2}\left(1+\frac{3M}{r(\bar{r})}\right)
+   * \f}
+   *
+   * (Table 2.1 in \cite BaumgarteShapiro).
+   *
+   * In these coordinates the horizon is at an isotropic radius of
+   * \f$\bar{r}=\frac{e^{2-2\sqrt{2}}}{2}\left(1+\sqrt{2}\right)^2
+   * \approx 1.27274\f$ (Eq. (7.37) in \cite Pfeiffer2005zm).
+   *
+   * See section 7.4.1 in \cite Pfeiffer2005zm for more details.
+   */
+  KerrSchildIsotropic
 };
 
 std::ostream& operator<<(std::ostream& os,
