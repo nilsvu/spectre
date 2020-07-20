@@ -5,6 +5,7 @@ set(LIBRARY XctsSolutions)
 
 set(LIBRARY_SOURCES
   ConstantDensityStar.cpp
+  Schwarzschild.cpp
   )
 
 add_spectre_library(${LIBRARY} ${LIBRARY_SOURCES})
