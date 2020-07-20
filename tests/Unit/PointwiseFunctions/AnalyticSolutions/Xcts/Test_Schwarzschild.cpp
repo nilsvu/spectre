@@ -124,4 +124,6 @@ SPECTRE_TEST_CASE(
       "PointwiseFunctions/AnalyticSolutions/Xcts"};
   test_solution<Xcts::Solutions::SchwarzschildCoordinates::Isotropic>(
       0.5, "isotropic");
+  test_solution<Xcts::Solutions::SchwarzschildCoordinates::PainleveGullstrand>(
+      2., "painleve_gullstrand");
 }

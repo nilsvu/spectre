@@ -25,6 +25,8 @@ std::ostream& operator<<(std::ostream& os,
   switch (coords) {
     case SchwarzschildCoordinates::Isotropic:
       return os << "Isotropic";
+    case SchwarzschildCoordinates::PainleveGullstrand:
+      return os << "PainleveGullstrand";
     default:
       ERROR("Unknown SchwarzschildCoordinates");
   }
@@ -34,6 +36,12 @@ template <>
 double Schwarzschild<
     SchwarzschildCoordinates::Isotropic>::radius_at_horizon() noexcept {
   return 0.5;
+}
+
+template <>
+double Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::
+    radius_at_horizon() noexcept {
+  return 2.;
 }
 
 // Conformal metric
@@ -66,6 +74,17 @@ Schwarzschild<SchwarzschildCoordinates::Isotropic>::variables(
   return {make_with_value<Scalar<DataType>>(x, 0.)};
 }
 
+template <>
+template <typename DataType>
+tuples::TaggedTuple<gr::Tags::TraceExtrinsicCurvature<DataType>>
+Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<gr::Tags::TraceExtrinsicCurvature<DataType>> /*meta*/) const
+    noexcept {
+  const DataType r = get(magnitude(x));
+  return {Scalar<DataType>{1.5 * sqrt(2.) / pow(r, 1.5)}};
+}
+
 // Extrinsic curvature trace gradient
 
 template <>
@@ -80,6 +99,25 @@ Schwarzschild<SchwarzschildCoordinates::Isotropic>::variables(
   return {make_with_value<tnsr::i<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
+template <>
+template <typename DataType>
+tuples::TaggedTuple<::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
+                                  tmpl::size_t<3>, Frame::Inertial>>
+Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
+                             tmpl::size_t<3>, Frame::Inertial>> /*meta*/) const
+    noexcept {
+  const DataType r = get(magnitude(x));
+  const DataType isotropic_prefactor = -4.5 / sqrt(2.) / pow(r, 3.5);
+  auto extrinsic_curvature_trace_gradient =
+      make_with_value<tnsr::i<DataType, 3, Frame::Inertial>>(r, 0.);
+  get<0>(extrinsic_curvature_trace_gradient) = isotropic_prefactor * get<0>(x);
+  get<1>(extrinsic_curvature_trace_gradient) = isotropic_prefactor * get<1>(x);
+  get<2>(extrinsic_curvature_trace_gradient) = isotropic_prefactor * get<2>(x);
+  return {std::move(extrinsic_curvature_trace_gradient)};
+}
+
 // Conformal factor
 
 template <>
@@ -90,6 +128,15 @@ Schwarzschild<SchwarzschildCoordinates::Isotropic>::variables(
     tmpl::list<Xcts::Tags::ConformalFactor<DataType>> /*meta*/) const noexcept {
   const DataType r = get(magnitude(x));
   return {Scalar<DataType>{1. + 0.5 / r}};
+}
+
+template <>
+template <typename DataType>
+tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DataType>>
+Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<Xcts::Tags::ConformalFactor<DataType>> /*meta*/) const noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 1.)};
 }
 
 // Conformal factor gradient
@@ -113,6 +160,18 @@ Schwarzschild<SchwarzschildCoordinates::Isotropic>::variables(
   return {std::move(conformal_factor_gradient)};
 }
 
+template <>
+template <typename DataType>
+tuples::TaggedTuple<::Tags::deriv<Xcts::Tags::ConformalFactor<DataType>,
+                                  tmpl::size_t<3>, Frame::Inertial>>
+Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<::Tags::deriv<Xcts::Tags::ConformalFactor<DataType>,
+                             tmpl::size_t<3>, Frame::Inertial>> /*meta*/) const
+    noexcept {
+  return {make_with_value<tnsr::i<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
 // Lapse (times conformal factor)
 
 template <>
@@ -124,6 +183,16 @@ Schwarzschild<SchwarzschildCoordinates::Isotropic>::variables(
     noexcept {
   const DataType r = get(magnitude(x));
   return {Scalar<DataType>{1. - 0.5 / r}};
+}
+
+template <>
+template <typename DataType>
+tuples::TaggedTuple<Xcts::Tags::LapseTimesConformalFactor<DataType>>
+Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<Xcts::Tags::LapseTimesConformalFactor<DataType>> /*meta*/) const
+    noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 1.)};
 }
 
 // Lapse (times conformal factor) gradient
@@ -146,6 +215,19 @@ Schwarzschild<SchwarzschildCoordinates::Isotropic>::variables(
   get<1>(conformal_factor_gradient) = isotropic_prefactor * get<1>(x);
   get<2>(conformal_factor_gradient) = isotropic_prefactor * get<2>(x);
   return {std::move(conformal_factor_gradient)};
+}
+
+template <>
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactor<DataType>,
+                  tmpl::size_t<3>, Frame::Inertial>>
+Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<::Tags::deriv<Xcts::Tags::LapseTimesConformalFactor<DataType>,
+                             tmpl::size_t<3>, Frame::Inertial>> /*meta*/) const
+    noexcept {
+  return {make_with_value<tnsr::i<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
 // Shift
@@ -171,6 +253,22 @@ Schwarzschild<SchwarzschildCoordinates::Isotropic>::variables(
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
+template <>
+template <typename DataType>
+tuples::TaggedTuple<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>
+Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>> /*meta*/)
+    const noexcept {
+  const DataType r = get(magnitude(x));
+  const DataType isotropic_prefactor = sqrt(2.) / pow(r, 1.5);
+  auto shift = x;
+  get<0>(shift) *= isotropic_prefactor;
+  get<1>(shift) *= isotropic_prefactor;
+  get<2>(shift) *= isotropic_prefactor;
+  return {std::move(shift)};
+}
+
 // Shift strain
 
 template <>
@@ -181,6 +279,27 @@ Schwarzschild<SchwarzschildCoordinates::Isotropic>::variables(
     tmpl::list<Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>> /*meta*/)
     const noexcept {
   return {make_with_value<tnsr::ii<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <>
+template <typename DataType>
+tuples::TaggedTuple<Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>>
+Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>> /*meta*/)
+    const noexcept {
+  const DataType r = get(magnitude(x));
+  const DataType diagonal_prefactor = sqrt(2.) / pow(r, 1.5);
+  const DataType isotropic_prefactor = -1.5 * diagonal_prefactor / square(r);
+  auto shift_strain =
+      make_with_value<tnsr::ii<DataType, 3, Frame::Inertial>>(x, 0.);
+  for (size_t i = 0; i < 3; i++) {
+    for (size_t j = i; j < 3; j++) {
+      shift_strain.get(i, j) = isotropic_prefactor * x.get(i) * x.get(j);
+    }
+    shift_strain.get(i, i) += diagonal_prefactor;
+  }
+  return {std::move(shift_strain)};
 }
 
 // Fixed sources (all zero)
@@ -357,7 +476,8 @@ Schwarzschild<Coords>::variables(
       const noexcept;
 
 GENERATE_INSTANTIATIONS(INSTANTIATE, (double, DataVector),
-                        (SchwarzschildCoordinates::Isotropic))
+                        (SchwarzschildCoordinates::Isotropic,
+                         SchwarzschildCoordinates::PainleveGullstrand))
 
 #undef DTYPE
 #undef INSTANTIATE

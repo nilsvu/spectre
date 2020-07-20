@@ -58,6 +58,34 @@ enum class SchwarzschildCoordinates {
    * \f$\bar{r}=\frac{M}{2}\f$ due to the radial transformation from \f$r=2M\f$.
    */
   Isotropic,
+
+  /*!
+   * \brief Painlevé-Gullstrand coordinates
+   *
+   * A coordinate system that arises from the canonical Schwarzschild
+   * coordinates by a time coordinate transformation such that the lapse is just
+   * \f$\alpha=1\f$ and the spatial metric is entirely flat
+   * \f$\gamma_{ij}=\eta_{ij}\f$ (not only conformally flat). The shift vector
+   * is
+   *
+   * \f{equation}
+   * \beta^i=\left(\frac{2M}{r}\right)^{1/2} l^i
+   * \f}
+   *
+   * with \f$l^i=l_i=\frac{x^i}{r}\f$ in Cartesian coordinates or
+   * \f$l^i=l_i=\left(1,0,0\right)\f$ in spherical polar coordinates and the
+   * spacetime is not maximally sliced but
+   *
+   * \f{equation}
+   * K=\frac{3}{2}\left(\frac{2M}{r^3}\right)^{1/2}
+   * \f}
+   *
+   * (Table 2.1 in \cite BaumgarteShapiro).
+   *
+   * Since only the time coordinate is transformed, the horizon remains at
+   * \f$r=2M\f$.
+   */
+  PainleveGullstrand,
 };
 
 std::ostream& operator<<(std::ostream& os,
