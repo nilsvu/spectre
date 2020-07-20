@@ -126,4 +126,6 @@ SPECTRE_TEST_CASE(
       0.5, "isotropic");
   test_solution<Xcts::Solutions::SchwarzschildCoordinates::PainleveGullstrand>(
       2., "painleve_gullstrand");
+  test_solution<Xcts::Solutions::SchwarzschildCoordinates::KerrSchildIsotropic>(
+      1.2727410334221052, "kerr_schild_isotropic");
 }
