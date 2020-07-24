@@ -49,3 +49,4 @@ target_link_libraries(
   )
 
 add_subdirectory(Actions)
+add_subdirectory(SubdomainPreconditioners)

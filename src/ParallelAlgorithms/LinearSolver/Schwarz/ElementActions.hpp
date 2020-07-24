@@ -120,7 +120,8 @@ struct SubdomainDataBufferTag : db::SimpleTag {
   using type = SubdomainDataType;
 };
 
-template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
+template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
+          typename SubdomainPreconditioner>
 struct InitializeElement {
  private:
   using fields_tag = FieldsTag;
@@ -135,11 +136,18 @@ struct InitializeElement {
   using subdomain_solver_tag =
       Tags::SubdomainSolver<LinearSolver::Serial::Gmres<SubdomainData>,
                             OptionsGroup>;
+  using subdomain_preconditioner_tag =
+      Tags::SubdomainPreconditioner<SubdomainPreconditioner, OptionsGroup>;
 
  public:
-  using initialization_tags =
-      tmpl::list<domain::Tags::InitialExtents<Dim>, subdomain_solver_tag>;
-  using initialization_tags_to_keep = tmpl::list<subdomain_solver_tag>;
+  using initialization_tags = tmpl::flatten<tmpl::list<
+      domain::Tags::InitialExtents<Dim>, subdomain_solver_tag,
+      tmpl::conditional_t<std::is_same_v<SubdomainPreconditioner, void>,
+                          tmpl::list<>, subdomain_preconditioner_tag>>>;
+  using initialization_tags_to_keep = tmpl::flatten<tmpl::list<
+      subdomain_solver_tag,
+      tmpl::conditional_t<std::is_same_v<SubdomainPreconditioner, void>,
+                          tmpl::list<>, subdomain_preconditioner_tag>>>;
   using const_global_cache_tags = tmpl::list<Tags::MaxOverlap<OptionsGroup>>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -199,7 +207,8 @@ struct OverlapSolutionInboxTag
   using type = std::map<temporal_id, OverlapMap<Dim, OverlapSolution>>;
 };
 
-template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
+template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
+          typename SubdomainPreconditioner>
 struct SolveSubdomain {
  private:
   using fields_tag = FieldsTag;
@@ -289,12 +298,41 @@ struct SolveSubdomain {
       return subdomain_result_buffer;
     };
 
+    // Prepare the preconditioner
+    if constexpr (not std::is_same_v<SubdomainPreconditioner, void>) {
+      // TODO: Improve the caching mechanism of the preconditioner
+      if (db::get<Tags::SubdomainPreconditionerBase<OptionsGroup>>(box)
+              .size() == std::numeric_limits<size_t>::max()) {
+        if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
+                     ::Verbosity::Debug)) {
+          Parallel::printf("%s Preparing subdomain preconditioner...\n",
+                           element_id);
+        }
+        db::item_type<Tags::SubdomainPreconditionerBase<OptionsGroup>,
+                      DbTagsList>
+            preconditioner{apply_subdomain_operator, subdomain_residual};
+        db::mutate<Tags::SubdomainPreconditionerBase<OptionsGroup>>(
+            make_not_null(&box),
+            [&preconditioner](const auto stored_preconditioner) noexcept {
+              *stored_preconditioner = preconditioner;
+            });
+      }
+    }
+
     // Solve the subdomain problem
     const auto& subdomain_solver =
         get<Tags::SubdomainSolverBase<OptionsGroup>>(box);
-    auto subdomain_solve_result = subdomain_solver(
-        apply_subdomain_operator, subdomain_residual,
-        make_with_value<SubdomainData>(subdomain_residual, 0.));
+    const auto& subdomain_preconditioner = [&]() noexcept {
+      if constexpr (std::is_same_v<SubdomainPreconditioner, void>) {
+        return LinearSolver::Serial::IdentityPreconditioner<SubdomainData>{};
+      } else {
+        return db::get<Tags::SubdomainPreconditionerBase<OptionsGroup>>(box);
+      }
+    }();
+    auto subdomain_solve_result =
+        subdomain_solver(apply_subdomain_operator, subdomain_residual,
+                         make_with_value<SubdomainData>(subdomain_residual, 0.),
+                         subdomain_preconditioner);
     const auto& subdomain_solve_has_converged = subdomain_solve_result.first;
     auto& subdomain_solution = subdomain_solve_result.second;
 

@@ -115,6 +115,7 @@ namespace LinearSolver::Schwarz {
  * - Subdomain preconditioning (see paragraph on subdomain solves above)
  */
 template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
+          typename SubdomainPreconditioner = void,
           typename SourceTag =
               db::add_tag_prefix<::Tags::FixedSource, FieldsTag>>
 struct Schwarz {
@@ -131,7 +132,8 @@ struct Schwarz {
 
   using initialize_element = tmpl::list<
       async_solvers::InitializeElement<FieldsTag, OptionsGroup, SourceTag>,
-      detail::InitializeElement<FieldsTag, OptionsGroup, SubdomainOperator>>;
+      detail::InitializeElement<FieldsTag, OptionsGroup, SubdomainOperator,
+                                SubdomainPreconditioner>>;
 
   using register_element = tmpl::list<
       async_solvers::RegisterElement<FieldsTag, OptionsGroup, SourceTag>,
@@ -142,7 +144,8 @@ struct Schwarz {
       async_solvers::PrepareSolve<FieldsTag, OptionsGroup, SourceTag, Label>,
       detail::SendOverlapData<FieldsTag, OptionsGroup, SubdomainOperator>,
       detail::ReceiveOverlapData<FieldsTag, OptionsGroup, SubdomainOperator>,
-      detail::SolveSubdomain<FieldsTag, OptionsGroup, SubdomainOperator>,
+      detail::SolveSubdomain<FieldsTag, OptionsGroup, SubdomainOperator,
+                             SubdomainPreconditioner>,
       detail::ReceiveOverlapSolution<FieldsTag, OptionsGroup,
                                      SubdomainOperator>,
       ApplyOperatorActions,

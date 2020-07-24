@@ -26,6 +26,7 @@
 #include "ParallelAlgorithms/LinearSolver/Schwarz/ElementCenteredSubdomainData.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Protocols.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/SubdomainPreconditioners/ExplicitInverse.hpp"
 #include "Utilities/MakeArray.hpp"
 #include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
@@ -201,9 +202,12 @@ struct Metavariables {
       "Test the Schwarz linear solver algorithm"};
   static constexpr size_t volume_dim = 1;
 
+  using subdomain_preconditioner =
+      LinearSolver::Schwarz::subdomain_preconditioners::ExplicitInverse<1>;
   using linear_solver =
       LinearSolver::Schwarz::Schwarz<helpers_distributed::fields_tag,
-                                     SchwarzSmoother, SubdomainOperator>;
+                                     SchwarzSmoother, SubdomainOperator,
+                                     subdomain_preconditioner>;
   using preconditioner = void;
 
   using Phase = helpers::Phase;
