@@ -307,6 +307,21 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
         normal_dot_auxiliary_field_fluxes));
   }
 
+  template <typename PackagedData>
+  void package_zero_data(const gsl::not_null<PackagedData*> packaged_data,
+                         const Mesh<Dim>& volume_mesh,
+                         const Direction<Dim>& direction,
+                         const Scalar<DataVector>& face_normal_magnitude) const
+      noexcept {
+    packaged_data->field_data = Variables<typename PackagedData::field_tags>{
+        volume_mesh.slice_away(direction.dimension()).number_of_grid_points(),
+        0.};
+    get<PerpendicularNumPoints>(packaged_data->extra_data) =
+        volume_mesh.extents(direction.dimension());
+    get(get<ElementSize>(packaged_data->field_data)) =
+        2. / get(face_normal_magnitude);
+  }
+
   void operator()(
       const gsl::not_null<typename ::Tags::NormalDotNumericalFlux<
           FieldTags>::type*>... numerical_flux_for_fields,
