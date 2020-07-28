@@ -17,7 +17,8 @@ installation_on_clusters "Installation on clusters" page.
 * [CMake](https://cmake.org/) 3.8.0 or later
 * [Charm++](http://charm.cs.illinois.edu/) 6.10.2
 * [Git](https://git-scm.com/)
-* BLAS (e.g. [OpenBLAS](http://www.openblas.net))
+* BLAS (e.g. [OpenBLAS](http://www.openblas.net), make sure to [disable
+  multithreading with `OPENBLAS_NUM_THREADS=1`](https://github.com/xianyi/OpenBLAS/wiki/Faq#multi-threaded))
 * [Blaze](https://bitbucket.org/blaze-lib/blaze/overview) v3.5
 * [Boost](http://www.boost.org/) 1.60.0 or later
 * [Brigand](https://github.com/edouarda/brigand)

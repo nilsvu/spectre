@@ -219,6 +219,10 @@ RUN git clone https://github.com/UIUC-PPL/charm charm_6_10_2 \
     && ./build LIBS multicore-linux-x86_64 clang ${PARALLEL_MAKE_ARG} -g -O0 \
     && rm -r /work/charm_6_10_2/doc /work/charm_6_10_2/examples
 
+# Disable OpenBLAS multithreading since it conflicts with Charm++ parallelism.
+# Details: https://github.com/xianyi/OpenBLAS/wiki/Faq#multi-threaded
+ENV OPENBLAS_NUM_THREADS 1
+
 # - Set the environment variable SPECTRE_CONTAINER so we can check if we are
 #   inside a container (0 is true in bash)
 # - The singularity containers work better if the locale is set properly
