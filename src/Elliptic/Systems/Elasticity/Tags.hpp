@@ -5,6 +5,7 @@
 
 #include <string>
 
+#include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataBox/Tag.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
 
@@ -65,6 +66,9 @@ template <size_t Dim>
 struct Stress : db::SimpleTag {
   using type = tnsr::II<DataVector, Dim>;
 };
+
+template <size_t Dim>
+using MinusNormalDotStress = ::Tags::NormalDotFlux<Displacement<Dim>>;
 
 /*!
  * \brief The energy density \f$U=-\frac{1}{2}S_{ij}T^{ij}\f$ stored in the

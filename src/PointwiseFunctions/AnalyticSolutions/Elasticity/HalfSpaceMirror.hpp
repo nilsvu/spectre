@@ -165,6 +165,22 @@ class HalfSpaceMirror
   // (see Elasticity::FirstOrderSystem)
   static auto variables(
       const tnsr::I<DataVector, 3>& x,
+      tmpl::list<::Tags::Initial<Tags::Displacement<3>>> /*meta*/) noexcept
+      -> tuples::TaggedTuple<::Tags::Initial<Tags::Displacement<3>>>;
+
+  static auto variables(
+      const tnsr::I<DataVector, 3>& x,
+      tmpl::list<::Tags::Initial<Tags::Strain<3>>> /*meta*/) noexcept
+      -> tuples::TaggedTuple<::Tags::Initial<Tags::Strain<3>>>;
+
+  auto boundary_variables(
+      const tnsr::I<DataVector, 3>& x, const Direction<3>& direction,
+      const tnsr::i<DataVector, 3>& face_normal,
+      tmpl::list<Tags::MinusNormalDotStress<3>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<Tags::MinusNormalDotStress<3>>;
+
+  static auto variables(
+      const tnsr::I<DataVector, 3>& x,
       tmpl::list<::Tags::FixedSource<Tags::Displacement<3>>> /*meta*/) noexcept
       -> tuples::TaggedTuple<::Tags::FixedSource<Tags::Displacement<3>>>;
   // @}
@@ -183,6 +199,16 @@ class HalfSpaceMirror
       }
     }
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
+  }
+
+  template <typename... Tags>
+  tuples::TaggedTuple<Tags...> boundary_variables(
+      const tnsr::I<DataVector, 3>& x, const Direction<3>& direction,
+      const tnsr::i<DataVector, 3>& face_normal,
+      tmpl::list<Tags...> /*meta*/) const noexcept {
+    static_assert(sizeof...(Tags) > 1, "An unsupported Tag was requested.");
+    return {tuples::get<Tags>(
+        boundary_variables(x, direction, face_normal, tmpl::list<Tags>{}))...};
   }
 
   static elliptic::BoundaryCondition boundary_condition_type(

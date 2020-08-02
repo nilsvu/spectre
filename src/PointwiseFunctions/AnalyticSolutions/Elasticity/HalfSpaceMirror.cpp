@@ -13,6 +13,7 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "ErrorHandling/Error.hpp"
 #include "ErrorHandling/Exceptions.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NormalDotFlux.hpp"
 #include "NumericalAlgorithms/Integration/GslQuadAdaptive.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/IsotropicHomogeneous.hpp"
 #include "Utilities/ConstantExpressions.hpp"
@@ -184,6 +185,36 @@ tuples::TaggedTuple<Tags::Strain<3>> HalfSpaceMirror::variables(
     }
   }
   return {std::move(strain)};
+}
+
+tuples::TaggedTuple<Tags::MinusNormalDotStress<3>>
+HalfSpaceMirror::boundary_variables(
+    const tnsr::I<DataVector, 3>& x, const Direction<3>& /*direction*/,
+    const tnsr::i<DataVector, 3>& face_normal,
+    tmpl::list<Tags::MinusNormalDotStress<3>> /*meta*/) const noexcept {
+  const auto strain =
+      get<Tags::Strain<3>>(variables(x, tmpl::list<Tags::Strain<3>>{}));
+  const auto stress = constitutive_relation_.stress(strain, x);
+  tnsr::I<DataVector, 3> n_dot_stress{x.begin()->size()};
+  normal_dot_flux(make_not_null(&n_dot_stress), face_normal, stress);
+  get<0>(n_dot_stress) *= -1.;
+  get<1>(n_dot_stress) *= -1.;
+  get<2>(n_dot_stress) *= -1.;
+  return {std::move(n_dot_stress)};
+}
+
+tuples::TaggedTuple<::Tags::Initial<Tags::Displacement<3>>>
+HalfSpaceMirror::variables(
+    const tnsr::I<DataVector, 3>& x,
+    tmpl::list<::Tags::Initial<Tags::Displacement<3>>> /*meta*/) noexcept {
+  return {make_with_value<tnsr::I<DataVector, 3>>(x, 0.)};
+}
+
+tuples::TaggedTuple<::Tags::Initial<Tags::Strain<3>>>
+HalfSpaceMirror::variables(
+    const tnsr::I<DataVector, 3>& x,
+    tmpl::list<::Tags::Initial<Tags::Strain<3>>> /*meta*/) noexcept {
+  return {make_with_value<tnsr::ii<DataVector, 3>>(x, 0.)};
 }
 
 tuples::TaggedTuple<::Tags::FixedSource<Tags::Displacement<3>>>
