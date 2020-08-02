@@ -30,12 +30,22 @@ struct AnalyticSolution {
   using type = SolutionType;
   using group = AnalyticSolutionGroup;
 };
+
+struct BoundaryConditionGroup {
+  static std::string name() noexcept { return "BoundaryCondition"; }
+  static constexpr Options::String help = "Boundary conditions";
+};
+
 /// \ingroup OptionTagsGroup
 /// The boundary condition to be applied at all external boundaries.
 template <typename BoundaryConditionType>
 struct BoundaryCondition {
+  static std::string name() noexcept {
+    return Options::name<BoundaryConditionType>();
+  }
   static constexpr Options::String help = "Boundary condition to be used";
   using type = BoundaryConditionType;
+  using group = BoundaryConditionGroup;
 };
 }  // namespace OptionTags
 
