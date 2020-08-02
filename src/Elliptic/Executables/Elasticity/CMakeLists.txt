@@ -8,6 +8,7 @@ set(LIBS_TO_LINK
   DiscontinuousGalerkin
   DomainCreators
   Elasticity
+  ElasticityBoundaryConditions
   ElasticPotentialEnergy
   Informer
   IO
@@ -26,7 +27,7 @@ function(add_elasticity_executable
     "SolveElastic${EXECUTABLE_NAME}"
     SolveElasticityProblem
     Elliptic/Executables/Elasticity
-    "Metavariables<${ELASTICITY_SYSTEM}, ${BACKGROUND} ${BOUNDARY_CONDITIONS}, ${INITIAL_GUESS}>"
+    "Metavariables<${ELASTICITY_SYSTEM}, ${BACKGROUND}, ${BOUNDARY_CONDITIONS}, ${INITIAL_GUESS}>"
     "${LIBS_TO_LINK}"
     )
 endfunction(add_elasticity_executable)
@@ -56,5 +57,20 @@ add_elasticity_executable(
 target_link_libraries(
   SolveElasticHalfSpaceMirror
   PRIVATE
+  ElasticitySolutions
+  )
+
+# Elasticity system with finite-size mirror
+add_elasticity_executable(
+  Mirror
+  "Elasticity::FirstOrderSystem<3>"
+  Elasticity::AnalyticData::Mirror
+  Elasticity::BoundaryConditions::LaserBeam
+  Elasticity::Solutions::HalfSpaceMirror
+  )
+target_link_libraries(
+  SolveElasticMirror
+  PRIVATE
+  ElasticityAnalyticData
   ElasticitySolutions
   )

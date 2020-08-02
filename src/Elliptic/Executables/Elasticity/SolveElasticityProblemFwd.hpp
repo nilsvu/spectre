@@ -15,7 +15,17 @@ struct HalfSpaceMirror;
 template <size_t Dim>
 struct Zero;
 }  // namespace Solutions
+namespace AnalyticData {
+struct Mirror;
+}  // namespace AnalyticData
+namespace BoundaryConditions {
+struct LaserBeam;
+}  // namespace BoundaryConditions
 }  // namespace Elasticity
+namespace elliptic {
+template <typename SolutionType>
+struct InitialGuessFromSolution;
+}  // namespace elliptic
 
 template <typename System, typename Background, typename BoundaryConditions,
           typename InitialGuess>
