@@ -8,6 +8,7 @@
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/Actions/ApplyLinearOperatorToInitialFields.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/Actions/InitializeBoundaryConditions.hpp"
 #include "Elliptic/Actions/InitializeFields.hpp"
@@ -21,6 +22,7 @@
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/InitializeSubdomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
+#include "Elliptic/Protocols.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "Elliptic/Tags.hpp"
@@ -65,6 +67,7 @@
 #include "PointwiseFunctions/Elasticity/PotentialEnergy.hpp"
 #include "Utilities/Blas.hpp"
 #include "Utilities/Functional.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace SolveElasticityProblem {
@@ -134,17 +137,30 @@ struct Metavariables {
   using fluxes_computer_tag =
       elliptic::Tags::FluxesComputer<typename system::fluxes>;
 
-  // Only Dirichlet boundary conditions are currently supported, and they are
-  // are all imposed by analytic solutions right now.
-  // We will add support for Neumann boundary conditions ASAP.
-  using analytic_solution = boundary_conditions;
-  using analytic_solution_tag = Tags::AnalyticSolution<analytic_solution>;
+  static constexpr bool has_analytic_solution =
+      tt::conforms_to_v<boundary_conditions,
+                        elliptic::protocols::AnalyticSolution>;
 
-  // We retrieve the constitutive relation from the analytic solution
+  using initial_guess_tag = tmpl::conditional_t<
+      has_analytic_solution and
+          std::is_same_v<initial_guess, boundary_conditions>,
+      Tags::AnalyticSolution<initial_guess>,
+      elliptic::Tags::InitialGuess<initial_guess>>;
+  using initial_guess_option_tag = tmpl::conditional_t<
+      has_analytic_solution and
+          std::is_same_v<initial_guess, boundary_conditions>,
+      OptionTags::AnalyticSolution<initial_guess>,
+      elliptic::OptionTags::InitialGuess<initial_guess>>;
+
+  using boundary_conditions_tag =
+      tmpl::conditional_t<std::is_same_v<initial_guess, boundary_conditions>,
+                          initial_guess_tag,
+                          Tags::BoundaryCondition<boundary_conditions>>;
+
+  // We retrieve the constitutive relation from the initial guess
   using constitutive_relation_type =
-      typename analytic_solution::constitutive_relation_type;
-  using constitutive_relation_provider_option_tag =
-      OptionTags::AnalyticSolution<analytic_solution>;
+      typename initial_guess::constitutive_relation_type;
+  using constitutive_relation_provider_option_tag = initial_guess_option_tag;
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
@@ -222,28 +238,36 @@ struct Metavariables {
   using observe_fields =
       tmpl::push_back<system_fields,
                       Elasticity::Tags::PotentialEnergyDensity<volume_dim>>;
-  using analytic_solution_fields = system_fields;
-  using events = tmpl::list<
+  using analytic_solution_fields =
+      tmpl::conditional_t<has_analytic_solution, system_fields, tmpl::list<>>;
+  using events = tmpl::flatten<tmpl::list<
       dg::Events::Registrars::ObserveFields<
           volume_dim, linear_solver_iteration_id, observe_fields,
           analytic_solution_fields,
           LinearSolver::multigrid::Tags::MultigridLevel>,
-      dg::Events::Registrars::ObserveErrorNorms<
-          linear_solver_iteration_id, analytic_solution_fields,
-          LinearSolver::multigrid::Tags::MultigridLevel>,
+      tmpl::conditional_t<
+          has_analytic_solution,
+          dg::Events::Registrars::ObserveErrorNorms<
+              linear_solver_iteration_id, analytic_solution_fields,
+              LinearSolver::multigrid::Tags::MultigridLevel>,
+          tmpl::list<>>,
       dg::Events::Registrars::ObserveVolumeIntegrals<
           volume_dim, linear_solver_iteration_id,
           tmpl::list<Elasticity::Tags::PotentialEnergyDensity<volume_dim>>,
-          LinearSolver::multigrid::Tags::MultigridLevel>>;
+          LinearSolver::multigrid::Tags::MultigridLevel>>>;
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       linear_solver_iteration_id,
       LinearSolver::multigrid::Tags::IsFinestLevel>>;
 
   // Collect all items to store in the cache.
-  using const_global_cache_tags = tmpl::list<
-      analytic_solution_tag, fluxes_computer_tag, normal_dot_numerical_flux,
+  using const_global_cache_tags = tmpl::flatten<tmpl::list<
+      initial_guess_tag,
+      tmpl::conditional_t<
+          std::is_same_v<initial_guess_tag, boundary_conditions_tag>,
+          tmpl::list<>, boundary_conditions_tag>,
+      fluxes_computer_tag, normal_dot_numerical_flux,
       Elasticity::Tags::ConstitutiveRelation<constitutive_relation_type>,
-      Tags::EventsAndTriggers<events, triggers>>;
+      Tags::EventsAndTriggers<events, triggers>>>;
 
   // Collect all reduction tags for observers
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
@@ -261,19 +285,23 @@ struct Metavariables {
           dg::Initialization::face_compute_tags<
               domain::Tags::BoundaryCoordinates<volume_dim>>,
           dg::Initialization::exterior_compute_tags<>, false, false>,
-      elliptic::Actions::InitializeBoundaryConditions<analytic_solution_tag>,
+      elliptic::Actions::InitializeBoundaryConditions<boundary_conditions_tag>,
       elliptic::Actions::InitializeFields,
       elliptic::Actions::InitializeFixedSources,
       typename linear_solver::initialize_element,
       typename multigrid::initialize_element,
       typename smoother::initialize_element,
       elliptic::dg::Actions::InitializeSubdomain<
-          volume_dim, typename smoother::options_group, analytic_solution_tag>,
+          volume_dim, typename smoother::options_group,
+          boundary_conditions_tag>,
       Initialization::Actions::AddComputeTags<tmpl::list<
           Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>,
           combined_iteration_id>>,
-      elliptic::Actions::InitializeAnalyticSolution<analytic_solution_tag,
-                                                    analytic_solution_fields>,
+      tmpl::conditional_t<
+          has_analytic_solution,
+          elliptic::Actions::InitializeAnalyticSolution<
+              boundary_conditions_tag, analytic_solution_fields>,
+          tmpl::list<>>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           Metavariables>,
       dg::Actions::InitializeMortars<boundary_scheme>,
@@ -297,7 +325,6 @@ struct Metavariables {
       dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
       Actions::MutateApply<boundary_scheme>>;
 
-
   using register_actions =
       tmpl::list<observers::Actions::RegisterEventsWithObservers,
                  typename linear_solver::register_element,
@@ -311,7 +338,9 @@ struct Metavariables {
       typename smoother::template solve<build_linear_operator_actions, Label>>;
 
   using solve_actions = tmpl::list<
-      elliptic::Actions::InitializeLinearOperator,
+      elliptic::Actions::apply_linear_operator_to_initial_fields<
+          build_linear_operator_actions, typename system::fields_tag,
+          linear_operand_tag, LinearSolver::multigrid::Tags::IsFinestLevel>,
       typename linear_solver::template solve<tmpl::list<
           Actions::RunEventsAndTriggers,
           // TODO: make preconditioning the identity operation if it is

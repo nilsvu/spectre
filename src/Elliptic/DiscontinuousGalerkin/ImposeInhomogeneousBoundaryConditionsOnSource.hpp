@@ -148,8 +148,8 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
       const Parallel::GlobalCache<Metavariables>& cache,
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    const auto& analytic_solution =
-        Parallel::get<typename Metavariables::analytic_solution_tag>(cache);
+    const auto& boundary_conditions =
+        Parallel::get<typename Metavariables::boundary_conditions_tag>(cache);
     const auto& normal_dot_numerical_flux_computer =
         Parallel::get<typename Metavariables::normal_dot_numerical_flux>(cache);
 
@@ -170,7 +170,7 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
             fluxes_computer_tag>,
         tmpl::push_front<get_volume_tags<FluxesType>,
                          domain::Tags::Mesh<volume_dim>, fluxes_computer_tag>>(
-        [&analytic_solution, &normal_dot_numerical_flux_computer](
+        [&boundary_conditions, &normal_dot_numerical_flux_computer](
             const Mesh<volume_dim>& volume_mesh,
             const Mesh<volume_dim - 1>& face_mesh,
             const Direction<volume_dim>& direction,
@@ -196,8 +196,9 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
               // Compute Dirichlet data on mortar
               Variables<typename system::primal_fields> dirichlet_boundary_data{
                   face_mesh.number_of_grid_points(), 0.};
-              dirichlet_boundary_data.assign_subset(analytic_solution.variables(
-                  boundary_coordinates, typename system::primal_fields{}));
+              dirichlet_boundary_data.assign_subset(
+                  boundary_conditions.variables(
+                      boundary_coordinates, typename system::primal_fields{}));
               // Compute the numerical flux contribution from the Dirichlet
               // data
               compute_dirichlet_boundary_normal_dot_numerical_flux(
@@ -211,16 +212,11 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
             case elliptic::BoundaryCondition::Neumann: {
               // Compute Neumann data on mortar by computing normal-dot-fluxes
               // from the analytic auxiliary fields
-              Variables<typename system::auxiliary_fields>
-                  neumann_aux_field_data{face_mesh.number_of_grid_points()};
-              neumann_aux_field_data.assign_subset(analytic_solution.variables(
-                  boundary_coordinates, typename system::auxiliary_fields{}));
-              const auto neumann_fluxes = compute_neumann_fluxes(
-                  neumann_aux_field_data, typename system::primal_fields{},
-                  fluxes_computer, fluxes_args...);
-              auto neumann_boundary_data =
-                  normal_dot_flux<typename system::primal_fields>(
-                      normalized_face_normal, neumann_fluxes);
+              auto neumann_boundary_data = variables_from_tagged_tuple(
+                  boundary_conditions.boundary_variables(
+                      boundary_coordinates, direction, normalized_face_normal,
+                      db::wrap_tags_in<::Tags::NormalDotFlux,
+                                       typename system::primal_fields>{}));
               // Compute the numerical flux contribution from the Dirichlet
               // data
               compute_neumann_boundary_normal_dot_numerical_flux(

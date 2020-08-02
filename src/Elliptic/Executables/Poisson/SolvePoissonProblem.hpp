@@ -8,6 +8,7 @@
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/Actions/ApplyLinearOperatorToInitialFields.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/Actions/InitializeBoundaryConditions.hpp"
 #include "Elliptic/Actions/InitializeFields.hpp"
@@ -138,6 +139,8 @@ struct Metavariables {
   // This will be generalized ASAP. We will also support numeric initial guesses
   // and analytic initial guesses that aren't solutions ("analytic data").
   using analytic_solution_tag = Tags::AnalyticSolution<boundary_conditions>;
+  using initial_guess_tag = analytic_solution_tag;
+  using boundary_conditions_tag = analytic_solution_tag;
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
@@ -320,7 +323,9 @@ struct Metavariables {
       typename smoother::template solve<build_linear_operator_actions, Label>>;
 
   using solve_actions = tmpl::list<
-      elliptic::Actions::InitializeLinearOperator,
+      elliptic::Actions::apply_linear_operator_to_initial_fields<
+          build_linear_operator_actions, typename system::fields_tag,
+          linear_operand_tag, LinearSolver::multigrid::Tags::IsFinestLevel>,
       typename linear_solver::template solve<tmpl::list<
           Actions::RunEventsAndTriggers,
           // TODO: make preconditioning the identity operation if it is

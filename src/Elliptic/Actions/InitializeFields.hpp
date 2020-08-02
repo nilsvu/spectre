@@ -55,11 +55,11 @@ struct InitializeFields {
     using system = typename Metavariables::system;
     using fields_tag = typename system::fields_tag;
 
-    const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
-    const size_t num_grid_points = mesh.number_of_grid_points();
-
-    // Set initial data to zero (for now).
-    typename fields_tag::type fields{num_grid_points, 0.};
+    typename fields_tag::type fields{variables_from_tagged_tuple(
+        db::get<typename Metavariables::initial_guess_tag>(box).variables(
+            db::get<domain::Tags::Coordinates<Dim, Frame::Inertial>>(box),
+            typename db::add_tag_prefix<::Tags::Initial,
+                                        fields_tag>::tags_list{}))};
 
     return std::make_tuple(
         ::Initialization::merge_into_databox<InitializeFields,

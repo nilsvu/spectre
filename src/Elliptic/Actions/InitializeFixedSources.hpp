@@ -48,7 +48,7 @@ struct InitializeFixedSources {
     // fields will never be sourced.
     typename fixed_sources_tag::type fixed_sources{num_grid_points, 0.};
     fixed_sources.assign_subset(
-        Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
+        Parallel::get<typename Metavariables::boundary_conditions_tag>(cache)
             .variables(inertial_coords,
                        db::wrap_tags_in<::Tags::FixedSource,
                                         typename system::primal_fields>{}));
