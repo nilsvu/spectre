@@ -5,11 +5,13 @@
 
 #include <cstddef>
 
-#include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
-#include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
-#include "Elliptic/Systems/Poisson/Tags.hpp"    // IWYU pragma: keep
+#include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Tensor/Tensor.hpp"
+#include "Elliptic/Protocols.hpp"
+#include "Elliptic/Systems/Poisson/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -36,7 +38,8 @@ namespace Solutions {
  * \note Corresponding 1D and 2D solutions are not implemented yet.
  */
 template <size_t Dim>
-class Lorentzian {
+class Lorentzian
+    : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
   static_assert(
       Dim == 3,
       "This solution is currently implemented in 3 spatial dimensions only");

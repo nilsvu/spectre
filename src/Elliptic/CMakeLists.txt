@@ -11,6 +11,7 @@ spectre_target_headers(
   HEADERS
   FirstOrderComputeTags.hpp
   FirstOrderOperator.hpp
+  Protocols.hpp
   Tags.hpp
   )
 

@@ -5,11 +5,13 @@
 
 #include <cstddef>
 
-#include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
-#include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
-#include "Elliptic/Systems/Poisson/Tags.hpp"    // IWYU pragma: keep
+#include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Tensor/Tensor.hpp"
+#include "Elliptic/Protocols.hpp"
+#include "Elliptic/Systems/Poisson/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -45,7 +47,7 @@ namespace Solutions {
  * This solution is taken from \cite Stamm2010.
  */
 template <size_t Dim>
-class Moustache {
+class Moustache : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  public:
   using options = tmpl::list<>;
   static constexpr Options::String help{

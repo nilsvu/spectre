@@ -7,11 +7,13 @@
 #include <cstddef>
 #include <limits>
 
-#include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
-#include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
-#include "Elliptic/Systems/Poisson/Tags.hpp"    // IWYU pragma: keep
+#include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Tensor/Tensor.hpp"
+#include "Elliptic/Protocols.hpp"
+#include "Elliptic/Systems/Poisson/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -31,7 +33,8 @@ namespace Solutions {
  * \f$f(x)=\boldsymbol{k}^2\prod_i \sin(k_i x_i)\f$.
  */
 template <size_t Dim>
-class ProductOfSinusoids {
+class ProductOfSinusoids
+    : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  public:
   struct WaveNumbers {
     using type = std::array<double, Dim>;
@@ -95,13 +98,13 @@ class ProductOfSinusoids {
 
 template <size_t Dim>
 bool operator==(const ProductOfSinusoids<Dim>& lhs,
-                          const ProductOfSinusoids<Dim>& rhs) noexcept {
+                const ProductOfSinusoids<Dim>& rhs) noexcept {
   return lhs.wave_numbers() == rhs.wave_numbers();
 }
 
 template <size_t Dim>
 bool operator!=(const ProductOfSinusoids<Dim>& lhs,
-                          const ProductOfSinusoids<Dim>& rhs) noexcept {
+                const ProductOfSinusoids<Dim>& rhs) noexcept {
   return not(lhs == rhs);
 }
 
