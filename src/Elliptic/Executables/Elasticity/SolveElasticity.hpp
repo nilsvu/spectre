@@ -61,12 +61,14 @@
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
 #include "PointwiseFunctions/AnalyticData/Elasticity/AnalyticData.hpp"
+#include "PointwiseFunctions/AnalyticData/Elasticity/Mirror.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/BentBeam.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/HalfSpaceMirror.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/Zero.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/BoundaryConditions/AnalyticDirichlet.hpp"
+#include "PointwiseFunctions/BoundaryConditions/Elasticity/LaserBeam.hpp"
 #include "PointwiseFunctions/Elasticity/PotentialEnergy.hpp"
 #include "Utilities/Blas.hpp"
 #include "Utilities/Functional.hpp"
@@ -136,7 +138,11 @@ struct Metavariables {
                           tmpl::list<>>>>;
   // We currently only have analytic solutions implemented, but will add
   // non-solution backgrounds ASAP.
-  using background_registrars = analytic_solution_registrars;
+  using background_registrars =
+      tmpl::flatten<analytic_solution_registrars,
+                    tmpl::conditional_t<
+                        Dim == 3, Elasticity::AnalyticData::Registrars::Mirror,
+                        tmpl::list<>>>;
   // Use the analytic solution to impose boundary conditions for now. Will add
   // fixed (zero Dirichlet) and free (zero Neumann) conditions ASAP.
   using boundary_condition_registrars =
