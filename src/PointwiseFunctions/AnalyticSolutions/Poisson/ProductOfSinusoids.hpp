@@ -9,9 +9,11 @@
 
 #include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
 #include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
-#include "Elliptic/Systems/Poisson/Tags.hpp"    // IWYU pragma: keep
+#include "Elliptic/Protocols.hpp"
+#include "Elliptic/Systems/Poisson/Tags.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -31,7 +33,8 @@ namespace Solutions {
  * \f$f(x)=\boldsymbol{k}^2\prod_i \sin(k_i x_i)\f$.
  */
 template <size_t Dim>
-class ProductOfSinusoids {
+class ProductOfSinusoids
+    : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  public:
   struct WaveNumbers {
     using type = std::array<double, Dim>;

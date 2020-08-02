@@ -5,12 +5,14 @@
 
 #include <limits>
 
-#include "DataStructures/DataBox/Prefixes.hpp"   // IWYU pragma: keep
-#include "DataStructures/Tensor/Tensor.hpp"      // IWYU pragma: keep
+#include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
+#include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
+#include "Elliptic/Protocols.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"  // IWYU pragma: keep
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/IsotropicHomogeneous.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/Tags.hpp"  // IWYU pragma: keep
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -71,7 +73,7 @@ namespace Elasticity::Solutions {
  * \int_{-L/2}^{L/2} \int_{-H/2}^{H/2} U dy\,dx = \frac{6M^2}{EH^3}L \text{.}
  * \f]
  */
-class BentBeam {
+class BentBeam : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  public:
   static constexpr size_t volume_dim = 2;
   using constitutive_relation_type =

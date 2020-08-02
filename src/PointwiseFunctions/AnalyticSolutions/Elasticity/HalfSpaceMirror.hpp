@@ -8,10 +8,12 @@
 
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Elliptic/Protocols.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "ErrorHandling/Error.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/IsotropicHomogeneous.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -75,7 +77,8 @@ namespace Elasticity::Solutions {
  * profile and \f$ \Theta = \mathrm{Tr}(S)\f$ the materials expansion.
  *
  */
-class HalfSpaceMirror {
+class HalfSpaceMirror
+    : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  public:
   static constexpr size_t volume_dim = 3;
 
