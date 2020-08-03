@@ -1,0 +1,77 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveElasticMirror
+# Check: parse;execute
+# ExpectedOutput:
+#   ElasticMirrorReductions.h5
+#   ElasticMirrorVolume0.h5
+
+BoundaryCondition:
+  Mirror:
+    BeamWidth: 0.177
+
+InitialGuess:
+  HalfSpaceMirror:
+    BeamWidth: 0.177
+    Material:
+      # Fused Silica
+      BulkModulus: 36.36363636363637
+      ShearModulus: 30.76923076923077
+
+DomainCreator:
+  Cylinder:
+    InnerRadius: 0.08
+    OuterRadius: 0.6
+    LowerBound: 0.
+    UpperBound: 0.3
+    IsPeriodicInZ: False
+    InitialRefinement: 0
+    InitialGridPoints: [3, 3, 4]
+    UseEquiangularMap: True
+
+NumericalFlux:
+  InternalPenalty:
+    PenaltyParameter: 1.
+
+Observers:
+  VolumeFileName: "ElasticMirrorVolume"
+  ReductionFileName: "ElasticMirrorReductions"
+
+LinearSolver:
+  GMRES:
+    ConvergenceCriteria:
+      MaxIterations: 10
+      RelativeResidual: 1.e-8
+      AbsoluteResidual: 1.e-12
+    Verbosity: Quiet
+
+  Preconditioner:
+    Multigrid:
+      Iterations: 1
+      CoarsestGridPoints: 12
+      Verbosity: Quiet
+
+    Smoother:
+      Schwarz:
+        MaxOverlap: 2
+        Iterations: 3
+        Verbosity: Quiet
+        SubdomainSolver:
+          ConvergenceCriteria:
+            MaxIterations: 1
+            RelativeResidual: 1.e-10
+            AbsoluteResidual: 1.e-10
+          Verbosity: Quiet
+          Restart: 0
+        SubdomainPreconditioner: # ExplicitInverse
+
+EventsAndTriggers:
+  ? EveryNIterations:
+      N: 1
+  : - ObserveErrorNorms:
+        SubfileName: ErrorNorms
+    - ObserveVolumeIntegrals:
+        SubfileName: VolumeIntegrals
+    - ObserveFields:
+        SubfileName: VolumeData

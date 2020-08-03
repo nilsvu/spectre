@@ -61,6 +61,8 @@
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/SubdomainPreconditioners/ExplicitInverse.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "PointwiseFunctions/AnalyticData/Elasticity/Mirror.hpp"
+#include "PointwiseFunctions/AnalyticData/InitialGuessFromSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/BentBeam.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/HalfSpaceMirror.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"

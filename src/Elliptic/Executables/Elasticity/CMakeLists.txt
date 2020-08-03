@@ -54,3 +54,17 @@ target_link_libraries(
   PRIVATE
   ElasticitySolutions
   )
+
+# Elasticity system with finite-size mirror
+add_elasticity_executable(
+  Mirror
+  "Elasticity::FirstOrderSystem<3>"
+  elliptic::InitialGuessFromSolution<Elasticity::Solutions::HalfSpaceMirror>
+  Elasticity::AnalyticData::Mirror
+  )
+target_link_libraries(
+  SolveElasticHalfSpaceMirror
+  PRIVATE
+  ElasticityAnalyticData
+  ElasticitySolutions
+  )

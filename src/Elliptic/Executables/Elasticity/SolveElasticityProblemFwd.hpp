@@ -13,7 +13,14 @@ namespace Solutions {
 struct BentBeam;
 struct HalfSpaceMirror;
 }  // namespace Solutions
+namespace AnalyticData {
+struct Mirror;
+}  // namespace AnalyticData
 }  // namespace Elasticity
+namespace elliptic {
+template <typename SolutionType>
+struct InitialGuessFromSolution;
+}  // namespace elliptic
 
 template <typename System, typename InitialGuess, typename BoundaryConditions>
 struct Metavariables;
