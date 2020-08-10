@@ -261,6 +261,14 @@ struct DetInvJacobianCompute : db::ComputeTag,
 /// Base tag for boundary data needed for updating the variables.
 struct VariablesBoundaryData : db::BaseTag {};
 
+/// \ingroup DataBoxTagsGroup
+/// \ingroup ComputationalDomainGroup
+/// The `Tag` on all faces of the element.
+template <size_t Dim, typename Tag>
+struct Faces : db::SimpleTag {
+  using type = DirectionMap<Dim, typename Tag::type>;
+};
+
 // @{
 /// \ingroup DataBoxTagsGroup
 /// \ingroup ComputationalDomainGroup
