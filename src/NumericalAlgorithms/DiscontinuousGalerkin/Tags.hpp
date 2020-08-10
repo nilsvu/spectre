@@ -41,6 +41,13 @@ struct Mortars : db::PrefixTag, db::SimpleTag {
   using type = std::unordered_map<Key, typename Tag::type, boost::hash<Key>>;
 };
 
+template <typename Tag, size_t VolumeDim>
+struct NeighborMortars : db::PrefixTag, db::SimpleTag {
+  using tag = Tag;
+  using Key = std::pair<::Direction<VolumeDim>, ::ElementId<VolumeDim>>;
+  using type = std::unordered_map<Key, db::item_type<Tag>, boost::hash<Key>>;
+};
+
 /// \ingroup DataBoxTagsGroup
 /// \ingroup DiscontinuousGalerkinGroup
 /// Size of a mortar, relative to the element face.  That is, the part
