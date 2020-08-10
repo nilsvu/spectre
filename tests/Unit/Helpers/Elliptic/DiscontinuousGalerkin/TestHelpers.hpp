@@ -22,8 +22,11 @@
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Structure/IndexToSliceAt.hpp"
 #include "Domain/SurfaceJacobian.hpp"
+#include "Elliptic/BoundaryConditions.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeBoundaryConditions.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
+#include "Elliptic/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NormalDotFlux.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
@@ -123,14 +126,12 @@ apply_first_order_dg_operator(
     PackageBoundaryData&& package_boundary_data,
     ApplyBoundaryContribution&& apply_boundary_contribution) {
   static constexpr size_t volume_dim = Dim;
-  using Vars = Variables<TagsList>;
-  using ResultVars = Variables<db::wrap_tags_in<DgOperatorAppliedTo, TagsList>>;
 
   const auto& dg_element = dg_elements.at(element_id);
   const auto& vars = all_variables.at(element_id);
 
   const size_t num_points = dg_element.mesh.number_of_grid_points();
-  ResultVars result{num_points};
+  Variables<db::wrap_tags_in<DgOperatorAppliedTo, TagsList>> result{num_points};
 
   // Compute fluxes
   const auto fluxes = std::apply(
@@ -214,9 +215,22 @@ apply_first_order_dg_operator(
     // Assemble local boundary data
     const auto fluxes_args_on_face =
         package_fluxes_args(element_id, dg_element, direction);
+    const auto n_dot_div_fluxes_on_face = Variables<
+        db::wrap_tags_in<::elliptic::dg::Tags::NormalDotDivAuxFlux, TagsList,
+                         tmpl::size_t<volume_dim>, Frame::Inertial>>(
+        normal_dot_flux<TagsList>(
+            face_normal, std::apply(
+                             [&div_fluxes_on_face,
+                              &fluxes_computer](const auto&... fluxes_args) {
+                               return ::elliptic::first_order_fluxes<
+                                   volume_dim, PrimalFields, AuxiliaryFields>(
+                                   Variables<TagsList>(div_fluxes_on_face),
+                                   fluxes_computer, fluxes_args...);
+                             },
+                             fluxes_args_on_face)));
     auto local_boundary_data = package_boundary_data(
         dg_element.mesh, direction, face_normal, magnitude_of_face_normal,
-        normal_dot_fluxes, div_fluxes_on_face, fluxes_args_on_face);
+        normal_dot_fluxes, n_dot_div_fluxes_on_face, fluxes_args_on_face);
     if (::dg::needs_projection(face_mesh, mortar_mesh, mortar_size)) {
       local_boundary_data = local_boundary_data.project_to_mortar(
           face_mesh, mortar_mesh, mortar_size);
@@ -227,30 +241,44 @@ apply_first_order_dg_operator(
     if (neighbor_id == ElementId<volume_dim>::external_boundary_id()) {
       // On exterior ("ghost") faces, manufacture boundary data that represent
       // homogeneous Dirichlet boundary conditions
-      const auto vars_on_face = data_on_slice(vars, dg_element.mesh.extents(),
-                                              dimension, slice_index);
-      Vars ghost_vars{face_num_points};
-      ::elliptic::dg::homogeneous_dirichlet_boundary_conditions<PrimalFields>(
-          make_not_null(&ghost_vars), vars_on_face);
-      const auto ghost_fluxes = std::apply(
-          [&ghost_vars, &fluxes_computer](const auto&... fluxes_args) {
-            return ::elliptic::first_order_fluxes<volume_dim, PrimalFields,
-                                                  AuxiliaryFields>(
-                ghost_vars, fluxes_computer, fluxes_args...);
-          },
-          fluxes_args_on_face);
+      tuples::tagged_tuple_from_typelist<
+          db::wrap_tags_in<::elliptic::Tags::BoundaryCondition, PrimalFields>>
+          boundary_condition_types{};
+      tmpl::for_each<PrimalFields>(
+          [&boundary_condition_types](auto tag_v) noexcept {
+            using tag = tmpl::type_from<decltype(tag_v)>;
+            get<::elliptic::Tags::BoundaryCondition<tag>>(
+                boundary_condition_types) =
+                ::elliptic::BoundaryCondition::Dirichlet;
+          });
       auto remote_face_normal = face_normal;
       for (size_t d = 0; d < volume_dim; d++) {
         remote_face_normal.get(d) *= -1.;
       }
-      const auto ghost_normal_dot_fluxes =
-          normal_dot_flux<TagsList>(remote_face_normal, ghost_fluxes);
+      Variables<db::wrap_tags_in<::Tags::NormalDotFlux, TagsList>>
+          ghost_normal_dot_fluxes{face_num_points};
+      ::elliptic::dg::homogeneous_boundary_conditions<PrimalFields,
+                                                      AuxiliaryFields>(
+          make_not_null(&ghost_normal_dot_fluxes), normal_dot_fluxes,
+          boundary_condition_types);
+      // Impose auxiliary equation on face
+      Variables<db::wrap_tags_in<::elliptic::dg::Tags::NormalDotDivAuxFlux,
+                                 PrimalFields, tmpl::size_t<volume_dim>,
+                                 Frame::Inertial>>
+          n_dot_div_aux_fluxes{face_num_points};
+      tmpl::for_each<PrimalFields>(
+          [&n_dot_div_aux_fluxes,
+           &ghost_normal_dot_fluxes](auto tag_v) noexcept {
+            using tag = tmpl::type_from<decltype(tag_v)>;
+            get<::elliptic::dg::Tags::NormalDotDivAuxFlux<
+                tag, tmpl::size_t<volume_dim>, Frame::Inertial>>(
+                n_dot_div_aux_fluxes) =
+                get<::Tags::NormalDotFlux<tag>>(ghost_normal_dot_fluxes);
+          });
       remote_boundary_data = package_boundary_data(
           dg_element.mesh, direction.opposite(), remote_face_normal,
           magnitude_of_face_normal, ghost_normal_dot_fluxes,
-          // Using the div_fluxes from the interior here is fine for Dirichlet
-          // boundaries
-          div_fluxes_on_face, fluxes_args_on_face);
+          n_dot_div_aux_fluxes, fluxes_args_on_face);
     } else {
       // On internal boundaries, get neighbor data from all_variables
       const auto& neighbor_orientation =
@@ -260,6 +288,12 @@ apply_first_order_dg_operator(
       const auto& neighbor = dg_elements.at(neighbor_id);
       const auto neighbor_face_mesh =
           neighbor.mesh.slice_away(direction_from_neighbor.dimension());
+      auto remote_face_normal = unnormalized_face_normal(
+          neighbor_face_mesh, neighbor.element_map, direction_from_neighbor);
+      const auto remote_face_normal_magnitude = magnitude(remote_face_normal);
+      for (size_t d = 0; d < volume_dim; d++) {
+        remote_face_normal.get(d) /= get(remote_face_normal_magnitude);
+      }
       const auto neighbor_mortars = create_mortars(neighbor_id, dg_elements);
       const auto& neighbor_mortar = neighbor_mortars.at(
           std::make_pair(direction_from_neighbor, element_id));
@@ -281,22 +315,30 @@ apply_first_order_dg_operator(
           divergence(remote_fluxes, neighbor.mesh, neighbor.inv_jacobian),
           neighbor.mesh.extents(), direction_from_neighbor.dimension(),
           index_to_slice_at(neighbor.mesh.extents(), direction_from_neighbor));
+      const auto remote_n_dot_div_fluxes_on_face = Variables<
+          db::wrap_tags_in<::elliptic::dg::Tags::NormalDotDivAuxFlux, TagsList,
+                           tmpl::size_t<volume_dim>, Frame::Inertial>>(
+          normal_dot_flux<TagsList>(
+              remote_face_normal,
+              std::apply(
+                  [&remote_div_fluxes_on_face,
+                   &fluxes_computer](const auto&... fluxes_args) {
+                    return ::elliptic::first_order_fluxes<
+                        volume_dim, PrimalFields, AuxiliaryFields>(
+                        Variables<TagsList>(remote_div_fluxes_on_face),
+                        fluxes_computer, fluxes_args...);
+                  },
+                  fluxes_args_on_remote_face)));
       const auto remote_fluxes_on_face = data_on_slice(
           remote_fluxes, neighbor.mesh.extents(),
           direction_from_neighbor.dimension(),
           index_to_slice_at(neighbor.mesh.extents(), direction_from_neighbor));
-      auto remote_face_normal = unnormalized_face_normal(
-          neighbor_face_mesh, neighbor.element_map, direction_from_neighbor);
-      const auto remote_face_normal_magnitude = magnitude(remote_face_normal);
-      for (size_t d = 0; d < volume_dim; d++) {
-        remote_face_normal.get(d) /= get(remote_face_normal_magnitude);
-      }
       auto remote_normal_dot_fluxes =
           normal_dot_flux<TagsList>(remote_face_normal, remote_fluxes_on_face);
       remote_boundary_data = package_boundary_data(
           neighbor.mesh, direction_from_neighbor, remote_face_normal,
           remote_face_normal_magnitude, remote_normal_dot_fluxes,
-          remote_div_fluxes_on_face, fluxes_args_on_remote_face);
+          remote_n_dot_div_fluxes_on_face, fluxes_args_on_remote_face);
       if (::dg::needs_projection(neighbor_face_mesh, neighbor_mortar_mesh,
                                  neighbor_mortar_size)) {
         remote_boundary_data = remote_boundary_data.project_to_mortar(

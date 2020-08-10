@@ -60,16 +60,16 @@ Matrix first_order_operator_matrix(const DomainCreator<Dim>& domain_creator,
           const Mesh<Dim>& volume_mesh, const Direction<Dim>& direction,
           const tnsr::i<DataVector, Dim>& face_normal,
           const Scalar<DataVector>& face_normal_magnitude,
-          const Variables<n_dot_fluxes_tags>& n_dot_fluxes,
-          const Variables<div_fluxes_tags>& div_fluxes, const std::tuple<> &
+          const auto& n_dot_fluxes, const auto& n_dot_div_fluxes,
+          const std::tuple<> &
           /*fluxes_args*/) -> BoundaryData {
     const auto face_mesh = volume_mesh.slice_away(direction.dimension());
     return ::dg::FirstOrderScheme::package_boundary_data(
         numerical_fluxes_computer, face_mesh, n_dot_fluxes, volume_mesh,
         direction, face_normal_magnitude,
         get<::Tags::NormalDotFlux<field_gradient_tag>>(n_dot_fluxes),
-        get<::Tags::div<::Tags::Flux<field_gradient_tag, tmpl::size_t<Dim>,
-                                     Frame::Inertial>>>(div_fluxes),
+        get<::elliptic::dg::Tags::NormalDotDivAuxFlux<
+            field_tag, tmpl::size_t<Dim>, Frame::Inertial>>(n_dot_div_fluxes),
         face_normal, fluxes_computer);
   };
   const auto apply_boundary_contribution =
