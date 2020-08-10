@@ -230,7 +230,7 @@ apply_first_order_dg_operator(
       const auto vars_on_face = data_on_slice(vars, dg_element.mesh.extents(),
                                               dimension, slice_index);
       Vars ghost_vars{face_num_points};
-      ::elliptic::dg::homogeneous_dirichlet_boundary_conditions<PrimalFields>(
+      ::elliptic::dg::homogeneous_boundary_conditions<PrimalFields>(
           make_not_null(&ghost_vars), vars_on_face);
       const auto ghost_fluxes = std::apply(
           [&ghost_vars, &fluxes_computer](const auto&... fluxes_args) {
@@ -245,12 +245,25 @@ apply_first_order_dg_operator(
       }
       const auto ghost_normal_dot_fluxes =
           normal_dot_flux<TagsList>(remote_face_normal, ghost_fluxes);
+      // Impose auxiliary equation on face
+      Variables<db::wrap_tags_in<
+          ::Tags::div,
+          db::wrap_tags_in<::Tags::Flux, TagsList, tmpl::size_t<volume_dim>,
+                           Frame::Inertial>>>
+          div_fluxes_on_exterior_face{face_num_points};
+      tmpl::for_each<AuxiliaryFields>(
+          [&div_fluxes_on_exterior_face, &ghost_vars](auto tag_v) noexcept {
+            using tag = tmpl::type_from<decltype(tag_v)>;
+            get<::Tags::div<
+                ::Tags::Flux<tag, tmpl::size_t<volume_dim>, Frame::Inertial>>>(
+                div_fluxes_on_exterior_face) = get<tag>(ghost_vars);
+          });
       remote_boundary_data = package_boundary_data(
           dg_element.mesh, direction.opposite(), remote_face_normal,
           magnitude_of_face_normal, ghost_normal_dot_fluxes,
           // Using the div_fluxes from the interior here is fine for Dirichlet
           // boundaries
-          div_fluxes_on_face, fluxes_args_on_face);
+          div_fluxes_on_exterior_face, fluxes_args_on_face);
     } else {
       // On internal boundaries, get neighbor data from all_variables
       const auto& neighbor_orientation =
