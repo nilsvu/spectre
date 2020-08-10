@@ -8,10 +8,12 @@
 
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/Index.hpp"
+#include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Domain/CreateInitialElement.hpp"
 #include "Domain/Domain.hpp"
 #include "Domain/ElementMap.hpp"
+#include "Domain/FaceNormal.hpp"
 #include "Domain/LogicalCoordinates.hpp"
 #include "Domain/Structure/CreateInitialMesh.hpp"
 #include "Domain/Structure/DirectionMap.hpp"
@@ -84,10 +86,23 @@ struct InitializeSubdomain {
 
     overlaps<Mesh<Dim>> overlap_meshes{};
     overlaps<size_t> overlap_extents{};
+    overlaps<Element<Dim>> overlap_elements{};
     overlaps<ElementMap<Dim, Frame::Inertial>> overlap_element_maps{};
+    overlaps<DirectionMap<Dim, tnsr::i<DataVector, Dim>>>
+        overlap_face_normals{};
+    overlaps<DirectionMap<Dim, Scalar<DataVector>>>
+        overlap_face_normal_magnitudes{};
+    overlaps<DirectionMap<Dim, Scalar<DataVector>>> overlap_surface_jacobians{};
     overlaps<::dg::MortarMap<Dim, Mesh<Dim - 1>>> overlap_mortar_meshes{};
     overlaps<::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>>
         overlap_mortar_sizes{};
+    overlaps<::dg::MortarMap<Dim, Mesh<Dim>>> overlap_neighbor_meshes{};
+    overlaps<::dg::MortarMap<Dim, Scalar<DataVector>>>
+        overlap_neighbor_face_normal_magnitudes{};
+    overlaps<::dg::MortarMap<Dim, Mesh<Dim - 1>>>
+        overlap_neighbor_mortar_meshes{};
+    overlaps<::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>>
+        overlap_neighbor_mortar_sizes{};
     overlaps<tnsr::I<DataVector, Dim, Frame::Inertial>>
         overlap_inertial_coords{};
     overlaps<std::unordered_map<Direction<Dim>, elliptic::BoundaryCondition>>
@@ -112,21 +127,52 @@ struct InitializeSubdomain {
             overlap_id,
             LinearSolver::Schwarz::overlap_extent(
                 neighbor_mesh.extents(dimension_in_neighbor), max_overlap));
-        // Element map
+        // Element
         const auto& neighbor_block = domain.blocks()[neighbor_id.block_id()];
+        overlap_elements.emplace(
+            overlap_id, domain::Initialization::create_initial_element(
+                            neighbor_id, neighbor_block, initial_refinement));
+        const auto& neighbor = overlap_elements.at(overlap_id);
+        // Element map
         overlap_element_maps.emplace(
             overlap_id,
             ElementMap<Dim, Frame::Inertial>{
                 neighbor_id, neighbor_block.stationary_map().get_clone()});
+        const auto& neighbor_element_map = overlap_element_maps.at(overlap_id);
+        // Faces
+        DirectionMap<Dim, tnsr::i<DataVector, Dim>> neighbor_face_normals{};
+        DirectionMap<Dim, Scalar<DataVector>> neighbor_face_normal_magnitudes{};
+        DirectionMap<Dim, Scalar<DataVector>> neighbor_surface_jacobians{};
+        const auto setup_face =
+            [&](const Direction<Dim>& local_direction) {
+              const auto neighbor_face_mesh =
+                  neighbor_mesh.slice_away(local_direction.dimension());
+              auto neighbor_face_normal = unnormalized_face_normal(
+                  neighbor_face_mesh, neighbor_element_map,
+                  local_direction);
+              // TODO: Use system's magnitude
+              auto neighbor_normal_magnitude = magnitude(neighbor_face_normal);
+              for (size_t d = 0; d < Dim; d++) {
+                neighbor_face_normal.get(d) /= get(neighbor_normal_magnitude);
+              }
+              auto neighbor_surface_jacobian = domain::surface_jacobian(
+                  neighbor_element_map, neighbor_face_mesh,
+                  local_direction, neighbor_normal_magnitude);
+              neighbor_face_normals[local_direction] =
+                  std::move(neighbor_face_normal);
+              neighbor_face_normal_magnitudes[local_direction] =
+                  std::move(neighbor_normal_magnitude);
+              neighbor_surface_jacobians[local_direction] =
+                  std::move(neighbor_surface_jacobian);
+            };
         // Mortars
-        Element<Dim> neighbor = domain::Initialization::create_initial_element(
-            neighbor_id, neighbor_block, initial_refinement);
         ::dg::MortarMap<Dim, Mesh<Dim - 1>> neighbor_mortar_meshes{};
         ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>> neighbor_mortar_sizes{};
         for (const auto& neighbor_direction_and_neighbors :
              neighbor.neighbors()) {
           const auto& neighbor_direction =
               neighbor_direction_and_neighbors.first;
+          setup_face(neighbor_direction);
           const auto neighbor_dimension = neighbor_direction.dimension();
           const auto& neighbor_neighbors =
               neighbor_direction_and_neighbors.second;
@@ -152,6 +198,7 @@ struct InitializeSubdomain {
         std::unordered_map<Direction<Dim>, elliptic::BoundaryCondition>
             neighbor_boundary_conditions{};
         for (const auto& neighbor_direction : neighbor.external_boundaries()) {
+          setup_face(neighbor_direction);
           const auto neighbor_mortar_id = std::make_pair(
               neighbor_direction, ElementId<Dim>::external_boundary_id());
           neighbor_mortar_meshes.emplace(
@@ -169,6 +216,12 @@ struct InitializeSubdomain {
                           neighbor_direction)),
                   neighbor_direction));
         }
+        overlap_face_normals.emplace(
+            overlap_id, std::move(neighbor_face_normals));
+        overlap_face_normal_magnitudes.emplace(
+            overlap_id, std::move(neighbor_face_normal_magnitudes));
+        overlap_surface_jacobians.emplace(
+            overlap_id, std::move(neighbor_surface_jacobians));
         overlap_mortar_meshes.emplace(overlap_id,
                                       std::move(neighbor_mortar_meshes));
         overlap_mortar_sizes.emplace(overlap_id,
@@ -179,8 +232,75 @@ struct InitializeSubdomain {
             logical_coordinates(neighbor_mesh));
         overlap_inertial_coords.emplace(overlap_id,
                                         std::move(neighbor_inertial_coords));
-      }
-    }
+
+        // Neighbor's neighbors
+        ::dg::MortarMap<Dim, Mesh<Dim>>
+            neighbors_neighbor_meshes{};
+        ::dg::MortarMap<Dim, Scalar<DataVector>>
+            neighbors_neighbor_face_normal_magnitudes{};
+        ::dg::MortarMap<Dim, Mesh<Dim - 1>>
+            neighbors_neighbor_mortar_meshes{};
+        ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>
+            neighbors_neighbor_mortar_sizes{};
+        for (const auto& neighbor_direction_and_neighbors :
+             neighbor.neighbors()) {
+          const auto& neighbor_direction =
+              neighbor_direction_and_neighbors.first;
+          const auto& neighbors_neighbor_orientation =
+              neighbor_direction_and_neighbors.second.orientation();
+          const auto direction_from_neighbors_neighbor =
+              neighbors_neighbor_orientation(neighbor_direction.opposite());
+          const auto reoriented_neighbor_face_mesh =
+              neighbors_neighbor_orientation(neighbor_mesh)
+                  .slice_away(direction_from_neighbors_neighbor.dimension());
+          for (const auto& neighbors_neighbor_id :
+               neighbor_direction_and_neighbors.second) {
+            const ::dg::MortarId<Dim> neighbors_neighbor_mortar_id{
+                neighbor_direction, neighbors_neighbor_id};
+            neighbors_neighbor_meshes.emplace(
+                neighbors_neighbor_mortar_id,
+                domain::Initialization::create_initial_mesh(
+                    initial_extents, neighbors_neighbor_id));
+            const auto& neighbors_neighbor_mesh =
+                neighbors_neighbor_meshes.at(neighbors_neighbor_mortar_id);
+            const auto neighbors_neighbor_face_mesh =
+                neighbors_neighbor_mesh.slice_away(
+                    direction_from_neighbors_neighbor.dimension());
+            const auto& neighbors_neighbor_block =
+                domain.blocks()[neighbors_neighbor_id.block_id()];
+            ElementMap<Dim, Frame::Inertial> neighbors_neighbor_element_map{
+                neighbors_neighbor_id,
+                neighbors_neighbor_block.stationary_map().get_clone()};
+            const auto neighbors_neighbor_face_normal =
+                unnormalized_face_normal(neighbors_neighbor_face_mesh,
+                                         neighbors_neighbor_element_map,
+                                         direction_from_neighbors_neighbor);
+            // TODO: Use system's magnitude
+            neighbors_neighbor_face_normal_magnitudes.emplace(
+                neighbors_neighbor_mortar_id,
+                magnitude(neighbors_neighbor_face_normal));
+            neighbors_neighbor_mortar_meshes.emplace(
+                neighbors_neighbor_mortar_id,
+                ::dg::mortar_mesh(reoriented_neighbor_face_mesh,
+                                  neighbors_neighbor_face_mesh));
+            neighbors_neighbor_mortar_sizes.emplace(
+                neighbors_neighbor_mortar_id,
+                ::dg::mortar_size(
+                    neighbors_neighbor_id, neighbor_id,
+                    direction_from_neighbors_neighbor.dimension(),
+                    neighbors_neighbor_orientation.inverse_map()));
+          }
+        }
+        overlap_neighbor_meshes.emplace(overlap_id,
+                                        std::move(neighbors_neighbor_meshes));
+        overlap_neighbor_face_normal_magnitudes.emplace(
+            overlap_id, std::move(neighbors_neighbor_face_normal_magnitudes));
+        overlap_neighbor_mortar_meshes.emplace(
+            overlap_id, std::move(neighbors_neighbor_mortar_meshes));
+        overlap_neighbor_mortar_sizes.emplace(
+            overlap_id, std::move(neighbors_neighbor_mortar_sizes));
+      }  // neighbors in direction
+    } // directions
 
     return std::make_tuple(
         ::Initialization::merge_into_databox<
@@ -188,16 +308,43 @@ struct InitializeSubdomain {
             db::AddSimpleTags<
                 overlaps_tag<domain::Tags::Mesh<Dim>>,
                 overlaps_tag<elliptic::dg::Tags::OverlapExtent>,
+                overlaps_tag<domain::Tags::Element<Dim>>,
                 overlaps_tag<domain::Tags::ElementMap<Dim>>,
+                overlaps_tag<domain::Tags::Faces<
+                    Dim, ::Tags::Normalized<
+                             domain::Tags::UnnormalizedFaceNormal<Dim>>>>,
+                overlaps_tag<domain::Tags::Faces<
+                    Dim, ::Tags::Magnitude<
+                             domain::Tags::UnnormalizedFaceNormal<Dim>>>>,
+                overlaps_tag<domain::Tags::Faces<
+                    Dim, domain::Tags::SurfaceJacobian<Frame::Logical,
+                                                       Frame::Inertial>>>,
                 overlaps_tag<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>,
                 overlaps_tag<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>,
+                overlaps_tag<
+                    ::Tags::NeighborMortars<domain::Tags::Mesh<Dim>, Dim>>,
+                overlaps_tag<::Tags::NeighborMortars<
+                    ::Tags::Magnitude<
+                        domain::Tags::UnnormalizedFaceNormal<Dim>>,
+                    Dim>>,
+                overlaps_tag<
+                    ::Tags::NeighborMortars<domain::Tags::Mesh<Dim - 1>, Dim>>,
+                overlaps_tag<
+                    ::Tags::NeighborMortars<::Tags::MortarSize<Dim - 1>, Dim>>,
                 overlaps_tag<domain::Tags::Coordinates<Dim, Frame::Inertial>>,
                 overlaps_tag<domain::Tags::Interface<
                     domain::Tags::BoundaryDirectionsExterior<Dim>,
                     elliptic::Tags::BoundaryCondition>>>>(
             std::move(box), std::move(overlap_meshes),
-            std::move(overlap_extents), std::move(overlap_element_maps),
+            std::move(overlap_extents), std::move(overlap_elements),
+            std::move(overlap_element_maps), std::move(overlap_face_normals),
+            std::move(overlap_face_normal_magnitudes),
+            std::move(overlap_surface_jacobians),
             std::move(overlap_mortar_meshes), std::move(overlap_mortar_sizes),
+            std::move(overlap_neighbor_meshes),
+            std::move(overlap_neighbor_face_normal_magnitudes),
+            std::move(overlap_neighbor_mortar_meshes),
+            std::move(overlap_neighbor_mortar_sizes),
             std::move(overlap_inertial_coords),
             std::move(overlap_boundary_conditions)));
   }

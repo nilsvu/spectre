@@ -45,6 +45,7 @@ target_link_libraries(
   Domain
   ErrorHandling
   Elasticity
+  Elliptic
   ParallelSchwarz
   Poisson
   PoissonDgTestHelpers

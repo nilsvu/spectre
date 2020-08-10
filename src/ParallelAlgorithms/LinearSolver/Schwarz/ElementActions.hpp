@@ -368,7 +368,8 @@ struct SolveSubdomain {
     const size_t num_points =
         db::get<domain::Tags::Mesh<Dim>>(box).number_of_grid_points();
     SubdomainOperator subdomain_operator{num_points};
-    SubdomainData subdomain_result_buffer{num_points};
+    auto subdomain_result_buffer =
+        make_with_value<SubdomainData>(subdomain_residual, 0.);
     // Construct the subdomain operator
     const auto apply_subdomain_operator = [&box, &subdomain_result_buffer,
                                            &subdomain_operator](
