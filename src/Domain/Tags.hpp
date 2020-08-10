@@ -301,6 +301,11 @@ struct DetJacobianCompute : db::ComputeTag,
 /// Base tag for boundary data needed for updating the variables.
 struct VariablesBoundaryData : db::BaseTag {};
 
+template <size_t Dim, typename FaceTag>
+struct Faces : db::SimpleTag {
+  using type = DirectionMap<Dim, typename FaceTag::type>;
+};
+
 // @{
 /// \ingroup DataBoxTagsGroup
 /// \ingroup ComputationalDomainGroup
