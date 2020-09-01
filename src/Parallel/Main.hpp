@@ -8,6 +8,7 @@
 
 #include <boost/program_options.hpp>
 #include <charm++.h>
+#include <cstdlib>
 #include <initializer_list>
 #include <string>
 #include <type_traits>
@@ -95,6 +96,12 @@ class Main : public CBase_Main<Metavariables> {
 template <typename Metavariables>
 Main<Metavariables>::Main(CkArgMsg* msg) noexcept
     : options_(Metavariables::help) {
+  // Configure environment
+  // Disable OpenBLAS multithreading since it conflicts with Charm++
+  // parallelism. Details:
+  // https://github.com/xianyi/OpenBLAS/wiki/Faq#multi-threaded
+  setenv("OPENBLAS_NUM_THREADS", "1", true);
+
   Informer::print_startup_info(msg);
 
   /// \todo detail::register_events_to_trace();
