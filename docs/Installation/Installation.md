@@ -19,7 +19,7 @@ installation_on_clusters "Installation on clusters" page.
 * [Git](https://git-scm.com/)
 * BLAS (e.g. [OpenBLAS](http://www.openblas.net))
 * [Blaze](https://bitbucket.org/blaze-lib/blaze/overview) v3.5
-* [Boost](http://www.boost.org/) 1.60.0 or later
+* [Boost](http://www.boost.org/) between 1.63.0 and 1.72.0
 * [Brigand](https://github.com/edouarda/brigand)
 * [Catch](https://github.com/philsquared/Catch) 2.1.0 or later
 * [GSL](https://www.gnu.org/software/gsl/)
@@ -259,7 +259,8 @@ To use modules with Spack, enable Spack's shell support by adding
 Once you have Spack installed and configured with OpenSSL and LMod, you can
 install the SpECTRE dependencies using
 ```
-spack install blaze@3.2
+spack install blaze@3.5
+spack install boost@1.72.0
 spack install brigand@master
 spack install libsharp -openmp -mpi
 spack install catch2
@@ -268,7 +269,7 @@ spack install jemalloc # or from your package manager
 spack install libxsmm
 spack install yaml-cpp@develop
 ```
-You can also install CMake, OpenBLAS, Boost, and HDF5 from Spack.
+You can also install CMake, OpenBLAS, HDF5 and Charm++ from Spack.
 To load the packages you've installed from Spack run `spack load PACKAGE`,
 or (equivalently) use the `module load` command.
 
@@ -288,7 +289,7 @@ Follow these steps:
 
 1.  Clone [SpECTRE](https://github.com/sxs-collaboration/spectre) into
     `SPECTRE_ROOT`, a directory of your choice.
-2.  Install Charm++:
+2.  Install Charm++ (if you haven't installed it from Spack):
   * Clone [Charm++](http://charm.cs.illinois.edu/software) into `CHARM_DIR`,
     again a directory of your choice.
   * In `CHARM_DIR`, run
