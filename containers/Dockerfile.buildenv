@@ -104,7 +104,16 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.2/cmake-3.18.2
     && tar -xzf cmake-3.18.2.tar.gz \
     && cd cmake-3.18.2 \
     && ./bootstrap --prefix=/usr/local \
-    && make \
+    && make ${PARALLEL_MAKE_ARG} \
+    && make install \
+    && rm -rf cmake*
+
+# Install the oldest version of CMake that we support so we can test it.
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.8.2/cmake-3.8.2.tar.gz \
+    && tar -xzf cmake-3.8.2.tar.gz \
+    && cd cmake-3.8.2 \
+    && ./bootstrap --prefix=/opt/local/cmake/3.8.2 \
+    && make ${PARALLEL_MAKE_ARG} \
     && make install \
     && rm -rf cmake*
 

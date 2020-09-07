@@ -277,6 +277,10 @@ jobs:
           # See issue https://github.com/sxs-collaboration/spectre/issues/1807
           - build_type: Debug
             EXTRA_CXX_FLAGS: "-DBLAZE_USE_VECTORIZATION=0"
+          - compiler: gcc-7
+            build_type: Debug
+            # Configure one build with the minimum CMake version we support
+            CMAKE_EXECUTABLE: /opt/local/cmake/3.8.2/bin/cmake
           - compiler: clang-8
             build_type: Debug
             # When building with ASAN we also need python bindings to be
@@ -355,6 +359,7 @@ jobs:
             fi
           fi
 
+          CMAKE_EXECUTABLE=${{ matrix.CMAKE_EXECUTABLE }}
           BUILD_PYTHON_BINDINGS=${{ matrix.BUILD_PYTHON_BINDINGS }}
           BUILD_SHARED_LIBS=${{ matrix.BUILD_SHARED_LIBS }}
           PYTHON_EXECUTABLE=${{ matrix.PYTHON_EXECUTABLE }}
@@ -364,7 +369,7 @@ jobs:
           UBSAN_INTEGER=${{ matrix.UBSAN_INTEGER }}
           USE_PCH=${{ matrix.use_pch }}
 
-          cmake
+          ${CMAKE_EXECUTABLE:-'cmake'}
           -D CMAKE_C_COMPILER=${CC}
           -D CMAKE_CXX_COMPILER=${CXX}
           -D CMAKE_Fortran_COMPILER=${FC}
