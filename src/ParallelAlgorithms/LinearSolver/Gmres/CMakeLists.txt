@@ -10,5 +10,6 @@ spectre_target_headers(
   InitializeElement.hpp
   ResidualMonitor.hpp
   ResidualMonitorActions.hpp
+  Tags/InboxTags.hpp
   )
 

@@ -25,14 +25,12 @@
 #include "Utilities/TypeTraits/IsA.hpp"
 
 /// \cond
-namespace LinearSolver {
-namespace Tags {
+namespace LinearSolver::Tags {
 template <typename OptionsGroup>
 struct ConvergenceCriteria;
 template <typename OptionsGroup>
 struct Iterations;
-}  // namespace Tags
-}  // namespace LinearSolver
+}  // namespace LinearSolver::Tags
 /// \endcond
 
 /*!

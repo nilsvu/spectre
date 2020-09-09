@@ -22,6 +22,9 @@ target_link_libraries(
   DataStructures
   LinearSolver
   IO
+  Informer
+  Initialization
+  Parallel
   Utilities
   )
 

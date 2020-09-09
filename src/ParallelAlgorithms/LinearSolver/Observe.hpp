@@ -3,6 +3,11 @@
 
 #pragma once
 
+#include <cstddef>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "IO/Observer/ObservationId.hpp"
@@ -10,10 +15,10 @@
 #include "IO/Observer/ReductionActions.hpp"
 #include "IO/Observer/TypeOfObservation.hpp"
 #include "Parallel/GlobalCache.hpp"
-#include "Parallel/Info.hpp"
 #include "Parallel/Invoke.hpp"
 #include "Parallel/Reduction.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "Utilities/Functional.hpp"
 
 namespace LinearSolver {
 namespace observe_detail {
