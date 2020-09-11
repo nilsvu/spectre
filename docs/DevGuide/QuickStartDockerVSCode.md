@@ -41,24 +41,6 @@ repository to your computer, selecting the SSH option:
 
 - [Cloning a repository](https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/cloning-a-repository)
 
-## Enable the development environment in the repository
-
-The development environment is included in the repository, but not enabled by
-default. To enable it, copy or symlink the directory
-`support/DevEnvironments/.devcontainer` to the repository root. This is easiest
-done with the command line. Navigate into the repository that you just cloned to
-your computer:
-
-```
-cd spectre
-```
-
-Now symlink the development environment:
-
-```
-ln -s support/DevEnvironments/.devcontainer .devcontainer
-```
-
 ## Install Docker
 
 On your computer you will need Docker to run the containerized development
