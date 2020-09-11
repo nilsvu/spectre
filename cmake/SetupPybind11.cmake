@@ -4,6 +4,11 @@
 option(BUILD_PYTHON_BINDINGS "Build the python bindings for SpECTRE" OFF)
 
 if(BUILD_PYTHON_BINDINGS)
+  if(NOT ${MEMORY_ALLOCATOR} STREQUAL SYSTEM)
+    message(FATAL_ERROR "Python bindings currently require using the system "
+      "memory allocator. Set MEMORY_ALLOCATOR=SYSTEM.")
+  endif()
+
   # Make sure to find the Python interpreter first, so it is consistent with
   # the one that pybind11 uses
   find_package(PythonInterp)
