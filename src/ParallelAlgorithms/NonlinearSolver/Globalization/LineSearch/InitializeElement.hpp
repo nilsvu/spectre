@@ -17,7 +17,7 @@ class TaggedTuple;
 }  // namespace tuples
 namespace Parallel {
 template <typename Metavariables>
-struct ConstGlobalCache;
+struct GlobalCache;
 }  // namespace Parallel
 /// \endcond
 
@@ -31,13 +31,12 @@ struct InitializeElement {
             typename ParallelComponent>
   static auto apply(db::DataBox<DbTagsList>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+                    const Parallel::GlobalCache<Metavariables>& /*cache*/,
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
     using compute_tags =
-        tmpl::list<NonlinearSolver::Tags::TemporalIdCompute,
-                   NonlinearSolver::Tags::TemporalIdNextCompute>;
+        tmpl::list<NonlinearSolver::Tags::TemporalIdCompute>;
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeElement,

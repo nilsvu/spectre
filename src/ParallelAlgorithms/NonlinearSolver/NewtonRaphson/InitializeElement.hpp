@@ -5,7 +5,7 @@
 
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
-#include "Parallel/ConstGlobalCache.hpp"
+#include "Parallel/GlobalCache.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
 
 /// \cond
@@ -34,19 +34,16 @@ struct InitializeElement {
             typename ActionList, typename ParallelComponent>
   static auto apply(DataBox& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+                    const Parallel::GlobalCache<Metavariables>& /*cache*/,
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using compute_tags = db::AddComputeTags<
-        ::Tags::NextCompute<NonlinearSolver::Tags::IterationId>>;
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeElement,
             db::AddSimpleTags<NonlinearSolver::Tags::IterationId,
                               linear_source_tag, linear_operator_tag,
-                              NonlinearSolver::Tags::HasConverged>,
-            compute_tags>(
+                              NonlinearSolver::Tags::HasConverged>>(
             // The `PrepareSolve` action populates these tags with initial
             // values
             std::move(box), std::numeric_limits<size_t>::max(),

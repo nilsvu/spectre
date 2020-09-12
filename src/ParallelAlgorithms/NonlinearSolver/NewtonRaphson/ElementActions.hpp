@@ -8,7 +8,7 @@
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "NumericalAlgorithms/LinearSolver/InnerProduct.hpp"
-#include "Parallel/ConstGlobalCache.hpp"
+#include "Parallel/GlobalCache.hpp"
 #include "Parallel/Info.hpp"
 #include "Parallel/Invoke.hpp"
 #include "Parallel/Reduction.hpp"
@@ -41,7 +41,7 @@ struct PrepareSolve {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     db::mutate<NonlinearSolver::Tags::IterationId>(make_not_null(&box), [
@@ -59,7 +59,7 @@ struct PrepareStep {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     db::mutate<NonlinearSolver::Tags::IterationId>(
@@ -67,12 +67,9 @@ struct PrepareStep {
         [
         ](const gsl::not_null<
               db::item_type<NonlinearSolver::Tags::IterationId>*>
-              iteration_id,
-          const db::item_type<::Tags::Next<NonlinearSolver::Tags::IterationId>>&
-              next_iteration_id) noexcept {
-          *iteration_id = next_iteration_id;
-        },
-        get<::Tags::Next<NonlinearSolver::Tags::IterationId>>(box));
+              iteration_id) noexcept {
+          ++(*iteration_id);
+        });
     return {std::move(box)};
   }
 };
@@ -97,7 +94,7 @@ struct UpdateResidual {
   static std::tuple<db::DataBox<DbTagsList>&&, bool> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      Parallel::ConstGlobalCache<Metavariables>& cache,
+      Parallel::GlobalCache<Metavariables>& cache,
       const ArrayIndex& array_index, const ActionList /*mete*/,
       const ParallelComponent* const /*meta*/) noexcept {
     ASSERT(get<NonlinearSolver::Tags::IterationId>(box) !=
@@ -159,8 +156,7 @@ struct UpdateHasConverged {
           db::tag_is_retrievable_v<correction_tag, DataBox> and
           db::tag_is_retrievable_v<nonlinear_source_tag, DataBox> and
           db::tag_is_retrievable_v<linear_operator_tag, DataBox>> = nullptr>
-  static void apply(DataBox& box,
-                    Parallel::ConstGlobalCache<Metavariables>& cache,
+  static void apply(DataBox& box, Parallel::GlobalCache<Metavariables>& cache,
                     const ArrayIndex& array_index,
                     const db::item_type<NonlinearSolver::Tags::HasConverged>&
                         has_converged) noexcept {
@@ -206,7 +202,7 @@ struct PerformStep {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*mete*/,
       const ParallelComponent* const /*meta*/) noexcept {
     // Apply the correction that the linear solve has determined to improve

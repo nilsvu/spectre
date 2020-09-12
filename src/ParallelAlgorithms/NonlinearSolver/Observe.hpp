@@ -7,7 +7,8 @@
 #include "IO/Observer/ObservationId.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
 #include "IO/Observer/ReductionActions.hpp"
-#include "Parallel/ConstGlobalCache.hpp"
+#include "IO/Observer/TypeOfObservation.hpp"
+#include "Parallel/GlobalCache.hpp"
 #include "Parallel/Info.hpp"
 #include "Parallel/Invoke.hpp"
 #include "Parallel/Reduction.hpp"
@@ -27,14 +28,12 @@ struct ObservationType {};
 struct Registration {
   template <typename ParallelComponent, typename DbTagsList,
             typename ArrayIndex>
-  static std::pair<observers::TypeOfObservation, observers::ObservationId>
+  static std::pair<observers::TypeOfObservation, observers::ObservationKey>
   register_info(const db::DataBox<DbTagsList>& /*box*/,
                 const ArrayIndex& /*array_index*/) noexcept {
-    observers::ObservationId fake_initial_observation_id{0., ObservationType{}};
-    return {
-        observers::TypeOfObservation::Reduction,
-        std::move(fake_initial_observation_id)  // NOLINT
-    };
+    return {observers::TypeOfObservation::Reduction,
+            observers::ObservationKey{
+                "NonlinearSolver::observe_detail::ObservationType"}};
   }
 };
 
@@ -56,20 +55,22 @@ struct Registration {
 template <typename FieldsTag, typename DbTagsList, typename Metavariables>
 void contribute_to_reduction_observer(
     db::DataBox<DbTagsList>& box,
-    Parallel::ConstGlobalCache<Metavariables>& cache) noexcept {
+    Parallel::GlobalCache<Metavariables>& cache) noexcept {
   using fields_tag = FieldsTag;
   using residual_magnitude_tag = db::add_tag_prefix<
       LinearSolver::Tags::Magnitude,
       db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>>;
 
   const auto observation_id = observers::ObservationId(
-      get<NonlinearSolver::Tags::IterationId>(box), ObservationType{});
+      get<NonlinearSolver::Tags::IterationId>(box),
+      "NonlinearSolver::observe_detail::ObservationType");
   auto& reduction_writer = Parallel::get_parallel_component<
       observers::ObserverWriter<Metavariables>>(cache);
   Parallel::threaded_action<observers::ThreadedActions::WriteReductionData>(
       // Node 0 is always the writer, so directly call the component on that
       // node
       reduction_writer[0], observation_id,
+      static_cast<size_t>(Parallel::my_node()),
       // When multiple nonlinear solves are performed, e.g. for AMR, we'll need
       // to write into separate subgroups, e.g.:
       // `/nonlinear_residuals/<amr_iteration_id>`

@@ -11,12 +11,12 @@
 #include <utility>
 #include <vector>
 
-#include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/DataBox/Tag.hpp"
 #include "Informer/Verbosity.hpp"
 #include "NumericalAlgorithms/Convergence/Criteria.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
-#include "NumericalAlgorithms/LinearSolver/Tags.hpp"
+#include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/Numeric.hpp"
 #include "Utilities/Requires.hpp"
@@ -167,10 +167,6 @@ struct TemporalIdCompute : db::ComputeTag, TemporalId {
            globalization_iteration_id;
   }
 };
-struct TemporalIdNextCompute : db::ComputeTag, ::Tags::Next<TemporalId> {
-  using argument_tags = tmpl::list<TemporalId>;
-  static size_t function(const size_t& temporal_id) { return temporal_id + 1; }
-};
 
 /*!
  * \brief Holds a `Convergence::HasConverged` flag that signals the nonlinear
@@ -192,6 +188,7 @@ struct ConvergenceCriteria : db::SimpleTag {
     return "NonlinearSolverConvergenceCriteria";
   }
   using type = Convergence::Criteria;
+  static constexpr bool pass_metavariables = false;
   using option_tags = tmpl::list<OptionTags::ConvergenceCriteria>;
   static type create_from_options(const type& option) { return option; }
 };
@@ -233,6 +230,7 @@ struct HasConvergedCompute : NonlinearSolver::Tags::HasConverged,
 struct Verbosity : db::SimpleTag {
   using type = ::Verbosity;
   static std::string name() noexcept { return "NonlinearSolverVerbosity"; }
+  static constexpr bool pass_metavariables = false;
   using option_tags = tmpl::list<OptionTags::Verbosity>;
   static type create_from_options(const type& option) { return option; }
 };
@@ -240,16 +238,3 @@ struct Verbosity : db::SimpleTag {
 }  // namespace Tags
 
 }  // namespace NonlinearSolver
-
-namespace Tags {
-
-template <>
-struct NextCompute<NonlinearSolver::Tags::IterationId>
-    : Next<NonlinearSolver::Tags::IterationId>, db::ComputeTag {
-  using argument_tags = tmpl::list<NonlinearSolver::Tags::IterationId>;
-  static size_t function(const size_t& iteration_id) noexcept {
-    return iteration_id + 1;
-  }
-};
-
-}  // namespace Tags

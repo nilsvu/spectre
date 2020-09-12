@@ -8,26 +8,31 @@
 #include "ErrorHandling/FloatingPointExceptions.hpp"
 #include "IO/Observer/Helpers.hpp"            // IWYU pragma: keep
 #include "IO/Observer/ObserverComponent.hpp"  // IWYU pragma: keep
-#include "NumericalAlgorithms/LinearSolver/ConjugateGradient/ConjugateGradient.hpp"
+#include "ParallelAlgorithms/LinearSolver/ConjugateGradient/ConjugateGradient.hpp"
 // #include "NumericalAlgorithms/LinearSolver/Gmres/Gmres.hpp"
-#include "Parallel/ConstGlobalCache.hpp"
+#include "Helpers/ParallelAlgorithms/NonlinearSolver/NonlinearSolverAlgorithmTestHelpers.hpp"
+#include "Parallel/GlobalCache.hpp"
 #include "Parallel/InitializationFunctions.hpp"
 #include "Parallel/Main.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Globalization/LineSearch/LineSearch.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "Utilities/TMPL.hpp"
-#include "tests/Unit/ParallelAlgorithms/NonlinearSolver/NonlinearSolverAlgorithmTestHelpers.hpp"
 
 namespace helpers = NonlinearSolverAlgorithmTestHelpers;
 
 namespace {
 
+struct LinearSolverGroup {
+  static std::string name() noexcept { return "LinearSolver"; }
+  static constexpr OptionString help = "Options for the linear solver";
+};
+
 struct Metavariables {
   using nonlinear_solver = NonlinearSolver::NewtonRaphson<
       Metavariables, helpers::fields_tag,
       NonlinearSolver::Globalization::LineSearch>;
-  using linear_solver =
-      LinearSolver::ConjugateGradient<Metavariables, helpers::correction_tag>;
+  using linear_solver = LinearSolver::cg::ConjugateGradient<
+      Metavariables, helpers::correction_tag, LinearSolverGroup>;
 
   using component_list =
       tmpl::append<tmpl::list<helpers::ElementArray<Metavariables>,
@@ -54,7 +59,7 @@ struct Metavariables {
 
   static Phase determine_next_phase(
       const Phase& current_phase,
-      const Parallel::CProxy_ConstGlobalCache<
+      const Parallel::CProxy_GlobalCache<
           Metavariables>& /*cache_proxy*/) noexcept {
     switch (current_phase) {
       case Phase::Initialization:

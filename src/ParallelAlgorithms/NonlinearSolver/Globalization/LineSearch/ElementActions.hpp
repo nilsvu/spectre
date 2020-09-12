@@ -9,7 +9,7 @@
 /// \cond
 namespace Parallel {
 template <typename Metavariables>
-struct ConstGlobalCache;
+struct GlobalCache;
 }  // namespace Parallel
 /// \endcond
 
@@ -24,7 +24,7 @@ struct Prepare {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& /*cache*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     db::mutate<NonlinearSolver::Tags::GlobalizationIterationId,
@@ -55,8 +55,7 @@ struct PerformStep {
                    NonlinearSolver::Tags::GlobalizationIterationId, DataBox> and
                db::tag_is_retrievable_v<NonlinearSolver::Tags::StepLength,
                                         DataBox>> = nullptr>
-  static void apply(DataBox& box,
-                    Parallel::ConstGlobalCache<Metavariables>& cache,
+  static void apply(DataBox& box, Parallel::GlobalCache<Metavariables>& cache,
                     const ArrayIndex& array_index) noexcept {
     db::mutate<NonlinearSolver::Tags::StepLength,
                NonlinearSolver::Tags::GlobalizationIterationId>(

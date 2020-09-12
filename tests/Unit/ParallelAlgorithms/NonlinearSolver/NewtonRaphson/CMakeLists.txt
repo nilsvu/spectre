@@ -14,12 +14,14 @@ function(add_algorithm_test TEST_NAME)
 
   add_dependencies(
     ${EXECUTABLE_NAME}
-    module_ConstGlobalCache
+    module_GlobalCache
     module_Main
     )
 
   target_link_libraries(
     ${EXECUTABLE_NAME}
+    PRIVATE
+    Boost::program_options
     Convergence
     DataStructures
     ErrorHandling

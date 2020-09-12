@@ -4,7 +4,7 @@
 #pragma once
 
 #include "IO/Observer/Helpers.hpp"
-#include "NumericalAlgorithms/LinearSolver/Tags.hpp"
+#include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/ElementActions.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/InitializeElement.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/ResidualMonitor.hpp"

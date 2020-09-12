@@ -7,7 +7,7 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "Informer/Tags.hpp"
 #include "Informer/Verbosity.hpp"
-#include "Parallel/ConstGlobalCache.hpp"
+#include "Parallel/GlobalCache.hpp"
 #include "Parallel/Info.hpp"
 #include "Parallel/Invoke.hpp"
 #include "Parallel/Printf.hpp"
@@ -46,8 +46,7 @@ struct UpdateResidualMagnitude {
             typename Metavariables, typename ArrayIndex,
             Requires<db::tag_is_retrievable_v<residual_magnitude_tag,
                                               DataBox>> = nullptr>
-  static void apply(DataBox& box,
-                    Parallel::ConstGlobalCache<Metavariables>& cache,
+  static void apply(DataBox& box, Parallel::GlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
                     const double residual_magnitude,
                     const size_t iteration_id) noexcept {

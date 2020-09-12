@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "tests/Unit/TestingFramework.hpp"
+#include "Framework/TestingFramework.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -18,28 +18,29 @@
 #include "DataStructures/DenseVector.hpp"
 #include "ErrorHandling/Error.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
+#include "Helpers/ParallelAlgorithms/LinearSolver/LinearSolverAlgorithmTestHelpers.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
-#include "NumericalAlgorithms/LinearSolver/Tags.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/Actions/Goto.hpp"
-#include "Parallel/ConstGlobalCache.hpp"
+#include "Parallel/GlobalCache.hpp"
 #include "Parallel/InitializationFunctions.hpp"
 #include "Parallel/Invoke.hpp"
 #include "Parallel/Main.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
+#include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Actions/TerminateIfConverged.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
 #include "Utilities/FileSystem.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
-#include "tests/Unit/NumericalAlgorithms/LinearSolver/LinearSolverAlgorithmTestHelpers.hpp"
 
 namespace NonlinearSolverAlgorithmTestHelpers {
 
 struct LinearOperator : db::SimpleTag {
   static constexpr OptionString help = "The linear operator A to invert.";
   using type = DenseMatrix<double>;
+  static constexpr bool pass_metavariables = false;
   using option_tags = tmpl::list<LinearOperator>;
   static type create_from_options(const type& option) { return option; }
   static std::string name() noexcept { return "LinearOperator"; }
@@ -47,6 +48,7 @@ struct LinearOperator : db::SimpleTag {
 struct Source : db::SimpleTag {
   static constexpr OptionString help = "The source b in the equation Ax=b.";
   using type = DenseVector<double>;
+  static constexpr bool pass_metavariables = false;
   using option_tags = tmpl::list<Source>;
   static type create_from_options(const type& option) { return option; }
   static std::string name() noexcept { return "Source"; }
@@ -54,6 +56,7 @@ struct Source : db::SimpleTag {
 struct InitialGuess : db::SimpleTag {
   static constexpr OptionString help = "The initial guess for the vector x.";
   using type = DenseVector<double>;
+  static constexpr bool pass_metavariables = false;
   using option_tags = tmpl::list<InitialGuess>;
   static type create_from_options(const type& option) { return option; }
   static std::string name() noexcept { return "InitialGuess"; }
@@ -61,6 +64,7 @@ struct InitialGuess : db::SimpleTag {
 struct ExpectedResult : db::SimpleTag {
   static constexpr OptionString help = "The solution x in the equation Ax=b";
   using type = DenseVector<double>;
+  static constexpr bool pass_metavariables = false;
   using option_tags = tmpl::list<ExpectedResult>;
   static type create_from_options(const type& option) { return option; }
   static std::string name() noexcept { return "ExpectedResult"; }
@@ -90,7 +94,7 @@ struct BuildNonlinearOperator {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& cache,
+      const Parallel::GlobalCache<Metavariables>& cache,
       const int /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*component*/) noexcept {
     db::mutate<nonlinear_operator_tag>(
@@ -109,7 +113,7 @@ struct BuildLinearOperator {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& cache,
+      const Parallel::GlobalCache<Metavariables>& cache,
       const int /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*component*/) noexcept {
     db::mutate<linear_operator_tag>(make_not_null(&box),
@@ -130,7 +134,7 @@ struct TestResult {
   static std::tuple<db::DataBox<DbTagsList>&&, bool> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::ConstGlobalCache<Metavariables>& cache,
+      const Parallel::GlobalCache<Metavariables>& cache,
       const int /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     const auto& has_converged = get<NonlinearSolver::Tags::HasConverged>(box);
@@ -154,7 +158,7 @@ struct InitializeElement {
             typename ActionList, typename ParallelComponent>
   static auto apply(db::DataBox<DbTagsList>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::ConstGlobalCache<Metavariables>& cache,
+                    const Parallel::GlobalCache<Metavariables>& cache,
                     const int /*array_index*/, const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
     const auto& A = get<LinearOperator>(cache);
@@ -165,15 +169,10 @@ struct InitializeElement {
         ::Initialization::merge_into_databox<
             InitializeElement,
             db::AddSimpleTags<fields_tag, nonlinear_source_tag,
-                              nonlinear_operator_tag, correction_tag,
-                              linear_operand_tag, linear_operator_tag>>(
+                              nonlinear_operator_tag, correction_tag>>(
             std::move(box), DenseVector<double>(x0), DenseVector<double>(b),
             DenseVector<double>(A * x0),
             make_with_value<db::item_type<correction_tag>>(
-                x0, std::numeric_limits<double>::signaling_NaN()),
-            make_with_value<db::item_type<linear_operand_tag>>(
-                x0, std::numeric_limits<double>::signaling_NaN()),
-            make_with_value<db::item_type<linear_operator_tag>>(
                 x0, std::numeric_limits<double>::signaling_NaN())));
   }
 };
@@ -187,12 +186,18 @@ struct ElementArray {
   using nonlinear_solver = typename Metavariables::nonlinear_solver;
   using linear_solver = typename Metavariables::linear_solver;
 
+  struct dummy_label {};
+  struct dummy_label2 {};
+  struct dummy_label3 {};
+
   using solve_linearized_system = tmpl::list<
       typename linear_solver::prepare_solve,
-      ::Actions::WhileNot<
-          LinearSolver::Tags::HasConverged,
+      ::Actions::RepeatUntil<
+          LinearSolver::Tags::HasConverged<
+              typename linear_solver::options_group>,
           tmpl::list<typename linear_solver::prepare_step, BuildLinearOperator,
-                     typename linear_solver::perform_step>>>;
+                     typename linear_solver::perform_step>,
+          dummy_label>>;
 
   /// [action_list]
   using phase_dependent_action_list = tmpl::list<
@@ -201,20 +206,27 @@ struct ElementArray {
           tmpl::flatten<tmpl::list<
               InitializeElement, typename nonlinear_solver::initialize_element,
               typename linear_solver::initialize_element,
-              typename nonlinear_solver::prepare_solve, BuildNonlinearOperator,
-              typename nonlinear_solver::update_residual,
               Parallel::Actions::TerminatePhase>>>,
 
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Solve,
           tmpl::flatten<tmpl::list<
-              NonlinearSolver::Actions::TerminateIfConverged,
-              typename nonlinear_solver::prepare_step, solve_linearized_system,
-              ::Actions::WhileNot<
-                  NonlinearSolver::Tags::GlobalizationHasConverged,
-                  tmpl::list<typename nonlinear_solver::perform_step,
-                             BuildNonlinearOperator,
-                             typename nonlinear_solver::update_residual>>>>>,
+              typename nonlinear_solver::prepare_solve, BuildNonlinearOperator,
+              typename nonlinear_solver::update_residual,
+              ::Actions::RepeatUntil<
+                  NonlinearSolver::Tags::HasConverged,
+                  tmpl::list<
+                      typename nonlinear_solver::prepare_step,
+                      solve_linearized_system,
+                      ::Actions::RepeatUntil<
+                          NonlinearSolver::Tags::GlobalizationHasConverged,
+                          tmpl::list<
+                              typename nonlinear_solver::perform_step,
+                              BuildNonlinearOperator,
+                              typename nonlinear_solver::update_residual>,
+                          dummy_label2>>,
+                  dummy_label3>,
+              Parallel::Actions::TerminatePhase>>>,
 
       Parallel::PhaseActions<typename Metavariables::Phase,
                              Metavariables::Phase::TestResult,
@@ -227,7 +239,7 @@ struct ElementArray {
       array_allocation_tags>;
 
   static void allocate_array(
-      Parallel::CProxy_ConstGlobalCache<Metavariables>& global_cache,
+      Parallel::CProxy_GlobalCache<Metavariables>& global_cache,
       const tuples::tagged_tuple_from_typelist<initialization_tags>&
           initialization_items) noexcept {
     auto& local_component = Parallel::get_parallel_component<ElementArray>(
@@ -238,7 +250,7 @@ struct ElementArray {
 
   static void execute_next_phase(
       const typename Metavariables::Phase next_phase,
-      Parallel::CProxy_ConstGlobalCache<Metavariables>& global_cache) noexcept {
+      Parallel::CProxy_GlobalCache<Metavariables>& global_cache) noexcept {
     auto& local_component = Parallel::get_parallel_component<ElementArray>(
         *(global_cache.ckLocalBranch()));
     local_component.start_phase(next_phase);
