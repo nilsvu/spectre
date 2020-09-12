@@ -8,6 +8,7 @@
 
 #include "DataStructures/DataVector.hpp"     // IWYU pragma: keep
 #include "DataStructures/Tensor/Tensor.hpp"  // IWYU pragma: keep
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NormalDotFlux.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
@@ -65,6 +66,45 @@ ProductOfSinusoids<Dim>::variables(
   auto field_source = get<Tags::Field>(variables(x, tmpl::list<Tags::Field>{}));
   field_source.get() *= square(magnitude(wave_numbers_));
   return {std::move(field_source)};
+}
+
+template <size_t Dim>
+tuples::TaggedTuple<::Tags::Initial<Tags::Field>>
+ProductOfSinusoids<Dim>::variables(
+    const tnsr::I<DataVector, Dim>& x,
+    tmpl::list<::Tags::Initial<Tags::Field>> /*meta*/) const noexcept {
+  return {make_with_value<Scalar<DataVector>>(x, 0.)};
+}
+
+template <size_t Dim>
+tuples::TaggedTuple<::Tags::Initial<
+    ::Tags::deriv<Tags::Field, tmpl::size_t<Dim>, Frame::Inertial>>>
+ProductOfSinusoids<Dim>::variables(
+    const tnsr::I<DataVector, Dim>& x,
+    tmpl::list<::Tags::Initial<::Tags::deriv<Tags::Field, tmpl::size_t<Dim>,
+                                             Frame::Inertial>>> /*meta*/) const
+    noexcept {
+  return {make_with_value<tnsr::i<DataVector, Dim, Frame::Inertial>>(x, 0.)};
+}
+
+template <size_t Dim>
+tuples::TaggedTuple<::Tags::NormalDotFlux<Tags::Field>>
+ProductOfSinusoids<Dim>::boundary_variables(
+    const tnsr::I<DataVector, Dim>& x, const Direction<Dim>& /*direction*/,
+    const tnsr::i<DataVector, Dim>& face_normal,
+    tmpl::list<::Tags::NormalDotFlux<Tags::Field>> /*meta*/) const noexcept {
+  const auto grad =
+      get<::Tags::deriv<Tags::Field, tmpl::size_t<Dim>, Frame::Inertial>>(
+          variables(x, tmpl::list<::Tags::deriv<Tags::Field, tmpl::size_t<Dim>,
+                                                Frame::Inertial>>{}));
+  auto grad_upper =
+      make_with_value<tnsr::I<DataVector, Dim, Frame::Inertial>>(x, 0.);
+  for (size_t i = 0; i < Dim; ++i) {
+    grad_upper.get(i) = grad.get(i);
+  }
+  Scalar<DataVector> n_dot_grad{x.begin()->size()};
+  normal_dot_flux(make_not_null(&n_dot_grad), face_normal, grad_upper);
+  return {std::move(n_dot_grad)};
 }
 
 template <size_t Dim>

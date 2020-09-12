@@ -70,6 +70,23 @@ class ProductOfSinusoids {
   auto variables(const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
                  tmpl::list<::Tags::FixedSource<Tags::Field>> /*meta*/) const
       noexcept -> tuples::TaggedTuple<::Tags::FixedSource<Tags::Field>>;
+
+  auto variables(const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
+                 tmpl::list<::Tags::Initial<Tags::Field>> /*meta*/) const
+      noexcept -> tuples::TaggedTuple<::Tags::Initial<Tags::Field>>;
+
+  auto variables(
+      const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
+      tmpl::list<::Tags::Initial<::Tags::deriv<
+          Tags::Field, tmpl::size_t<Dim>, Frame::Inertial>>> /*meta*/) const
+      noexcept -> tuples::TaggedTuple<::Tags::Initial<
+          ::Tags::deriv<Tags::Field, tmpl::size_t<Dim>, Frame::Inertial>>>;
+
+  auto boundary_variables(
+      const tnsr::I<DataVector, Dim>& x, const Direction<Dim>& direction,
+      const tnsr::i<DataVector, Dim>& face_normal,
+      tmpl::list<::Tags::NormalDotFlux<Tags::Field>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<::Tags::NormalDotFlux<Tags::Field>>;
   // @}
 
   /// Retrieve a collection of variables at coordinates `x`
@@ -81,6 +98,16 @@ class ProductOfSinusoids {
                   "The generic template will recurse infinitely if only one "
                   "tag is being retrieved.");
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
+  }
+
+  template <typename... Tags>
+  tuples::TaggedTuple<Tags...> boundary_variables(
+      const tnsr::I<DataVector, 3>& x, const Direction<3>& direction,
+      const tnsr::i<DataVector, 3>& face_normal,
+      tmpl::list<Tags...> /*meta*/) const noexcept {
+    static_assert(sizeof...(Tags) > 1, "An unsupported Tag was requested.");
+    return {tuples::get<Tags>(
+        boundary_variables(x, direction, face_normal, tmpl::list<Tags>{}))...};
   }
 
   static elliptic::BoundaryCondition boundary_condition_type(
