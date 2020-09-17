@@ -9,6 +9,7 @@
 #include "DataStructures/DataBox/DataBoxTag.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
+#include "Parallel/Tags.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/Trigger.hpp"
 #include "Utilities/Registration.hpp"
 #include "Utilities/TMPL.hpp"
@@ -16,21 +17,23 @@
 namespace elliptic {
 namespace Triggers {
 /// \cond
-template <typename IterationId, typename TriggerRegistrars>
+template <typename IterationId, typename ArraySectionIdTag,
+          typename TriggerRegistrars>
 class EveryNIterations;
 /// \endcond
 
 namespace Registrars {
-template <typename IterationId>
+template <typename IterationId, typename ArraySectionIdTag = void>
 using EveryNIterations =
-    ::Registration::Registrar<Triggers::EveryNIterations, IterationId>;
+    ::Registration::Registrar<Triggers::EveryNIterations, IterationId,
+                              ArraySectionIdTag>;
 }  // namespace Registrars
 
 /// \ingroup EventsAndTriggersGroup
 /// Trigger every N iterations after a given offset.
-template <typename IterationId,
-          typename TriggerRegistrars =
-              tmpl::list<Registrars::EveryNIterations<IterationId>>>
+template <typename IterationId, typename ArraySectionIdTag = void,
+          typename TriggerRegistrars = tmpl::list<
+              Registrars::EveryNIterations<IterationId, ArraySectionIdTag>>>
 class EveryNIterations : public Trigger<TriggerRegistrars> {
  public:
   /// \cond
@@ -58,12 +61,21 @@ class EveryNIterations : public Trigger<TriggerRegistrars> {
   EveryNIterations(const uint64_t interval, const uint64_t offset) noexcept
       : interval_(interval), offset_(offset) {}
 
-  using argument_tags = tmpl::list<IterationId>;
+  using argument_tags = tmpl::flatten<tmpl::list<
+      IterationId,
+      tmpl::conditional_t<std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
+                          Parallel::Tags::SectionBase<ArraySectionIdTag>>>>;
 
-  bool operator()(const typename IterationId::type& iteration_id) const
-      noexcept {
+  bool operator()(
+      const typename IterationId::type& iteration_id) const noexcept {
     const auto step_number = static_cast<uint64_t>(iteration_id);
     return step_number >= offset_ and (step_number - offset_) % interval_ == 0;
+  }
+
+  template <typename ArraySectionProxy>
+  bool operator()(const typename IterationId::type& iteration_id,
+                  const ArraySectionProxy& section) const noexcept {
+    return section and (*this)(iteration_id);
   }
 
   // clang-tidy: google-runtime-references
@@ -78,9 +90,10 @@ class EveryNIterations : public Trigger<TriggerRegistrars> {
 };
 
 /// \cond
-template <typename IterationId, typename TriggerRegistrars>
-PUP::able::PUP_ID EveryNIterations<IterationId, TriggerRegistrars>::my_PUP_ID =
-    0;  // NOLINT
+template <typename IterationId, typename ArraySectionIdTag,
+          typename TriggerRegistrars>
+PUP::able::PUP_ID EveryNIterations<IterationId, ArraySectionIdTag,
+                                   TriggerRegistrars>::my_PUP_ID = 0;  // NOLINT
 /// \endcond
 }  // namespace Triggers
 }  // namespace elliptic
