@@ -44,19 +44,21 @@ struct Inertial;
 namespace dg {
 namespace Events {
 template <typename ObservationValueTag, typename Tensors,
-          typename EventRegistrars>
+          typename ArraySectionIdTag, typename EventRegistrars>
 class ObserveErrorNorms;
 
 namespace Registrars {
-template <typename ObservationValueTag, typename Tensors>
+template <typename ObservationValueTag, typename Tensors,
+          typename ArraySectionIdTag = void>
 using ObserveErrorNorms =
     ::Registration::Registrar<Events::ObserveErrorNorms, ObservationValueTag,
-                              Tensors>;
+                              Tensors, ArraySectionIdTag>;
 }  // namespace Registrars
 
 template <typename ObservationValueTag, typename Tensors,
-          typename EventRegistrars = tmpl::list<
-              Registrars::ObserveErrorNorms<ObservationValueTag, Tensors>>>
+          typename ArraySectionIdTag = void,
+          typename EventRegistrars = tmpl::list<Registrars::ObserveErrorNorms<
+              ObservationValueTag, Tensors, ArraySectionIdTag>>>
 class ObserveErrorNorms;  // IWYU pragma: keep
 
 /*!
@@ -73,9 +75,10 @@ class ObserveErrorNorms;  // IWYU pragma: keep
  *   over all points
  */
 template <typename ObservationValueTag, typename... Tensors,
-          typename EventRegistrars>
+          typename ArraySectionIdTag, typename EventRegistrars>
 class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
-                        EventRegistrars> : public Event<EventRegistrars> {
+                        ArraySectionIdTag, EventRegistrars>
+    : public Event<EventRegistrars> {
  private:
   template <typename Tag>
   struct LocalSquareError {
@@ -127,13 +130,18 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
   using observed_reduction_data_tags =
       observers::make_reduction_data_tags<tmpl::list<ReductionData>>;
 
-  using argument_tags = tmpl::list<ObservationValueTag, Tensors...,
-                                   ::Tags::AnalyticSolutionsBase>;
+  using argument_tags = tmpl::flatten<
+      tmpl::list<ObservationValueTag,
+                 tmpl::conditional_t<
+                     std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
+                     observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>,
+                 Tensors..., ::Tags::AnalyticSolutionsBase>>;
 
   template <typename Metavariables, typename ArrayIndex,
             typename ParallelComponent>
   void operator()(
       const typename ObservationValueTag::type& observation_value,
+      const std::optional<std::string>& observation_key_suffix,
       const typename Tensors::type&... tensors,
       const std::optional<std::reference_wrapper<
           const ::Variables<tmpl::list<::Tags::Analytic<Tensors>...>>>>
@@ -169,13 +177,16 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
         *Parallel::get_parallel_component<observers::Observer<Metavariables>>(
              cache)
              .ckLocalBranch();
+    const std::string subfile_path_with_suffix =
+        subfile_path_ + observation_key_suffix.value_or("none");
     Parallel::simple_action<observers::Actions::ContributeReductionData>(
         local_observer,
-        observers::ObservationId(observation_value, subfile_path_ + ".dat"),
+        observers::ObservationId(observation_value,
+                                 subfile_path_with_suffix + ".dat"),
         observers::ArrayComponentId{
             std::add_pointer_t<ParallelComponent>{nullptr},
             Parallel::ArrayIndex<ArrayIndex>(array_index)},
-        subfile_path_,
+        subfile_path_with_suffix,
         std::vector<std::string>{db::tag_name<ObservationValueTag>(),
                                  "NumberOfPoints",
                                  ("Error(" + db::tag_name<Tensors>() + ")")...},
@@ -191,22 +202,60 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
   template <typename Metavariables, typename ArrayIndex,
             typename ParallelComponent>
   void operator()(const typename ObservationValueTag::type& observation_value,
+                  const std::optional<std::string>& observation_key_suffix,
                   const typename Tensors::type&... tensors,
                   const ::Variables<tmpl::list<::Tags::Analytic<Tensors>...>>&
                       analytic_solutions,
                   Parallel::GlobalCache<Metavariables>& cache,
                   const ArrayIndex& array_index,
                   const ParallelComponent* const component) const noexcept {
-    this->operator()(observation_value, tensors...,
+    this->operator()(observation_value, observation_key_suffix, tensors...,
                      std::make_optional(std::cref(analytic_solutions)), cache,
                      array_index, component);
   }
 
-  using observation_registration_tags = tmpl::list<>;
+  // Repeat the overloads with missing `observation_key_suffix`
+  template <typename Metavariables, typename ArrayIndex,
+            typename ParallelComponent>
+  void operator()(
+      const typename ObservationValueTag::type& observation_value,
+      const typename Tensors::type&... tensors,
+      const std::optional<std::reference_wrapper<
+          const ::Variables<tmpl::list<::Tags::Analytic<Tensors>...>>>>
+          analytic_solutions,
+      Parallel::GlobalCache<Metavariables>& cache,
+      const ArrayIndex& array_index,
+      const ParallelComponent* const meta) const noexcept {
+    (*this)(observation_value, std::make_optional(""), tensors...,
+            analytic_solutions, cache, array_index, meta);
+  }
+
+  template <typename Metavariables, typename ArrayIndex,
+            typename ParallelComponent>
+  void operator()(const typename ObservationValueTag::type& observation_value,
+                  const typename Tensors::type&... tensors,
+                  const ::Variables<tmpl::list<::Tags::Analytic<Tensors>...>>&
+                      analytic_solutions,
+                  Parallel::GlobalCache<Metavariables>& cache,
+                  const ArrayIndex& array_index,
+                  const ParallelComponent* const component) const noexcept {
+    this->operator()(observation_value, std::make_optional(""), tensors...,
+                     std::make_optional(std::cref(analytic_solutions)), cache,
+                     array_index, component);
+  }
+
+  using observation_registration_tags = tmpl::conditional_t<
+      std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
+      tmpl::list<observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>>;
+
   std::pair<observers::TypeOfObservation, observers::ObservationKey>
-  get_observation_type_and_key_for_registration() const noexcept {
-    return {observers::TypeOfObservation::Reduction,
-            observers::ObservationKey(subfile_path_ + ".dat")};
+  get_observation_type_and_key_for_registration(
+      const std::optional<std::string>& observation_key_suffix =
+          std::make_optional("")) const noexcept {
+    return {
+        observers::TypeOfObservation::Reduction,
+        observers::ObservationKey(
+            subfile_path_ + observation_key_suffix.value_or("none") + ".dat")};
   }
 
   // NOLINTNEXTLINE(google-runtime-references)
@@ -220,16 +269,18 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
 };
 
 template <typename ObservationValueTag, typename... Tensors,
-          typename EventRegistrars>
+          typename ArraySectionIdTag, typename EventRegistrars>
 ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
+                  ArraySectionIdTag,
                   EventRegistrars>::ObserveErrorNorms(const std::string&
                                                           subfile_name) noexcept
     : subfile_path_("/" + subfile_name) {}
 
 /// \cond
 template <typename ObservationValueTag, typename... Tensors,
-          typename EventRegistrars>
+          typename ArraySectionIdTag, typename EventRegistrars>
 PUP::able::PUP_ID ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
+                                    ArraySectionIdTag,
                                     EventRegistrars>::my_PUP_ID = 0;  // NOLINT
 /// \endcond
 }  // namespace Events

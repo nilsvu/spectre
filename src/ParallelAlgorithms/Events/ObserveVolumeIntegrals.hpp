@@ -41,21 +41,24 @@ struct Inertial;
 namespace dg {
 namespace Events {
 template <size_t VolumeDim, typename ObservationValueTag, typename Tensors,
-          typename EventRegistrars>
+          typename ArraySectionIdTag, typename EventRegistrars>
 class ObserveVolumeIntegrals;
 
 namespace Registrars {
-template <size_t VolumeDim, typename ObservationValueTag, typename Tensors>
+template <size_t VolumeDim, typename ObservationValueTag, typename Tensors,
+          typename ArraySectionIdTag = void>
 // Presence of size_t template argument requires to define this struct
 // instead of using Registration::Registrar alias.
 struct ObserveVolumeIntegrals {
   template <typename RegistrarList>
-  using f = Events::ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
-                                           Tensors, RegistrarList>;
+  using f =
+      Events::ObserveVolumeIntegrals<VolumeDim, ObservationValueTag, Tensors,
+                                     ArraySectionIdTag, RegistrarList>;
 };
 }  // namespace Registrars
 
 template <size_t VolumeDim, typename ObservationValueTag, typename Tensors,
+          typename ArraySectionIdTag = void,
           typename EventRegistrars =
               tmpl::list<Registrars::ObserveVolumeIntegrals<
                   VolumeDim, ObservationValueTag, Tensors>>>
@@ -71,10 +74,10 @@ class ObserveVolumeIntegrals;
  * - `VolumeIntegral(*)` = volume integral of the tensor
  */
 template <size_t VolumeDim, typename ObservationValueTag, typename... Tensors,
-          typename EventRegistrars>
+          typename ArraySectionIdTag, typename EventRegistrars>
 class ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
-                             tmpl::list<Tensors...>, EventRegistrars>
-    : public Event<EventRegistrars> {
+                             tmpl::list<Tensors...>, ArraySectionIdTag,
+                             EventRegistrars> : public Event<EventRegistrars> {
  private:
   using VolumeIntegralDatum =
       Parallel::ReductionDatum<std::vector<double>, funcl::VectorPlus>;
@@ -120,13 +123,18 @@ class ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
       observers::make_reduction_data_tags<tmpl::list<ReductionData>>;
 
   using argument_tags =
-      tmpl::list<ObservationValueTag, domain::Tags::Mesh<VolumeDim>,
+      tmpl::list<ObservationValueTag,
+                 tmpl::conditional_t<
+                     std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
+                     observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>,
+                 domain::Tags::Mesh<VolumeDim>,
                  domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>,
                  Tensors...>;
 
   template <typename Metavariables, typename ArrayIndex,
             typename ParallelComponent>
   void operator()(const typename ObservationValueTag::type& observation_value,
+                  const std::optional<std::string>& observation_key_suffix,
                   const Mesh<VolumeDim>& mesh,
                   const Scalar<DataVector>& det_inv_jacobian,
                   const typename Tensors::type&... tensors,
@@ -162,22 +170,44 @@ class ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
         *Parallel::get_parallel_component<observers::Observer<Metavariables>>(
              cache)
              .ckLocalBranch();
+    const std::string subfile_path_with_suffix =
+        subfile_path_ + observation_key_suffix.value_or("none");
     Parallel::simple_action<observers::Actions::ContributeReductionData>(
         local_observer,
-        observers::ObservationId(observation_value, subfile_path_ + ".dat"),
+        observers::ObservationId(observation_value,
+                                 subfile_path_with_suffix + ".dat"),
         observers::ArrayComponentId{
             std::add_pointer_t<ParallelComponent>{nullptr},
             Parallel::ArrayIndex<ArrayIndex>(array_index)},
-        subfile_path_, reduction_names,
+        subfile_path_with_suffix, reduction_names,
         ReductionData{static_cast<double>(observation_value), local_volume,
                       local_volume_integrals});
   }
 
-  using observation_registration_tags = tmpl::list<>;
+  template <typename Metavariables, typename ArrayIndex,
+            typename ParallelComponent>
+  void operator()(const typename ObservationValueTag::type& observation_value,
+                  const Mesh<VolumeDim>& mesh,
+                  const Scalar<DataVector>& det_inv_jacobian,
+                  const typename Tensors::type&... tensors,
+                  Parallel::GlobalCache<Metavariables>& cache,
+                  const ArrayIndex& array_index,
+                  const ParallelComponent* const meta) const noexcept {
+    (*this)(observation_value, std::make_optional(""), mesh, det_inv_jacobian,
+            tensors..., cache, array_index, meta);
+  }
+
+  using observation_registration_tags = tmpl::conditional_t<
+      std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
+      tmpl::list<observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>>;
   std::pair<observers::TypeOfObservation, observers::ObservationKey>
-  get_observation_type_and_key_for_registration() const noexcept {
-    return {observers::TypeOfObservation::Reduction,
-            observers::ObservationKey(subfile_path_ + ".dat")};
+  get_observation_type_and_key_for_registration(
+      const std::optional<std::string>& observation_key_suffix =
+          std::make_optional("")) const noexcept {
+    return {
+        observers::TypeOfObservation::Reduction,
+        observers::ObservationKey(
+            subfile_path_ + observation_key_suffix.value_or("none") + ".dat")};
   }
 
   // NOLINTNEXTLINE(google-runtime-references)
@@ -191,19 +221,18 @@ class ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
 };
 
 template <size_t VolumeDim, typename ObservationValueTag, typename... Tensors,
-          typename EventRegistrars>
+          typename ArraySectionIdTag, typename EventRegistrars>
 ObserveVolumeIntegrals<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
-                       EventRegistrars>::
+                       ArraySectionIdTag, EventRegistrars>::
     ObserveVolumeIntegrals(const std::string& subfile_name) noexcept
     : subfile_path_("/" + subfile_name) {}
 
 /// \cond
 template <size_t VolumeDim, typename ObservationValueTag, typename... Tensors,
-          typename EventRegistrars>
-PUP::able::PUP_ID ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
-                                         tmpl::list<Tensors...>,
-                                         EventRegistrars>::my_PUP_ID =
-    0;  // NOLINT
+          typename ArraySectionIdTag, typename EventRegistrars>
+PUP::able::PUP_ID ObserveVolumeIntegrals<
+    VolumeDim, ObservationValueTag, tmpl::list<Tensors...>, ArraySectionIdTag,
+    EventRegistrars>::my_PUP_ID = 0;  // NOLINT
 /// \endcond
 }  // namespace Events
 }  // namespace dg
