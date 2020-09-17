@@ -99,23 +99,35 @@ void package_exterior_boundary_data(
 /// Contribute boundary data to the operator once it is available on both sides
 /// of a mortar. Typically you would invoke `package_boundary_data` on both
 /// sides of the mortar, communicate the results and then call this function.
-template <size_t Dim, typename FieldsTagsList,
+template <bool MassiveOperator, size_t Dim, typename FieldsTagsList,
           typename NumericalFluxesComputerType, typename BoundaryData>
 void apply_boundary_contribution(
     const gsl::not_null<Variables<FieldsTagsList>*> result,
     const NumericalFluxesComputerType& numerical_fluxes_computer,
     const BoundaryData& local_boundary_data,
     const BoundaryData& remote_boundary_data,
-    const Scalar<DataVector>& magnitude_of_face_normal, const Mesh<Dim>& mesh,
+    const Scalar<DataVector>& magnitude_of_face_normal,
+    const Scalar<DataVector>& surface_jacobian, const Mesh<Dim>& mesh,
     const Direction<Dim>& direction, const Mesh<Dim - 1>& mortar_mesh,
     const ::dg::MortarSize<Dim - 1>& mortar_size) noexcept {
   const size_t dimension = direction.dimension();
-  auto boundary_contribution = ::dg::FirstOrderScheme::boundary_flux(
+  auto boundary_flux_on_slice = ::dg::FirstOrderScheme::boundary_flux(
       local_boundary_data, remote_boundary_data, numerical_fluxes_computer,
-      magnitude_of_face_normal, mesh.extents(dimension),
       mesh.slice_away(dimension), mortar_mesh, mortar_size);
-  add_slice_to_data(result, std::move(boundary_contribution), mesh.extents(),
-                    dimension, index_to_slice_at(mesh.extents(), direction));
+  // Lift flux to the volume. We still only need to provide it on the face
+  // because it is zero everywhere else.
+  auto lifted_flux = [&]() noexcept {
+    if constexpr (MassiveOperator) {
+      return ::dg::lift_flux_massive_no_mass_lumping(
+          std::move(boundary_flux_on_slice), mesh.slice_away(dimension),
+          surface_jacobian);
+    } else {
+      return ::dg::lift_flux(std::move(boundary_flux_on_slice),
+                             mesh.extents(dimension), magnitude_of_face_normal);
+    }
+  }();
+  add_slice_to_data(result, std::move(lifted_flux), mesh.extents(), dimension,
+                    index_to_slice_at(mesh.extents(), direction));
 }
 
 }  // namespace elliptic::dg

@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "DataStructures/DataBox/DataBox.hpp"
+#include "DataStructures/Tensor/EagerMath/Determinant.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Domain/CreateInitialElement.hpp"
@@ -19,6 +20,7 @@
 #include "Domain/Structure/DirectionMap.hpp"
 #include "Domain/Structure/Element.hpp"
 #include "Domain/Structure/ElementId.hpp"
+#include "Domain/SurfaceJacobian.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
@@ -73,12 +75,16 @@ struct InitializeSubdomain {
           elliptic::dg::subdomain_operator::Tags::ExtrudingExtent,
           domain::Tags::Element<Dim>, domain::Tags::ElementMap<Dim>,
           domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
+          domain::Tags::DetJacobian<Frame::Logical, Frame::Inertial>,
           domain::Tags::Faces<
               Dim,
               ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
           domain::Tags::Faces<
               Dim,
               ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
+          domain::Tags::Faces<
+              Dim,
+              domain::Tags::SurfaceJacobian<Frame::Logical, Frame::Inertial>>,
           ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
           ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>,
           elliptic::dg::subdomain_operator::Tags::NeighborMortars<
@@ -117,10 +123,13 @@ struct InitializeSubdomain {
     overlaps<ElementMap<Dim, Frame::Inertial>> overlap_element_maps{};
     overlaps<InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>>
         overlap_inv_jacobians{};
+    overlaps<Scalar<DataVector>> overlap_det_jacobians{};
     overlaps<DirectionMap<Dim, tnsr::i<DataVector, Dim>>>
         overlap_face_normals{};
     overlaps<DirectionMap<Dim, Scalar<DataVector>>>
         overlap_face_normal_magnitudes{};
+    overlaps<DirectionMap<Dim, Scalar<DataVector>>>
+        overlap_surface_jacobians{};
     overlaps<::dg::MortarMap<Dim, Mesh<Dim - 1>>> overlap_mortar_meshes{};
     overlaps<::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>>
         overlap_mortar_sizes{};
@@ -167,13 +176,17 @@ struct InitializeSubdomain {
         overlap_inv_jacobians.emplace(
             overlap_id,
             neighbor_element_map.inv_jacobian(neighbor_logical_coords));
+        // Det(Jacobian)
+        const auto jacobian =
+            neighbor_element_map.jacobian(neighbor_logical_coords);
+        overlap_det_jacobians.emplace(overlap_id, determinant(jacobian));
         // Faces and mortars, internal and external
         DirectionMap<Dim, tnsr::i<DataVector, Dim>> neighbor_face_normals{};
         DirectionMap<Dim, Scalar<DataVector>> neighbor_face_normal_magnitudes{};
         DirectionMap<Dim, Scalar<DataVector>> neighbor_surface_jacobians{};
         const auto setup_face =
             [&neighbor_face_normals, &neighbor_face_normal_magnitudes,
-             &neighbor_mesh,
+             &neighbor_surface_jacobians, &neighbor_mesh,
              &neighbor_element_map](const Direction<Dim>& local_direction) {
               const auto neighbor_face_mesh =
                   neighbor_mesh.slice_away(local_direction.dimension());
@@ -190,6 +203,11 @@ struct InitializeSubdomain {
                                             std::move(neighbor_face_normal));
               neighbor_face_normal_magnitudes.emplace(
                   local_direction, std::move(neighbor_normal_magnitude));
+              neighbor_surface_jacobians.emplace(
+                  local_direction,
+                  domain::surface_jacobian(
+                      neighbor_element_map, neighbor_face_mesh, local_direction,
+                      neighbor_face_normal_magnitudes.at(local_direction)));
             };
         ::dg::MortarMap<Dim, Mesh<Dim - 1>> neighbor_mortar_meshes{};
         ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>> neighbor_mortar_sizes{};
@@ -232,6 +250,8 @@ struct InitializeSubdomain {
                                      std::move(neighbor_face_normals));
         overlap_face_normal_magnitudes.emplace(
             overlap_id, std::move(neighbor_face_normal_magnitudes));
+        overlap_surface_jacobians.emplace(
+            overlap_id, std::move(neighbor_surface_jacobians));
         overlap_mortar_meshes.emplace(overlap_id,
                                       std::move(neighbor_mortar_meshes));
         overlap_mortar_sizes.emplace(overlap_id,
@@ -309,10 +329,10 @@ struct InitializeSubdomain {
         make_not_null(&box), std::move(overlap_meshes),
         std::move(overlap_extents), std::move(overlap_elements),
         std::move(overlap_element_maps), std::move(overlap_inv_jacobians),
-        std::move(overlap_face_normals),
+        std::move(overlap_det_jacobians), std::move(overlap_face_normals),
         std::move(overlap_face_normal_magnitudes),
-        std::move(overlap_mortar_meshes), std::move(overlap_mortar_sizes),
-        std::move(overlap_neighbor_meshes),
+        std::move(overlap_surface_jacobians), std::move(overlap_mortar_meshes),
+        std::move(overlap_mortar_sizes), std::move(overlap_neighbor_meshes),
         std::move(overlap_neighbor_face_normal_magnitudes),
         std::move(overlap_neighbor_mortar_meshes),
         std::move(overlap_neighbor_mortar_sizes));

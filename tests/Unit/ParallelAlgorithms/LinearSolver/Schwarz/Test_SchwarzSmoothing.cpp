@@ -168,6 +168,8 @@ struct Metavariables {
 
   static constexpr size_t volume_dim = Dim;
 
+  static constexpr bool massive_operator = true;
+
   // Choose a first-order Poisson system
   using system = Poisson::FirstOrderSystem<Dim, Poisson::Geometry::Euclidean>;
   using fields_tag = typename system::fields_tag;
@@ -194,14 +196,14 @@ struct Metavariables {
   using boundary_scheme = dg::FirstOrderScheme::FirstOrderScheme<
       Dim, fields_tag,
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>,
-      normal_dot_numerical_flux, linear_solver_iteration_id>;
+      normal_dot_numerical_flux, linear_solver_iteration_id, massive_operator>;
 
   // Set up the Schwarz smoother
   using subdomain_operator =
       elliptic::dg::subdomain_operator::SubdomainOperator<
           volume_dim, primal_fields, auxiliary_fields, fluxes_computer_tag,
           typename system::sources, normal_dot_numerical_flux, SchwarzSmoother,
-          tmpl::list<>, tmpl::list<>>;
+          massive_operator, tmpl::list<>, tmpl::list<>>;
   using linear_solver =
       LinearSolver::Schwarz::Schwarz<fields_tag, SchwarzSmoother,
                                      subdomain_operator>;
@@ -283,7 +285,8 @@ struct Metavariables {
           boundary_scheme, domain::Tags::InternalDirections<volume_dim>>,
       dg::Actions::SendDataForFluxes<boundary_scheme>,
       Actions::MutateApply<elliptic::FirstOrderOperator<
-          volume_dim, LinearSolver::Tags::OperatorAppliedTo, fields_tag>>,
+          volume_dim, LinearSolver::Tags::OperatorAppliedTo, fields_tag,
+          massive_operator>>,
       elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
           fields_tag, primal_fields>,
       dg::Actions::CollectDataForFluxes<

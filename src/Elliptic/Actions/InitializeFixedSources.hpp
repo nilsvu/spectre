@@ -12,6 +12,7 @@
 #include "DataStructures/Variables.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/Mass.hpp"
 #include "ParallelAlgorithms/Initialization/MutateAssign.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
@@ -82,6 +83,13 @@ struct InitializeFixedSources {
     fixed_sources.assign_subset(background.variables(
         inertial_coords, db::wrap_tags_in<::Tags::FixedSource,
                                           typename system::primal_fields>{}));
+
+    if constexpr (Metavariables::massive_operator) {
+      fixed_sources = mass(
+          fixed_sources, db::get<domain::Tags::Mesh<Dim>>(box),
+          db::get<domain::Tags::DetJacobian<Frame::Logical, Frame::Inertial>>(
+              box));
+    }
 
     Initialization::mutate_assign<simple_tags>(make_not_null(&box),
                                                std::move(fixed_sources));

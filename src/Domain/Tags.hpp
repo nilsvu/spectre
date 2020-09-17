@@ -237,8 +237,9 @@ struct JacobianComputeFromMap
   using argument_tags = tmpl::list<MapTag, SourceCoordsTag>;
   static constexpr auto function(
       const gsl::not_null<return_type*> jacobian,
-      const db::const_item_type<MapTag>& element_map,
-      const db::const_item_type<SourceCoordsTag>& source_coords) noexcept {
+      const typename MapTag::type& element_map,
+      const tnsr::I<DataVector, MapTag::dim, typename MapTag::source_frame>&
+          source_coords) noexcept {
     *jacobian = element_map.jacobian(source_coords);
   }
 };

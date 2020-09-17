@@ -152,6 +152,9 @@ struct InitializeInterfaces {
           Directions, typename System::template magnitude_tag<
                           domain::Tags::UnnormalizedFaceNormal<dim>>>,
       domain::Tags::InterfaceCompute<
+          Directions, domain::Tags::SurfaceJacobianCompute<
+                          domain::Tags::ElementMap<dim, Frame::Inertial>>>,
+      domain::Tags::InterfaceCompute<
           Directions,
           ::Tags::NormalizedCompute<domain::Tags::UnnormalizedFaceNormal<dim>>>,
       tmpl::transform<FaceComputeTags,
@@ -183,6 +186,10 @@ struct InitializeInterfaces {
           domain::Tags::BoundaryDirectionsExterior<dim>,
           typename System::template magnitude_tag<
               domain::Tags::UnnormalizedFaceNormal<dim>>>,
+      domain::Tags::InterfaceCompute<
+          domain::Tags::BoundaryDirectionsExterior<dim>,
+          domain::Tags::SurfaceJacobianCompute<
+              domain::Tags::ElementMap<dim, Frame::Inertial>>>,
       domain::Tags::InterfaceCompute<
           domain::Tags::BoundaryDirectionsExterior<dim>,
           ::Tags::NormalizedCompute<domain::Tags::UnnormalizedFaceNormal<dim>>>,

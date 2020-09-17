@@ -18,6 +18,7 @@
 #include "Domain/Structure/CreateInitialMesh.hpp"
 #include "Domain/Structure/Element.hpp"
 #include "Domain/Structure/ElementId.hpp"
+#include "Domain/SurfaceJacobian.hpp"
 #include "Domain/Tags.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "Parallel/GlobalCache.hpp"
@@ -77,6 +78,10 @@ struct InitializeDomain {
       domain ::Tags::MappedCoordinates<
           domain::Tags::ElementMap<Dim>,
           domain ::Tags::Coordinates<Dim, Frame::Logical>>,
+      domain::Tags::JacobianComputeFromMap<
+          domain::Tags::ElementMap<Dim>,
+          domain::Tags::Coordinates<Dim, Frame::Logical>>,
+      domain::Tags::DetJacobianCompute<Dim, Frame::Logical, Frame::Inertial>,
       domain ::Tags::InverseJacobianCompute<
           domain ::Tags::ElementMap<Dim>,
           domain::Tags::Coordinates<Dim, Frame::Logical>>,

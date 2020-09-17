@@ -3,13 +3,17 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
 
+#include "DataStructures/ApplyMatrices.hpp"
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Matrix.hpp"
 #include "DataStructures/Variables.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
+#include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
@@ -197,6 +201,28 @@ void first_order_operator(
   *operator_applied_to_vars = sources - div_fluxes;
 }
 
+// template <typename OperatorTags, typename DivFluxesTags, typename SourcesTags,
+//           size_t Dim>
+// void first_order_operator_massive(
+//     const gsl::not_null<Variables<OperatorTags>*> operator_applied_to_vars,
+//     const Variables<DivFluxesTags>& div_fluxes,
+//     const Variables<SourcesTags>& sources, const Mesh<Dim>& mesh,
+//     const Scalar<DataVector>& det_jacobian) noexcept {
+//   std::array<Matrix, Dim> mass_matrices{};
+//   for (size_t d = 0; d < Dim; d++) {
+//     gsl::at(mass_matrices, d) = Spectral::mass_matrix(mesh.slice_through(d));
+//   }
+//   if (UNLIKELY(operator_applied_to_vars->number_of_grid_points() !=
+//                mesh.number_of_grid_points())) {
+//     operator_applied_to_vars->initialize(mesh.number_of_grid_points());
+//   }
+//   apply_matrices(
+//       operator_applied_to_vars, mass_matrices,
+//       Variables<OperatorTags>(get(det_jacobian) *
+//                               Variables<OperatorTags>(sources - div_fluxes)),
+//       mesh.extents());
+// }
+
 template <typename PrimalFields, typename AuxiliaryFields,
           typename SourcesComputer, typename OperatorTags, typename FluxesTags,
           typename VarsTags, typename FluxesComputer, size_t Dim,
@@ -235,6 +261,45 @@ void first_order_operator(
   first_order_operator(operator_applied_to_vars, *div_fluxes,
                        std::move(sources));
 }
+
+// template <typename PrimalFields, typename AuxiliaryFields,
+//           typename SourcesComputer, typename OperatorTags, typename FluxesTags,
+//           typename VarsTags, typename FluxesComputer, size_t Dim,
+//           typename... FluxesArgs, typename... SourcesArgs>
+// void first_order_operator_massive(
+//     const gsl::not_null<Variables<OperatorTags>*> operator_applied_to_vars,
+//     const gsl::not_null<Variables<FluxesTags>*> fluxes,
+//     const gsl::not_null<Variables<db::wrap_tags_in<::Tags::div, FluxesTags>>*>
+//         div_fluxes,
+//     const Variables<VarsTags>& vars, const Mesh<Dim>& mesh,
+//     const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
+//         inv_jacobian,
+//     const FluxesComputer& fluxes_computer,
+//     const std::tuple<FluxesArgs...>& fluxes_args,
+//     const std::tuple<SourcesArgs...>& sources_args) noexcept {
+//   using all_fields = tmpl::append<PrimalFields, AuxiliaryFields>;
+//   // Compute (volume) fluxes
+//   std::apply(
+//       [&](const auto&... expanded_fluxes_args) {
+//         first_order_fluxes<Dim, PrimalFields, AuxiliaryFields>(
+//             fluxes, Variables<all_fields>(vars), fluxes_computer,
+//             expanded_fluxes_args...);
+//       },
+//       fluxes_args);
+//   // Compute divergence of volume fluxes
+//   divergence(div_fluxes, *fluxes, mesh, inv_jacobian);
+//   // Compute sources
+//   auto sources = std::apply(
+//       [&](const auto&... expanded_sources_args) {
+//         return first_order_sources<Dim, PrimalFields, AuxiliaryFields,
+//                                    SourcesComputer>(
+//             Variables<all_fields>(vars), *fluxes, expanded_sources_args...);
+//       },
+//       sources_args);
+//   // Forward to overload above that subtracts div(fluxes) and sources
+//   first_order_operator(operator_applied_to_vars, *div_fluxes,
+//                        std::move(sources));
+// }
 //@}
 
 /*!
@@ -269,7 +334,8 @@ void first_order_operator(
  * - Modifies:
  *   - `operator_tag`
  */
-template <size_t Dim, template <typename> class OperatorTag, typename VarsTag>
+template <size_t Dim, template <typename> class OperatorTag, typename VarsTag,
+          bool MassiveOperator>
 struct FirstOrderOperator {
  private:
   using operator_tag = db::add_tag_prefix<OperatorTag, VarsTag>;
@@ -280,11 +346,19 @@ struct FirstOrderOperator {
 
  public:
   using return_tags = tmpl::list<operator_tag>;
-  using argument_tags = tmpl::list<div_fluxes_tag, sources_tag>;
-  static constexpr auto apply =
-      &first_order_operator<typename operator_tag::tags_list,
-                            typename div_fluxes_tag::tags_list,
-                            typename sources_tag::tags_list>;
+  using argument_tags =
+      tmpl::list<div_fluxes_tag, sources_tag, domain::Tags::Mesh<Dim>,
+                 domain::Tags::DetJacobian<Frame::Logical, Frame::Inertial>>;
+  static void apply(
+      const gsl::not_null<typename operator_tag::type*> operator_data,
+      const typename div_fluxes_tag::type& div_fluxes,
+      const typename sources_tag::type& sources, const Mesh<Dim>& mesh,
+      const Scalar<DataVector>& det_jac) noexcept {
+    first_order_operator(operator_data, div_fluxes, sources);
+    if constexpr (MassiveOperator) {
+      apply_mass(operator_data, mesh, det_jac);
+    }
+  }
 };
 
 }  // namespace elliptic

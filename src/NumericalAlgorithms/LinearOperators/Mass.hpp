@@ -6,7 +6,9 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
+#include <functional>
 #include <string>
 
 #include "DataStructures/ApplyMatrices.hpp"
@@ -38,6 +40,33 @@ struct Mass : db::PrefixTag, db::SimpleTag {
 }  // namespace Tags
 
 // TODO: resolve jacobians better with higher-order quadrature
+
+namespace mass_detail {
+template <size_t Dim, size_t... Dims>
+auto make_mass_matrices(const Mesh<Dim>& mesh,
+                        std::index_sequence<Dims...> /*meta*/) noexcept {
+  return std::array<std::reference_wrapper<const Matrix>, Dim>{
+      {Spectral::mass_matrix(mesh.slice_through(Dims))...}};
+}
+}  // namespace
+
+template <typename ResultTags, typename OperandTags, size_t Dim>
+void mass(const gsl::not_null<Variables<ResultTags>*> result,
+          Variables<OperandTags> operand, const Mesh<Dim>& mesh,
+          const Scalar<DataVector>& det_jacobian) noexcept {
+  operand *= get(det_jacobian);
+  apply_matrices(
+      result,
+      mass_detail::make_mass_matrices(mesh, std::make_index_sequence<Dim>{}),
+      operand, mesh.extents());
+}
+
+template <typename Tags, size_t Dim>
+void apply_mass(const gsl::not_null<Variables<Tags>*> data,
+                const Mesh<Dim>& mesh,
+                const Scalar<DataVector>& det_jacobian) noexcept {
+  mass(data, *data, mesh, det_jacobian);
+}
 
 template <typename VariablesTags, size_t Dim>
 Variables<db::wrap_tags_in<Tags::Mass, VariablesTags>> mass(

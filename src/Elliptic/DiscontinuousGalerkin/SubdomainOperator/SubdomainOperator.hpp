@@ -20,6 +20,7 @@
 #include "Domain/Structure/DirectionMap.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Structure/MaxNumberOfNeighbors.hpp"
+#include "Domain/SurfaceJacobian.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/ApplyFace.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/Tags.hpp"
@@ -73,6 +74,7 @@ struct make_overlap_tag {
 template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
           typename FluxesComputerTag, typename SourcesComputer,
           typename NumericalFluxesComputerTag, typename OptionsGroup,
+          bool MassiveOperator,
           typename FluxesArgsTagsFromCenter = tmpl::list<>,
           typename SourcesArgsTagsFromCenter = tmpl::list<>>
 struct SubdomainOperator
@@ -160,18 +162,20 @@ struct SubdomainOperator
                 typename NeighborsBufferTag<ExtendedResultBufferTag>::type{}} {}
 
   struct element_operator {
-    using argument_tags =
-        tmpl::append<tmpl::list<domain::Tags::Mesh<Dim>,
-                                domain::Tags::InverseJacobian<
-                                    Dim, Frame::Logical, Frame::Inertial>,
-                                FluxesComputerTag>,
-                     fluxes_args_tags, sources_args_tags>;
+    using argument_tags = tmpl::append<
+        tmpl::list<
+            domain::Tags::Mesh<Dim>,
+            domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
+            domain::Tags::DetJacobian<Frame::Logical, Frame::Inertial>,
+            FluxesComputerTag>,
+        fluxes_args_tags, sources_args_tags>;
 
     template <typename... RemainingArgs>
     static void apply(
         const Mesh<Dim>& mesh,
         const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
             inv_jacobian,
+        const Scalar<DataVector>& det_jacobian,
         const FluxesComputerType& fluxes_computer,
         const RemainingArgs&... expanded_remaining_args) noexcept {
       const auto remaining_args =
@@ -189,6 +193,9 @@ struct SubdomainOperator
           tuple_head<num_fluxes_args>(remaining_args),
           tuple_slice<num_fluxes_args, num_fluxes_args + num_sources_args>(
               remaining_args));
+      if constexpr (MassiveOperator) {
+        apply_mass(make_not_null(&(result->element_data)), mesh, det_jacobian);
+      }
     }
   };
 
@@ -205,12 +212,15 @@ struct SubdomainOperator
             Tags::ExtrudingExtent, domain::Tags::Mesh<Dim>,
             domain::Tags::Element<Dim>,
             domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
+            domain::Tags::DetJacobian<Frame::Logical, Frame::Inertial>,
             domain::Tags::Faces<
                 Dim,
                 ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
             domain::Tags::Faces<
                 Dim,
                 ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
+            domain::Tags::Faces<Dim, domain::Tags::SurfaceJacobian<
+                                         Frame::Logical, Frame::Inertial>>,
             ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
             ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>,
             Tags::NeighborMortars<domain::Tags::Mesh<Dim>, Dim>,
@@ -264,6 +274,7 @@ struct SubdomainOperator
         domain::Tags::Mesh<Dim>, FluxesComputerTag, NumericalFluxesComputerTag,
         ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>,
         ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>,
+        domain::Tags::SurfaceJacobian<Frame::Logical, Frame::Inertial>,
         ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
         ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>, overlap_tags,
         fluxes_args_tags, overlap_fluxes_args_tags,
@@ -297,7 +308,7 @@ struct SubdomainOperator
             const auto& [operand, result, subdomain_operator] =
                 tuple_tail<3>(all_args);
             apply_face<is_external_boundary, PrimalFields, AuxiliaryFields,
-                       SourcesComputer>(
+                       SourcesComputer, MassiveOperator>(
                 result, direction, expanded_standard_args...,
                 // fluxes_args_tags
                 tuple_slice<num_standard_args,

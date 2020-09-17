@@ -27,6 +27,7 @@
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "ErrorHandling/Assert.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
+#include "NumericalAlgorithms/LinearOperators/Mass.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/ElementCenteredSubdomainData.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/OverlapHelpers.hpp"
@@ -82,13 +83,14 @@ auto unmap_all(const std::tuple<MapsOrValues...>& maps_or_values,
  */
 template <
     bool IsExternalBoundary, typename PrimalFields, typename AuxiliaryFields,
-    typename SourcesComputerType, size_t Dim, typename FluxesComputerType,
-    typename NumericalFluxesComputerType, typename... FluxesArgs,
-    typename... OverlapFluxesArgs, typename... OverlapFluxesArgIsFromCenter,
-    typename... OverlapFluxesFaceArgs, typename... OverlapFluxesArgIsInVolume,
-    typename... OverlapSourcesArgs, typename... OverlapSourcesArgIsFromCenter,
-    typename ResultTags, typename ArgTags, typename BoundaryData,
-    typename AllFieldsTags, typename FluxesTags, typename DivFluxesTags>
+    typename SourcesComputerType, bool MassiveOperator, size_t Dim,
+    typename FluxesComputerType, typename NumericalFluxesComputerType,
+    typename... FluxesArgs, typename... OverlapFluxesArgs,
+    typename... OverlapFluxesArgIsFromCenter, typename... OverlapFluxesFaceArgs,
+    typename... OverlapFluxesArgIsInVolume, typename... OverlapSourcesArgs,
+    typename... OverlapSourcesArgIsFromCenter, typename ResultTags,
+    typename ArgTags, typename BoundaryData, typename AllFieldsTags,
+    typename FluxesTags, typename DivFluxesTags>
 static void apply_face(
     const gsl::not_null<
         LinearSolver::Schwarz::ElementCenteredSubdomainData<Dim, ResultTags>*>
@@ -98,6 +100,7 @@ static void apply_face(
     const NumericalFluxesComputerType& numerical_fluxes_computer,
     const tnsr::i<DataVector, Dim>& face_normal,
     const Scalar<DataVector>& magnitude_of_face_normal,
+    const Scalar<DataVector>& surface_jacobian,
     const ::dg::MortarMap<Dim, Mesh<Dim - 1>>& mortar_meshes,
     const ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>& mortar_sizes,
     const LinearSolver::Schwarz::OverlapMap<Dim, size_t>& all_overlap_extents,
@@ -107,12 +110,17 @@ static void apply_face(
     const LinearSolver::Schwarz::OverlapMap<
         Dim, InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>>&
         all_overlap_inv_jacobians,
+    const LinearSolver::Schwarz::OverlapMap<Dim, Scalar<DataVector>>&
+        all_overlap_det_jacobians,
     const LinearSolver::Schwarz::OverlapMap<
         Dim, DirectionMap<Dim, tnsr::i<DataVector, Dim>>>&
         all_overlap_face_normals,
     const LinearSolver::Schwarz::OverlapMap<
         Dim, DirectionMap<Dim, Scalar<DataVector>>>&
         all_overlap_face_normal_magnitudes,
+    const LinearSolver::Schwarz::OverlapMap<
+        Dim, DirectionMap<Dim, Scalar<DataVector>>>&
+        all_overlap_surface_jacobians,
     const LinearSolver::Schwarz::OverlapMap<
         Dim, ::dg::MortarMap<Dim, Mesh<Dim - 1>>>& all_overlap_mortar_meshes,
     const LinearSolver::Schwarz::OverlapMap<
@@ -201,10 +209,10 @@ static void apply_face(
         fluxes_args);
     // No projections necessary since an external boundary mortar covers the
     // full face
-    elliptic::dg::apply_boundary_contribution(
+    elliptic::dg::apply_boundary_contribution<MassiveOperator>(
         make_not_null(&result->element_data), numerical_fluxes_computer,
         center_boundary_data_on_face, std::move(remote_boundary_data),
-        magnitude_of_face_normal, mesh, direction, face_mesh,
+        magnitude_of_face_normal, surface_jacobian, mesh, direction, face_mesh,
         make_array<Dim - 1>(Spectral::MortarSize::Full));
   } else {
     const auto& neighbors = element.neighbors().at(direction);
@@ -275,10 +283,10 @@ static void apply_face(
                                                overlap_dimension_in_neighbor,
                                                orientation.inverse_map());
         }
-        elliptic::dg::apply_boundary_contribution(
+        elliptic::dg::apply_boundary_contribution<MassiveOperator>(
             make_not_null(&result->element_data), numerical_fluxes_computer,
             center_boundary_data, remote_boundary_data,
-            magnitude_of_face_normal, mesh, direction, mortar_mesh,
+            magnitude_of_face_normal, surface_jacobian, mesh, direction, mortar_mesh,
             mortar_size);
         continue;
       }
@@ -286,6 +294,8 @@ static void apply_face(
       const auto& overlap_data = operand.overlap_data.at(overlap_id);
       const auto& neighbor_inv_jacobian =
           all_overlap_inv_jacobians.at(overlap_id);
+      const auto& neighbor_det_jacobian =
+          all_overlap_det_jacobians.at(overlap_id);
 
       // Extend the overlap data to the full neighbor mesh by padding it with
       // zeros. This is necessary because spectral operators such as derivatives
@@ -312,6 +322,10 @@ static void apply_face(
                             tmpl::list<OverlapFluxesArgIsFromCenter...>{}),
           detail::unmap_all(all_overlap_sources_args, overlap_id,
                             tmpl::list<OverlapSourcesArgIsFromCenter...>{}));
+       if constexpr (MassiveOperator) {
+         apply_mass(make_not_null(&neighbor_result_extended), neighbor_mesh,
+                    neighbor_det_jacobian);
+       }
 
       // Iterate over the neighbor's mortars to compute boundary data. For the
       // mortars to the subdomain center, to external boundaries and to elements
@@ -347,6 +361,9 @@ static void apply_face(
             all_overlap_face_normals.at(overlap_id).at(neighbor_face_direction);
         const auto& neighbor_face_normal_magnitude =
             all_overlap_face_normal_magnitudes.at(overlap_id)
+                .at(neighbor_face_direction);
+        const auto& neighbor_surface_jacobian =
+            all_overlap_surface_jacobians.at(overlap_id)
                 .at(neighbor_face_direction);
 
         // Compute the boundary data on the neighbor's local side of the
@@ -392,11 +409,12 @@ static void apply_face(
               neighbor_face_direction, neighbor_face_mesh, neighbor_face_normal,
               neighbor_face_normal_magnitude, fluxes_computer,
               numerical_fluxes_computer, neighbor_fluxes_args_on_face);
-          elliptic::dg::apply_boundary_contribution(
+          elliptic::dg::apply_boundary_contribution<MassiveOperator>(
               make_not_null(&neighbor_result_extended),
               numerical_fluxes_computer, neighbor_local_boundary_data,
               neighbor_remote_boundary_data, neighbor_face_normal_magnitude,
-              neighbor_mesh, neighbor_face_direction, neighbor_face_mesh,
+              neighbor_surface_jacobian, neighbor_mesh, neighbor_face_direction,
+              neighbor_face_mesh,
               make_array<Dim - 1>(Spectral::MortarSize::Full));
         } else {
           for (const auto& neighbors_neighbor_id :
@@ -433,12 +451,12 @@ static void apply_face(
                     neighbor_mortar_mesh.extents(),
                     overlap_dimension_in_neighbor, orientation.inverse_map());
               }
-              elliptic::dg::apply_boundary_contribution(
+              elliptic::dg::apply_boundary_contribution<MassiveOperator>(
                   make_not_null(&result->element_data),
                   numerical_fluxes_computer, center_boundary_data,
                   std::move(reoriented_neighbor_boundary_data),
-                  magnitude_of_face_normal, mesh, direction, mortar_mesh,
-                  mortar_size);
+                  magnitude_of_face_normal, surface_jacobian, mesh, direction,
+                  mortar_mesh, mortar_size);
               // Second, prepare applying the boundary contribution to the
               // neighbor
               neighbor_remote_boundary_data = center_boundary_data;
@@ -556,11 +574,14 @@ static void apply_face(
                       neighbors_neighbor_mesh.extents(),
                       neighbors_neighbor_overlap_extents,
                       overlap_direction_from_neighbors_neighbor);
-                  elliptic::dg::apply_boundary_contribution(
+                  elliptic::dg::apply_boundary_contribution<MassiveOperator>(
                       make_not_null(&neighbors_neighbor_result_extended),
                       numerical_fluxes_computer, neighbor_remote_boundary_data,
                       std::move(reoriented_neighbor_local_boundary_data),
                       all_overlap_face_normal_magnitudes
+                          .at(*neighbors_neighbor_overlap_id)
+                          .at(direction_from_neighbors_neighbor),
+                      all_overlap_surface_jacobians
                           .at(*neighbors_neighbor_overlap_id)
                           .at(direction_from_neighbors_neighbor),
                       neighbors_neighbor_mesh,
@@ -622,12 +643,13 @@ static void apply_face(
                 }
               }
             }
-            elliptic::dg::apply_boundary_contribution(
+            elliptic::dg::apply_boundary_contribution<MassiveOperator>(
                 make_not_null(&neighbor_result_extended),
                 numerical_fluxes_computer,
                 projected_neighbor_local_boundary_data,
                 neighbor_remote_boundary_data, neighbor_face_normal_magnitude,
-                neighbor_mesh, neighbor_face_direction, neighbor_mortar_mesh,
+                neighbor_surface_jacobian, neighbor_mesh,
+                neighbor_face_direction, neighbor_mortar_mesh,
                 neighbor_mortar_size);
           }  // neighbor mortars
         }    // if external neighbor face
