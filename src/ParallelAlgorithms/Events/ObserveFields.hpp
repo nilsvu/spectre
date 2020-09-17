@@ -51,27 +51,31 @@ struct Time;
 namespace dg {
 namespace Events {
 template <size_t VolumeDim, typename ObservationValueTag, typename Tensors,
-          typename AnalyticSolutionTensors, typename EventRegistrars,
+          typename AnalyticSolutionTensors, typename ArraySectionIdTag,
+          typename EventRegistrars,
           typename NonSolutionTensors =
               tmpl::list_difference<Tensors, AnalyticSolutionTensors>>
 class ObserveFields;
 
 namespace Registrars {
 template <size_t VolumeDim, typename ObservationValueTag, typename Tensors,
-          typename AnalyticSolutionTensors = tmpl::list<>>
+          typename AnalyticSolutionTensors = tmpl::list<>,
+          typename ArraySectionIdTag = void>
 struct ObserveFields {
   template <typename RegistrarList>
   using f = Events::ObserveFields<VolumeDim, ObservationValueTag, Tensors,
-                                  AnalyticSolutionTensors, RegistrarList>;
+                                  AnalyticSolutionTensors, ArraySectionIdTag,
+                                  RegistrarList>;
 };
 }  // namespace Registrars
 
-template <
-    size_t VolumeDim, typename ObservationValueTag, typename Tensors,
-    typename AnalyticSolutionTensors = tmpl::list<>,
-    typename EventRegistrars = tmpl::list<Registrars::ObserveFields<
-        VolumeDim, ObservationValueTag, Tensors, AnalyticSolutionTensors>>,
-    typename NonSolutionTensors>
+template <size_t VolumeDim, typename ObservationValueTag, typename Tensors,
+          typename AnalyticSolutionTensors = tmpl::list<>,
+          typename ArraySectionIdTag = void,
+          typename EventRegistrars = tmpl::list<Registrars::ObserveFields<
+              VolumeDim, ObservationValueTag, Tensors, AnalyticSolutionTensors,
+              ArraySectionIdTag>>,
+          typename NonSolutionTensors>
 class ObserveFields;  // IWYU pragma: keep
 
 /*!
@@ -85,11 +89,11 @@ class ObserveFields;  // IWYU pragma: keep
  *   \f$\text{value} - \text{analytic solution}\f$
  */
 template <size_t VolumeDim, typename ObservationValueTag, typename... Tensors,
-          typename... AnalyticSolutionTensors, typename EventRegistrars,
-          typename... NonSolutionTensors>
+          typename... AnalyticSolutionTensors, typename ArraySectionIdTag,
+          typename EventRegistrars, typename... NonSolutionTensors>
 class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
-                    tmpl::list<AnalyticSolutionTensors...>, EventRegistrars,
-                    tmpl::list<NonSolutionTensors...>>
+                    tmpl::list<AnalyticSolutionTensors...>, ArraySectionIdTag,
+                    EventRegistrars, tmpl::list<NonSolutionTensors...>>
     : public Event<EventRegistrars> {
  private:
   static_assert(
@@ -164,15 +168,19 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
     variables_to_observe_.insert(coordinates_tag::name());
   }
 
-  using argument_tags =
-      tmpl::list<ObservationValueTag, domain::Tags::Mesh<VolumeDim>,
-                 coordinates_tag, AnalyticSolutionTensors...,
-                 ::Tags::Analytic<AnalyticSolutionTensors>...,
-                 NonSolutionTensors...>;
+  using argument_tags = tmpl::flatten<tmpl::list<
+      ObservationValueTag,
+      tmpl::conditional_t<
+          std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
+          observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>,
+      domain::Tags::Mesh<VolumeDim>, coordinates_tag,
+      AnalyticSolutionTensors..., ::Tags::Analytic<AnalyticSolutionTensors>...,
+      NonSolutionTensors...>>;
 
   template <typename Metavariables, typename ParallelComponent>
   void operator()(
       const typename ObservationValueTag::type& observation_value,
+      const std::optional<std::string>& observation_key_suffix,
       const Mesh<VolumeDim>& mesh,
       const tnsr::I<DataVector, VolumeDim, Frame::Inertial>&
           inertial_coordinates,
@@ -199,8 +207,9 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
             NonSolutionTensors::type::size()...},
         0_st));
 
-    const auto record_tensor_components = [ this, &components, &element_name ](
-        const auto tensor_tag_v, const auto& tensor) noexcept {
+    const auto record_tensor_components = [this, &components, &element_name](
+                                              const auto tensor_tag_v,
+                                              const auto& tensor) noexcept {
       using tensor_tag = tmpl::type_from<decltype(tensor_tag_v)>;
       if (variables_to_observe_.count(db::tag_name<tensor_tag>()) == 1) {
         for (size_t i = 0; i < tensor.size(); ++i) {
@@ -217,9 +226,9 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
     EXPAND_PACK_LEFT_TO_RIGHT(record_tensor_components(
         tmpl::type_<NonSolutionTensors>{}, non_solution_tensors));
 
-    const auto record_errors = [ this, &components, &element_name ](
-        const auto tensor_tag_v, const auto& tensor,
-        const auto& analytic_tensor) noexcept {
+    const auto record_errors = [this, &components, &element_name](
+                                   const auto tensor_tag_v, const auto& tensor,
+                                   const auto& analytic_tensor) noexcept {
       using tensor_tag = tmpl::type_from<decltype(tensor_tag_v)>;
       if (variables_to_observe_.count(db::tag_name<tensor_tag>()) == 1) {
         for (size_t i = 0; i < tensor.size(); ++i) {
@@ -242,23 +251,51 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
         *Parallel::get_parallel_component<observers::Observer<Metavariables>>(
              cache)
              .ckLocalBranch();
+    const std::string subfile_path_with_suffix =
+        subfile_path_ + observation_key_suffix.value_or("none");
     Parallel::simple_action<observers::Actions::ContributeVolumeData>(
         local_observer,
-        observers::ObservationId(observation_value, subfile_path_ + ".vol"),
-        subfile_path_,
+        observers::ObservationId(observation_value,
+                                 subfile_path_with_suffix + ".vol"),
+        subfile_path_with_suffix,
         observers::ArrayComponentId(
             std::add_pointer_t<ParallelComponent>{nullptr},
             Parallel::ArrayIndex<ElementId<VolumeDim>>(array_index)),
-        std::move(components), mesh.extents(), mesh.basis(),
-        mesh.quadrature());
+        std::move(components), mesh.extents(), mesh.basis(), mesh.quadrature());
   }
 
-  using observation_registration_tags = tmpl::list<>;
-  std::pair<observers::TypeOfObservation, observers::ObservationKey>
-  get_observation_type_and_key_for_registration() const noexcept {
-    return {observers::TypeOfObservation::Volume,
-            observers::ObservationKey(subfile_path_ + ".vol")};
+  template <typename Metavariables, typename ParallelComponent>
+  void operator()(
+      const typename ObservationValueTag::type& observation_value,
+      const Mesh<VolumeDim>& mesh,
+      const tnsr::I<DataVector, VolumeDim, Frame::Inertial>&
+          inertial_coordinates,
+      const typename AnalyticSolutionTensors::
+          type&... analytic_solution_tensors,
+      const typename ::Tags::Analytic<
+          AnalyticSolutionTensors>::type&... analytic_solutions,
+      const typename NonSolutionTensors::type&... non_solution_tensors,
+      Parallel::GlobalCache<Metavariables>& cache,
+      const ElementId<VolumeDim>& array_index,
+      const ParallelComponent* const meta) const noexcept {
+    (*this)(observation_value, std::make_optional(""), mesh,
+            inertial_coordinates, analytic_solution_tensors...,
+            analytic_solutions..., non_solution_tensors..., cache, array_index,
+            meta);
   }
+
+    using observation_registration_tags = tmpl::conditional_t<
+        std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
+        tmpl::list<observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>>;
+    std::pair<observers::TypeOfObservation, observers::ObservationKey>
+    get_observation_type_and_key_for_registration(
+        const std::optional<std::string>& observation_key_suffix =
+            std::make_optional("")) const noexcept {
+      return {observers::TypeOfObservation::Volume,
+              observers::ObservationKey(
+                  subfile_path_ + observation_key_suffix.value_or("none") +
+                  ".vol")};
+    }
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) noexcept override {
@@ -274,12 +311,12 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
 
 /// \cond
 template <size_t VolumeDim, typename ObservationValueTag, typename... Tensors,
-          typename... AnalyticSolutionTensors, typename EventRegistrars,
-          typename... NonSolutionTensors>
-PUP::able::PUP_ID
-    ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
-                  tmpl::list<AnalyticSolutionTensors...>, EventRegistrars,
-                  tmpl::list<NonSolutionTensors...>>::my_PUP_ID = 0;  // NOLINT
+          typename... AnalyticSolutionTensors, typename ArraySectionIdTag,
+          typename EventRegistrars, typename... NonSolutionTensors>
+PUP::able::PUP_ID ObserveFields<
+    VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
+    tmpl::list<AnalyticSolutionTensors...>, ArraySectionIdTag, EventRegistrars,
+    tmpl::list<NonSolutionTensors...>>::my_PUP_ID = 0;  // NOLINT
 /// \endcond
 }  // namespace Events
 }  // namespace dg
