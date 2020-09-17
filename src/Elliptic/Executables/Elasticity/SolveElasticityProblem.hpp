@@ -81,6 +81,8 @@ struct Metavariables {
   using initial_guess = InitialGuess;
   using boundary_conditions = BoundaryConditions;
 
+  static constexpr bool massive_operator = true;
+
   static constexpr Options::String help{
       "Find the solution to a linear elasticity problem."};
 
@@ -129,7 +131,7 @@ struct Metavariables {
       volume_dim, linear_operand_tag,
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
                          linear_operand_tag>,
-      normal_dot_numerical_flux, linear_solver_iteration_id>;
+      normal_dot_numerical_flux, linear_solver_iteration_id, massive_operator>;
 
   // Collect events and triggers
   // (public for use by the Charm++ registration code)
@@ -191,7 +193,7 @@ struct Metavariables {
       dg::Actions::SendDataForFluxes<boundary_scheme>,
       Actions::MutateApply<elliptic::FirstOrderOperator<
           volume_dim, LinearSolver::Tags::OperatorAppliedTo,
-          linear_operand_tag>>,
+          linear_operand_tag, massive_operator>>,
       elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
           linear_operand_tag, primal_variables>,
       dg::Actions::CollectDataForFluxes<
