@@ -139,6 +139,12 @@ struct ReductionDataNames : db::SimpleTag {
 struct H5FileLock : db::SimpleTag {
   using type = Parallel::NodeLock;
 };
+
+template <typename SectionIdTag>
+struct ObservationKeySuffix : db::SimpleTag {
+  using type = std::optional<std::string>;
+};
+
 }  // namespace Tags
 
 /// \ingroup ObserversGroup
