@@ -25,6 +25,7 @@
 #include "IO/Observer/ArrayComponentId.hpp"
 #include "IO/Observer/ObservationId.hpp"
 #include "IO/Observer/ReductionActions.hpp"
+#include "IO/Observer/Tags.hpp"
 #include "IO/Observer/TypeOfObservation.hpp"
 #include "Informer/Tags.hpp"
 #include "Informer/Verbosity.hpp"
@@ -72,47 +73,83 @@ using reduction_data = Parallel::ReductionData<
     // Maximum number of subdomain solver iterations
     Parallel::ReductionDatum<size_t, funcl::Max<>>>;
 
-template <typename OptionsGroup>
+struct SubdomainStatsFormatter {
+  std::string operator()(const size_t iteration_id, const size_t num_subdomains,
+                         const size_t avg_subdomain_its,
+                         const size_t min_subdomain_its,
+                         const size_t max_subdomain_its) const noexcept {
+    return "'" + solver_name + "' iteration " + get_output(iteration_id) +
+           " completed all subdomain solves (" + get_output(num_subdomains) +
+           "). Average of number of iterations: " +
+           get_output(avg_subdomain_its) + " (min " +
+           get_output(min_subdomain_its) + ", max " +
+           get_output(max_subdomain_its) + ").";
+  }
+
+  void pup(PUP::er& p) noexcept { p | solver_name; }
+
+  std::string solver_name;
+};
+
+template <typename OptionsGroup, typename ArraySectionIdTag>
 struct RegisterObservers {
   template <typename ParallelComponent, typename DbTagsList,
             typename ArrayIndex>
   static std::pair<observers::TypeOfObservation, observers::ObservationKey>
-  register_info(const db::DataBox<DbTagsList>& /*box*/,
+  register_info(const db::DataBox<DbTagsList>& box,
                 const ArrayIndex& /*array_index*/) noexcept {
-    return {observers::TypeOfObservation::Reduction,
-            observers::ObservationKey{pretty_type::get_name<OptionsGroup>() +
-                                      "SubdomainSolves"}};
+    const auto observation_key_suffix = [&]() noexcept -> std::string {
+      if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+        return "";
+      } else {
+        return db::get<
+                   observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>(
+                   box)
+            .value_or("none");
+      }
+    }();
+    return {
+        observers::TypeOfObservation::Reduction,
+        observers::ObservationKey{pretty_type::get_name<OptionsGroup>() +
+                                  observation_key_suffix + "SubdomainSolves"}};
   }
 };
 
-template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
-using RegisterElement =
-    observers::Actions::RegisterWithObservers<RegisterObservers<OptionsGroup>>;
+template <typename FieldsTag, typename OptionsGroup, typename SourceTag,
+          typename ArraySectionIdTag>
+using RegisterElement = observers::Actions::RegisterWithObservers<
+    RegisterObservers<OptionsGroup, ArraySectionIdTag>>;
 
 template <typename OptionsGroup, typename ParallelComponent,
           typename Metavariables, typename ArrayIndex>
 void contribute_to_subdomain_stats_observation(
     const size_t iteration_id, const size_t subdomain_solve_num_iterations,
-    Parallel::GlobalCache<Metavariables>& cache,
-    const ArrayIndex& array_index) noexcept {
+    Parallel::GlobalCache<Metavariables>& cache, const ArrayIndex& array_index,
+    const std::string& observation_key_suffix) noexcept {
   auto& local_observer =
       *Parallel::get_parallel_component<observers::Observer<Metavariables>>(
            cache)
            .ckLocalBranch();
   Parallel::simple_action<observers::Actions::ContributeReductionData>(
       local_observer,
-      observers::ObservationId(
-          iteration_id,
-          pretty_type::get_name<OptionsGroup>() + "SubdomainSolves"),
+      observers::ObservationId(iteration_id,
+                               pretty_type::get_name<OptionsGroup>() +
+                                   observation_key_suffix + "SubdomainSolves"),
       observers::ArrayComponentId{
           std::add_pointer_t<ParallelComponent>{nullptr},
           Parallel::ArrayIndex<ArrayIndex>(array_index)},
-      std::string{"/" + Options::name<OptionsGroup>() + "SubdomainSolves"},
+      std::string{"/" + Options::name<OptionsGroup>() + observation_key_suffix +
+                  "SubdomainSolves"},
       std::vector<std::string>{"Iteration", "NumSubdomains", "AvgNumIterations",
                                "MinNumIterations", "MaxNumIterations"},
       reduction_data{iteration_id, 1, subdomain_solve_num_iterations,
                      subdomain_solve_num_iterations,
-                     subdomain_solve_num_iterations});
+                     subdomain_solve_num_iterations},
+      UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
+               ::Verbosity::Verbose)
+          ? std::make_optional(SubdomainStatsFormatter{
+                Options::name<OptionsGroup>() + observation_key_suffix})
+          : std::nullopt);
 }
 
 template <typename SubdomainDataType, typename OptionsGroup>
@@ -215,7 +252,8 @@ struct OverlapSolutionInboxTag
 // problem for this element-centered subdomain. Apply the weighted solution on
 // this element directly and send the solution on overlap regions to the
 // neighbors that they overlap with.
-template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
+template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
+          typename ArraySectionIdTag>
 struct SolveSubdomain {
  private:
   using fields_tag = FieldsTag;
@@ -332,9 +370,21 @@ struct SolveSubdomain {
             subdomain_solve_has_converged.residual_magnitude());
       }
     }
-    contribute_to_subdomain_stats_observation<OptionsGroup, ParallelComponent>(
-        iteration_id + 1, subdomain_solve_has_converged.num_iterations(), cache,
-        element_id);
+    const auto observation_key_suffix =
+        [&]() noexcept -> std::optional<std::string> {
+      if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+        return std::make_optional("");
+      } else {
+        return db::get<
+            observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>(box);
+      }
+    }();
+    if (observation_key_suffix) {
+      contribute_to_subdomain_stats_observation<OptionsGroup,
+                                                ParallelComponent>(
+          iteration_id + 1, subdomain_solve_has_converged.num_iterations(),
+          cache, element_id, *observation_key_suffix);
+    }
 
     // Apply weighting
     if (LIKELY(max_overlap > 0)) {

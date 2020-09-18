@@ -18,6 +18,7 @@
 #include "IO/Observer/ObservationId.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
 #include "IO/Observer/ReductionActions.hpp"
+#include "IO/Observer/Tags.hpp"
 #include "IO/Observer/TypeOfObservation.hpp"
 #include "Informer/Tags.hpp"
 #include "Informer/Verbosity.hpp"
@@ -29,6 +30,7 @@
 #include "Parallel/Invoke.hpp"
 #include "Parallel/Printf.hpp"
 #include "Parallel/Reduction.hpp"
+#include "Parallel/Tags.hpp"
 #include "ParallelAlgorithms/Initialization/MutateAssign.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/Functional.hpp"
@@ -45,7 +47,7 @@ class TaggedTuple;
 }  // namespace tuples
 namespace LinearSolver::async_solvers {
 template <typename FieldsTag, typename OptionsGroup, typename SourceTag,
-          typename Label>
+          typename Label, typename ArraySectionIdTag, bool ObserveInitial>
 struct CompleteStep;
 }  // namespace LinearSolver::async_solvers
 /// \endcond
@@ -60,36 +62,62 @@ using reduction_data = Parallel::ReductionData<
     // Residual
     Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>;
 
+struct ResidualReductionFormatter {
+  std::string operator()(const size_t iteration_id, const double residual) const
+      noexcept {
+    if (iteration_id == 0) {
+      return "Linear solver '" + solver_name +
+             "' initialized with residual: " + get_output(residual);
+    } else {
+      return "Linear solver '" + solver_name + "' iteration " +
+             get_output(iteration_id) +
+             " done. Remaining residual: " + get_output(residual);
+    }
+  }
+
+  void pup(PUP::er& p) noexcept { p | solver_name; }
+
+  std::string solver_name;
+};
+
 template <typename OptionsGroup, typename ParallelComponent,
           typename Metavariables, typename ArrayIndex>
 void contribute_to_residual_observation(
     const size_t iteration_id, const double residual_magnitude_square,
-    Parallel::GlobalCache<Metavariables>& cache,
-    const ArrayIndex& array_index) noexcept {
+    Parallel::GlobalCache<Metavariables>& cache, const ArrayIndex& array_index,
+    const std::string& observation_key_suffix) noexcept {
   auto& local_observer =
       *Parallel::get_parallel_component<observers::Observer<Metavariables>>(
            cache)
            .ckLocalBranch();
   Parallel::simple_action<observers::Actions::ContributeReductionData>(
       local_observer,
-      observers::ObservationId(iteration_id,
-                               pretty_type::get_name<OptionsGroup>()),
+      observers::ObservationId(
+          iteration_id,
+          pretty_type::get_name<OptionsGroup>() + observation_key_suffix),
       observers::ArrayComponentId{
           std::add_pointer_t<ParallelComponent>{nullptr},
           Parallel::ArrayIndex<ArrayIndex>(array_index)},
-      std::string{"/" + Options::name<OptionsGroup>() + "Residuals"},
+      std::string{"/" + Options::name<OptionsGroup>() + observation_key_suffix +
+                  "Residuals"},
       std::vector<std::string>{"Iteration", "Residual"},
-      reduction_data{iteration_id, residual_magnitude_square});
+      reduction_data{iteration_id, residual_magnitude_square},
+      UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
+               ::Verbosity::Quiet)
+          ? std::make_optional(ResidualReductionFormatter{
+                Options::name<OptionsGroup>() + observation_key_suffix})
+          : std::nullopt);
   if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
-               ::Verbosity::Verbose)) {
+               ::Verbosity::Debug)) {
     if (iteration_id == 0) {
       Parallel::printf(
           "Linear solver '" + Options::name<OptionsGroup>() +
+              observation_key_suffix +
               "' initialized on element %s. Remaining local residual: %e\n",
           get_output(array_index), sqrt(residual_magnitude_square));
     } else {
-      Parallel::printf("Linear solver '" +
-                           Options::name<OptionsGroup>() +
+      Parallel::printf("Linear solver '" + Options::name<OptionsGroup>() +
+                           observation_key_suffix +
                            "' iteration %zu done on element %s. Remaining "
                            "local residual: %e\n",
                        iteration_id, get_output(array_index),
@@ -139,24 +167,37 @@ struct InitializeElement {
   }
 };
 
-template <typename OptionsGroup>
+template <typename OptionsGroup, typename ArraySectionIdTag = void>
 struct RegisterObservers {
   template <typename ParallelComponent, typename DbTagsList,
             typename ArrayIndex>
   static std::pair<observers::TypeOfObservation, observers::ObservationKey>
-  register_info(const db::DataBox<DbTagsList>& /*box*/,
+  register_info(const db::DataBox<DbTagsList>& box,
                 const ArrayIndex& /*array_index*/) noexcept {
+    const auto observation_key_suffix = [&]() noexcept -> std::string {
+      if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+        return "";
+      } else {
+        return db::get<
+                   observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>(
+                   box)
+            .value_or("none");
+      }
+    }();
     return {observers::TypeOfObservation::Reduction,
-            observers::ObservationKey{pretty_type::get_name<OptionsGroup>()}};
+            observers::ObservationKey{pretty_type::get_name<OptionsGroup>() +
+                                      observation_key_suffix}};
   }
 };
 
-template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
-using RegisterElement =
-    observers::Actions::RegisterWithObservers<RegisterObservers<OptionsGroup>>;
+template <typename FieldsTag, typename OptionsGroup, typename SourceTag,
+          typename ArraySectionIdTag = void>
+using RegisterElement = observers::Actions::RegisterWithObservers<
+    RegisterObservers<OptionsGroup, ArraySectionIdTag>>;
 
 template <typename FieldsTag, typename OptionsGroup, typename SourceTag,
-          typename Label>
+          typename Label, typename ArraySectionIdTag = void,
+          bool ObserveInitial = true>
 struct PrepareSolve {
  private:
   using fields_tag = FieldsTag;
@@ -191,15 +232,31 @@ struct PrepareSolve {
         get<Convergence::Tags::Iterations<OptionsGroup>>(box));
 
     // Observe the initial residual even if no steps are going to be performed
-    const auto& residual = get<residual_tag>(box);
-    const double residual_magnitude_square = inner_product(residual, residual);
-    contribute_to_residual_observation<OptionsGroup, ParallelComponent>(
-        iteration_id, residual_magnitude_square, cache, array_index);
+    if constexpr (ObserveInitial) {
+      const auto& observation_key_suffix =
+          [&]() noexcept -> std::optional<std::string> {
+        if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+          return std::make_optional("");
+        } else {
+          return db::get<
+              observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>(box);
+        }
+      }();
+      if (observation_key_suffix) {
+        const auto& residual = get<residual_tag>(box);
+        const double residual_magnitude_square =
+            inner_product(residual, residual);
+        contribute_to_residual_observation<OptionsGroup, ParallelComponent>(
+            iteration_id, residual_magnitude_square, cache, array_index,
+            *observation_key_suffix);
+      }
+    }
 
     // Skip steps entirely if the solve has already converged
     constexpr size_t step_end_index =
-        tmpl::index_of<ActionList, CompleteStep<FieldsTag, OptionsGroup,
-                                                SourceTag, Label>>::value;
+        tmpl::index_of<ActionList,
+                       CompleteStep<FieldsTag, OptionsGroup, SourceTag, Label,
+                                    ArraySectionIdTag, ObserveInitial>>::value;
     constexpr size_t this_action_index =
         tmpl::index_of<ActionList, PrepareSolve>::value;
     return {std::move(box), false,
@@ -210,7 +267,8 @@ struct PrepareSolve {
 };
 
 template <typename FieldsTag, typename OptionsGroup, typename SourceTag,
-          typename Label>
+          typename Label, typename ArraySectionIdTag = void,
+          bool ObserveInitial = true>
 struct CompleteStep {
  private:
   using fields_tag = FieldsTag;
@@ -244,17 +302,31 @@ struct CompleteStep {
         get<Convergence::Tags::Iterations<OptionsGroup>>(box));
 
     // Observe element-local residual magnitude
-    const size_t completed_iterations =
-        get<Convergence::Tags::IterationId<OptionsGroup>>(box);
-    const auto& residual = get<residual_tag>(box);
-    const double residual_magnitude_square = inner_product(residual, residual);
-    contribute_to_residual_observation<OptionsGroup, ParallelComponent>(
-        completed_iterations, residual_magnitude_square, cache, array_index);
+    const auto observation_key_suffix =
+        [&]() noexcept -> std::optional<std::string> {
+      if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+        return std::make_optional("");
+      } else {
+        return db::get<
+            observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>(box);
+      }
+    }();
+    if (observation_key_suffix) {
+      const size_t completed_iterations =
+          get<Convergence::Tags::IterationId<OptionsGroup>>(box);
+      const auto& residual = get<residual_tag>(box);
+      const double residual_magnitude_square =
+          inner_product(residual, residual);
+      contribute_to_residual_observation<OptionsGroup, ParallelComponent>(
+          completed_iterations, residual_magnitude_square, cache, array_index,
+          *observation_key_suffix);
+    }
 
     // Repeat steps until the solve has converged
     constexpr size_t step_begin_index =
-        tmpl::index_of<ActionList, PrepareSolve<FieldsTag, OptionsGroup,
-                                                SourceTag, Label>>::value +
+        tmpl::index_of<ActionList,
+                       PrepareSolve<FieldsTag, OptionsGroup, SourceTag, Label,
+                                    ArraySectionIdTag, ObserveInitial>>::value +
         1;
     constexpr size_t this_action_index =
         tmpl::index_of<ActionList, CompleteStep>::value;
