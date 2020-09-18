@@ -25,7 +25,9 @@
 #include "Parallel/Invoke.hpp"
 #include "Parallel/NodeLock.hpp"
 #include "Parallel/Printf.hpp"
+#include "Parallel/PupStlCpp17.hpp"
 #include "Parallel/Reduction.hpp"
+#include "Utilities/GetOutput.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/PrettyType.hpp"
 #include "Utilities/Requires.hpp"
@@ -46,6 +48,17 @@ struct CollectReductionDataOnNode;
 struct WriteReductionData;
 /// \endcond
 }  // namespace ThreadedActions
+
+struct DefaultFormatter {
+  template <typename... ReductionTypes>
+  std::string operator()(
+      const ReductionTypes&... reduction_data) const noexcept {
+    return "Reduction complete: " +
+           get_output(std::make_tuple(reduction_data...));
+  }
+
+  void pup(PUP::er& /*p*/) noexcept {}
+};
 
 namespace Actions {
 /// \cond
@@ -80,15 +93,16 @@ struct ContributeReductionDataToWriter;
  */
 struct ContributeReductionData {
   template <typename ParallelComponent, typename DbTagsList,
-            typename Metavariables, typename ArrayIndex, typename... Ts>
-  static auto apply(db::DataBox<DbTagsList>& box,
-                    Parallel::GlobalCache<Metavariables>& cache,
-                    const ArrayIndex& array_index,
-                    const observers::ObservationId& observation_id,
-                    const ArrayComponentId& sender_array_id,
-                    const std::string& subfile_name,
-                    const std::vector<std::string>& reduction_names,
-                    Parallel::ReductionData<Ts...>&& reduction_data) noexcept {
+            typename Metavariables, typename ArrayIndex, typename... Ts,
+            typename Formatter = DefaultFormatter>
+  static auto apply(
+      db::DataBox<DbTagsList>& box, Parallel::GlobalCache<Metavariables>& cache,
+      const ArrayIndex& array_index,
+      const observers::ObservationId& observation_id,
+      const ArrayComponentId& sender_array_id, const std::string& subfile_name,
+      const std::vector<std::string>& reduction_names,
+      Parallel::ReductionData<Ts...>&& reduction_data,
+      std::optional<Formatter>&& formatter = std::nullopt) noexcept {
     if constexpr (tmpl::list_contains_v<DbTagsList,
                                         Tags::ReductionData<Ts...>> and
                   tmpl::list_contains_v<DbTagsList,
@@ -100,7 +114,7 @@ struct ContributeReductionData {
           make_not_null(&box),
           [&array_index, &cache, &observation_id,
            reduction_data = std::move(reduction_data), &reduction_names,
-           &sender_array_id, &subfile_name](
+           &sender_array_id, &subfile_name, &formatter](
               const gsl::not_null<std::unordered_map<
                   ObservationId, Parallel::ReductionData<Ts...>>*>
                   reduction_data_map,
@@ -163,7 +177,8 @@ struct ContributeReductionData {
                       std::add_pointer_t<ParallelComponent>{nullptr},
                       Parallel::ArrayIndex<ArrayIndex>(array_index)},
                   subfile_name, (*reduction_names_map)[observation_id],
-                  std::move((*reduction_data_map)[observation_id]));
+                  std::move((*reduction_data_map)[observation_id]),
+                  std::move(formatter));
               reduction_data_map->erase(observation_id);
               reduction_names_map->erase(observation_id);
               reduction_observers_contributed->erase(observation_id);
@@ -191,17 +206,16 @@ struct CollectReductionDataOnNode {
  public:
   template <typename ParallelComponent, typename DbTagsList,
             typename Metavariables, typename ArrayIndex,
-            typename... ReductionDatums>
-  static void apply(db::DataBox<DbTagsList>& box,
-                    Parallel::GlobalCache<Metavariables>& cache,
-                    const ArrayIndex& /*array_index*/,
-                    const gsl::not_null<Parallel::NodeLock*> node_lock,
-                    const observers::ObservationId& observation_id,
-                    ArrayComponentId observer_group_id,
-                    const std::string& subfile_name,
-                    std::vector<std::string>&& reduction_names,
-                    Parallel::ReductionData<ReductionDatums...>&&
-                        received_reduction_data) noexcept {
+            typename... ReductionDatums, typename Formatter = DefaultFormatter>
+  static void apply(
+      db::DataBox<DbTagsList>& box, Parallel::GlobalCache<Metavariables>& cache,
+      const ArrayIndex& /*array_index*/,
+      const gsl::not_null<Parallel::NodeLock*> node_lock,
+      const observers::ObservationId& observation_id,
+      ArrayComponentId observer_group_id, const std::string& subfile_name,
+      std::vector<std::string>&& reduction_names,
+      Parallel::ReductionData<ReductionDatums...>&& received_reduction_data,
+      std::optional<Formatter>&& formatter = std::nullopt) noexcept {
     if constexpr (tmpl::list_contains_v<
                       DbTagsList, Tags::ReductionData<ReductionDatums...>> and
                   tmpl::list_contains_v<DbTagsList, Tags::ReductionDataNames<
@@ -348,7 +362,8 @@ struct CollectReductionDataOnNode {
             observation_id, static_cast<size_t>(Parallel::my_node()),
             subfile_name,
             // NOLINTNEXTLINE(bugprone-use-after-move)
-            std::move(reduction_names), std::move(received_reduction_data));
+            std::move(reduction_names), std::move(received_reduction_data),
+            std::move(formatter));
       }
     } else {
       (void)node_lock;
@@ -403,17 +418,16 @@ struct WriteReductionData {
  public:
   template <typename ParallelComponent, typename DbTagsList,
             typename Metavariables, typename ArrayIndex,
-            typename... ReductionDatums>
-  static void apply(db::DataBox<DbTagsList>& box,
-                    Parallel::GlobalCache<Metavariables>& cache,
-                    const ArrayIndex& /*array_index*/,
-                    const gsl::not_null<Parallel::NodeLock*> node_lock,
-                    const observers::ObservationId& observation_id,
-                    const size_t sender_node_number,
-                    const std::string& subfile_name,
-                    std::vector<std::string>&& reduction_names,
-                    Parallel::ReductionData<ReductionDatums...>&&
-                        received_reduction_data) noexcept {
+            typename... ReductionDatums, typename Formatter = DefaultFormatter>
+  static void apply(
+      db::DataBox<DbTagsList>& box, Parallel::GlobalCache<Metavariables>& cache,
+      const ArrayIndex& /*array_index*/,
+      const gsl::not_null<Parallel::NodeLock*> node_lock,
+      const observers::ObservationId& observation_id,
+      const size_t sender_node_number, const std::string& subfile_name,
+      std::vector<std::string>&& reduction_names,
+      Parallel::ReductionData<ReductionDatums...>&& received_reduction_data,
+      const std::optional<Formatter>& formatter = std::nullopt) noexcept {
     if constexpr (tmpl::list_contains_v<
                       DbTagsList, Tags::ReductionData<ReductionDatums...>> and
                   tmpl::list_contains_v<DbTagsList, Tags::ReductionDataNames<
@@ -562,6 +576,10 @@ struct WriteReductionData {
         reduction_file_lock->lock();
         // NOLINTNEXTLINE(bugprone-use-after-move)
         received_reduction_data.finalize();
+        if (formatter) {
+          Parallel::printf(
+              std::apply(*formatter, received_reduction_data.data()) + "\n");
+        }
         WriteReductionData::write_data(
             subfile_name,
             // NOLINTNEXTLINE(bugprone-use-after-move)
