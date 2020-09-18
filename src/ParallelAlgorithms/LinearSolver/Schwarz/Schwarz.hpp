@@ -117,7 +117,8 @@ namespace LinearSolver::Schwarz {
 template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
           typename SubdomainPreconditioner = void,
           typename SourceTag =
-              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>>
+              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>,
+          typename ArraySectionIdTag = void>
 struct Schwarz {
   using operand_tag = FieldsTag;
   using fields_tag = FieldsTag;
@@ -135,21 +136,25 @@ struct Schwarz {
       detail::InitializeElement<FieldsTag, OptionsGroup, SubdomainOperator,
                                 SubdomainPreconditioner>>;
 
-  using register_element = tmpl::list<
-      async_solvers::RegisterElement<FieldsTag, OptionsGroup, SourceTag>,
-      detail::RegisterElement<FieldsTag, OptionsGroup, SourceTag>>;
+  using register_element =
+      tmpl::list<async_solvers::RegisterElement<FieldsTag, OptionsGroup,
+                                                SourceTag, ArraySectionIdTag>,
+                 detail::RegisterElement<FieldsTag, OptionsGroup, SourceTag,
+                                         ArraySectionIdTag>>;
 
   template <typename ApplyOperatorActions, typename Label = OptionsGroup>
   using solve = tmpl::list<
-      async_solvers::PrepareSolve<FieldsTag, OptionsGroup, SourceTag, Label>,
+      async_solvers::PrepareSolve<FieldsTag, OptionsGroup, SourceTag, Label,
+                                  ArraySectionIdTag>,
       detail::SendOverlapData<FieldsTag, OptionsGroup, SubdomainOperator>,
       detail::ReceiveOverlapData<FieldsTag, OptionsGroup, SubdomainOperator>,
       detail::SolveSubdomain<FieldsTag, OptionsGroup, SubdomainOperator,
-                             SubdomainPreconditioner>,
+                             SubdomainPreconditioner, ArraySectionIdTag>,
       detail::ReceiveOverlapSolution<FieldsTag, OptionsGroup,
                                      SubdomainOperator>,
       ApplyOperatorActions,
-      async_solvers::CompleteStep<FieldsTag, OptionsGroup, SourceTag, Label>>;
+      async_solvers::CompleteStep<FieldsTag, OptionsGroup, SourceTag, Label,
+                                  ArraySectionIdTag>>;
 };
 
 }  // namespace LinearSolver::Schwarz
