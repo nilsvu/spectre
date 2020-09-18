@@ -101,7 +101,8 @@ struct UpdateFields {
  */
 template <typename FieldsTag, typename OptionsGroup,
           typename SourceTag =
-              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>>
+              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>,
+          typename ArraySectionIdTag = void>
 struct Richardson {
   using fields_tag = FieldsTag;
   using options_group = OptionsGroup;
@@ -113,12 +114,15 @@ struct Richardson {
   using initialize_element =
       async_solvers::InitializeElement<FieldsTag, OptionsGroup, SourceTag>;
   using register_element =
-      async_solvers::RegisterElement<FieldsTag, OptionsGroup, SourceTag>;
+      async_solvers::RegisterElement<FieldsTag, OptionsGroup, SourceTag,
+                                     ArraySectionIdTag>;
   template <typename ApplyOperatorActions, typename Label = OptionsGroup>
-  using solve = tmpl::list<
-      async_solvers::PrepareSolve<FieldsTag, OptionsGroup, SourceTag, Label>,
-      detail::UpdateFields<FieldsTag, OptionsGroup, SourceTag>,
-      ApplyOperatorActions,
-      async_solvers::CompleteStep<FieldsTag, OptionsGroup, SourceTag, Label>>;
+  using solve =
+      tmpl::list<async_solvers::PrepareSolve<FieldsTag, OptionsGroup, SourceTag,
+                                             Label, ArraySectionIdTag>,
+                 detail::UpdateFields<FieldsTag, OptionsGroup, SourceTag>,
+                 ApplyOperatorActions,
+                 async_solvers::CompleteStep<FieldsTag, OptionsGroup, SourceTag,
+                                             Label, ArraySectionIdTag>>;
 };
 }  // namespace LinearSolver::Richardson
