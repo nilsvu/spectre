@@ -381,7 +381,7 @@ struct SolveSubdomain {
     // Solve the subdomain problem
     const auto& subdomain_solver =
         get<Tags::SubdomainSolverBase<OptionsGroup>>(box);
-    const auto& subdomain_preconditioner = [&box]() noexcept {
+    const auto& subdomain_preconditioner = [&]() noexcept {
       if constexpr (std::is_same_v<SubdomainPreconditioner, void>) {
         return LinearSolver::Serial::IdentityPreconditioner<SubdomainData>{};
         (void)box;
