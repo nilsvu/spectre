@@ -10,8 +10,8 @@ import numpy as np
 import sys
 
 
-def generate_xdmf(file_prefix, output_filename, start_time, stop_time, stride,
-                  coordinates):
+def generate_xdmf(file_prefix, output_filename, subfile_name, start_time,
+                  stop_time, stride, coordinates):
     """
     Generate one XDMF file that ParaView and VisIt can use to load the data
     out of the HDF5 files.
@@ -27,7 +27,7 @@ def generate_xdmf(file_prefix, output_filename, start_time, stop_time, stride,
     assert len(h5files) > 0, "No H5 files with prefix '{}' found.".format(
         file_prefix)
 
-    element_data = h5files[0][0].get('element_data.vol')
+    element_data = h5files[0][0].get(subfile_name + '.vol')
     temporal_ids_and_values = [(x,
                                 element_data.get(x).attrs['observation_value'])
                                for x in element_data.keys()]
@@ -57,7 +57,8 @@ def generate_xdmf(file_prefix, output_filename, start_time, stop_time, stride,
         xdmf_output += "    <Time Value=\"%1.14e\"/>\n" % (id_and_value[1])
         # loop over each h5 file
         for h5file in h5files:
-            h5temporal = h5file[0].get('element_data.vol').get(id_and_value[0])
+            h5temporal = h5file[0].get(subfile_name + '.vol').get(
+                id_and_value[0])
             # Make sure the coordinates are found in the file. We assume there
             # should always be an x-coordinate.
             assert coordinates + '_x' in h5temporal, (
@@ -130,8 +131,8 @@ def generate_xdmf(file_prefix, output_filename, start_time, stop_time, stride,
                                  (numpoints))
 
             # Configure grid location
-            Grid_path = "          %s:/element_data.vol/%s" % (h5file[1],
-                                                               id_and_value[0])
+            Grid_path = ("          {}:/".format(h5file[1]) + subfile_name +
+                         ".vol/{}".format(id_and_value[0]))
             xdmf_output += ("    <Grid Name=\"%s\" GridType=\"Uniform\">\n" %
                             (h5file[1]))
             # Write topology information. In 3d we write a hexahedral topology
@@ -243,12 +244,20 @@ def parse_args():
         formatter_class=ap.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         '--file-prefix',
+        '-i',
         required=True,
         help="The common prefix of the H5 volume files to load")
     parser.add_argument(
-        '--output',
+        '--output-filename',
+        '-o',
         required=True,
         help="Output file name, an xmf extension will be added")
+    parser.add_argument(
+        '--subfile-name',
+        '-d',
+        default='element_data',
+        help="Name of the volume data subfile in the H5 files, excluding the "
+        "'.vol' extension")
     parser.add_argument("--stride",
                         default=1,
                         type=int,
@@ -274,6 +283,4 @@ def parse_args():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     input_args = parse_args()
-    generate_xdmf(input_args.file_prefix, input_args.output,
-                  input_args.start_time, input_args.stop_time,
-                  input_args.stride, input_args.coordinates)
+    generate_xdmf(**vars(input_args))
