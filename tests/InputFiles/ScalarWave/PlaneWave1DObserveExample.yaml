@@ -55,6 +55,7 @@ EventsAndTriggers:
       Offset: 5
   : - ObserveErrorNorms:
         SubfileName: Errors
+        PrintToScreen: True
   ? SpecifiedSlabs:
       Slabs: [0, 100]
   : - ObserveFields:

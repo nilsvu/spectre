@@ -28,8 +28,10 @@
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/Functional.hpp"
+#include "Utilities/GetOutput.hpp"
 #include "Utilities/Numeric.hpp"
 #include "Utilities/Registration.hpp"
+#include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -56,6 +58,38 @@ template <typename ObservationValueTag, typename Tensors,
           typename EventRegistrars = tmpl::list<
               Registrars::ObserveErrorNorms<ObservationValueTag, Tensors>>>
 class ObserveErrorNorms;  // IWYU pragma: keep
+
+
+namespace detail {
+template <size_t NumErrorNorms,
+          typename = std::make_index_sequence<NumErrorNorms>>
+struct ErrorNormsReductionFormatter;
+
+template <size_t NumErrorNorms, size_t... Is>
+struct ErrorNormsReductionFormatter<NumErrorNorms, std::index_sequence<Is...>> {
+  template <typename... ErrorNorms,
+            Requires<sizeof...(ErrorNorms) == NumErrorNorms and
+                     (std::is_same_v<ErrorNorms, double> and ...)> = nullptr>
+  std::string operator()(const double observation_value,
+                         const size_t num_points,
+                         const ErrorNorms... error_norms) const noexcept {
+    return "Error norms at " + observation_value_label + " " +
+           get_output(observation_value) + " (reduced over " +
+           get_output(num_points) + " grid points):\n" +
+           (("  " + get<Is>(error_norm_labels) + ": " +
+             get_output(error_norms) + "\n") +
+            ...);
+  }
+
+  void pup(PUP::er& p) noexcept {
+    p | observation_value_label;
+    p | error_norm_labels;
+  }
+
+  std::string observation_value_label;
+  std::array<std::string, NumErrorNorms> error_norm_labels;
+};
+}  // namespace detail
 
 /*!
  * \ingroup DiscontinuousGalerkinGroup
@@ -98,6 +132,12 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
         "The name of the subfile inside the HDF5 file without an extension and "
         "without a preceding '/'."};
   };
+  struct PrintToScreen {
+    using type = bool;
+    static constexpr Options::String help = {
+        "Print the error norms to screen when reductions are complete"};
+    static bool default_value() noexcept { return false; }
+  };
 
   /// \cond
   explicit ObserveErrorNorms(CkMigrateMessage* /*unused*/) noexcept {}
@@ -105,7 +145,7 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
   WRAPPED_PUPable_decl_template(ObserveErrorNorms);  // NOLINT
   /// \endcond
 
-  using options = tmpl::list<SubfileName>;
+  using options = tmpl::list<SubfileName, PrintToScreen>;
   static constexpr Options::String help =
       "Observe the RMS errors in the tensors compared to their analytic\n"
       "solution.\n"
@@ -120,7 +160,8 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
       "run at once will produce unpredictable results.";
 
   ObserveErrorNorms() = default;
-  explicit ObserveErrorNorms(const std::string& subfile_name) noexcept;
+  explicit ObserveErrorNorms(const std::string& subfile_name,
+                             bool print_to_screen) noexcept;
 
   using observed_reduction_data_tags =
       observers::make_reduction_data_tags<tmpl::list<ReductionData>>;
@@ -172,7 +213,13 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
                                  ("Error(" + db::tag_name<Tensors>() + ")")...},
         ReductionData{
             static_cast<double>(observation_value), num_points,
-            std::move(get<LocalSquareError<Tensors>>(local_square_errors))...});
+            std::move(get<LocalSquareError<Tensors>>(local_square_errors))...},
+        print_to_screen_
+            ? std::make_optional(
+                  detail::ErrorNormsReductionFormatter<sizeof...(Tensors)>{
+                      db::tag_name<ObservationValueTag>(),
+                      {db::tag_name<Tensors>()...}})
+            : std::nullopt);
   }
 
   using observation_registration_tags = tmpl::list<>;
@@ -186,18 +233,21 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
   void pup(PUP::er& p) override {
     Event<EventRegistrars>::pup(p);
     p | subfile_path_;
+    p | print_to_screen_;
   }
 
  private:
   std::string subfile_path_;
+  bool print_to_screen_;
 };
 
 template <typename ObservationValueTag, typename... Tensors,
           typename EventRegistrars>
-ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
-                  EventRegistrars>::ObserveErrorNorms(const std::string&
-                                                          subfile_name) noexcept
-    : subfile_path_("/" + subfile_name) {}
+ObserveErrorNorms<
+    ObservationValueTag, tmpl::list<Tensors...>,
+    EventRegistrars>::ObserveErrorNorms(const std::string& subfile_name,
+                                        const bool print_to_screen) noexcept
+    : subfile_path_("/" + subfile_name), print_to_screen_(print_to_screen) {}
 
 /// \cond
 template <typename ObservationValueTag, typename... Tensors,
