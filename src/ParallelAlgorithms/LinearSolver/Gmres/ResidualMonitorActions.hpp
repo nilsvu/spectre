@@ -71,7 +71,7 @@ struct InitializeResidualMagnitude {
     // Do some logging
     if (UNLIKELY(static_cast<int>(
                      get<LinearSolver::Tags::Verbosity<OptionsGroup>>(cache)) >=
-                 static_cast<int>(::Verbosity::Verbose))) {
+                 static_cast<int>(::Verbosity::Quiet))) {
       Parallel::printf("Linear solver '" +
                            Options::name<OptionsGroup>() +
                            "' initialized with residual: %e\n",
@@ -190,7 +190,7 @@ struct StoreOrthogonalization {
     // Do some logging
     if (UNLIKELY(static_cast<int>(
                      get<LinearSolver::Tags::Verbosity<OptionsGroup>>(cache)) >=
-                 static_cast<int>(::Verbosity::Verbose))) {
+                 static_cast<int>(::Verbosity::Quiet))) {
       Parallel::printf("Linear solver '" +
                            Options::name<OptionsGroup>() +
                            "' iteration %zu done. Remaining residual: %e\n",
