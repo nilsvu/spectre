@@ -59,6 +59,9 @@ EventsAndTriggers:
           # about 100 steps per slab.
           - Cfl:
               SafetyFactor: 20
+  ? EveryNSlabs:
+      N: 1
+  : - PrintTime
 
 Observers:
   VolumeFileName: "ScalarWavePlaneWave1DVolume"

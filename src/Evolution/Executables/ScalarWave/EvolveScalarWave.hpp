@@ -16,6 +16,7 @@
 #include "Evolution/Actions/ComputeTimeDerivative.hpp"  // IWYU pragma: keep
 #include "Evolution/ComputeTags.hpp"
 #include "Evolution/DiscontinuousGalerkin/DgElementArray.hpp"  // IWYU pragma: keep
+#include "Evolution/Events/PrintTime.hpp"
 #include "Evolution/Initialization/DgDomain.hpp"
 #include "Evolution/Initialization/DiscontinuousGalerkin.hpp"
 #include "Evolution/Initialization/Evolution.hpp"
@@ -29,6 +30,7 @@
 #include "IO/Observer/Actions/RegisterEvents.hpp"
 #include "IO/Observer/Helpers.hpp"            // IWYU pragma: keep
 #include "IO/Observer/ObserverComponent.hpp"  // IWYU pragma: keep
+#include "Informer/LoggerComponent.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ComputeNonconservativeBoundaryFluxes.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Actions/ImposeBoundaryConditions.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/FirstOrder/FirstOrderScheme.hpp"
@@ -146,7 +148,8 @@ struct EvolutionMetavars {
                      Dim, Tags::Time, observe_fields, analytic_solution_fields>,
                  dg::Events::Registrars::ObserveErrorNorms<
                      Tags::Time, analytic_solution_fields>,
-                 Events::Registrars::ChangeSlabSize<slab_choosers>>;
+                 Events::Registrars::ChangeSlabSize<slab_choosers>,
+                 evolution::Events::Registrars::PrintTime>;
   using triggers = Triggers::time_triggers;
 
   // A tmpl::list of tags to be added to the GlobalCache by the
@@ -230,6 +233,7 @@ struct EvolutionMetavars {
   using component_list = tmpl::list<
       observers::Observer<EvolutionMetavars>,
       observers::ObserverWriter<EvolutionMetavars>,
+      logging::Logger<EvolutionMetavars>,
       DgElementArray<
           EvolutionMetavars,
           tmpl::list<
