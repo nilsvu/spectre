@@ -73,7 +73,7 @@ struct InitializeResidualMagnitude {
 
     // Do some logging
     if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
-                 ::Verbosity::Verbose)) {
+                 ::Verbosity::Quiet)) {
       Parallel::printf("Linear solver '" +
                            Options::name<OptionsGroup>() +
                            "' initialized with residual: %e\n",
@@ -190,10 +190,9 @@ struct StoreOrthogonalization {
 
     // Do some logging
     if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
-                 ::Verbosity::Verbose)) {
-      Parallel::printf("Linear solver '" +
-                           Options::name<OptionsGroup>() +
-                           "' iteration %zu done. Remaining residual: %e\n",
+                 ::Verbosity::Quiet)) {
+      Parallel::printf("Linear solver '" + Options::name<OptionsGroup>() +
+                           "' iteration %zu complete. Remaining residual: %e\n",
                        completed_iterations, residual_magnitude);
     }
     if (UNLIKELY(has_converged and get<logging::Tags::Verbosity<OptionsGroup>>(
