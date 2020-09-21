@@ -36,10 +36,6 @@ tuples::TaggedTuple<Tags::MinusNormalDotStress<3>> Mirror::boundary_variables(
 tuples::TaggedTuple<Tags::Displacement<3>> Mirror::variables(
     const tnsr::I<DataVector, 3>& x,
     tmpl::list<Tags::Displacement<3>> /*meta*/) const noexcept {
-  for (size_t i = 0; i < get<2>(x).size(); ++i) {
-    ASSERT(get<2>(x)[i] > 0,
-           "Displacement field is only available on a boundary at z > 0");
-  }
   return {make_with_value<tnsr::I<DataVector, 3>>(x, 0.)};
 }
 

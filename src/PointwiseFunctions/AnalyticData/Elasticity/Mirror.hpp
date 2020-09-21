@@ -86,11 +86,18 @@ class Mirror {
   static elliptic::BoundaryCondition boundary_condition_type(
       const tnsr::I<DataVector, 3>& /*x*/, const Direction<3>& direction) {
     // Impose Dirichlet conditions on the side of the mirror that faces away
-    // from the laser
-    if (direction == Direction<3>::upper_zeta()) {
-      return elliptic::BoundaryCondition::Dirichlet;
-    } else {
+    // from the laser:
+    // if (direction == Direction<3>::upper_zeta()) {
+    //   return elliptic::BoundaryCondition::Dirichlet;
+    // } else {
+    //   return elliptic::BoundaryCondition::Neumann;
+    // }
+    // Impose Dirichlet conditions on all sides of the mirror, except the one
+    // faces the laser:
+    if (direction == Direction<3>::lower_zeta()) {
       return elliptic::BoundaryCondition::Neumann;
+    } else {
+      return elliptic::BoundaryCondition::Dirichlet;
     }
   }
 
