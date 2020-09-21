@@ -282,7 +282,7 @@ struct ContributeToSectionReductionImpl {
                 &ReductionData<Ts...>::combine)),
         section_cookie, callback);
     // Parallel::printf("Contributed the data.\n");
-  };
+  }
 };
 
 template <class Action, class ParallelComponent, class SectionIdTag,
