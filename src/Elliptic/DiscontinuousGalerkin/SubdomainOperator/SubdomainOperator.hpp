@@ -210,8 +210,8 @@ auto slice_arg_to_face(const Arg& arg, const Index<Dim>& extents,
   return slice_arg_to_face_impl<Arg>::apply(arg, extents, direction);
 }
 
-CREATE_IS_CALLABLE(at);
-CREATE_IS_CALLABLE_V(at);
+CREATE_IS_CALLABLE(at)
+CREATE_IS_CALLABLE_V(at)
 
 template <
     size_t Dim, typename Arg,
@@ -243,7 +243,7 @@ decltype(auto) unmap_overlap_args(
             unmap_overlap_arg(expanded_overlap_args, overlap_id)...);
       },
       overlap_args);
-};
+}
 
 }  // namespace SubdomainOperator_detail
 
