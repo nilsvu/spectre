@@ -63,7 +63,7 @@ add_elasticity_executable(
   Elasticity::AnalyticData::Mirror
   )
 target_link_libraries(
-  SolveElasticHalfSpaceMirror
+  SolveElasticMirror
   PRIVATE
   ElasticityAnalyticData
   ElasticitySolutions
