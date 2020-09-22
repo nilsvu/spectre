@@ -6,19 +6,17 @@ Source: [1, 2]
 InitialGuess: [2, 1]
 ExpectedResult: [0.0909090909090909, 0.6363636363636364]
 
-NonlinearSolver:
-  Verbosity: Verbose
+NewtonRaphson:
   ConvergenceCriteria:
-    MaxIterations: 20
-    AbsoluteResidual: 1e-14
+    MaxIterations: 10
+    AbsoluteResidual: 1.e-14
     RelativeResidual: 0
+  Verbosity: Quiet
 
 LinearSolver:
-  Verbosity: Verbose
-  ConvergenceCriteria:
-    MaxIterations: 1
-    AbsoluteResidual: 0
-    RelativeResidual: 0
+  Iterations: 10
+  RelaxationParameter: 0.2857142857142857
+  Verbosity: Quiet
 
 Observers:
   VolumeFileName: "Test_NewtonRaphsonNonlinearSolverAlgorithm_Volume"

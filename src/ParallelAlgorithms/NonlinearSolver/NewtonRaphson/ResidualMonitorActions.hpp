@@ -11,7 +11,9 @@
 #include "Parallel/Info.hpp"
 #include "Parallel/Invoke.hpp"
 #include "Parallel/Printf.hpp"
-#include "ParallelAlgorithms/NonlinearSolver/Observe.hpp"
+#include "ParallelAlgorithms/LinearSolver/Observe.hpp"
+#include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/Tags/InboxTags.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
 #include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/Functional.hpp"
@@ -22,25 +24,18 @@ namespace tuples {
 template <typename...>
 class TaggedTuple;
 }  // namespace tuples
-namespace NonlinearSolver {
-namespace newton_raphson_detail {
-template <typename FieldsTag>
-struct UpdateHasConverged;
-}  // namespace newton_raphson_detail
-}  // namespace NonlinearSolver
 /// \endcond
 
-namespace NonlinearSolver {
-namespace newton_raphson_detail {
+namespace NonlinearSolver::newton_raphson::detail {
 
-template <typename FieldsTag, typename GlobalizationStrategy,
-          typename BroadcastTarget>
-struct UpdateResidualMagnitude {
+template <typename FieldsTag, typename OptionsGroup, typename BroadcastTarget>
+struct CheckResidualMagnitude {
+  using fields_tag = FieldsTag;
   using residual_magnitude_tag = db::add_tag_prefix<
       LinearSolver::Tags::Magnitude,
-      db::add_tag_prefix<NonlinearSolver::Tags::Residual, FieldsTag>>;
+      db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>>;
   using initial_residual_magnitude_tag =
-      db::add_tag_prefix<::Tags::Initial, residual_magnitude_tag>;
+      db::add_tag_prefix<LinearSolver::Tags::Initial, residual_magnitude_tag>;
 
   template <typename ParallelComponent, typename DataBox,
             typename Metavariables, typename ArrayIndex,
@@ -48,13 +43,14 @@ struct UpdateResidualMagnitude {
                                               DataBox>> = nullptr>
   static void apply(DataBox& box, Parallel::GlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
-                    const double residual_magnitude,
-                    const size_t iteration_id) noexcept {
+                    const size_t iteration_id,
+                    const size_t /*globalization_iteration_id*/,
+                    const double residual_magnitude) noexcept {
     if (UNLIKELY(iteration_id == 0)) {
       db::mutate<initial_residual_magnitude_tag>(
-          make_not_null(&box), [residual_magnitude](
-                                   const gsl::not_null<double*>
-                                       initial_residual_magnitude) noexcept {
+          make_not_null(&box),
+          [residual_magnitude](const gsl::not_null<double*>
+                                   initial_residual_magnitude) noexcept {
             *initial_residual_magnitude = residual_magnitude;
           });
     } else {
@@ -66,73 +62,77 @@ struct UpdateResidualMagnitude {
       // TODO: Add sufficient decrease condition
       if (residual_magnitude - get<residual_magnitude_tag>(box) > 0.) {
         // Do some logging
-        if (UNLIKELY(static_cast<int>(get<NonlinearSolver::Tags::Verbosity>(
-                         box)) >= static_cast<int>(::Verbosity::Verbose))) {
+        if (UNLIKELY(static_cast<int>(
+                         get<LinearSolver::Tags::Verbosity<OptionsGroup>>(
+                             box)) >= static_cast<int>(::Verbosity::Verbose))) {
           Parallel::printf(
               "Apply globalization to decrease nonlinear solver iteration %zu "
               "residual: %e\n",
-              get<NonlinearSolver::Tags::IterationId>(box), residual_magnitude);
+              iteration_id, residual_magnitude);
         }
 
-        Parallel::simple_action<typename GlobalizationStrategy::perform_step>(
-            Parallel::get_parallel_component<BroadcastTarget>(cache));
+        Parallel::receive_data<Tags::GlobalizationIsComplete<OptionsGroup>>(
+            Parallel::get_parallel_component<BroadcastTarget>(cache),
+            iteration_id, std::optional<Convergence::HasConverged>{});
         return;
       }
     }
 
-    db::mutate<residual_magnitude_tag, NonlinearSolver::Tags::IterationId>(
+    db::mutate<residual_magnitude_tag>(
         make_not_null(&box),
-        [ residual_magnitude,
-          iteration_id ](const gsl::not_null<double*> local_residual_magnitude,
-                         const gsl::not_null<
-                             db::item_type<NonlinearSolver::Tags::IterationId>*>
-                             local_iteration_id) noexcept {
+        [residual_magnitude](
+            const gsl::not_null<double*> local_residual_magnitude) noexcept {
           *local_residual_magnitude = residual_magnitude;
-          *local_iteration_id = iteration_id;
         });
 
     // At this point, the iteration is complete. We proceed with observing,
     // logging and checking convergence before broadcasting back to the
     // elements.
 
-    NonlinearSolver::observe_detail::contribute_to_reduction_observer<
-        FieldsTag>(box, cache);
+    LinearSolver::observe_detail::contribute_to_reduction_observer<
+        OptionsGroup>(iteration_id, residual_magnitude, cache);
 
-    // Determine whether the nonlinear solver has converged. This invokes the
-    // compute item.
-    const auto& has_converged = get<NonlinearSolver::Tags::HasConverged>(box);
+    // Determine whether the nonlinear solver has converged
+    Convergence::HasConverged has_converged{
+        get<LinearSolver::Tags::ConvergenceCriteria<OptionsGroup>>(box),
+        iteration_id, residual_magnitude,
+        get<initial_residual_magnitude_tag>(box)};
 
     // Do some logging
-    if (UNLIKELY(static_cast<int>(get<NonlinearSolver::Tags::Verbosity>(box)) >=
-                 static_cast<int>(::Verbosity::Verbose))) {
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Quiet))) {
       if (UNLIKELY(iteration_id == 0)) {
-        Parallel::printf("Nonlinear solver initialized with residual %e.\n",
+        Parallel::printf("Nonlinear solver '" + Options::name<OptionsGroup>() +
+                             "' initialized with residual %e.\n",
                          residual_magnitude);
       } else {
-        Parallel::printf(
-            "Nonlinear solver iteration %zu done. Remaining residual: %e\n",
-            iteration_id, residual_magnitude);
+        Parallel::printf("Nonlinear solver '" + Options::name<OptionsGroup>() +
+                             "' iteration %zu done. Remaining residual: %e\n",
+                         iteration_id, residual_magnitude);
       }
     }
     if (UNLIKELY(has_converged and
-                 static_cast<int>(get<NonlinearSolver::Tags::Verbosity>(box)) >=
+                 static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
                      static_cast<int>(::Verbosity::Quiet))) {
       if (UNLIKELY(iteration_id == 0)) {
-        Parallel::printf(
-            "The nonlinear solver has converged without any iterations: %s\n",
-            has_converged);
+        Parallel::printf("The nonlinear solver '" +
+                             Options::name<OptionsGroup>() +
+                             "' has converged without any iterations: %s\n",
+                         has_converged);
       } else {
-        Parallel::printf(
-            "The nonlinear solver has converged in %zu iterations: %s\n",
-            iteration_id, has_converged);
+        Parallel::printf("The nonlinear solver '" +
+                             Options::name<OptionsGroup>() +
+                             "' has converged in %zu iterations: %s\n",
+                         iteration_id, has_converged);
       }
     }
 
-    Parallel::simple_action<UpdateHasConverged<FieldsTag>>(
-        Parallel::get_parallel_component<BroadcastTarget>(cache),
-        has_converged);
+    Parallel::receive_data<Tags::GlobalizationIsComplete<OptionsGroup>>(
+        Parallel::get_parallel_component<BroadcastTarget>(cache), iteration_id,
+        std::optional<Convergence::HasConverged>(std::move(has_converged)));
   }
 };
 
-}  // namespace newton_raphson_detail
-}  // namespace NonlinearSolver
+}  // namespace NonlinearSolver::newton_raphson::detail

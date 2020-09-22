@@ -6,15 +6,14 @@
 #include <vector>
 
 #include "ErrorHandling/FloatingPointExceptions.hpp"
-#include "IO/Observer/Helpers.hpp"            // IWYU pragma: keep
-#include "IO/Observer/ObserverComponent.hpp"  // IWYU pragma: keep
-#include "ParallelAlgorithms/LinearSolver/ConjugateGradient/ConjugateGradient.hpp"
-// #include "NumericalAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "Helpers/ParallelAlgorithms/NonlinearSolver/NonlinearSolverAlgorithmTestHelpers.hpp"
+#include "IO/Observer/Helpers.hpp"
+#include "IO/Observer/ObserverComponent.hpp"
+#include "Options/Options.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/InitializationFunctions.hpp"
 #include "Parallel/Main.hpp"
-#include "ParallelAlgorithms/NonlinearSolver/Globalization/LineSearch/LineSearch.hpp"
+#include "ParallelAlgorithms/LinearSolver/Richardson/Richardson.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -24,29 +23,23 @@ namespace {
 
 struct LinearSolverGroup {
   static std::string name() noexcept { return "LinearSolver"; }
-  static constexpr OptionString help = "Options for the linear solver";
+  static constexpr Options::String help = "Options for the linear solver";
+};
+
+struct NonlinearSolverGroup {
+  static std::string name() noexcept { return "NewtonRaphson"; }
+  static constexpr Options::String help = "Options for the nonlinear solver";
 };
 
 struct Metavariables {
-  using nonlinear_solver = NonlinearSolver::NewtonRaphson<
-      Metavariables, helpers::fields_tag,
-      NonlinearSolver::Globalization::LineSearch>;
-  using linear_solver = LinearSolver::cg::ConjugateGradient<
-      Metavariables, helpers::correction_tag, LinearSolverGroup>;
-
-  using component_list =
-      tmpl::append<tmpl::list<helpers::ElementArray<Metavariables>,
-                              observers::ObserverWriter<Metavariables>,
-                              helpers::OutputCleaner<Metavariables>>,
-                   typename nonlinear_solver::component_list,
-                   typename linear_solver::component_list>;
-
-  using observed_reduction_data_tags =
-      observers::collect_reduction_data_tags<tmpl::list<linear_solver>>;
-
   static constexpr const char* const help{
       "Test the Newton-Raphson nonlinear solver algorithm"};
-  static constexpr bool ignore_unrecognized_command_line_options = false;
+
+  using nonlinear_solver = NonlinearSolver::newton_raphson::NewtonRaphson<
+      Metavariables, helpers::fields_tag, NonlinearSolverGroup>;
+  using linear_solver = LinearSolver::Richardson::Richardson<
+      typename nonlinear_solver::linear_solver_fields_tag, LinearSolverGroup,
+      typename nonlinear_solver::linear_solver_source_tag>;
 
   enum class Phase {
     Initialization,
@@ -56,6 +49,17 @@ struct Metavariables {
     CleanOutput,
     Exit
   };
+
+  using component_list =
+      tmpl::append<tmpl::list<helpers::ElementArray<Metavariables>,
+                              observers::Observer<Metavariables>,
+                              observers::ObserverWriter<Metavariables>,
+                              helpers::OutputCleaner<Metavariables>>,
+                   typename nonlinear_solver::component_list,
+                   typename linear_solver::component_list>;
+
+  using observed_reduction_data_tags = observers::collect_reduction_data_tags<
+      tmpl::list<nonlinear_solver, linear_solver>>;
 
   static Phase determine_next_phase(
       const Phase& current_phase,
@@ -74,6 +78,8 @@ struct Metavariables {
         return Phase::Exit;
     }
   }
+
+  static constexpr bool ignore_unrecognized_command_line_options = false;
 };
 
 }  // namespace

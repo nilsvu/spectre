@@ -22,38 +22,7 @@
 #include "Utilities/Requires.hpp"
 #include "Utilities/TypeTraits.hpp"
 
-namespace NonlinearSolver {
-
-namespace OptionTags {
-
-/*!
- * \ingroup OptionGroupsGroup
- * \brief Groups option tags related to the iterative nonlinear solver, e.g.
- * convergence criteria.
- */
-struct Group {
-  static std::string name() noexcept { return "NonlinearSolver"; }
-  static constexpr OptionString help =
-      "Options for the iterative nonlinear solver";
-};
-
-struct ConvergenceCriteria {
-  static constexpr OptionString help =
-      "Determine convergence of the nonlinear solve";
-  using type = Convergence::Criteria;
-  using group = Group;
-};
-
-struct Verbosity {
-  using type = ::Verbosity;
-  static constexpr OptionString help = {"Logging verbosity"};
-  static type default_value() noexcept { return ::Verbosity::Quiet; }
-  using group = Group;
-};
-
-}  // namespace OptionTags
-
-namespace Tags {
+namespace NonlinearSolver::Tags {
 
 /*
  * \brief The correction \f$\delta x\f$ to improve a solution \f$x_0\f$
@@ -89,23 +58,10 @@ template <typename Tag>
 struct OperatorAppliedTo : db::PrefixTag, db::SimpleTag {
   static std::string name() noexcept {
     // Add "Nonlinear" prefix to abbreviate the namespace for uniqueness
-    return "NonlinearOperatorAppliedTo(" + Tag::name() + ")";
+    return "NonlinearOperatorAppliedTo(" + db::tag_name<Tag>() + ")";
   }
   using type = typename Tag::type;
   using tag = Tag;
-};
-
-/*!
- * \brief Identifies a step in the nonlinear solver algorithm
- */
-struct IterationId : db::SimpleTag {
-  static std::string name() noexcept {
-    // Add "Nonlinear" prefix to abbreviate the namespace for uniqueness
-    return "NonlinearIterationId";
-  }
-  using type = size_t;
-  template <typename Tag>
-  using step_prefix = OperatorAppliedTo<Tag>;
 };
 
 /*!
@@ -116,125 +72,45 @@ template <typename Tag>
 struct Residual : db::PrefixTag, db::SimpleTag {
   static std::string name() noexcept {
     // Add "Nonlinear" prefix to abbreviate the namespace for uniqueness
-    return "NonlinearResidual(" + Tag::name() + ")";
+    return "NonlinearResidual(" + db::tag_name<Tag>() + ")";
   }
   using type = typename Tag::type;
   using tag = Tag;
 };
 
+/// Compute the residual \f$r=b - Ax\f$ from the `SourceTag` \f$b\f$ and the
+/// `db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, FieldsTag>`
+/// \f$Ax\f$.
+template <typename FieldsTag, typename SourceTag>
+struct ResidualCompute : db::add_tag_prefix<Residual, FieldsTag>,
+                         db::ComputeTag {
+  using base = db::add_tag_prefix<Residual, FieldsTag>;
+  using argument_tags =
+      tmpl::list<SourceTag, db::add_tag_prefix<OperatorAppliedTo, FieldsTag>>;
+  using return_type = typename base::type;
+  static void function(
+      const gsl::not_null<return_type*> residual,
+      const typename SourceTag::type& source,
+      const typename db::add_tag_prefix<OperatorAppliedTo, FieldsTag>::type&
+          operator_applied_to_fields) noexcept {
+    *residual = source - operator_applied_to_fields;
+  }
+};
+
+template <typename OptionsGroup>
 struct StepLength : db::SimpleTag {
   using type = double;
-  static std::string name() noexcept { return "StepLength"; }
-};
-
-/*!
- * \brief Holds a flag that signals the globalization has converged.
- */
-struct GlobalizationHasConverged : db::SimpleTag {
   static std::string name() noexcept {
-    return "NonlinearGlobalizationHasConverged";
+    return "StepLength(" + Options::name<OptionsGroup>() + ")";
   }
-  using type = bool;
 };
 
+template <typename OptionsGroup>
 struct GlobalizationIterationId : db::SimpleTag {
   using type = size_t;
-  static std::string name() noexcept { return "GlobalizationIterationId"; }
-};
-
-struct GlobalizationIterationsHistory : db::SimpleTag {
-  using type = std::vector<size_t>;
   static std::string name() noexcept {
-    return "GlobalizationIterationsHistory";
+    return "GlobalizationIterationId(" + Options::name<OptionsGroup>() + ")";
   }
 };
 
-struct TemporalId : db::SimpleTag {
-  using type = size_t;
-  static std::string name() noexcept { return "TemporalId"; }
-  template <typename Tag>
-  using step_prefix = OperatorAppliedTo<Tag>;
-};
-
-struct TemporalIdCompute : db::ComputeTag, TemporalId {
-  using argument_tags =
-      tmpl::list<GlobalizationIterationId, GlobalizationIterationsHistory>;
-  static size_t function(
-      const size_t& globalization_iteration_id,
-      const std::vector<size_t>& globalization_iterations_history) {
-    return alg::accumulate(globalization_iterations_history, size_t{0},
-                           funcl::Plus<>{}) +
-           globalization_iteration_id;
-  }
-};
-
-/*!
- * \brief Holds a `Convergence::HasConverged` flag that signals the nonlinear
- * solver has converged, along with the reason for convergence.
- */
-struct HasConverged : db::SimpleTag {
-  static std::string name() noexcept { return "NonlinearSolverHasConverged"; }
-  using type = Convergence::HasConverged;
-};
-
-/*!
- * \brief `Convergence::Criteria` that determine the nonlinear solve has
- * converged
- *
- * \see NonlinearSolver::OptionTags::ConvergenceCriteria
- */
-struct ConvergenceCriteria : db::SimpleTag {
-  static std::string name() noexcept {
-    return "NonlinearSolverConvergenceCriteria";
-  }
-  using type = Convergence::Criteria;
-  static constexpr bool pass_metavariables = false;
-  using option_tags = tmpl::list<OptionTags::ConvergenceCriteria>;
-  static type create_from_options(const type& option) { return option; }
-};
-
-/*
- * \brief Employs the `NonlinearSolver::OptionTags::ConvergenceCriteria` to
- * determine the nonlinear solver has converged.
- */
-template <typename FieldsTag>
-struct HasConvergedCompute : NonlinearSolver::Tags::HasConverged,
-                             db::ComputeTag {
- private:
-  using residual_magnitude_tag = db::add_tag_prefix<
-      LinearSolver::Tags::Magnitude,
-      db::add_tag_prefix<NonlinearSolver::Tags::Residual, FieldsTag>>;
-  using initial_residual_magnitude_tag =
-      db::add_tag_prefix<::Tags::Initial, residual_magnitude_tag>;
-
- public:
-  using argument_tags =
-      tmpl::list<NonlinearSolver::Tags::ConvergenceCriteria,
-                 NonlinearSolver::Tags::IterationId, residual_magnitude_tag,
-                 initial_residual_magnitude_tag>;
-  static db::item_type<NonlinearSolver::Tags::HasConverged> function(
-      const Convergence::Criteria& convergence_criteria,
-      const size_t& iteration_id, const double& residual_magnitude,
-      const double& initial_residual_magnitude) noexcept {
-    return Convergence::HasConverged(convergence_criteria, iteration_id,
-                                     residual_magnitude,
-                                     initial_residual_magnitude);
-  }
-};
-
-/*!
- * \brief Logging verbosity of the nonlinear solver
- *
- * \see NonlinearSolver::OptionTags::Verbosity
- */
-struct Verbosity : db::SimpleTag {
-  using type = ::Verbosity;
-  static std::string name() noexcept { return "NonlinearSolverVerbosity"; }
-  static constexpr bool pass_metavariables = false;
-  using option_tags = tmpl::list<OptionTags::Verbosity>;
-  static type create_from_options(const type& option) { return option; }
-};
-
-}  // namespace Tags
-
-}  // namespace NonlinearSolver
+}  // namespace NonlinearSolver::Tags

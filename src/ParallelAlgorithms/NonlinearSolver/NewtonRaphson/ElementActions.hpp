@@ -3,84 +3,52 @@
 
 #pragma once
 
+#include <cstddef>
 #include <tuple>
 
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
+#include "NumericalAlgorithms/Convergence/HasConverged.hpp"
 #include "NumericalAlgorithms/LinearSolver/InnerProduct.hpp"
 #include "Parallel/GlobalCache.hpp"
-#include "Parallel/Info.hpp"
 #include "Parallel/Invoke.hpp"
 #include "Parallel/Reduction.hpp"
+#include "Parallel/Tags.hpp"
+#include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/ResidualMonitorActions.hpp"
+#include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/Tags/InboxTags.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/Requires.hpp"
+#include "Utilities/TMPL.hpp"
 
 /// \cond
 namespace tuples {
 template <typename...>
 class TaggedTuple;
 }  // namespace tuples
-namespace NonlinearSolver {
-namespace newton_raphson_detail {
-template <typename Metavariables, typename FieldsTag>
+namespace NonlinearSolver::newton_raphson::detail {
+template <typename Metavariables, typename FieldsTag, typename OptionsGroup>
 struct ResidualMonitor;
-}  // namespace newton_raphson_detail
-}  // namespace NonlinearSolver
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
+struct PrepareStep;
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
+struct GlobalizeAndCompleteStep;
+}  // namespace NonlinearSolver::newton_raphson::detail
 /// \endcond
 
-namespace NonlinearSolver {
-namespace newton_raphson_detail {
+namespace NonlinearSolver::newton_raphson::detail {
 
-struct PrepareSolve {
-  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
-            typename ArrayIndex, typename ActionList,
-            typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&> apply(
-      db::DataBox<DbTagsList>& box,
-      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
-      const ParallelComponent* const /*meta*/) noexcept {
-    db::mutate<NonlinearSolver::Tags::IterationId>(make_not_null(&box), [
-    ](const gsl::not_null<size_t*> iteration_id) noexcept {
-      *iteration_id = 0;
-    });
-    return {std::move(box)};
-  }
-};
-
-struct PrepareStep {
-  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
-            typename ArrayIndex, typename ActionList,
-            typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&> apply(
-      db::DataBox<DbTagsList>& box,
-      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
-      const ParallelComponent* const /*meta*/) noexcept {
-    db::mutate<NonlinearSolver::Tags::IterationId>(
-        make_not_null(&box),
-        [
-        ](const gsl::not_null<
-              db::item_type<NonlinearSolver::Tags::IterationId>*>
-              iteration_id) noexcept {
-          ++(*iteration_id);
-        });
-    return {std::move(box)};
-  }
-};
-
-template <typename FieldsTag, typename GlobalizationStrategy>
-struct UpdateResidual {
+template <typename FieldsTag, typename OptionsGroup>
+struct InitializeElement {
  private:
   using fields_tag = FieldsTag;
   using nonlinear_source_tag =
       db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
-  using nonlinear_operator_tag =
+  using nonlinear_operator_applied_to_fields_tag =
       db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo, fields_tag>;
   using correction_tag =
       db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
@@ -91,104 +59,210 @@ struct UpdateResidual {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&, bool> apply(
+  static auto apply(db::DataBox<DbTagsList>& box,
+                    const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+                    const Parallel::GlobalCache<Metavariables>& /*cache*/,
+                    const ArrayIndex& /*array_index*/,
+                    const ActionList /*meta*/,
+                    const ParallelComponent* const /*meta*/) noexcept {
+    return std::make_tuple(
+        ::Initialization::merge_into_databox<
+            InitializeElement,
+            db::AddSimpleTags<
+                LinearSolver::Tags::IterationId<OptionsGroup>,
+                LinearSolver::Tags::HasConverged<OptionsGroup>,
+                nonlinear_operator_applied_to_fields_tag, correction_tag,
+                linear_source_tag,
+                NonlinearSolver::Tags::GlobalizationIterationId<OptionsGroup>,
+                NonlinearSolver::Tags::StepLength<OptionsGroup>>,
+            db::AddComputeTags<NonlinearSolver::Tags::ResidualCompute<
+                fields_tag, nonlinear_source_tag>>>(
+            std::move(box),
+            // The `PrepareSolve` action populates these tags with initial
+            // values
+            std::numeric_limits<size_t>::max(), Convergence::HasConverged{},
+            typename nonlinear_operator_applied_to_fields_tag::type{},
+            typename correction_tag::type{}, typename linear_source_tag::type{},
+            std::numeric_limits<size_t>::max(),
+            std::numeric_limits<double>::signaling_NaN()));
+  }
+};
+
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
+struct PrepareSolve {
+ private:
+  using fields_tag = FieldsTag;
+  using nonlinear_residual_tag =
+      db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>;
+
+ public:
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       Parallel::GlobalCache<Metavariables>& cache,
-      const ArrayIndex& array_index, const ActionList /*mete*/,
+      const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    ASSERT(get<NonlinearSolver::Tags::IterationId>(box) !=
-               std::numeric_limits<size_t>::max(),
-           "Nonlinear solve iteration ID is at initial state. Did you forget "
-           "to invoke 'PrepareStep'?");
+    // Skip the solve entirely on elements that are not part of the section
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        constexpr size_t prepare_step_index =
+            tmpl::index_of<ActionList,
+                           PrepareStep<FieldsTag, OptionsGroup, Label,
+                                       ArraySectionIdTag>>::value;
+        return {std::move(box), false, prepare_step_index + 1};
+      }
+    }
 
-    db::mutate<linear_source_tag>(
+    db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>>(
         make_not_null(&box),
-        [](const gsl::not_null<db::item_type<linear_source_tag>*> linear_source,
-           const db::item_type<nonlinear_source_tag>& nonlinear_source,
-           const db::item_type<nonlinear_operator_tag>& nonlinear_operator) {
-          // Compute new nonlinear residual, which sources the next linear
-          // solve. The nonlinear source b stays the same, but need to apply the
-          // nonlinear operator to the new field values. We assume this has been
-          // done at this point.
-          *linear_source = nonlinear_source - nonlinear_operator;
-        },
-        get<nonlinear_source_tag>(box), get<nonlinear_operator_tag>(box));
+        [](const gsl::not_null<size_t*> iteration_id) noexcept {
+          *iteration_id = 0;
+        });
 
-    Parallel::contribute_to_reduction<UpdateResidualMagnitude<
-        FieldsTag, GlobalizationStrategy, ParallelComponent>>(
-        Parallel::ReductionData<
-            Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>,
-            Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>>{
-            LinearSolver::inner_product(get<linear_source_tag>(box),
-                                        get<linear_source_tag>(box)),
-            get<NonlinearSolver::Tags::IterationId>(box)},
-        Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
-        Parallel::get_parallel_component<
-            ResidualMonitor<Metavariables, FieldsTag>>(cache));
+    const auto& residual = db::get<nonlinear_residual_tag>(box);
+    const double local_residual_magnitude_square =
+        LinearSolver::inner_product(residual, residual);
+    Parallel::ReductionData<
+        Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+        Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+        Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>
+        reduction_data{
+            db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box), 0,
+            local_residual_magnitude_square};
+    if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+      Parallel::contribute_to_reduction<
+          CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>>(
+          std::move(reduction_data),
+          Parallel::get_parallel_component<ParallelComponent>(
+              cache)[array_index],
+          Parallel::get_parallel_component<
+              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+    } else {
+      Parallel::contribute_to_reduction<
+          CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>,
+          ParallelComponent, ArraySectionIdTag>(
+          std::move(reduction_data),
+          Parallel::get_parallel_component<ParallelComponent>(
+              cache)[array_index],
+          Parallel::get_parallel_component<
+              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache),
+          *get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box),
+          get<ArraySectionIdTag>(box));
+    }
 
-    // Terminate algorithm for now. The reduction will be broadcast to the
-    // action below, which is responsible for restarting the algorithm.
-    return {std::move(box), true};
+    constexpr size_t next_action_index =
+        tmpl::index_of<ActionList, PrepareSolve>::value + 1;
+    return {std::move(box), false, next_action_index};
   }
 };
 
-template <typename FieldsTag>
-struct UpdateHasConverged {
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
+struct InitializeHasConverged {
+  using inbox_tags = tmpl::list<Tags::GlobalizationIsComplete<OptionsGroup>>;
+
+  template <typename DbTags, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex>
+  static bool is_ready(const db::DataBox<DbTags>& box,
+                       const tuples::TaggedTuple<InboxTags...>& inboxes,
+                       const Parallel::GlobalCache<Metavariables>& /*cache*/,
+                       const ArrayIndex& /*array_index*/) noexcept {
+    const auto& inbox =
+        get<Tags::GlobalizationIsComplete<OptionsGroup>>(inboxes);
+    return inbox.find(db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(
+               box)) != inbox.end();
+  }
+
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
+      db::DataBox<DbTagsList>& box, tuples::TaggedTuple<InboxTags...>& inboxes,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
+      const ArrayIndex& /*array_index*/, const ActionList /*mete*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    // Retrieve reduction data from inbox
+    auto globalization_is_complete = std::move(
+        tuples::get<Tags::GlobalizationIsComplete<OptionsGroup>>(inboxes)
+            .extract(
+                db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box))
+            .mapped());
+    auto& has_converged = *globalization_is_complete;
+
+    db::mutate<LinearSolver::Tags::HasConverged<OptionsGroup>>(
+        make_not_null(&box),
+        [&has_converged](const gsl::not_null<Convergence::HasConverged*>
+                             local_has_converged) noexcept {
+          *local_has_converged = std::move(has_converged);
+        });
+
+    // Skip steps entirely if the solve has already converged
+    constexpr size_t complete_step_index =
+        tmpl::index_of<ActionList,
+                       GlobalizeAndCompleteStep<FieldsTag, OptionsGroup, Label,
+                                                ArraySectionIdTag>>::value;
+    constexpr size_t this_action_index =
+        tmpl::index_of<ActionList, InitializeHasConverged>::value;
+    return {std::move(box), false,
+            get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box)
+                ? (complete_step_index + 1)
+                : (this_action_index + 1)};
+  }
+};
+
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
+struct PrepareStep {
  private:
   using fields_tag = FieldsTag;
-  using nonlinear_source_tag =
-      db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
   using correction_tag =
       db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
-  using linear_operator_tag =
+  using linear_operator_applied_to_correction_tag =
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, correction_tag>;
 
  public:
-  template <
-      typename ParallelComponent, typename DataBox, typename Metavariables,
-      typename ArrayIndex,
-      Requires<
-          db::tag_is_retrievable_v<NonlinearSolver::Tags::HasConverged,
-                                   DataBox> and
-          db::tag_is_retrievable_v<
-              NonlinearSolver::Tags::GlobalizationHasConverged, DataBox> and
-          db::tag_is_retrievable_v<correction_tag, DataBox> and
-          db::tag_is_retrievable_v<nonlinear_source_tag, DataBox> and
-          db::tag_is_retrievable_v<linear_operator_tag, DataBox>> = nullptr>
-  static void apply(DataBox& box, Parallel::GlobalCache<Metavariables>& cache,
-                    const ArrayIndex& array_index,
-                    const db::item_type<NonlinearSolver::Tags::HasConverged>&
-                        has_converged) noexcept {
-    db::mutate<NonlinearSolver::Tags::HasConverged,
-               NonlinearSolver::Tags::GlobalizationHasConverged, correction_tag,
-               linear_operator_tag>(
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&> apply(
+      db::DataBox<DbTagsList>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
+      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>, correction_tag,
+               linear_operator_applied_to_correction_tag,
+               NonlinearSolver::Tags::GlobalizationIterationId<OptionsGroup>,
+               NonlinearSolver::Tags::StepLength<OptionsGroup>>(
         make_not_null(&box),
-        [&has_converged](
-            const gsl::not_null<
-                db::item_type<NonlinearSolver::Tags::HasConverged>*>
-                local_has_converged,
-            const gsl::not_null<bool*> globalization_has_converged,
-            const gsl::not_null<db::item_type<correction_tag>*> correction,
-            const gsl::not_null<db::item_type<linear_operator_tag>*>
-                linear_operator,
-            const db::item_type<nonlinear_source_tag>& used_for_size) noexcept {
-          *local_has_converged = has_converged;
-          *globalization_has_converged = true;
+        [](const gsl::not_null<size_t*> iteration_id, const auto correction,
+           const auto linear_operator_applied_to_correction,
+           const gsl::not_null<size_t*> globalization_iteration_id,
+           const gsl::not_null<double*> step_length,
+           const auto& used_for_size) noexcept {
+          ++(*iteration_id);
           // Begin the linear solve with a zero initial guess
           *correction =
-              make_with_value<db::item_type<correction_tag>>(used_for_size, 0.);
-          *linear_operator = *correction;
+              make_with_value<typename correction_tag::type>(used_for_size, 0.);
+          // Since the initial guess is zero, we don't need to apply the linear
+          // operator to it but can just set it to zero as well. Linear things
+          // are nice...
+          *linear_operator_applied_to_correction = *correction;
+          // Begin line search globalization with a unity step length
+          *globalization_iteration_id = 0;
+          *step_length = 1.;
         },
-        get<nonlinear_source_tag>(box));
-
-    // Proceed with algorithm
-    Parallel::get_parallel_component<ParallelComponent>(cache)[array_index]
-        .perform_algorithm(true);
+        db::get<fields_tag>(box));
+    return {std::move(box)};
   }
 };
 
-template <typename FieldsTag>
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
 struct PerformStep {
  private:
   using fields_tag = FieldsTag;
@@ -199,24 +273,166 @@ struct PerformStep {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&> apply(
+  static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*mete*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    // Skip the solve entirely on elements that are not part of the section
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        constexpr size_t complete_step_index = tmpl::index_of<
+            ActionList, GlobalizeAndCompleteStep<FieldsTag, OptionsGroup, Label,
+                                                 ArraySectionIdTag>>::value;
+        return {std::move(box), false, complete_step_index + 1};
+      }
+    }
+
     // Apply the correction that the linear solve has determined to improve
     // the nonlinear solution
     db::mutate<fields_tag>(
         make_not_null(&box),
-        [](const gsl::not_null<db::item_type<fields_tag>*> fields,
-           const db::item_type<correction_tag>& correction,
-           const double& step_length) { *fields += step_length * correction; },
-        get<correction_tag>(box), get<NonlinearSolver::Tags::StepLength>(box));
+        [](const auto fields, const auto& correction,
+           const double step_length) { *fields += step_length * correction; },
+        db::get<correction_tag>(box),
+        db::get<NonlinearSolver::Tags::StepLength<OptionsGroup>>(box));
 
+    constexpr size_t next_action_index =
+        tmpl::index_of<ActionList, PerformStep>::value + 1;
+    return {std::move(box), false, next_action_index};
+  }
+};
+
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
+struct ContributeToResidualMagnitudeReduction {
+ private:
+  using fields_tag = FieldsTag;
+  using nonlinear_residual_tag =
+      db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>;
+
+ public:
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&> apply(
+      db::DataBox<DbTagsList>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      Parallel::GlobalCache<Metavariables>& cache,
+      const ArrayIndex& array_index, const ActionList /*mete*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    const auto& residual = db::get<nonlinear_residual_tag>(box);
+    const double local_residual_magnitude_square =
+        LinearSolver::inner_product(residual, residual);
+    Parallel::ReductionData<
+        Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+        Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+        Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>
+        reduction_data{
+            db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box),
+            db::get<
+                NonlinearSolver::Tags::GlobalizationIterationId<OptionsGroup>>(
+                box),
+            local_residual_magnitude_square};
+    if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+      Parallel::contribute_to_reduction<
+          CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>>(
+          std::move(reduction_data),
+          Parallel::get_parallel_component<ParallelComponent>(
+              cache)[array_index],
+          Parallel::get_parallel_component<
+              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+    } else {
+      Parallel::contribute_to_reduction<
+          CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>,
+          ParallelComponent, ArraySectionIdTag>(
+          std::move(reduction_data),
+          Parallel::get_parallel_component<ParallelComponent>(
+              cache)[array_index],
+          Parallel::get_parallel_component<
+              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache),
+          *get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box),
+          get<ArraySectionIdTag>(box));
+    }
     return {std::move(box)};
   }
 };
 
-}  // namespace newton_raphson_detail
-}  // namespace NonlinearSolver
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
+struct GlobalizeAndCompleteStep {
+  using inbox_tags = tmpl::list<Tags::GlobalizationIsComplete<OptionsGroup>>;
+
+  template <typename DbTags, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex>
+  static bool is_ready(const db::DataBox<DbTags>& box,
+                       const tuples::TaggedTuple<InboxTags...>& inboxes,
+                       const Parallel::GlobalCache<Metavariables>& /*cache*/,
+                       const ArrayIndex& /*array_index*/) noexcept {
+    const auto& inbox =
+        get<Tags::GlobalizationIsComplete<OptionsGroup>>(inboxes);
+    return inbox.find(db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(
+               box)) != inbox.end();
+  }
+
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
+      db::DataBox<DbTagsList>& box, tuples::TaggedTuple<InboxTags...>& inboxes,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
+      const ArrayIndex& /*array_index*/, const ActionList /*mete*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    // Retrieve reduction data from inbox
+    auto globalization_is_complete = std::move(
+        tuples::get<Tags::GlobalizationIsComplete<OptionsGroup>>(inboxes)
+            .extract(
+                db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box))
+            .mapped());
+
+    if (not globalization_is_complete) {
+      // Update the step length
+      db::mutate<NonlinearSolver::Tags::StepLength<OptionsGroup>,
+                 NonlinearSolver::Tags::GlobalizationIterationId<OptionsGroup>>(
+          make_not_null(&box),
+          [](const gsl::not_null<double*> step_length,
+             const gsl::not_null<size_t*> globalization_iteration_id) noexcept {
+            if (*globalization_iteration_id == 0) {
+              *step_length = -0.5;
+            } else {
+              *step_length *= 0.5;
+            }
+            ++(*globalization_iteration_id);
+          });
+      // Continue globalization by taking a step with the updated step length
+      // and checking the residual again
+      constexpr size_t perform_step_index =
+          tmpl::index_of<ActionList, PerformStep<FieldsTag, OptionsGroup, Label,
+                                                 ArraySectionIdTag>>::value;
+      return {std::move(box), false, perform_step_index};
+    }
+
+    auto& has_converged = *globalization_is_complete;
+
+    db::mutate<LinearSolver::Tags::HasConverged<OptionsGroup>>(
+        make_not_null(&box),
+        [&has_converged](const gsl::not_null<Convergence::HasConverged*>
+                             local_has_converged) noexcept {
+          *local_has_converged = std::move(has_converged);
+        });
+
+    // Repeat steps until the solve has converged
+    constexpr size_t this_action_index =
+        tmpl::index_of<ActionList, GlobalizeAndCompleteStep>::value;
+    constexpr size_t prepare_step_index =
+        tmpl::index_of<ActionList, PrepareStep<FieldsTag, OptionsGroup, Label,
+                                               ArraySectionIdTag>>::value;
+    return {std::move(box), false,
+            get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box)
+                ? (this_action_index + 1)
+                : prepare_step_index};
+  }
+};
+
+}  // namespace NonlinearSolver::newton_raphson::detail
