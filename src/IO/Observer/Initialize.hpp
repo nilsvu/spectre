@@ -25,18 +25,22 @@ using reduction_data_to_reduction_names = typename Tag::names_tag;
  * Uses:
  * - Metavariables:
  *   - `observed_reduction_data_tags` (see ContributeReductionData)
+ *
+ * \note This action relies on the `SetupDataBox` aggregated initialization
+ * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
+ * phase action list prior to this action.
  */
 template <class Metavariables>
 struct Initialize {
   using simple_tags = tmpl::append<
-      db::AddSimpleTags<Tags::ExpectedContributorsForObservations,
-                        Tags::ContributorsOfReductionData,
-                        Tags::ContributorsOfTensorData, Tags::TensorData>,
+      tmpl::list<Tags::ExpectedContributorsForObservations,
+                 Tags::ContributorsOfReductionData,
+                 Tags::ContributorsOfTensorData, Tags::TensorData>,
       typename Metavariables::observed_reduction_data_tags,
       tmpl::transform<
           typename Metavariables::observed_reduction_data_tags,
           tmpl::bind<detail::reduction_data_to_reduction_names, tmpl::_1>>>;
-  using compute_tags = db::AddComputeTags<>;
+  using compute_tags = tmpl::list<>;
 
   using return_tag_list = tmpl::append<simple_tags, compute_tags>;
 
@@ -48,27 +52,7 @@ struct Initialize {
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    if constexpr (not tmpl::list_contains_v<DbTagsList, Tags::TensorData>) {
-      return helper(typename Metavariables::observed_reduction_data_tags{});
-    } else {
-      ERROR("You appear to be initializing the Observer twice.");
-      return std::make_tuple(std::move(box));
-    }
-  }
-
- private:
-  template <typename... ReductionTags>
-  static auto helper(tmpl::list<ReductionTags...> /*meta*/) noexcept {
-    return std::make_tuple(
-        db::create<simple_tags>(
-            db::item_type<Tags::ExpectedContributorsForObservations>{},
-            db::item_type<Tags::ContributorsOfReductionData>{},
-            db::item_type<Tags::ContributorsOfTensorData>{},
-            db::item_type<Tags::TensorData>{},
-            db::item_type<ReductionTags>{}...,
-            db::item_type<
-                detail::reduction_data_to_reduction_names<ReductionTags>>{}...),
-        true);
+    return std::make_tuple(std::move(box));
   }
 };
 
@@ -79,21 +63,24 @@ struct Initialize {
  * Uses:
  * - Metavariables:
  *   - `observed_reduction_data_tags` (see ContributeReductionData)
+ *
+ * \note This action relies on the `SetupDataBox` aggregated initialization
+ * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
+ * phase action list prior to this action.
  */
 template <class Metavariables>
 struct InitializeWriter {
   using simple_tags = tmpl::append<
-      db::AddSimpleTags<Tags::ExpectedContributorsForObservations,
-                        Tags::ContributorsOfReductionData,
-                        Tags::ReductionDataLock, Tags::ContributorsOfTensorData,
-                        Tags::VolumeDataLock, Tags::TensorData,
-                        Tags::NodesExpectedToContributeReductions,
-                        Tags::NodesThatContributedReductions, Tags::H5FileLock>,
+      tmpl::list<Tags::ExpectedContributorsForObservations,
+                 Tags::ContributorsOfReductionData, Tags::ReductionDataLock,
+                 Tags::ContributorsOfTensorData, Tags::VolumeDataLock,
+                 Tags::TensorData, Tags::NodesExpectedToContributeReductions,
+                 Tags::NodesThatContributedReductions, Tags::H5FileLock>,
       typename Metavariables::observed_reduction_data_tags,
       tmpl::transform<
           typename Metavariables::observed_reduction_data_tags,
           tmpl::bind<detail::reduction_data_to_reduction_names, tmpl::_1>>>;
-  using compute_tags = db::AddComputeTags<>;
+  using compute_tags = tmpl::list<>;
 
   using return_tag_list = tmpl::append<simple_tags, compute_tags>;
 
@@ -105,30 +92,7 @@ struct InitializeWriter {
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    if constexpr (not tmpl::list_contains_v<DbTagsList, Tags::TensorData>) {
-      return helper(typename Metavariables::observed_reduction_data_tags{});
-    } else {
-      ERROR("You appear to be initializing the ObserverWriter twice.");
-      return std::make_tuple(std::move(box));
-    }
-  }
-
- private:
-  template <typename... ReductionTags>
-  static auto helper(tmpl::list<ReductionTags...> /*meta*/) noexcept {
-    return std::make_tuple(
-        db::create<simple_tags>(
-            db::item_type<Tags::ExpectedContributorsForObservations>{},
-            db::item_type<Tags::ContributorsOfReductionData>{},
-            Parallel::NodeLock{},
-            db::item_type<Tags::ContributorsOfTensorData>{},
-            Parallel::NodeLock{}, db::item_type<Tags::TensorData>{},
-            db::item_type<Tags::NodesExpectedToContributeReductions>{},
-            db::item_type<Tags::NodesThatContributedReductions>{},
-            Parallel::NodeLock{}, db::item_type<ReductionTags>{}...,
-            db::item_type<
-                detail::reduction_data_to_reduction_names<ReductionTags>>{}...),
-        true);
+    return std::make_tuple(std::move(box));
   }
 };
 }  // namespace Actions

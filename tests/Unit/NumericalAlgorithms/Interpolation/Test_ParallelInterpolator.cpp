@@ -42,6 +42,7 @@
 #include "NumericalAlgorithms/Interpolation/TryToInterpolate.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/ParallelComponentHelpers.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"  // IWYU pragma: keep
 #include "Time/Slab.hpp"
@@ -182,8 +183,9 @@ struct mock_interpolation_target {
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
-          tmpl::list<intrp::Actions::InitializeInterpolationTarget<
-              Metavariables, InterpolationTargetTag>>>,
+          tmpl::list<Actions::SetupDataBox,
+                     intrp::Actions::InitializeInterpolationTarget<
+                         Metavariables, InterpolationTargetTag>>>,
       Parallel::PhaseActions<typename Metavariables::Phase,
                              Metavariables::Phase::Registration, tmpl::list<>>,
       Parallel::PhaseActions<typename Metavariables::Phase,
@@ -201,7 +203,8 @@ struct mock_interpolator {
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
-          tmpl::list<intrp::Actions::InitializeInterpolator>>,
+          tmpl::list<Actions::SetupDataBox,
+                     intrp::Actions::InitializeInterpolator<Metavariables>>>,
       Parallel::PhaseActions<typename Metavariables::Phase,
                              Metavariables::Phase::Registration, tmpl::list<>>,
       Parallel::PhaseActions<typename Metavariables::Phase,
@@ -288,13 +291,21 @@ SPECTRE_TEST_CASE("Unit.NumericalAlgorithms.Interpolator.Integration",
   ActionTesting::set_phase(make_not_null(&runner),
                            metavars::Phase::Initialization);
   ActionTesting::emplace_component<interp_component>(&runner, 0);
-  ActionTesting::next_action<interp_component>(make_not_null(&runner), 0);
+  for (size_t i = 0; i < 2; ++i) {
+    ActionTesting::next_action<interp_component>(make_not_null(&runner), 0);
+  }
   ActionTesting::emplace_component<target_a_component>(&runner, 0);
-  ActionTesting::next_action<target_a_component>(make_not_null(&runner), 0);
+  for (size_t i = 0; i < 2; ++i) {
+    ActionTesting::next_action<target_a_component>(make_not_null(&runner), 0);
+  }
   ActionTesting::emplace_component<target_b_component>(&runner, 0);
-  ActionTesting::next_action<target_b_component>(make_not_null(&runner), 0);
+  for (size_t i = 0; i < 2; ++i) {
+    ActionTesting::next_action<target_b_component>(make_not_null(&runner), 0);
+  }
   ActionTesting::emplace_component<target_c_component>(&runner, 0);
-  ActionTesting::next_action<target_c_component>(make_not_null(&runner), 0);
+  for (size_t i = 0; i < 2; ++i) {
+    ActionTesting::next_action<target_c_component>(make_not_null(&runner), 0);
+  }
   ActionTesting::set_phase(make_not_null(&runner),
                            metavars::Phase::Registration);
 

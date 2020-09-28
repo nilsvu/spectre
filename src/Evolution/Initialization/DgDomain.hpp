@@ -75,6 +75,10 @@ namespace Initialization {
  *   - `domain::Tags::MinimumGridSpacingCompute<Dim, Frame::Inertial>>`
  * - Removes: nothing
  * - Modifies: nothing
+ *
+ * \note This action relies on the `SetupDataBox` aggregated initialization
+ * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
+ * phase action list prior to this action.
  */
 template <size_t Dim>
 struct Domain {
@@ -83,6 +87,36 @@ struct Domain {
                  ::domain::Tags::InitialRefinementLevels<Dim>,
                  ::domain::Tags::InitialFunctionsOfTime<Dim>>;
   using const_global_cache_tags = tmpl::list<::domain::Tags::Domain<Dim>>;
+
+  using simple_tags =
+      tmpl::list<::domain::Tags::Mesh<Dim>, ::domain::Tags::Element<Dim>,
+                 ::domain::Tags::ElementMap<Dim, Frame::Grid>,
+                 ::domain::CoordinateMaps::Tags::CoordinateMap<Dim, Frame::Grid,
+                                                               Frame::Inertial>,
+                 ::domain::Tags::FunctionsOfTime>;
+
+  using compute_tags = tmpl::list<
+      ::domain::Tags::LogicalCoordinates<Dim>,
+      // Compute tags for Frame::Grid quantities
+      ::domain::Tags::MappedCoordinates<
+          ::domain::Tags::ElementMap<Dim, Frame::Grid>,
+          ::domain::Tags::Coordinates<Dim, Frame::Logical>>,
+      ::domain::Tags::InverseJacobianCompute<
+          ::domain::Tags::ElementMap<Dim, Frame::Grid>,
+          ::domain::Tags::Coordinates<Dim, Frame::Logical>>,
+      // Compute tags for Frame::Inertial quantities
+      ::domain::Tags::CoordinatesMeshVelocityAndJacobiansCompute<
+          ::domain::CoordinateMaps::Tags::CoordinateMap<Dim, Frame::Grid,
+                                                        Frame::Inertial>>,
+
+      ::domain::Tags::InertialFromGridCoordinatesCompute<Dim>,
+      ::domain::Tags::ElementToInertialInverseJacobian<Dim>,
+      ::domain::Tags::DetInvJacobianCompute<Dim, Frame::Logical,
+                                            Frame::Inertial>,
+      ::domain::Tags::InertialMeshVelocityCompute<Dim>,
+      evolution::domain::Tags::DivMeshVelocityCompute<Dim>,
+      // Compute tags for other mesh quantities
+      ::domain::Tags::MinimumGridSpacingCompute<Dim, Frame::Inertial>>;
 
   template <
       typename DataBox, typename... InboxTags, typename Metavariables,
@@ -96,35 +130,6 @@ struct Domain {
                     const ElementId<Dim>& array_index,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using simple_tags = db::AddSimpleTags<
-        ::domain::Tags::Mesh<Dim>, ::domain::Tags::Element<Dim>,
-        ::domain::Tags::ElementMap<Dim, Frame::Grid>,
-        ::domain::CoordinateMaps::Tags::CoordinateMap<Dim, Frame::Grid,
-                                                      Frame::Inertial>,
-        ::domain::Tags::FunctionsOfTime>;
-
-    using compute_tags = db::AddComputeTags<
-        ::domain::Tags::LogicalCoordinates<Dim>,
-        // Compute tags for Frame::Grid quantities
-        ::domain::Tags::MappedCoordinates<
-            ::domain::Tags::ElementMap<Dim, Frame::Grid>,
-            ::domain::Tags::Coordinates<Dim, Frame::Logical>>,
-        ::domain::Tags::InverseJacobianCompute<
-            ::domain::Tags::ElementMap<Dim, Frame::Grid>,
-            ::domain::Tags::Coordinates<Dim, Frame::Logical>>,
-        // Compute tags for Frame::Inertial quantities
-        ::domain::Tags::CoordinatesMeshVelocityAndJacobiansCompute<
-            ::domain::CoordinateMaps::Tags::CoordinateMap<Dim, Frame::Grid,
-                                                          Frame::Inertial>>,
-
-        ::domain::Tags::InertialFromGridCoordinatesCompute<Dim>,
-        ::domain::Tags::ElementToInertialInverseJacobian<Dim>,
-        ::domain::Tags::DetInvJacobianCompute<Dim, Frame::Logical,
-                                              Frame::Inertial>,
-        ::domain::Tags::InertialMeshVelocityCompute<Dim>,
-        evolution::domain::Tags::DivMeshVelocityCompute<Dim>,
-        // Compute tags for other mesh quantities
-        ::domain::Tags::MinimumGridSpacingCompute<Dim, Frame::Inertial>>;
 
     const auto& initial_extents =
         db::get<::domain::Tags::InitialExtents<Dim>>(box);
@@ -165,13 +170,12 @@ struct Domain {
           ::domain::make_coordinate_map_base<Frame::Grid, Frame::Inertial>(
               ::domain::CoordinateMaps::Identity<Dim>{});
     }
+    db::mutate_assign(make_not_null(&box), simple_tags{}, std::move(mesh),
+                      std::move(element), std::move(element_map),
+                      std::move(grid_to_inertial_map),
+                      std::move(functions_of_time));
 
-    return std::make_tuple(::Initialization::merge_into_databox<
-                           Domain, simple_tags, compute_tags,
-                           ::Initialization::MergePolicy::Overwrite>(
-        std::move(box), std::move(mesh), std::move(element),
-        std::move(element_map), std::move(grid_to_inertial_map),
-        std::move(functions_of_time)));
+    return std::make_tuple(std::move(box));
   }
 
   template <

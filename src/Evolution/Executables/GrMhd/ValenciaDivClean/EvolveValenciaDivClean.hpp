@@ -64,6 +64,7 @@
 #include "NumericalAlgorithms/Interpolation/Tags.hpp"
 #include "NumericalAlgorithms/Interpolation/TryToInterpolate.hpp"
 #include "Options/Options.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
 #include "Parallel/InitializationFunctions.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"
@@ -262,10 +263,11 @@ struct EvolutionMetavars {
   };
 
   using initialization_actions = tmpl::list<
+      Actions::SetupDataBox,
       Initialization::Actions::TimeAndTimeStep<EvolutionMetavars>,
       evolution::dg::Initialization::Domain<3>,
-      Initialization::Actions::GrTagsForHydro,
-      Initialization::Actions::ConservativeSystem,
+      Initialization::Actions::GrTagsForHydro<EvolutionMetavars>,
+      Initialization::Actions::ConservativeSystem<EvolutionMetavars>,
       evolution::Initialization::Actions::SetVariables<
           domain::Tags::Coordinates<3, Frame::Logical>>,
       Initialization::Actions::TimeStepperHistory<EvolutionMetavars>,
@@ -292,7 +294,7 @@ struct EvolutionMetavars {
       dg::Actions::InitializeMortars<boundary_scheme>,
       Initialization::Actions::DiscontinuousGalerkin<EvolutionMetavars>,
       Initialization::Actions::Minmod<3>,
-      intrp::Actions::ElementInitInterpPoints,
+      intrp::Actions::ElementInitInterpPoints<EvolutionMetavars>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
   using dg_element_array_component = DgElementArray<

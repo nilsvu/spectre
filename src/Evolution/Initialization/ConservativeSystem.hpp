@@ -25,6 +25,8 @@
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
 
+#include "Parallel/Printf.hpp"
+
 /// \cond
 namespace Frame {
 struct Inertial;
@@ -63,8 +65,43 @@ namespace Actions {
 ///
 /// - Removes: nothing
 /// - Modifies: nothing
+///
+/// \note This action relies on the `SetupDataBox` aggregated initialization
+/// mechanism, so `Actions::SetupDataBox` must be present in the
+/// `Initialization` phase action list prior to this action.
+template <typename Metavariables>
 struct ConservativeSystem {
-  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+ private:
+  using system = typename Metavariables::system;
+  static_assert(system::is_in_flux_conservative_form,
+                "System is not in flux conservative form");
+
+  static constexpr size_t dim = system::volume_dim;
+
+  using variables_tag = typename system::variables_tag;
+  using fluxes_tag = db::add_tag_prefix<::Tags::Flux, variables_tag,
+                                         tmpl::size_t<dim>, Frame::Inertial>;
+  using sources_tag = db::add_tag_prefix<::Tags::Source, variables_tag>;
+
+  template <typename System, typename enable = std::true_type>
+  struct simple_tags_impl {
+    using type = tmpl::list<variables_tag, fluxes_tag, sources_tag>;
+  };
+
+  template <typename System>
+  struct simple_tags_impl<
+      System, std::bool_constant<System::has_primitive_and_conservative_vars>> {
+    using type = tmpl::list<variables_tag, fluxes_tag, sources_tag,
+                            typename system::primitive_variables_tag,
+                            typename Metavariables::equation_of_state_tag>;
+  };
+
+ public:
+  using simple_tags = typename simple_tags_impl<system>::type;
+
+  using compute_tags = db::AddComputeTags<>;
+
+  template <typename DbTagsList, typename... InboxTags,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
   static auto apply(db::DataBox<DbTagsList>& box,
@@ -72,20 +109,9 @@ struct ConservativeSystem {
                     const Parallel::GlobalCache<Metavariables>& /*cache*/,
                     const ArrayIndex& /*array_index*/, ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using system = typename Metavariables::system;
-    static_assert(system::is_in_flux_conservative_form,
-                  "System is not in flux conservative form");
-    static constexpr size_t dim = system::volume_dim;
-    using variables_tag = typename system::variables_tag;
-    using fluxes_tag = db::add_tag_prefix<::Tags::Flux, variables_tag,
-                                          tmpl::size_t<dim>, Frame::Inertial>;
-    using sources_tag = db::add_tag_prefix<::Tags::Source, variables_tag>;
-    using simple_tags =
-        db::AddSimpleTags<variables_tag, fluxes_tag, sources_tag>;
-    using compute_tags = db::AddComputeTags<>;
-
     const size_t num_grid_points =
         db::get<domain::Tags::Mesh<dim>>(box).number_of_grid_points();
+    Parallel::printf("grrr %zu\n", num_grid_points);
     typename variables_tag::type vars(num_grid_points);
     typename fluxes_tag::type fluxes(num_grid_points);
     typename sources_tag::type sources(num_grid_points);
@@ -97,22 +123,15 @@ struct ConservativeSystem {
           db::get<domain::Tags::Mesh<dim>>(box).number_of_grid_points()};
       auto equation_of_state =
           db::get<::Tags::AnalyticSolutionOrData>(box).equation_of_state();
-
-      return std::make_tuple(
-          merge_into_databox<
-              ConservativeSystem,
-              tmpl::push_back<simple_tags,
-                              typename system::primitive_variables_tag,
-                              typename Metavariables::equation_of_state_tag>,
-              compute_tags>(std::move(box), std::move(vars), std::move(fluxes),
-                            std::move(sources), std::move(primitive_vars),
-                            std::move(equation_of_state)));
+      db::mutate_assign(make_not_null(&box), simple_tags{}, std::move(vars),
+                        std::move(fluxes), std::move(sources),
+                        std::move(primitive_vars),
+                        std::move(equation_of_state));
     } else {
-      return std::make_tuple(
-          merge_into_databox<ConservativeSystem, simple_tags, compute_tags>(
-              std::move(box), std::move(vars), std::move(fluxes),
-              std::move(sources)));
+      db::mutate_assign(make_not_null(&box), simple_tags{}, std::move(vars),
+                         std::move(fluxes), std::move(sources));
     }
+    return std::make_tuple(std::move(box));
   }
 };
 }  // namespace Actions

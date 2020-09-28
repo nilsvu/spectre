@@ -29,6 +29,7 @@
 #include "IO/Importers/Tags.hpp"
 #include "IO/Observer/ArrayComponentId.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/ArrayIndex.hpp"
 #include "Utilities/FileSystem.hpp"
 #include "Utilities/MakeString.hpp"
@@ -81,7 +82,9 @@ struct MockVolumeDataReader {
   using array_index = size_t;
   using phase_dependent_action_list = tmpl::list<Parallel::PhaseActions<
       typename Metavariables::Phase, Metavariables::Phase::Initialization,
-      tmpl::list<importers::detail::InitializeElementDataReader>>>;
+
+      tmpl::list<Actions::SetupDataBox,
+                 importers::detail::InitializeElementDataReader>>>;
 };
 
 struct Metavariables {
@@ -101,7 +104,9 @@ SPECTRE_TEST_CASE("Unit.IO.Importers.VolumeDataReaderActions", "[Unit][IO]") {
 
   // Setup mock data file reader
   ActionTesting::emplace_component<reader_component>(make_not_null(&runner), 0);
-  ActionTesting::next_action<reader_component>(make_not_null(&runner), 0);
+  for (size_t i = 0; i < 2; ++i) {
+    ActionTesting::next_action<reader_component>(make_not_null(&runner), 0);
+  }
 
   // Create a few elements with sample data
   // Specific IDs have no significance, just need different IDs.

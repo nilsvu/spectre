@@ -46,8 +46,22 @@ struct InitializeElement {
           LinearSolver::Tags::IterationId<OptionsGroup>>;
   using basis_history_tag =
       LinearSolver::Tags::KrylovSubspaceBasis<operand_tag>;
+  using preconditioned_basis_history_tag =
+      LinearSolver::Tags::KrylovSubspaceBasis<preconditioned_operand_tag>;
 
  public:
+  using simple_tags = tmpl::append<
+      tmpl::list<LinearSolver::Tags::IterationId<OptionsGroup>,
+                 initial_fields_tag, operator_applied_to_fields_tag,
+                 operand_tag, operator_applied_to_operand_tag,
+                 orthogonalization_iteration_id_tag, basis_history_tag,
+                 LinearSolver::Tags::HasConverged<OptionsGroup>>,
+      tmpl::conditional_t<Preconditioned,
+                          tmpl::list<preconditioned_basis_history_tag,
+                                     preconditioned_operand_tag>,
+                          tmpl::list<>>>;
+  using compute_tags = tmpl::list<>;
+
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
@@ -57,39 +71,12 @@ struct InitializeElement {
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    auto initial_box = ::Initialization::merge_into_databox<
-        InitializeElement,
-        db::AddSimpleTags<LinearSolver::Tags::IterationId<OptionsGroup>,
-                          initial_fields_tag, operator_applied_to_fields_tag,
-                          operand_tag, operator_applied_to_operand_tag,
-                          orthogonalization_iteration_id_tag, basis_history_tag,
-                          LinearSolver::Tags::HasConverged<OptionsGroup>>>(
-        std::move(box),
-        // The `PrepareSolve` action populates these tags with initial values,
-        // except for `operator_applied_to_fields_tag` which is expected to be
-        // filled at that point and `operator_applied_to_operand_tag` which is
-        // expected to be updated in every iteration of the algorithm.
-        std::numeric_limits<size_t>::max(), typename initial_fields_tag::type{},
-        typename operator_applied_to_fields_tag::type{},
-        typename operand_tag::type{},
-        typename operator_applied_to_operand_tag::type{},
-        std::numeric_limits<size_t>::max(), typename basis_history_tag::type{},
-        Convergence::HasConverged{});
+    db::mutate_assign<LinearSolver::Tags::IterationId<OptionsGroup>,
+                      orthogonalization_iteration_id_tag>(
+        make_not_null(&box), std::numeric_limits<size_t>::max(),
+        std::numeric_limits<size_t>::max());
 
-    if constexpr (not Preconditioned) {
-      return std::make_tuple(std::move(initial_box));
-    } else {
-      using preconditioned_basis_history_tag =
-          LinearSolver::Tags::KrylovSubspaceBasis<preconditioned_operand_tag>;
-
-      return std::make_tuple(::Initialization::merge_into_databox<
-                             InitializeElement,
-                             db::AddSimpleTags<preconditioned_basis_history_tag,
-                                               preconditioned_operand_tag>>(
-          std::move(initial_box),
-          typename preconditioned_basis_history_tag::type{},
-          typename preconditioned_operand_tag::type{}));
-    }
+    return std::make_tuple(std::move(box));
   }
 };
 

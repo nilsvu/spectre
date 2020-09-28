@@ -25,6 +25,7 @@
 #include "Evolution/Systems/Cce/ScriPlusValues.hpp"
 #include "Evolution/Systems/Cce/SwshDerivatives.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "ParallelAlgorithms/Actions/MutateApply.hpp"
@@ -92,16 +93,17 @@ struct CharacteristicEvolution {
   using chare_type = Parallel::Algorithms::Singleton;
   using metavariables = Metavariables;
 
-  using initialize_action_list =
-      tmpl::list<Actions::InitializeCharacteristicEvolutionVariables,
-                 Actions::InitializeCharacteristicEvolutionTime,
-                 Actions::InitializeCharacteristicEvolutionScri,
-                 Actions::RequestBoundaryData<
-                     typename Metavariables::cce_boundary_component,
-                     CharacteristicEvolution<Metavariables>>,
-                 Actions::ReceiveWorldtubeData<Metavariables>,
-                 Actions::InitializeFirstHypersurface,
-                 Initialization::Actions::RemoveOptionsAndTerminatePhase>;
+  using initialize_action_list = tmpl::list<
+      ::Actions::SetupDataBox,
+      Actions::InitializeCharacteristicEvolutionVariables<Metavariables>,
+      Actions::InitializeCharacteristicEvolutionTime<Metavariables>,
+      Actions::InitializeCharacteristicEvolutionScri<Metavariables>,
+      Actions::RequestBoundaryData<
+          typename Metavariables::cce_boundary_component,
+          CharacteristicEvolution<Metavariables>>,
+      Actions::ReceiveWorldtubeData<Metavariables>,
+      Actions::InitializeFirstHypersurface,
+      Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
   using initialization_tags =
       Parallel::get_initialization_tags<initialize_action_list>;

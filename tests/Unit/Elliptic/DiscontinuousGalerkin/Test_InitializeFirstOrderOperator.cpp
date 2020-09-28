@@ -28,6 +28,7 @@
 #include "Framework/ActionTesting.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeInterfaces.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
@@ -104,7 +105,7 @@ struct ElementArray {
           tmpl::list<ActionTesting::InitializeDataBox<tmpl::list<
                          domain::Tags::InitialRefinementLevels<Dim>,
                          domain::Tags::InitialExtents<Dim>, vars_tag<Dim>>>,
-                     dg::Actions::InitializeDomain<Dim>,
+                     Actions::SetupDataBox, dg::Actions::InitializeDomain<Dim>,
                      dg::Actions::InitializeInterfaces<
                          typename Metavariables::system,
                          dg::Initialization::slice_tags_to_face<>,
@@ -114,10 +115,11 @@ struct ElementArray {
 
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Testing,
-          tmpl::list<elliptic::dg::Actions::InitializeFirstOrderOperator<
-              Dim, Fluxes<Dim>, Sources, vars_tag<Dim>,
-              tmpl::list<ScalarFieldTag>,
-              tmpl::list<AuxiliaryFieldTag<Dim>>>>>>;
+          tmpl::list<Actions::SetupDataBox,
+                     elliptic::dg::Actions::InitializeFirstOrderOperator<
+                         Dim, Fluxes<Dim>, Sources, vars_tag<Dim>,
+                         tmpl::list<ScalarFieldTag>,
+                         tmpl::list<AuxiliaryFieldTag<Dim>>>>>>;
 };
 
 template <size_t Dim>
@@ -192,12 +194,16 @@ void test_initialize_fluxes(const DomainCreator<Dim>& domain_creator,
       &runner, element_id,
       {domain_creator.initial_refinement_levels(), std::move(initial_extents),
        std::move(vars)});
-  ActionTesting::next_action<element_array>(make_not_null(&runner), element_id);
-  ActionTesting::next_action<element_array>(make_not_null(&runner), element_id);
+  for (size_t i = 0; i < 3; ++i) {
+    ActionTesting::next_action<element_array>(make_not_null(&runner),
+                                              element_id);
+  }
   ActionTesting::set_phase(make_not_null(&runner),
                            metavariables::Phase::Testing);
-  ActionTesting::next_action<element_array>(make_not_null(&runner), element_id);
-
+  for (size_t i = 0; i < 2; ++i) {
+    ActionTesting::next_action<element_array>(make_not_null(&runner),
+                                              element_id);
+  }
   check_compute_items(runner, element_id);
 
   // Check the variables on exterior boundaries exist (for imposing boundary

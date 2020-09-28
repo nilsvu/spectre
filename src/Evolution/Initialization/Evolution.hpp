@@ -72,11 +72,20 @@ namespace Actions {
 /// - Modifies: nothing
 ///
 /// \note HistoryEvolvedVariables is allocated, but needs to be initialized
+///
+/// \note This action relies on the `SetupDataBox` aggregated initialization
+/// mechanism, so `Actions::SetupDataBox` must be present in the
+/// `Initialization` phase action list prior to this action.
 template <typename Metavariables>
 struct TimeAndTimeStep {
   using initialization_tags =
       tmpl::list<Tags::InitialTime, Tags::InitialTimeDelta,
                  Tags::InitialSlabSize<Metavariables::local_time_stepping>>;
+
+  using simple_tags =
+      tmpl::list<::Tags::TimeStepId, ::Tags::Next<::Tags::TimeStepId>,
+                 ::Tags::Time, ::Tags::TimeStep>;
+  using compute_tags = tmpl::list<::Tags::SubstepTimeCompute>;
 
   template <
       typename DbTagsList, typename... InboxTags, typename ArrayIndex,
@@ -124,19 +133,11 @@ struct TimeAndTimeStep {
         -static_cast<int64_t>(time_stepper.number_of_past_steps()),
         initial_time);
 
-    using compute_tags = db::AddComputeTags<::Tags::SubstepTimeCompute>;
-
-    return std::make_tuple(
-        merge_into_databox<TimeAndTimeStep,
-                           db::AddSimpleTags<::Tags::TimeStepId,
-                                             ::Tags::Next<::Tags::TimeStepId>,
-                                             ::Tags::Time, ::Tags::TimeStep>,
-                           compute_tags>(
-            std::move(box),
-            // At this point we have not started evolution yet, so the current
-            // time is undefined and _next_ is the initial time.
-            TimeStepId{}, time_id, std::numeric_limits<double>::signaling_NaN(),
-            initial_dt));
+    db::mutate_assign<::Tags::TimeStepId, ::Tags::Next<::Tags::TimeStepId>,
+                      ::Tags::Time, ::Tags::TimeStep>(
+        make_not_null(&box), TimeStepId{}, time_id,
+        std::numeric_limits<double>::signaling_NaN(), initial_dt);
+    return std::make_tuple(std::move(box));
   }
 
   template <
@@ -182,6 +183,10 @@ struct TimeAndTimeStep {
 /// - Modifies: nothing
 ///
 /// \note HistoryEvolvedVariables is allocated, but needs to be initialized
+///
+/// \note This action relies on the `SetupDataBox` aggregated initialization
+/// mechanism, so `Actions::SetupDataBox` must be present in the
+/// `Initialization` phase action list prior to this action.
 template <typename Metavariables>
 struct TimeStepperHistory {
   using initialization_tags = tmpl::list<>;
@@ -203,6 +208,13 @@ struct TimeStepperHistory {
   struct ComputeTags<System, true> {
     using type = db::AddComputeTags<>;
   };
+
+  using simple_tags =
+      tmpl::list<dt_variables_tag,
+                 ::Tags::HistoryEvolvedVariables<variables_tag>>;
+
+  using compute_tags =
+      typename ComputeTags<typename Metavariables::system>::type;
 
   template <typename DbTagsList, typename... InboxTags, typename ArrayIndex,
             typename ActionList, typename ParallelComponent,
@@ -227,15 +239,10 @@ struct TimeStepperHistory {
     DtVars dt_vars{num_grid_points};
     typename ::Tags::HistoryEvolvedVariables<variables_tag>::type history;
 
-    using compute_tags =
-        typename ComputeTags<typename Metavariables::system>::type;
-    return std::make_tuple(
-        merge_into_databox<
-            TimeStepperHistory,
-            db::AddSimpleTags<dt_variables_tag,
-                              ::Tags::HistoryEvolvedVariables<variables_tag>>,
-            compute_tags>(std::move(box), std::move(dt_vars),
-                          std::move(history)));
+    db::mutate_assign(make_not_null(&box), simple_tags{}, std::move(dt_vars),
+                      std::move(history));
+
+    return std::make_tuple(std::move(box));
   }
 
   template <typename DbTagsList, typename... InboxTags, typename ArrayIndex,

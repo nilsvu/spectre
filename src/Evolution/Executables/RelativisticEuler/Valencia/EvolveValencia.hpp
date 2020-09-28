@@ -42,6 +42,7 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/LocalLaxFriedrichs.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "Options/Options.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
 #include "Parallel/InitializationFunctions.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"
@@ -218,10 +219,11 @@ struct EvolutionMetavars {
   };
 
   using initialization_actions = tmpl::list<
+      Actions::SetupDataBox,
       Initialization::Actions::TimeAndTimeStep<EvolutionMetavars>,
       evolution::dg::Initialization::Domain<Dim>,
-      Initialization::Actions::GrTagsForHydro,
-      Initialization::Actions::ConservativeSystem,
+      Initialization::Actions::GrTagsForHydro<EvolutionMetavars>,
+      Initialization::Actions::ConservativeSystem<EvolutionMetavars>,
       evolution::Initialization::Actions::SetVariables<
           domain::Tags::Coordinates<Dim, Frame::Logical>>,
       Initialization::Actions::TimeStepperHistory<EvolutionMetavars>,

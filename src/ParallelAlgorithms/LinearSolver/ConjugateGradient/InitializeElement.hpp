@@ -41,6 +41,13 @@ struct InitializeElement {
       db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
 
  public:
+  using simple_tags =
+      tmpl::list<LinearSolver::Tags::IterationId<OptionsGroup>,
+                 operator_applied_to_fields_tag, operand_tag,
+                 operator_applied_to_operand_tag, residual_tag,
+                 LinearSolver::Tags::HasConverged<OptionsGroup>>;
+  using compute_tags = tmpl::list<>;
+
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
@@ -50,24 +57,18 @@ struct InitializeElement {
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    return std::make_tuple(
-        ::Initialization::merge_into_databox<
-            InitializeElement,
-            db::AddSimpleTags<LinearSolver::Tags::IterationId<OptionsGroup>,
-                              operator_applied_to_fields_tag, operand_tag,
-                              operator_applied_to_operand_tag, residual_tag,
-                              LinearSolver::Tags::HasConverged<OptionsGroup>>>(
-            std::move(box),
-            // The `PrepareSolve` action populates these tags with initial
-            // values, except for `operator_applied_to_fields_tag` which is
-            // expected to be filled at that point and
-            // `operator_applied_to_operand_tag` which is expected to be updated
-            // in every iteration of the algorithm.
-            std::numeric_limits<size_t>::max(),
-            typename operator_applied_to_fields_tag::type{},
-            typename operand_tag::type{},
-            typename operator_applied_to_operand_tag::type{},
-            typename residual_tag::type{}, Convergence::HasConverged{}));
+    // The `PrepareSolve` action populates these tags with initial
+    // values, except for `operator_applied_to_fields_tag` which is
+    // expected to be filled at that point and
+    // `operator_applied_to_operand_tag` which is expected to be updated
+    // in every iteration of the algorithm.
+    db::mutate_assign(
+        make_not_null(&box), simple_tags{}, std::numeric_limits<size_t>::max(),
+        typename operator_applied_to_fields_tag::type{},
+        typename operand_tag::type{},
+        typename operator_applied_to_operand_tag::type{},
+        typename residual_tag::type{}, Convergence::HasConverged{});
+    return std::make_tuple(std::move(box));
   }
 };
 

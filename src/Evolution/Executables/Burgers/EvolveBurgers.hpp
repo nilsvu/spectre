@@ -196,9 +196,10 @@ struct EvolutionMetavars {
   };
 
   using initialization_actions = tmpl::list<
+      Actions::SetupDataBox,
       Initialization::Actions::TimeAndTimeStep<EvolutionMetavars>,
       evolution::dg::Initialization::Domain<1>,
-      Initialization::Actions::ConservativeSystem,
+      Initialization::Actions::ConservativeSystem<EvolutionMetavars>,
       evolution::Initialization::Actions::SetVariables<
           domain::Tags::Coordinates<1, Frame::Logical>>,
       Initialization::Actions::TimeStepperHistory<EvolutionMetavars>,

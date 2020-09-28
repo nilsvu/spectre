@@ -12,9 +12,11 @@
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "IO/Observer/Actions/RegisterSingleton.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/ParallelComponentHelpers.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"
+#include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "ParallelAlgorithms/LinearSolver/Observe.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
@@ -47,7 +49,9 @@ struct ResidualMonitor {
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
-          tmpl::list<InitializeResidualMonitor<FieldsTag, OptionsGroup>>>,
+          tmpl::list<::Actions::SetupDataBox,
+                     InitializeResidualMonitor<FieldsTag, OptionsGroup>,
+                     Initialization::Actions::RemoveOptionsAndTerminatePhase>>,
       Parallel::PhaseActions<
           typename Metavariables::Phase,
           Metavariables::Phase::RegisterWithObserver,
@@ -76,6 +80,9 @@ struct InitializeResidualMonitor {
           db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>>>;
 
  public:
+  using simple_tags =
+      tmpl::list<residual_square_tag, initial_residual_magnitude_tag>;
+  using compute_tags = tmpl::list<>;
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
@@ -85,17 +92,12 @@ struct InitializeResidualMonitor {
                     const ArrayIndex& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    return std::make_tuple(
-        ::Initialization::merge_into_databox<
-            InitializeResidualMonitor,
-            db::AddSimpleTags<residual_square_tag,
-                              initial_residual_magnitude_tag>>(
-            std::move(box),
-            // The `InitializeResidual` action populates these tags with initial
-            // values
-            std::numeric_limits<double>::signaling_NaN(),
-            std::numeric_limits<double>::signaling_NaN()),
-        true);
+    // The `InitializeResidual` action populates these
+    // tags with initial values
+    db::mutate_assign(make_not_null(&box), simple_tags{},
+                      std::numeric_limits<double>::signaling_NaN(),
+                      std::numeric_limits<double>::signaling_NaN());
+    return std::make_tuple(std::move(box));
   }
 };
 

@@ -7,6 +7,7 @@
 
 #include "AlgorithmArray.hpp"
 #include "DataStructures/DataBox/DataBox.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/Creators/TimeDependence/RegisterDerivedWithCharm.hpp"
 #include "Domain/FunctionsOfTime/RegisterDerivedWithCharm.hpp"
@@ -141,6 +142,7 @@ struct Metavariables {
                   typename Metavariables::Phase,
                   Metavariables::Phase::Initialization,
                   tmpl::list<
+                      Actions::SetupDataBox,
                       Initialization::Actions::TimeAndTimeStep<Metavariables>,
                       evolution::dg::Initialization::Domain<Dim>,
                       ::Initialization::Actions::

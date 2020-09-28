@@ -57,23 +57,16 @@ namespace Actions {
  *  - `Tags::Variables<metavariables::cce_swsh_derivative_tags>`
  *  - `Spectral::Swsh::Tags::SwshInterpolator< Tags::CauchyAngularCoords>`
  * - Removes: nothing
+ *
+ * \note This action relies on the `SetupDataBox` aggregated initialization
+ * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
+ * phase action list prior to this action.
  */
+template <typename Metavariables>
 struct InitializeCharacteristicEvolutionVariables {
   using const_global_cache_tags =
       tmpl::list<Tags::LMax, Tags::NumberOfRadialPoints>;
 
-  template <
-      typename DbTags, typename... InboxTags, typename Metavariables,
-      typename ArrayIndex, typename ActionList, typename ParallelComponent,
-      Requires<not tmpl::list_contains_v<
-          DbTags, ::Tags::Variables<tmpl::list<
-                      typename Metavariables::evolved_swsh_tag>>>> = nullptr>
-  static auto apply(db::DataBox<DbTags>& box,
-                    const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::GlobalCache<Metavariables>& /*cache*/,
-                    const ArrayIndex& /*array_index*/,
-                    const ActionList /*meta*/,
-                    const ParallelComponent* const /*meta*/) noexcept {
     using boundary_value_variables_tag = ::Tags::Variables<
         tmpl::append<typename Metavariables::cce_boundary_communication_tags,
                      typename Metavariables::cce_gauge_boundary_tags>>;
@@ -100,6 +93,27 @@ struct InitializeCharacteristicEvolutionVariables {
     using evolved_swsh_dt_variables_tag =
         db::add_tag_prefix<::Tags::dt, evolved_swsh_variables_tag>;
 
+  using simple_tags = tmpl::list<
+      boundary_value_variables_tag, coordinate_variables_tag,
+      dt_coordinate_variables_tag, evolved_swsh_variables_tag,
+      evolved_swsh_dt_variables_tag, angular_coordinates_variables_tag,
+      scri_variables_tag, volume_variables_tag,
+      pre_swsh_derivatives_variables_tag, transform_buffer_variables_tag,
+      swsh_derivative_variables_tag,
+      Spectral::Swsh::Tags::SwshInterpolator<Tags::CauchyAngularCoords>>;
+
+  using compute_tags = tmpl::list<>;
+
+  template <
+      typename DbTags, typename... InboxTags, typename ArrayIndex,
+      typename ActionList, typename ParallelComponent>
+  static auto apply(db::DataBox<DbTags>& box,
+                    const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+                    const Parallel::GlobalCache<Metavariables>& /*cache*/,
+                    const ArrayIndex& /*array_index*/,
+                    const ActionList /*meta*/,
+                    const ParallelComponent* const /*meta*/) noexcept {
+
     const size_t l_max = db::get<Spectral::Swsh::Tags::LMaxBase>(box);
     const size_t number_of_radial_points =
         db::get<Spectral::Swsh::Tags::NumberOfRadialPointsBase>(box);
@@ -109,50 +123,23 @@ struct InitializeCharacteristicEvolutionVariables {
     const size_t transform_buffer_size =
         number_of_radial_points *
         Spectral::Swsh::size_of_libsharp_coefficient_vector(l_max);
-    return std::make_tuple(
-        Initialization::merge_into_databox<
-            InitializeCharacteristicEvolutionVariables,
-            db::AddSimpleTags<
-                boundary_value_variables_tag, coordinate_variables_tag,
-                dt_coordinate_variables_tag, evolved_swsh_variables_tag,
-                evolved_swsh_dt_variables_tag,
-                angular_coordinates_variables_tag, scri_variables_tag,
-                volume_variables_tag, pre_swsh_derivatives_variables_tag,
-                transform_buffer_variables_tag, swsh_derivative_variables_tag,
-                Spectral::Swsh::Tags::SwshInterpolator<
-                    Tags::CauchyAngularCoords>>,
-            db::AddComputeTags<>, Initialization::MergePolicy::Overwrite>(
-            std::move(box),
-            typename boundary_value_variables_tag::type{boundary_size},
-            typename coordinate_variables_tag::type{boundary_size},
-            typename dt_coordinate_variables_tag::type{boundary_size},
-            typename evolved_swsh_variables_tag::type{volume_size},
-            typename evolved_swsh_dt_variables_tag::type{volume_size},
-            typename angular_coordinates_variables_tag::type{boundary_size},
-            typename scri_variables_tag::type{boundary_size},
-            typename volume_variables_tag::type{volume_size},
-            typename pre_swsh_derivatives_variables_tag::type{volume_size, 0.0},
-            typename transform_buffer_variables_tag::type{transform_buffer_size,
-                                                          0.0},
-            typename swsh_derivative_variables_tag::type{volume_size, 0.0},
-            Spectral::Swsh::SwshInterpolator{}));
-  }
+    db::mutate_assign(
+        make_not_null(&box), simple_tags{},
+        typename boundary_value_variables_tag::type{boundary_size},
+        typename coordinate_variables_tag::type{boundary_size},
+        typename dt_coordinate_variables_tag::type{boundary_size},
+        typename evolved_swsh_variables_tag::type{volume_size},
+        typename evolved_swsh_dt_variables_tag::type{volume_size},
+        typename angular_coordinates_variables_tag::type{boundary_size},
+        typename scri_variables_tag::type{boundary_size},
+        typename volume_variables_tag::type{volume_size},
+        typename pre_swsh_derivatives_variables_tag::type{volume_size, 0.0},
+        typename transform_buffer_variables_tag::type{transform_buffer_size,
+                                                      0.0},
+        typename swsh_derivative_variables_tag::type{volume_size, 0.0},
+        Spectral::Swsh::SwshInterpolator{});
 
-  template <
-      typename DbTags, typename... InboxTags, typename Metavariables,
-      typename ArrayIndex, typename ActionList, typename ParallelComponent,
-      Requires<tmpl::list_contains_v<
-          DbTags, ::Tags::Variables<tmpl::list<
-                      typename Metavariables::evolved_swsh_tag>>>> = nullptr>
-  static std::tuple<db::DataBox<DbTags>&&> apply(
-      const db::DataBox<DbTags>& /*box*/,
-      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
-      const ParallelComponent* const /*meta*/) noexcept {
-    ERROR(
-        "The DataBox has already been initialized with Cce characteristic "
-        "evolution variables. Only initialize the Cce databox once.");
+    return std::make_tuple(std::move(box));
   }
 };
 

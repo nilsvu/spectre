@@ -43,9 +43,22 @@ namespace Actions {
  * - Adds:
  *   - `fields_tag`
  *   - `db::add_tag_prefix<::Tags::FixedSource, fields_tag>`
+ *
+ * \note This action relies on the `SetupDataBox` aggregated initialization
+ * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
+ * phase action list prior to this action.
  */
+template <typename Metavariables>
 struct InitializeSystem {
-  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+  using system = typename Metavariables::system;
+  using fields_tag = typename system::fields_tag;
+  using fixed_sources_tag =
+      db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
+
+  using simple_tags = tmpl::list<fields_tag, fixed_sources_tag>;
+  using compute_tags = tmpl::list<>;
+
+  template <typename DbTagsList, typename... InboxTags,
             size_t Dim, typename ActionList, typename ParallelComponent>
   static auto apply(db::DataBox<DbTagsList>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
@@ -53,12 +66,8 @@ struct InitializeSystem {
                     const ElementId<Dim>& /*array_index*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using system = typename Metavariables::system;
-    using fields_tag = typename system::fields_tag;
     using linear_operator_applied_to_fields_tag =
         db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
-    using fixed_sources_tag =
-        db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
 
     const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
     const size_t num_grid_points = mesh.number_of_grid_points();
@@ -92,11 +101,9 @@ struct InitializeSystem {
             .variables(inertial_coords,
                        db::wrap_tags_in<::Tags::FixedSource,
                                         typename system::primal_fields>{}));
-
-    return std::make_tuple(
-        ::Initialization::merge_into_databox<
-            InitializeSystem, db::AddSimpleTags<fields_tag, fixed_sources_tag>>(
-            std::move(box), std::move(fields), std::move(fixed_sources)));
+    db::mutate_assign(make_not_null(&box), simple_tags{}, std::move(fields),
+                      std::move(fixed_sources));
+    return std::make_tuple(std::move(box));
   }
 };
 

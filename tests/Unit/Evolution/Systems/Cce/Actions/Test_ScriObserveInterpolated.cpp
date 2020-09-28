@@ -32,6 +32,7 @@
 #include "NumericalAlgorithms/Interpolation/BarycentricRationalSpanInterpolator.hpp"
 #include "NumericalAlgorithms/Spectral/SwshCoefficients.hpp"
 #include "NumericalAlgorithms/Spectral/SwshCollocation.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Time/Tags.hpp"
 #include "Time/TimeSteppers/RungeKutta3.hpp"
@@ -87,7 +88,8 @@ struct mock_observer {
 
   using const_global_cache_tags = tmpl::list<observers::Tags::VolumeFileName>;
   using initialize_action_list =
-      tmpl::list<observers::Actions::InitializeWriter<Metavariables>>;
+      tmpl::list<::Actions::SetupDataBox,
+                 observers::Actions::InitializeWriter<Metavariables>>;
   using initialization_tags =
       Parallel::get_initialization_tags<initialize_action_list>;
 
@@ -109,11 +111,12 @@ struct mock_characteristic_evolution {
   using replace_these_simple_actions = tmpl::list<>;
   using with_these_simple_actions = tmpl::list<>;
 
-  using initialize_action_list =
-      tmpl::list<Actions::InitializeCharacteristicEvolutionVariables,
-                 Actions::InitializeCharacteristicEvolutionTime,
-                 Actions::InitializeCharacteristicEvolutionScri,
-                 Initialization::Actions::RemoveOptionsAndTerminatePhase>;
+  using initialize_action_list = tmpl::list<
+      ::Actions::SetupDataBox,
+      Actions::InitializeCharacteristicEvolutionVariables<Metavariables>,
+      Actions::InitializeCharacteristicEvolutionTime<Metavariables>,
+      Actions::InitializeCharacteristicEvolutionScri<Metavariables>,
+      Initialization::Actions::RemoveOptionsAndTerminatePhase>;
   using initialization_tags =
       Parallel::get_initialization_tags<initialize_action_list>;
 
@@ -246,10 +249,13 @@ SPECTRE_TEST_CASE("Unit.Evolution.Systems.Cce.Actions.ScriObserveInterpolated",
   ActionTesting::emplace_component<observation_component>(&runner, 0);
 
   // the initialization actions
-  for (size_t i = 0; i < 4; ++i) {
+  for (size_t i = 0; i < 5; ++i) {
     ActionTesting::next_action<evolution_component>(make_not_null(&runner), 0);
   }
-  ActionTesting::next_action<observation_component>(make_not_null(&runner), 0);
+  for (size_t i = 0; i < 2; ++i) {
+    ActionTesting::next_action<observation_component>(make_not_null(&runner),
+                                                      0);
+  }
   runner.set_phase(test_metavariables::Phase::Evolve);
 
   // generate data that will be well behaved for the interpolation and the

@@ -44,7 +44,12 @@ namespace Actions {
  * Metavariables::cce_boundary_communication_tags>`
  * - Removes: nothing
  * - Modifies: nothing
+ *
+ * \note This action relies on the `SetupDataBox` aggregated initialization
+ * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
+ * phase action list prior to this action.
  */
+template <typename Metavariables>
 struct InitializeH5WorldtubeBoundary {
   using initialization_tags =
       tmpl::list<Tags::H5WorldtubeBoundaryDataManager>;
@@ -53,16 +58,11 @@ struct InitializeH5WorldtubeBoundary {
   using const_global_cache_tags =
       tmpl::list<Tags::LMax, Tags::EndTimeFromFile, Tags::StartTimeFromFile>;
 
-  template <class Metavariables>
-  using h5_boundary_manager_simple_tags = db::AddSimpleTags<::Tags::Variables<
+  using simple_tags = tmpl::list<::Tags::Variables<
       typename Metavariables::cce_boundary_communication_tags>>;
 
-  template <class Metavariables>
-  using return_tag_list = h5_boundary_manager_simple_tags<Metavariables>;
-
-  template <typename DbTags, typename... InboxTags, typename Metavariables,
-            typename ArrayIndex, typename ActionList,
-            typename ParallelComponent,
+  template <typename DbTags, typename... InboxTags, typename ArrayIndex,
+            typename ActionList, typename ParallelComponent,
             Requires<tmpl::list_contains_v<
                 DbTags, Tags::H5WorldtubeBoundaryDataManager>> = nullptr>
   static auto apply(db::DataBox<DbTags>& box,
@@ -76,18 +76,14 @@ struct InitializeH5WorldtubeBoundary {
         boundary_variables{
             Spectral::Swsh::number_of_swsh_collocation_points(l_max)};
 
-    auto initial_box = Initialization::merge_into_databox<
-        InitializeH5WorldtubeBoundary,
-        h5_boundary_manager_simple_tags<Metavariables>, db::AddComputeTags<>,
-        Initialization::MergePolicy::Overwrite>(std::move(box),
-                                                std::move(boundary_variables));
+    db::mutate_assign(make_not_null(&box), simple_tags{},
+                      std::move(boundary_variables));
 
-    return std::make_tuple(std::move(initial_box));
+    return std::make_tuple(std::move(box));
   }
 
-  template <typename DbTags, typename... InboxTags, typename Metavariables,
-            typename ArrayIndex, typename ActionList,
-            typename ParallelComponent,
+  template <typename DbTags, typename... InboxTags, typename ArrayIndex,
+            typename ActionList, typename ParallelComponent,
             Requires<not tmpl::list_contains_v<
                 DbTags, Tags::H5WorldtubeBoundaryDataManager>> = nullptr>
   static auto apply(db::DataBox<DbTags>& box,
@@ -118,7 +114,12 @@ struct InitializeH5WorldtubeBoundary {
  * `InitializationTags::GhInterfaceManager`)
  * - Removes: nothing
  * - Modifies: nothing
+ *
+ * \note This action relies on the `SetupDataBox` aggregated initialization
+ * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
+ * phase action list prior to this action.
  */
+template <typename Metavariables>
 struct InitializeGhWorldtubeBoundary {
   using initialization_tags = tmpl::list<Tags::GhInterfaceManager>;
 
@@ -129,17 +130,11 @@ struct InitializeGhWorldtubeBoundary {
                  Tags::NoEndTime, Tags::SpecifiedStartTime,
                  Tags::InterfaceManagerInterpolationStrategy>;
 
-  template <class Metavariables>
-  using gh_boundary_manager_simple_tags = db::AddSimpleTags<
-      ::Tags::Variables<
-          typename Metavariables::cce_boundary_communication_tags>,
-      Tags::GhInterfaceManager>;
+  using simple_tags = db::AddSimpleTags<::Tags::Variables<
+      typename Metavariables::cce_boundary_communication_tags>>;
 
-  template <typename DbTags, typename... InboxTags, typename Metavariables,
-            typename ArrayIndex, typename ActionList,
-            typename ParallelComponent,
-            Requires<tmpl::list_contains_v<DbTags, Tags::GhInterfaceManager>> =
-                nullptr>
+  template <typename DbTags, typename... InboxTags, typename ArrayIndex,
+            typename ActionList, typename ParallelComponent>
   static auto apply(db::DataBox<DbTags>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
                     const Parallel::GlobalCache<Metavariables>& /*cache*/,
@@ -151,29 +146,8 @@ struct InitializeGhWorldtubeBoundary {
         boundary_variables{
             Spectral::Swsh::number_of_swsh_collocation_points(l_max)};
 
-    auto initial_box = Initialization::merge_into_databox<
-        InitializeGhWorldtubeBoundary,
-        gh_boundary_manager_simple_tags<Metavariables>, db::AddComputeTags<>,
-        Initialization::MergePolicy::Overwrite>(
-        std::move(box), std::move(boundary_variables),
-        db::get<Tags::GhInterfaceManager>(box).get_clone());
-
-    return std::make_tuple(std::move(initial_box));
-  }
-
-  template <
-      typename DbTags, typename... InboxTags, typename Metavariables,
-      typename ArrayIndex, typename ActionList, typename ParallelComponent,
-      Requires<not tmpl::list_contains_v<DbTags, Tags::GhInterfaceManager>> =
-          nullptr>
-  static auto apply(db::DataBox<DbTags>& box,
-                    const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::GlobalCache<Metavariables>& /*cache*/,
-                    const ArrayIndex& /*array_index*/,
-                    const ActionList /*meta*/,
-                    const ParallelComponent* const /*meta*/) noexcept {
-    ERROR(
-        "Required tag `Tags::GhInterfaceManager` is missing from the DataBox");
+    db::mutate_assign(make_not_null(&box), simple_tags{},
+                      std::move(boundary_variables));
     return std::make_tuple(std::move(box));
   }
 };

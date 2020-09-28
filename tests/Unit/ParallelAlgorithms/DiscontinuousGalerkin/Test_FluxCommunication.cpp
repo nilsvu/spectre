@@ -48,6 +48,7 @@
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/Spectral/Projection.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/CollectDataForFluxes.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/FluxCommunication.hpp"
@@ -161,6 +162,7 @@ struct ElementArray {
               // testing framework can't compile `is_ready` for
               // `ReceiveDataForFluxes`. See
               // https://github.com/sxs-collaboration/spectre/issues/1908
+              Actions::SetupDataBox,
               dg::Actions::InitializeMortars<DgBoundaryScheme<Dim>, false>,
               dg::Actions::CollectDataForFluxes<
                   DgBoundaryScheme<Dim>, domain::Tags::InternalDirections<Dim>>,
@@ -266,6 +268,8 @@ void test_no_refinement() noexcept {
     return ActionTesting::get_databox_tag<element_array, tag>(runner, self_id);
   };
 
+  // SetupDataBox on self
+  ActionTesting::next_action<element_array>(make_not_null(&runner), self_id);
   // InitializeMortars on self
   ActionTesting::next_action<element_array>(make_not_null(&runner), self_id);
   // CollectDataForFluxes on self
@@ -298,6 +302,9 @@ void test_no_refinement() noexcept {
   // Now check ReceiveDataForFluxes
   for (auto mortar_id : neighbor_mortar_ids) {
     CHECK_FALSE(ActionTesting::is_ready<element_array>(runner, self_id));
+    // SetupDataBox on neighbor
+    ActionTesting::next_action<element_array>(make_not_null(&runner),
+                                              mortar_id.second);
     // InitializeMortars on neighbor
     ActionTesting::next_action<element_array>(make_not_null(&runner),
                                               mortar_id.second);
@@ -367,6 +374,8 @@ void test_no_neighbors() noexcept {
   ActionTesting::set_phase(make_not_null(&runner),
                            metavariables::Phase::Testing);
 
+  // SetupDataBox
+  ActionTesting::next_action<element_array>(make_not_null(&runner), self_id);
   // InitializeMortars
   ActionTesting::next_action<element_array>(make_not_null(&runner), self_id);
   // CollectDataForFluxes
@@ -444,6 +453,8 @@ void test_p_refinement() noexcept {
     return ActionTesting::get_databox_tag<element_array, tag>(runner, self_id);
   };
 
+  // SetupDataBox
+  ActionTesting::next_action<element_array>(make_not_null(&runner), self_id);
   // InitializeMortars
   ActionTesting::next_action<element_array>(make_not_null(&runner), self_id);
   // CollectDataForFluxes
@@ -537,6 +548,8 @@ void test_h_refinement(const Spectral::MortarSize& mortar_size) {
     return ActionTesting::get_databox_tag<element_array, tag>(runner, self_id);
   };
 
+  // SetupDataBox
+  ActionTesting::next_action<element_array>(make_not_null(&runner), self_id);
   // InitializeMortars
   ActionTesting::next_action<element_array>(make_not_null(&runner), self_id);
   // CollectDataForFluxes

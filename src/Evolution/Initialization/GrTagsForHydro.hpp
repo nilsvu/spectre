@@ -57,23 +57,28 @@ namespace Actions {
 ///
 /// - Removes: nothing
 /// - Modifies: nothing
+///
+/// \note This action relies on the `SetupDataBox` aggregated initialization
+/// mechanism, so `Actions::SetupDataBox` must be present in the
+/// `Initialization` phase action list prior to this action.
+template <typename Metavariables>
 struct GrTagsForHydro {
   using initialization_tags = tmpl::list<Initialization::Tags::InitialTime>;
 
-  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
-            typename ArrayIndex, typename ActionList,
-            typename ParallelComponent>
+  using system = typename Metavariables::system;
+  static constexpr size_t dim = system::volume_dim;
+  using gr_tag = typename system::spacetime_variables_tag;
+
+  using simple_tags = tmpl::list<gr_tag>;
+  using compute_tags = tmpl::list<>;
+
+  template <typename DbTagsList, typename... InboxTags, typename ArrayIndex,
+            typename ActionList, typename ParallelComponent>
   static auto apply(db::DataBox<DbTagsList>& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
                     const Parallel::GlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/, ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
-    using system = typename Metavariables::system;
-    static constexpr size_t dim = system::volume_dim;
-    using gr_tag = typename system::spacetime_variables_tag;
-    using simple_tags = db::AddSimpleTags<gr_tag>;
-    using compute_tags = db::AddComputeTags<>;
-
     const double initial_time = db::get<Initialization::Tags::InitialTime>(box);
     using GrVars = typename gr_tag::type;
 
@@ -92,11 +97,9 @@ struct GrTagsForHydro {
     gr_vars.assign_subset(evolution::initial_data(
         Parallel::get<::Tags::AnalyticSolutionOrData>(cache), inertial_coords,
         initial_time, typename GrVars::tags_list{}));
+    db::mutate_assign(make_not_null(&box), simple_tags{}, std::move(gr_vars));
 
-    return std::make_tuple(
-        Initialization::merge_into_databox<GrTagsForHydro, simple_tags,
-                                           compute_tags>(std::move(box),
-                                                         std::move(gr_vars)));
+    return std::make_tuple(std::move(box));
   }
 };
 }  // namespace Actions

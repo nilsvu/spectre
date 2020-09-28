@@ -28,6 +28,7 @@
 #include "NumericalAlgorithms/Convergence/Reason.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/Actions/Goto.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/InitializationFunctions.hpp"
@@ -270,7 +271,7 @@ struct ElementArray {
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
-          tmpl::list<InitializeElement,
+          tmpl::list<InitializeElement, Actions::SetupDataBox,
                      typename linear_solver::initialize_element,
                      ComputeOperatorAction<fields_tag>,
                      detail::init_preconditioner<preconditioner>,

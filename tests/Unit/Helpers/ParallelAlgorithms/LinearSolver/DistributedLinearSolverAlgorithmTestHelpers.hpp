@@ -30,6 +30,7 @@
 #include "IO/Observer/ObserverComponent.hpp"
 #include "IO/Observer/Tags.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/Info.hpp"
@@ -265,6 +266,8 @@ struct TestResult {
 };
 
 struct InitializeElement {
+  using simple_tags = tmpl::list<fields_tag, sources_tag>;
+  using compute_tags = tmpl::list<>;
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ActionList, typename ParallelComponent>
   static auto apply(db::DataBox<DbTagsList>& box,
@@ -274,12 +277,11 @@ struct InitializeElement {
                     const ParallelComponent* const /*meta*/) noexcept {
     const auto& source = gsl::at(get<Source>(box), array_index);
     const size_t num_points = source.size();
+    db::mutate_assign(make_not_null(&box), simple_tags{},
+                      typename fields_tag::type{num_points, 0.},
+                      typename sources_tag::type{source});
 
-    return std::make_tuple(
-        ::Initialization::merge_into_databox<
-            InitializeElement, db::AddSimpleTags<fields_tag, sources_tag>>(
-            std::move(box), typename fields_tag::type{num_points, 0.},
-            typename sources_tag::type{source}));
+    return std::make_tuple(std::move(box));
   }
 };
 
@@ -313,7 +315,7 @@ struct ElementArray {
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
-          tmpl::list<InitializeElement,
+          tmpl::list<Actions::SetupDataBox, InitializeElement,
                      typename linear_solver::initialize_element,
                      ComputeOperatorAction<fields_tag>,
                      helpers::detail::init_preconditioner<preconditioner>,

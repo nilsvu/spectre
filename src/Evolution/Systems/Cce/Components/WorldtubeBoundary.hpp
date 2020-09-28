@@ -5,6 +5,7 @@
 
 #include "Evolution/Systems/Cce/Actions/InitializeWorldtubeBoundary.hpp"
 #include "Evolution/Systems/Cce/BoundaryData.hpp"
+#include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/Info.hpp"
@@ -41,7 +42,8 @@ struct H5WorldtubeBoundary {
   using chare_type = Parallel::Algorithms::Singleton;
   using metavariables = Metavariables;
   using initialize_action_list =
-      tmpl::list<Actions::InitializeH5WorldtubeBoundary,
+      tmpl::list<::Actions::SetupDataBox,
+                 Actions::InitializeH5WorldtubeBoundary<Metavariables>,
                  Initialization::Actions::RemoveOptionsAndTerminatePhase>;
   using initialization_tags =
       Parallel::get_initialization_tags<initialize_action_list>;
@@ -108,7 +110,8 @@ struct GhWorldtubeBoundary {
   using chare_type = Parallel::Algorithms::Singleton;
   using metavariables = Metavariables;
   using initialize_action_list =
-      tmpl::list<Actions::InitializeGhWorldtubeBoundary,
+      tmpl::list<::Actions::SetupDataBox,
+                 Actions::InitializeGhWorldtubeBoundary<Metavariables>,
                  Initialization::Actions::RemoveOptionsAndTerminatePhase>;
   using initialization_tags =
       Parallel::get_initialization_tags<initialize_action_list>;
