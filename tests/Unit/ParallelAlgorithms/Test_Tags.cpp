@@ -19,4 +19,6 @@ SPECTRE_TEST_CASE("Unit.ParallelAlgorithms.Tags",
                   "[Unit][ParallelAlgorithms]") {
   TestHelpers::db::test_simple_tag<Parallel::Tags::IterationId<TestLabel>>(
       "IterationId(TestLabel)");
+  TestHelpers::db::test_simple_tag<Parallel::Tags::HasConverged<TestLabel>>(
+      "HasConverged(TestLabel)");
 }

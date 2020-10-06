@@ -15,6 +15,7 @@ spectre_target_headers(
 target_link_libraries(
   ${LIBRARY}
   INTERFACE
+  Convergence
   Utilities
   )
 

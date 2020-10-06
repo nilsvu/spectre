@@ -37,6 +37,7 @@
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "ParallelAlgorithms/Tags.hpp"
 #include "Utilities/FileSystem.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/Requires.hpp"
@@ -176,7 +177,7 @@ struct TestResult {
       // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
       const ParallelComponent* const /*meta*/) noexcept {
     const auto& has_converged =
-        get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box);
+        get<Parallel::Tags::HasConverged<OptionsGroup>>(box);
     SPECTRE_PARALLEL_REQUIRE(has_converged);
     SPECTRE_PARALLEL_REQUIRE(has_converged.reason() ==
                              get<ExpectedConvergenceReason>(box));
