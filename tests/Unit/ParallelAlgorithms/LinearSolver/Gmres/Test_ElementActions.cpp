@@ -146,8 +146,7 @@ void test_element_actions() {
       [&runner, &get_tag,
        &set_tag](const Convergence::HasConverged& has_converged) {
         const size_t iteration_id = 0;
-        set_tag(Parallel::Tags::IterationId<DummyOptionsGroup>{},
-                iteration_id);
+        set_tag(Parallel::Tags::IterationId<DummyOptionsGroup>{}, iteration_id);
         set_tag(operand_tag{}, DenseVector<double>(3, 2.));
         set_tag(basis_history_tag{},
                 std::vector<DenseVector<double>>{DenseVector<double>(3, 0.5),
@@ -183,8 +182,7 @@ void test_element_actions() {
       [&runner, &get_tag,
        &set_tag](const Convergence::HasConverged& has_converged) {
         const size_t iteration_id = 2;
-        set_tag(Parallel::Tags::IterationId<DummyOptionsGroup>{},
-                iteration_id);
+        set_tag(Parallel::Tags::IterationId<DummyOptionsGroup>{}, iteration_id);
         set_tag(initial_fields_tag{}, DenseVector<double>(3, -1.));
         set_tag(operand_tag{}, DenseVector<double>(3, 2.));
         set_tag(basis_history_tag{},
@@ -217,8 +215,7 @@ void test_element_actions() {
         CHECK(get_tag(basis_history_tag{})[2] == get_tag(operand_tag{}));
         // minres * basis_history - initial = 2 * 0.5 + 4 * 1.5 - 1 = 6
         CHECK_ITERABLE_APPROX(get_tag(VectorTag{}), DenseVector<double>(3, 6.));
-        CHECK(get_tag(Parallel::Tags::IterationId<DummyOptionsGroup>{}) ==
-              3);
+        CHECK(get_tag(Parallel::Tags::IterationId<DummyOptionsGroup>{}) == 3);
         CHECK(get_tag(Parallel::Tags::HasConverged<DummyOptionsGroup>{}) ==
               has_converged);
         CHECK(ActionTesting::get_next_action_index<element_array>(runner, 0) ==

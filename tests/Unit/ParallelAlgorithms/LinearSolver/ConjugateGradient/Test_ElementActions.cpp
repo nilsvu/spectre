@@ -121,8 +121,7 @@ SPECTRE_TEST_CASE(
       [&runner, &get_tag,
        &set_tag](const Convergence::HasConverged& has_converged) {
         const size_t iteration_id = 0;
-        set_tag(Parallel::Tags::IterationId<DummyOptionsGroup>{},
-                iteration_id);
+        set_tag(Parallel::Tags::IterationId<DummyOptionsGroup>{}, iteration_id);
         REQUIRE_FALSE(ActionTesting::is_ready<element_array>(runner, 0));
         auto& inbox = ActionTesting::get_inbox_tag<
             element_array, LinearSolver::cg::detail::Tags::InitialHasConverged<
