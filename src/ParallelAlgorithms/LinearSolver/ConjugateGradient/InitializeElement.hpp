@@ -13,6 +13,7 @@
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "ParallelAlgorithms/Tags.hpp"
 
 /// \cond
 namespace Parallel {
@@ -53,7 +54,7 @@ struct InitializeElement {
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeElement,
-            db::AddSimpleTags<LinearSolver::Tags::IterationId<OptionsGroup>,
+            db::AddSimpleTags<Parallel::Tags::IterationId<OptionsGroup>,
                               operator_applied_to_fields_tag, operand_tag,
                               operator_applied_to_operand_tag, residual_tag,
                               LinearSolver::Tags::HasConverged<OptionsGroup>>>(

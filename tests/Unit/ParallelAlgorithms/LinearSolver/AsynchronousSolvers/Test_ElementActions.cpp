@@ -20,6 +20,7 @@
 #include "ParallelAlgorithms/Actions/SetData.hpp"
 #include "ParallelAlgorithms/LinearSolver/AsynchronousSolvers/ElementActions.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "ParallelAlgorithms/Tags.hpp"
 #include "Utilities/FileSystem.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
@@ -145,7 +146,7 @@ SPECTRE_TEST_CASE("Unit.ParallelLinearSolver.Asynchronous.ElementActions",
 
   {
     INFO("InitializeElement");
-    CHECK(get_tag(LinearSolver::Tags::IterationId<TestSolver>{}) ==
+    CHECK(get_tag(Parallel::Tags::IterationId<TestSolver>{}) ==
           std::numeric_limits<size_t>::max());
     tmpl::for_each<tmpl::list<operator_applied_to_fields_tag, residual_tag,
                               LinearSolver::Tags::HasConverged<TestSolver>>>(
@@ -162,7 +163,7 @@ SPECTRE_TEST_CASE("Unit.ParallelLinearSolver.Asynchronous.ElementActions",
     set_tag(operator_applied_to_fields_tag{}, DenseVector<double>{7., 8., 9.});
     ActionTesting::next_action<element_array>(make_not_null(&runner),
                                               element_id);
-    CHECK(get_tag(LinearSolver::Tags::IterationId<TestSolver>{}) == 0);
+    CHECK(get_tag(Parallel::Tags::IterationId<TestSolver>{}) == 0);
     CHECK_FALSE(get_tag(LinearSolver::Tags::HasConverged<TestSolver>{}));
     ActionTesting::invoke_queued_simple_action<obs_component>(
         make_not_null(&runner), 0);
@@ -176,7 +177,7 @@ SPECTRE_TEST_CASE("Unit.ParallelLinearSolver.Asynchronous.ElementActions",
             DenseVector<double>{13., 14., 15});
     ActionTesting::next_action<element_array>(make_not_null(&runner),
                                               element_id);
-    CHECK(get_tag(LinearSolver::Tags::IterationId<TestSolver>{}) == 1);
+    CHECK(get_tag(Parallel::Tags::IterationId<TestSolver>{}) == 1);
     CHECK(get_tag(LinearSolver::Tags::HasConverged<TestSolver>{}));
     ActionTesting::invoke_queued_simple_action<obs_component>(
         make_not_null(&runner), 0);

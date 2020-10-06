@@ -25,6 +25,7 @@ target_link_libraries(
   IO
   LinearSolver
   Parallel
+  ParallelAlgorithms
   Utilities
   )
 

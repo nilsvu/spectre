@@ -44,6 +44,7 @@
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "ParallelAlgorithms/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Lorentzian.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Moustache.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
@@ -93,7 +94,7 @@ struct Metavariables {
       Metavariables, typename system::fields_tag,
       SolvePoissonProblem::OptionTags::LinearSolverGroup, false>;
   using linear_solver_iteration_id =
-      LinearSolver::Tags::IterationId<typename linear_solver::options_group>;
+      Parallel::Tags::IterationId<typename linear_solver::options_group>;
   // For the GMRES linear solver we need to apply the DG operator to its
   // internal "operand" in every iteration of the algorithm.
   using linear_operand_tag = db::add_tag_prefix<LinearSolver::Tags::Operand,

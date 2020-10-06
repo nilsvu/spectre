@@ -29,6 +29,7 @@
 #include "Parallel/Reduction.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "ParallelAlgorithms/Tags.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/GetOutput.hpp"
 #include "Utilities/Gsl.hpp"
@@ -125,7 +126,7 @@ struct InitializeElement {
     return std::make_tuple(
         ::Initialization::merge_into_databox<
             InitializeElement,
-            db::AddSimpleTags<LinearSolver::Tags::IterationId<OptionsGroup>,
+            db::AddSimpleTags<Parallel::Tags::IterationId<OptionsGroup>,
                               LinearSolver::Tags::HasConverged<OptionsGroup>,
                               operator_applied_to_fields_tag>,
             db::AddComputeTags<
@@ -178,7 +179,7 @@ struct PrepareSolve {
       const ParallelComponent* const /*meta*/) noexcept {
     constexpr size_t iteration_id = 0;
 
-    db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>,
+    db::mutate<Parallel::Tags::IterationId<OptionsGroup>,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
         [](const gsl::not_null<size_t*> local_iteration_id,
@@ -231,7 +232,7 @@ struct CompleteStep {
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     // Prepare for next iteration
-    db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>,
+    db::mutate<Parallel::Tags::IterationId<OptionsGroup>,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box),
         [](const gsl::not_null<size_t*> iteration_id,
@@ -245,7 +246,7 @@ struct CompleteStep {
 
     // Observe element-local residual magnitude
     const size_t completed_iterations =
-        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
+        get<Parallel::Tags::IterationId<OptionsGroup>>(box);
     const auto& residual = get<residual_tag>(box);
     const double residual_magnitude_square = inner_product(residual, residual);
     contribute_to_residual_observation<OptionsGroup, ParallelComponent>(
