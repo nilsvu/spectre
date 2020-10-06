@@ -7,10 +7,64 @@
 #include <string>
 
 #include "DataStructures/DataBox/Tag.hpp"
+#include "NumericalAlgorithms/Convergence/Criteria.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
+#include "Options/Options.hpp"
 #include "Utilities/PrettyType.hpp"
 
-namespace Parallel::Tags {
+namespace Parallel {
+namespace OptionTags {
+
+template <typename OptionsGroup>
+struct ConvergenceCriteria {
+  static constexpr Options::String help =
+      "Determine convergence of the algorithm";
+  using type = Convergence::Criteria;
+  using group = OptionsGroup;
+};
+
+template <typename OptionsGroup>
+struct Iterations {
+  static constexpr Options::String help =
+      "Number of iterations to run the algorithm";
+  using type = size_t;
+  using group = OptionsGroup;
+};
+
+}  // namespace OptionTags
+
+namespace Tags {
+
+/// `Convergence::Criteria` that determine the algorithm has converged
+template <typename OptionsGroup>
+struct ConvergenceCriteria : db::SimpleTag {
+  static std::string name() noexcept {
+    return "ConvergenceCriteria(" + Options::name<OptionsGroup>() + ")";
+  }
+  using type = Convergence::Criteria;
+
+  using option_tags = tmpl::list<OptionTags::ConvergenceCriteria<OptionsGroup>>;
+  static constexpr bool pass_metavariables = false;
+  static Convergence::Criteria create_from_options(
+      const Convergence::Criteria& convergence_criteria) noexcept {
+    return convergence_criteria;
+  }
+};
+
+/// A fixed number of iterations to run the parallel algorithm
+template <typename OptionsGroup>
+struct Iterations : db::SimpleTag {
+  static std::string name() noexcept {
+    return "Iterations(" + Options::name<OptionsGroup>() + ")";
+  }
+  using type = size_t;
+
+  static constexpr bool pass_metavariables = false;
+  using option_tags = tmpl::list<OptionTags::Iterations<OptionsGroup>>;
+  static size_t create_from_options(const size_t max_iterations) noexcept {
+    return max_iterations;
+  }
+};
 
 /*!
  * \brief Holds an `IterationId` that identifies a step in a parallel algorithm
@@ -35,4 +89,5 @@ struct HasConverged : db::SimpleTag {
   using type = Convergence::HasConverged;
 };
 
-}  // namespace Parallel::Tags
+}  // namespace Tags
+}  // namespace Parallel

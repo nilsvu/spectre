@@ -18,6 +18,7 @@
 #include "ParallelAlgorithms/LinearSolver/ConjugateGradient/Tags/InboxTags.hpp"
 #include "ParallelAlgorithms/LinearSolver/Observe.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "ParallelAlgorithms/Tags.hpp"
 #include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/Gsl.hpp"
@@ -69,7 +70,7 @@ struct InitializeResidual {
 
     // Determine whether the linear solver has converged
     Convergence::HasConverged has_converged{
-        get<LinearSolver::Tags::ConvergenceCriteria<OptionsGroup>>(box),
+        get<Parallel::Tags::ConvergenceCriteria<OptionsGroup>>(box),
         iteration_id, residual_magnitude, residual_magnitude};
 
     // Do some logging
@@ -164,7 +165,7 @@ struct UpdateResidual {
 
     // Determine whether the linear solver has converged
     Convergence::HasConverged has_converged{
-        get<LinearSolver::Tags::ConvergenceCriteria<OptionsGroup>>(box),
+        get<Parallel::Tags::ConvergenceCriteria<OptionsGroup>>(box),
         completed_iterations, residual_magnitude,
         get<initial_residual_magnitude_tag>(box)};
 
