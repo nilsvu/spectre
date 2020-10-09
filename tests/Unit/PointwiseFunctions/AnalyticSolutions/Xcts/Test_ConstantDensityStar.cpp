@@ -98,7 +98,8 @@ void test_solution(const double density, const double radius,
 
   {
     INFO("Verify the solution solves the XCTS system");
-    using system = Xcts::FirstOrderSystem<Xcts::Equations::Hamiltonian>;
+    using system = Xcts::FirstOrderSystem<Xcts::Equations::Hamiltonian,
+                                          Xcts::Geometry::Flat>;
     const Mesh<3> mesh{12, Spectral::Basis::Legendre,
                        Spectral::Quadrature::GaussLobatto};
     using AffineMap = domain::CoordinateMaps::Affine;

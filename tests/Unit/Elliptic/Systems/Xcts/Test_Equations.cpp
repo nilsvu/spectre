@@ -134,7 +134,7 @@ void test_equations(const DataVector& used_for_size) {
 template <Xcts::Equations EnabledEquations>
 void test_computers(const DataVector& used_for_size) {
   CAPTURE(EnabledEquations);
-  using system = Xcts::FirstOrderSystem<EnabledEquations>;
+  using system = Xcts::FirstOrderSystem<EnabledEquations, Xcts::Geometry::Flat>;
   using primal_fields = typename system::primal_fields;
   using auxiliary_fields = typename system::auxiliary_fields;
   using vars_tag = typename system::fields_tag;

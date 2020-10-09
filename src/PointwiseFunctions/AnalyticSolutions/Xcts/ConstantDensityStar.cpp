@@ -94,6 +94,15 @@ void ConstantDensityStar::pup(PUP::er& p) noexcept {
 }
 
 template <typename DataType>
+tuples::TaggedTuple<gr::Tags::TraceExtrinsicCurvature<DataType>>
+ConstantDensityStar::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<gr::Tags::TraceExtrinsicCurvature<DataType>> /*meta*/) const
+    noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 0.)};
+}
+
+template <typename DataType>
 tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DataType>>
 ConstantDensityStar::variables(
     const tnsr::I<DataType, 3, Frame::Inertial>& x,
@@ -201,6 +210,11 @@ bool operator!=(const ConstantDensityStar& lhs,
 #define DTYPE(data) BOOST_PP_TUPLE_ELEM(0, data)
 
 #define INSTANTIATE(_, data)                                                   \
+  template tuples::TaggedTuple<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>> \
+  ConstantDensityStar::variables(                                              \
+      const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \
+      tmpl::list<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>>)              \
+      const noexcept;                                                          \
   template tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DTYPE(data)>>       \
   ConstantDensityStar::variables(                                              \
       const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \

@@ -11,9 +11,11 @@
 #include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
 #include "Domain/Structure/Direction.hpp"
 #include "Elliptic/BoundaryConditions.hpp"
+#include "Elliptic/Protocols.hpp"
 #include "Elliptic/Systems/Poisson/Tags.hpp"  // IWYU pragma: keep
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -33,7 +35,8 @@ namespace Solutions {
  * \f$f(x)=\boldsymbol{k}^2\prod_i \sin(k_i x_i)\f$.
  */
 template <size_t Dim>
-class ProductOfSinusoids {
+class ProductOfSinusoids
+    : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  public:
   struct WaveNumbers {
     using type = std::array<double, Dim>;
@@ -46,8 +49,8 @@ class ProductOfSinusoids {
       "coordinate in each dimension."};
 
   ProductOfSinusoids() = default;
-  ProductOfSinusoids(const ProductOfSinusoids&) noexcept = delete;
-  ProductOfSinusoids& operator=(const ProductOfSinusoids&) noexcept = delete;
+  ProductOfSinusoids(const ProductOfSinusoids&) noexcept = default;
+  ProductOfSinusoids& operator=(const ProductOfSinusoids&) noexcept = default;
   ProductOfSinusoids(ProductOfSinusoids&&) noexcept = default;
   ProductOfSinusoids& operator=(ProductOfSinusoids&&) noexcept = default;
   ~ProductOfSinusoids() noexcept = default;
@@ -102,20 +105,42 @@ class ProductOfSinusoids {
 
   template <typename... Tags>
   tuples::TaggedTuple<Tags...> boundary_variables(
-      const tnsr::I<DataVector, 3>& x, const Direction<3>& direction,
-      const tnsr::i<DataVector, 3>& face_normal,
+      const tnsr::I<DataVector, Dim>& x, const Direction<Dim>& direction,
+      const tnsr::i<DataVector, Dim>& face_normal,
       tmpl::list<Tags...> /*meta*/) const noexcept {
     static_assert(sizeof...(Tags) > 1, "An unsupported Tag was requested.");
     return {tuples::get<Tags>(
         boundary_variables(x, direction, face_normal, tmpl::list<Tags>{}))...};
   }
 
+  template <typename Tag>
   static elliptic::BoundaryCondition boundary_condition_type(
-      const tnsr::I<DataVector, Dim>& /*x*/, const Direction<Dim>& direction) {
+      const tnsr::I<DataVector, Dim>& /*x*/, const Direction<Dim>& direction,
+      Tag /*meta*/) {
     if (direction == Direction<Dim>::upper_xi()) {
       return elliptic::BoundaryCondition::Neumann;
     } else {
       return elliptic::BoundaryCondition::Dirichlet;
+    }
+  }
+
+  template <typename Fields, typename Fluxes>
+  void impose_boundary_conditions(
+      const gsl::not_null<Variables<Fields>*> dirichlet_fields,
+      const gsl::not_null<Variables<Fluxes>*> neumann_fields,
+      const Variables<Fields>& /*vars*/,
+      const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
+      const Direction<Dim>& direction,
+      const tnsr::i<DataVector, Dim, Frame::Inertial>& face_normal) const
+      noexcept {
+    if (direction == Direction<Dim>::upper_xi()) {
+      get<::Tags::NormalDotFlux<Poisson::Tags::Field>>(*neumann_fields) =
+          get<::Tags::NormalDotFlux<Poisson::Tags::Field>>(boundary_variables(
+              x, direction, face_normal,
+              tmpl::list<::Tags::NormalDotFlux<Poisson::Tags::Field>>{}));
+    } else {
+      get<Poisson::Tags::Field>(*dirichlet_fields) = get<Poisson::Tags::Field>(
+          variables(x, tmpl::list<Poisson::Tags::Field>{}));
     }
   }
 

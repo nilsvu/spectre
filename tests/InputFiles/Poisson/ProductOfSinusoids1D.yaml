@@ -39,19 +39,19 @@ LinearSolver:
     Multigrid:
       Iterations: 1
       CoarsestGridPoints: 3
-      Verbosity: Quiet
+      Verbosity: Silent
 
     Smoother:
       Schwarz:
         MaxOverlap: 2
         Iterations: 3
-        Verbosity: Quiet
+        Verbosity: Silent
         SubdomainSolver:
           ConvergenceCriteria:
             MaxIterations: 1
             RelativeResidual: 1.e-5
             AbsoluteResidual: 1.e-10
-          Verbosity: Quiet
+          Verbosity: Silent
           Restart: 0
         SubdomainPreconditioner: # ExplicitInverse
 
@@ -59,6 +59,6 @@ EventsAndTriggers:
   ? EveryNIterations:
       N: 1
   : - ObserveErrorNorms:
-        SubfileName: Errors
+        SubfileName: ErrorNorms
     - ObserveFields:
         SubfileName: VolumeData

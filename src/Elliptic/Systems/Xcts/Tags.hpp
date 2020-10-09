@@ -99,5 +99,15 @@ struct ShiftStrain : db::SimpleTag {
   using type = tnsr::ii<DataType, Dim, Frame>;
 };
 
+template <typename DataType, size_t Dim, typename Frame>
+struct ShiftBackground : db::SimpleTag {
+  using type = tnsr::I<DataType, Dim, Frame>;
+};
+
+template <typename DataType, size_t Dim, typename Frame>
+struct ShiftExcess : db::SimpleTag {
+  using type = tnsr::I<DataType, Dim, Frame>;
+};
+
 }  // namespace Tags
 }  // namespace Xcts

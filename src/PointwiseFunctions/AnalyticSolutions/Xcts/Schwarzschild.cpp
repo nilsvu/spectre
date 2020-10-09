@@ -406,23 +406,34 @@ Schwarzschild<SchwarzschildCoordinates::KerrSchildIsotropic>::variables(
 
 // Shift
 
-template <>
+template <SchwarzschildCoordinates Coords>
 template <typename DataType>
-tuples::TaggedTuple<gr::Tags::Shift<3, Frame::Inertial, DataType>>
-Schwarzschild<SchwarzschildCoordinates::Isotropic>::variables(
+tuples::TaggedTuple<Xcts::Tags::ShiftBackground<DataType, 3, Frame::Inertial>>
+Schwarzschild<Coords>::variables(
     const tnsr::I<DataType, 3, Frame::Inertial>& x,
-    tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DataType>> /*meta*/) const
-    noexcept {
+    tmpl::list<
+        Xcts::Tags::ShiftBackground<DataType, 3, Frame::Inertial>> /*meta*/)
+    const noexcept {
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
 template <>
 template <typename DataType>
-tuples::TaggedTuple<gr::Tags::Shift<3, Frame::Inertial, DataType>>
+tuples::TaggedTuple<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>
+Schwarzschild<SchwarzschildCoordinates::Isotropic>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>> /*meta*/)
+    const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <>
+template <typename DataType>
+tuples::TaggedTuple<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>
 Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::variables(
     const tnsr::I<DataType, 3, Frame::Inertial>& x,
-    tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DataType>> /*meta*/) const
-    noexcept {
+    tmpl::list<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>> /*meta*/)
+    const noexcept {
   const DataType r = get(magnitude(x));
   const DataType isotropic_prefactor = sqrt(2.) / pow(r, 3. / 2.);
   auto shift = x;
@@ -434,11 +445,11 @@ Schwarzschild<SchwarzschildCoordinates::PainleveGullstrand>::variables(
 
 template <>
 template <typename DataType>
-tuples::TaggedTuple<gr::Tags::Shift<3, Frame::Inertial, DataType>>
+tuples::TaggedTuple<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>
 Schwarzschild<SchwarzschildCoordinates::KerrSchildIsotropic>::variables(
     const tnsr::I<DataType, 3, Frame::Inertial>& x,
-    tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DataType>> /*meta*/) const
-    noexcept {
+    tmpl::list<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>> /*meta*/)
+    const noexcept {
   const DataType rbar = get(magnitude(x));
   const DataType r = kerr_schild_areal_radius_from_isotropic(rbar);
   const DataType lapse = 1. / sqrt(1. + 2. / r);
@@ -548,12 +559,12 @@ Schwarzschild<Coords>::variables(
 template <SchwarzschildCoordinates Coords>
 template <typename DataType>
 tuples::TaggedTuple<
-    ::Tags::FixedSource<gr::Tags::Shift<3, Frame::Inertial, DataType>>>
+    ::Tags::FixedSource<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>>
 Schwarzschild<Coords>::variables(
     const tnsr::I<DataType, 3, Frame::Inertial>& x,
     tmpl::list<::Tags::FixedSource<
-        gr::Tags::Shift<3, Frame::Inertial, DataType>>> /*meta*/) const
-    noexcept {
+        Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>> /*meta*/)
+    const noexcept {
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
@@ -632,10 +643,17 @@ Schwarzschild<Coords>::variables(
           ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>,    \
                         tmpl::size_t<3>, Frame::Inertial>>) const noexcept;    \
   template tuples::TaggedTuple<                                                \
-      gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>                        \
+      Xcts::Tags::ShiftBackground<DTYPE(data), 3, Frame::Inertial>>            \
   Schwarzschild<COORDS(data)>::variables(                                      \
       const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \
-      tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>)            \
+      tmpl::list<                                                              \
+          Xcts::Tags::ShiftBackground<DTYPE(data), 3, Frame::Inertial>>)       \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>>                \
+  Schwarzschild<COORDS(data)>::variables(                                      \
+      const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \
+      tmpl::list<Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>>)    \
       const noexcept;                                                          \
   template tuples::TaggedTuple<                                                \
       Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>>                \
@@ -657,12 +675,13 @@ Schwarzschild<Coords>::variables(
       tmpl::list<::Tags::FixedSource<                                          \
           Xcts::Tags::LapseTimesConformalFactor<DTYPE(data)>>>)                \
       const noexcept;                                                          \
-  template tuples::TaggedTuple<                                                \
-      ::Tags::FixedSource<gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>>   \
+  template tuples::TaggedTuple<::Tags::FixedSource<                            \
+      Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>>>               \
   Schwarzschild<COORDS(data)>::variables(                                      \
       const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \
       tmpl::list<::Tags::FixedSource<                                          \
-          gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>>) const noexcept;  \
+          Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>>>)          \
+      const noexcept;                                                          \
   template tuples::TaggedTuple<gr::Tags::EnergyDensity<DTYPE(data)>>           \
   Schwarzschild<COORDS(data)>::variables(                                      \
       const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \

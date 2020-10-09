@@ -16,13 +16,45 @@
 #include "Informer/Verbosity.hpp"
 #include "NumericalAlgorithms/Convergence/Criteria.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
+#include "Options/Options.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/Numeric.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TypeTraits.hpp"
 
-namespace NonlinearSolver::Tags {
+namespace NonlinearSolver {
+
+namespace OptionTags {
+
+/// Set to values near unity when the nonlinear solver overshoots, e.g. when
+/// the initial guess is particularly bad. Larger values mean the nonlinear
+/// solver is stricter with accepting steps, preferring to apply the
+/// globalization strategy.
+template <typename OptionsGroup>
+struct SufficientDecreaseParameter {
+  using type = double;
+  static std::string name() noexcept { return "SufficientDecrease"; }
+  static constexpr Options::String help = {
+      "Fraction of decrease predicted by linearization"};
+  static type lower_bound() noexcept { return 0.; }
+  static type upper_bound() noexcept { return 1.; }
+  static type default_value() noexcept { return 1.e-4; }
+  using group = OptionsGroup;
+};
+
+template <typename OptionsGroup>
+struct StepLengthReduction {
+  using type = size_t;
+  static constexpr Options::String help = {
+      "Halves the step length this many times"};
+  static type default_value() noexcept { return 0; }
+  using group = OptionsGroup;
+};
+
+}  // namespace OptionTags
+
+namespace Tags {
 
 /*
  * \brief The correction \f$\delta x\f$ to improve a solution \f$x_0\f$
@@ -44,7 +76,7 @@ namespace NonlinearSolver::Tags {
 template <typename Tag>
 struct Correction : db::PrefixTag, db::SimpleTag {
   static std::string name() noexcept {
-    return "Correction(" + Tag::name() + ")";
+    return "Correction(" + db::tag_name<Tag>() + ")";
   }
   using type = typename Tag::type;
   using tag = Tag;
@@ -113,4 +145,22 @@ struct GlobalizationIterationId : db::SimpleTag {
   }
 };
 
-}  // namespace NonlinearSolver::Tags
+template <typename OptionsGroup>
+struct SufficientDecreaseParameter : db::SimpleTag {
+  using type = double;
+  static constexpr bool pass_metavariables = false;
+  using option_tags =
+      tmpl::list<OptionTags::SufficientDecreaseParameter<OptionsGroup>>;
+  static type create_from_options(const type& option) { return option; }
+};
+
+template <typename OptionsGroup>
+struct StepLengthReduction : db::SimpleTag {
+  using type = size_t;
+  static constexpr bool pass_metavariables = false;
+  using option_tags = tmpl::list<OptionTags::StepLengthReduction<OptionsGroup>>;
+  static type create_from_options(const type& option) { return option; }
+};
+
+}  // namespace Tags
+}  // namespace NonlinearSolver

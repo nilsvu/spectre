@@ -52,8 +52,6 @@ struct InitializeElement {
       db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo, fields_tag>;
   using correction_tag =
       db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
-  using linear_source_tag =
-      db::add_tag_prefix<::Tags::FixedSource, correction_tag>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -72,7 +70,6 @@ struct InitializeElement {
                 LinearSolver::Tags::IterationId<OptionsGroup>,
                 LinearSolver::Tags::HasConverged<OptionsGroup>,
                 nonlinear_operator_applied_to_fields_tag, correction_tag,
-                linear_source_tag,
                 NonlinearSolver::Tags::GlobalizationIterationId<OptionsGroup>,
                 NonlinearSolver::Tags::StepLength<OptionsGroup>>,
             db::AddComputeTags<NonlinearSolver::Tags::ResidualCompute<
@@ -82,8 +79,7 @@ struct InitializeElement {
             // values
             std::numeric_limits<size_t>::max(), Convergence::HasConverged{},
             typename nonlinear_operator_applied_to_fields_tag::type{},
-            typename correction_tag::type{}, typename linear_source_tag::type{},
-            std::numeric_limits<size_t>::max(),
+            typename correction_tag::type{}, std::numeric_limits<size_t>::max(),
             std::numeric_limits<double>::signaling_NaN()));
   }
 };
@@ -106,9 +102,23 @@ struct PrepareSolve {
       Parallel::GlobalCache<Metavariables>& cache,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + ": Prepare solve\n",
+          array_index);
+    }
+
     // Skip the solve entirely on elements that are not part of the section
     if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
       if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>>(
+            make_not_null(&box),
+            [](const gsl::not_null<size_t*> iteration_id) noexcept {
+              *iteration_id = 1;
+            });
+        // TODO: Handle immediate convergence
         constexpr size_t prepare_step_index =
             tmpl::index_of<ActionList,
                            PrepareStep<FieldsTag, OptionsGroup, Label,
@@ -129,10 +139,11 @@ struct PrepareSolve {
     Parallel::ReductionData<
         Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
         Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-        Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>
+        Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>,
+        Parallel::ReductionDatum<double, funcl::AssertEqual<>>>
         reduction_data{
             db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box), 0,
-            local_residual_magnitude_square};
+            local_residual_magnitude_square, 1.};
     if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
       Parallel::contribute_to_reduction<
           CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>>(
@@ -225,6 +236,9 @@ struct PrepareStep {
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, correction_tag>;
 
  public:
+  using const_global_cache_tags =
+      tmpl::list<NonlinearSolver::Tags::StepLengthReduction<OptionsGroup>>;
+
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
@@ -232,8 +246,17 @@ struct PrepareStep {
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + "(%zu): Prepare step\n",
+          array_index,
+          db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box) + 1);
+    }
+
     db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>, correction_tag,
                linear_operator_applied_to_correction_tag,
                NonlinearSolver::Tags::GlobalizationIterationId<OptionsGroup>,
@@ -242,8 +265,8 @@ struct PrepareStep {
         [](const gsl::not_null<size_t*> iteration_id, const auto correction,
            const auto linear_operator_applied_to_correction,
            const gsl::not_null<size_t*> globalization_iteration_id,
-           const gsl::not_null<double*> step_length,
-           const auto& used_for_size) noexcept {
+           const gsl::not_null<double*> step_length, const auto& used_for_size,
+           const size_t num_step_length_reductions) noexcept {
           ++(*iteration_id);
           // Begin the linear solve with a zero initial guess
           *correction =
@@ -254,9 +277,10 @@ struct PrepareStep {
           *linear_operator_applied_to_correction = *correction;
           // Begin line search globalization with a unity step length
           *globalization_iteration_id = 0;
-          *step_length = 1.;
+          *step_length = pow(0.5, num_step_length_reductions);
         },
-        db::get<fields_tag>(box));
+        db::get<fields_tag>(box),
+        db::get<NonlinearSolver::Tags::StepLengthReduction<OptionsGroup>>(box));
     return {std::move(box)};
   }
 };
@@ -277,15 +301,26 @@ struct PerformStep {
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*mete*/,
+      const ArrayIndex& array_index, const ActionList /*mete*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() +
+              "(%zu): Perform step with length %f\n",
+          array_index,
+          db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box),
+          db::get<NonlinearSolver::Tags::StepLength<OptionsGroup>>(box));
+    }
+
     // Skip the solve entirely on elements that are not part of the section
     if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
       if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
-        constexpr size_t complete_step_index = tmpl::index_of<
+        constexpr size_t step_end_index = tmpl::index_of<
             ActionList, GlobalizeAndCompleteStep<FieldsTag, OptionsGroup, Label,
                                                  ArraySectionIdTag>>::value;
-        return {std::move(box), false, complete_step_index + 1};
+        return {std::move(box), false, step_end_index};
       }
     }
 
@@ -328,13 +363,15 @@ struct ContributeToResidualMagnitudeReduction {
     Parallel::ReductionData<
         Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
         Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-        Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>
+        Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>,
+        Parallel::ReductionDatum<double, funcl::AssertEqual<>>>
         reduction_data{
             db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box),
             db::get<
                 NonlinearSolver::Tags::GlobalizationIterationId<OptionsGroup>>(
                 box),
-            local_residual_magnitude_square};
+            local_residual_magnitude_square,
+            abs(db::get<NonlinearSolver::Tags::StepLength<OptionsGroup>>(box))};
     if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
       Parallel::contribute_to_reduction<
           CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>>(
@@ -372,8 +409,21 @@ struct GlobalizeAndCompleteStep {
                        const ArrayIndex& /*array_index*/) noexcept {
     const auto& inbox =
         get<Tags::GlobalizationIsComplete<OptionsGroup>>(inboxes);
-    return inbox.find(db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(
-               box)) != inbox.end();
+    const auto received_data =
+        inbox.find(db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    if (received_data == inbox.end()) {
+      return false;
+    }
+
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        const bool globalization_is_complete =
+            received_data->second.has_value();
+        return globalization_is_complete;
+      }
+    }
+
+    return true;
   }
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -382,7 +432,7 @@ struct GlobalizeAndCompleteStep {
   static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
       db::DataBox<DbTagsList>& box, tuples::TaggedTuple<InboxTags...>& inboxes,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*mete*/,
+      const ArrayIndex& array_index, const ActionList /*mete*/,
       const ParallelComponent* const /*meta*/) noexcept {
     // Retrieve reduction data from inbox
     auto globalization_is_complete = std::move(
@@ -390,6 +440,53 @@ struct GlobalizeAndCompleteStep {
             .extract(
                 db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box))
             .mapped());
+
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      if (not globalization_is_complete) {
+        Parallel::printf(
+            "%s " + Options::name<OptionsGroup>() + "(%zu): Globalize(%zu)\n",
+            array_index,
+            db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box),
+            db::get<
+                NonlinearSolver::Tags::GlobalizationIterationId<OptionsGroup>>(
+                box));
+      } else {
+        Parallel::printf(
+            "%s " + Options::name<OptionsGroup>() + "(%zu): Complete step\n",
+            array_index,
+            db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+      }
+    }
+
+    // Skip the solve entirely on elements that are not part of the section
+    constexpr size_t this_action_index =
+        tmpl::index_of<ActionList, GlobalizeAndCompleteStep>::value;
+    constexpr size_t prepare_step_index =
+        tmpl::index_of<ActionList, PrepareStep<FieldsTag, OptionsGroup, Label,
+                                               ArraySectionIdTag>>::value;
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        auto& has_converged = *globalization_is_complete;
+
+        db::mutate<LinearSolver::Tags::HasConverged<OptionsGroup>,
+                   LinearSolver::Tags::IterationId<OptionsGroup>>(
+            make_not_null(&box),
+            [&has_converged](
+                const gsl::not_null<Convergence::HasConverged*>
+                    local_has_converged,
+                const gsl::not_null<size_t*> local_iteration_id) noexcept {
+              *local_has_converged = std::move(has_converged);
+              ++(*local_iteration_id);
+            });
+
+        return {std::move(box), false,
+                get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box)
+                    ? (this_action_index + 1)
+                    : (prepare_step_index + 1)};
+      }
+    }
 
     if (not globalization_is_complete) {
       // Update the step length
@@ -399,7 +496,7 @@ struct GlobalizeAndCompleteStep {
           [](const gsl::not_null<double*> step_length,
              const gsl::not_null<size_t*> globalization_iteration_id) noexcept {
             if (*globalization_iteration_id == 0) {
-              *step_length = -0.5;
+              *step_length *= -0.5;
             } else {
               *step_length *= 0.5;
             }
@@ -415,19 +512,19 @@ struct GlobalizeAndCompleteStep {
 
     auto& has_converged = *globalization_is_complete;
 
-    db::mutate<LinearSolver::Tags::HasConverged<OptionsGroup>>(
+    db::mutate<LinearSolver::Tags::HasConverged<OptionsGroup>,
+               LinearSolver::Tags::IterationId<OptionsGroup>>(
         make_not_null(&box),
-        [&has_converged](const gsl::not_null<Convergence::HasConverged*>
-                             local_has_converged) noexcept {
+        [&has_converged](
+            const gsl::not_null<Convergence::HasConverged*> local_has_converged,
+            const gsl::not_null<size_t*> local_iteration_id) noexcept {
           *local_has_converged = std::move(has_converged);
+          if (*local_has_converged) {
+            ++(*local_iteration_id);
+          }
         });
 
     // Repeat steps until the solve has converged
-    constexpr size_t this_action_index =
-        tmpl::index_of<ActionList, GlobalizeAndCompleteStep>::value;
-    constexpr size_t prepare_step_index =
-        tmpl::index_of<ActionList, PrepareStep<FieldsTag, OptionsGroup, Label,
-                                               ArraySectionIdTag>>::value;
     return {std::move(box), false,
             get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box)
                 ? (this_action_index + 1)

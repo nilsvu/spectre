@@ -16,7 +16,6 @@
 #include "Domain/CoordinateMaps/ProductMaps.hpp"
 #include "Domain/CoordinateMaps/ProductMaps.tpp"
 #include "Domain/LogicalCoordinates.hpp"
-#include "Domain/Mesh.hpp"
 #include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "Framework/CheckWithRandomValues.hpp"
@@ -24,6 +23,7 @@
 #include "Framework/TestCreation.hpp"
 #include "Framework/TestHelpers.hpp"
 #include "Helpers/PointwiseFunctions/AnalyticSolutions/FirstOrderEllipticSolutionsTestHelpers.hpp"
+#include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Schwarzschild.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
@@ -121,7 +121,8 @@ void test_solution(const double radius_at_horizon,
   {
     INFO("Verify the solution solves the XCTS system");
     using system =
-        Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift>;
+        Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift,
+                               Xcts::Geometry::Flat>;
     const Mesh<3> mesh{12, Spectral::Basis::Legendre,
                        Spectral::Quadrature::GaussLobatto};
     using AffineMap = domain::CoordinateMaps::Affine;
@@ -138,7 +139,7 @@ void test_solution(const double radius_at_horizon,
     const auto background_fields =
         solution.variables(inertial_coords, background_tags{});
     FirstOrderEllipticSolutionsTestHelpers::verify_solution<system>(
-        solution, typename system::fluxes{}, mesh, coord_map, 1.e-3,
+        solution, typename system::fluxes{}, mesh, coord_map, 5.e-4,
         std::tuple<>{},
         std::make_tuple(
             get<gr::Tags::EnergyDensity<DataVector>>(matter_sources),

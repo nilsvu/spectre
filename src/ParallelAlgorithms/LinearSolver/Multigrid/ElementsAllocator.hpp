@@ -106,7 +106,7 @@ struct ElementsAllocator {
       }
       if (UNLIKELY(
               static_cast<int>(get<LinearSolver::Tags::Verbosity<OptionsGroup>>(
-                  local_cache)) >= static_cast<int>(::Verbosity::Quiet))) {
+                  local_cache)) >= static_cast<int>(::Verbosity::Silent))) {
         Parallel::printf(
             "'%s' level %zu has %zu elements in %zu blocks distributed on %d "
             "procs.\n",

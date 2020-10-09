@@ -73,8 +73,6 @@ struct IterationId : db::SimpleTag {
     return "IterationId(" + Options::name<OptionsGroup>() + ")";
   }
   using type = size_t;
-  template <typename Tag>
-  using step_prefix = OperatorAppliedTo<Tag>;
 };
 
 /*!

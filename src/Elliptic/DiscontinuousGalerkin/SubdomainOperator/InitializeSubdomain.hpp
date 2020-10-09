@@ -22,6 +22,7 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/BoundaryConditions.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
+#include "Elliptic/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
@@ -47,9 +48,17 @@ namespace elliptic::dg::Actions {
 // TODO: Are h-refined mortars weighted correctly?
 // TODO: Keep in mind that the weighting operation should preserve symmetry of
 // the linear operator
-template <size_t Dim, typename OptionsGroup,
-          typename BoundaryConditionsProviderTag>
-struct InitializeSubdomain {
+template <size_t Dim, typename OptionsGroup, typename BoundaryConditionsTag,
+          typename BackgroundFields, typename CommunicatedFields,
+          typename PrimalFields>
+struct InitializeSubdomain;
+
+template <size_t Dim, typename OptionsGroup, typename BoundaryConditionsTag,
+          typename... BackgroundFields, typename... CommunicatedFields,
+          typename PrimalFields>
+struct InitializeSubdomain<Dim, OptionsGroup, BoundaryConditionsTag,
+                           tmpl::list<BackgroundFields...>,
+                           tmpl::list<CommunicatedFields...>, PrimalFields> {
   using initialization_tags =
       tmpl::list<domain::Tags::InitialExtents<Dim>,
                  domain::Tags::InitialRefinementLevels<Dim>>;
@@ -70,7 +79,7 @@ struct InitializeSubdomain {
                                     tmpl::pin<DataBox>>>::value> = nullptr>
   static auto apply(DataBox& box,
                     const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::GlobalCache<Metavariables>& /*cache*/,
+                    const Parallel::GlobalCache<Metavariables>& cache,
                     const ElementId<Dim>& /*element_id*/,
                     const ActionList /*meta*/,
                     const ParallelComponent* const /*meta*/) noexcept {
@@ -82,7 +91,7 @@ struct InitializeSubdomain {
     const auto& max_overlap =
         get<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>(box);
     const auto& boundary_conditions_provider =
-        db::get<BoundaryConditionsProviderTag>(box);
+        db::get<BoundaryConditionsTag>(box);
 
     overlaps<Mesh<Dim>> overlap_meshes{};
     overlaps<size_t> overlap_extents{};
@@ -105,8 +114,20 @@ struct InitializeSubdomain {
         overlap_neighbor_mortar_sizes{};
     overlaps<tnsr::I<DataVector, Dim, Frame::Inertial>>
         overlap_inertial_coords{};
-    overlaps<std::unordered_map<Direction<Dim>, elliptic::BoundaryCondition>>
-        overlap_boundary_conditions{};
+    overlaps<std::unordered_map<
+        Direction<Dim>, tuples::tagged_tuple_from_typelist<db::wrap_tags_in<
+                            elliptic::Tags::BoundaryCondition, PrimalFields>>>>
+        overlap_boundary_condition_types{};
+    tuples::TaggedTuple<overlaps_tag<BackgroundFields>...>
+        overlap_background_fields{};
+    tuples::TaggedTuple<overlaps_tag<CommunicatedFields>...>
+        overlap_communicated_fields{};
+    overlaps<std::unordered_map<Direction<Dim>,
+                                tnsr::I<DataVector, Dim, Frame::Inertial>>>
+        overlap_boundary_inertial_coords{};
+    tuples::TaggedTuple<overlaps_tag<domain::Tags::Interface<
+        domain::Tags::BoundaryDirectionsInterior<Dim>, BackgroundFields>>...>
+        overlap_boundary_background_fields{};
 
     const auto& element = db::get<domain::Tags::Element<Dim>>(box);
     for (const auto& direction_and_neighbors : element.neighbors()) {
@@ -127,6 +148,10 @@ struct InitializeSubdomain {
             overlap_id,
             LinearSolver::Schwarz::overlap_extent(
                 neighbor_mesh.extents(dimension_in_neighbor), max_overlap));
+        const size_t overlap_num_points =
+            LinearSolver::Schwarz::overlap_num_points(
+                neighbor_mesh.extents(), overlap_extents.at(overlap_id),
+                dimension_in_neighbor);
         // Element
         const auto& neighbor_block = domain.blocks()[neighbor_id.block_id()];
         overlap_elements.emplace(
@@ -143,28 +168,26 @@ struct InitializeSubdomain {
         DirectionMap<Dim, tnsr::i<DataVector, Dim>> neighbor_face_normals{};
         DirectionMap<Dim, Scalar<DataVector>> neighbor_face_normal_magnitudes{};
         DirectionMap<Dim, Scalar<DataVector>> neighbor_surface_jacobians{};
-        const auto setup_face =
-            [&](const Direction<Dim>& local_direction) {
-              const auto neighbor_face_mesh =
-                  neighbor_mesh.slice_away(local_direction.dimension());
-              auto neighbor_face_normal = unnormalized_face_normal(
-                  neighbor_face_mesh, neighbor_element_map,
-                  local_direction);
-              // TODO: Use system's magnitude
-              auto neighbor_normal_magnitude = magnitude(neighbor_face_normal);
-              for (size_t d = 0; d < Dim; d++) {
-                neighbor_face_normal.get(d) /= get(neighbor_normal_magnitude);
-              }
-              auto neighbor_surface_jacobian = domain::surface_jacobian(
-                  neighbor_element_map, neighbor_face_mesh,
-                  local_direction, neighbor_normal_magnitude);
-              neighbor_face_normals[local_direction] =
-                  std::move(neighbor_face_normal);
-              neighbor_face_normal_magnitudes[local_direction] =
-                  std::move(neighbor_normal_magnitude);
-              neighbor_surface_jacobians[local_direction] =
-                  std::move(neighbor_surface_jacobian);
-            };
+        const auto setup_face = [&](const Direction<Dim>& local_direction) {
+          const auto neighbor_face_mesh =
+              neighbor_mesh.slice_away(local_direction.dimension());
+          auto neighbor_face_normal = unnormalized_face_normal(
+              neighbor_face_mesh, neighbor_element_map, local_direction);
+          // TODO: Use system's magnitude
+          auto neighbor_normal_magnitude = magnitude(neighbor_face_normal);
+          for (size_t d = 0; d < Dim; d++) {
+            neighbor_face_normal.get(d) /= get(neighbor_normal_magnitude);
+          }
+          auto neighbor_surface_jacobian = domain::surface_jacobian(
+              neighbor_element_map, neighbor_face_mesh, local_direction,
+              neighbor_normal_magnitude);
+          neighbor_face_normals[local_direction] =
+              std::move(neighbor_face_normal);
+          neighbor_face_normal_magnitudes[local_direction] =
+              std::move(neighbor_normal_magnitude);
+          neighbor_surface_jacobians[local_direction] =
+              std::move(neighbor_surface_jacobian);
+        };
         // Mortars
         ::dg::MortarMap<Dim, Mesh<Dim - 1>> neighbor_mortar_meshes{};
         ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>> neighbor_mortar_sizes{};
@@ -195,8 +218,15 @@ struct InitializeSubdomain {
                                   neighbor_neighbors.orientation()));
           }
         }
-        std::unordered_map<Direction<Dim>, elliptic::BoundaryCondition>
-            neighbor_boundary_conditions{};
+        std::unordered_map<
+            Direction<Dim>,
+            tuples::tagged_tuple_from_typelist<db::wrap_tags_in<
+                elliptic::Tags::BoundaryCondition, PrimalFields>>>
+            neighbor_boundary_condition_types{};
+        overlap_boundary_inertial_coords.emplace(
+            overlap_id,
+            std::unordered_map<Direction<Dim>,
+                               tnsr::I<DataVector, Dim, Frame::Inertial>>{});
         for (const auto& neighbor_direction : neighbor.external_boundaries()) {
           setup_face(neighbor_direction);
           const auto neighbor_mortar_id = std::make_pair(
@@ -207,17 +237,27 @@ struct InitializeSubdomain {
           neighbor_mortar_sizes.emplace(
               neighbor_mortar_id,
               make_array<Dim - 1>(Spectral::MortarSize::Full));
-          neighbor_boundary_conditions.emplace(
-              neighbor_direction,
-              boundary_conditions_provider.boundary_condition_type(
-                  overlap_element_maps.at(overlap_id)(
-                      interface_logical_coordinates(
-                          neighbor_mortar_meshes.at(neighbor_mortar_id),
-                          neighbor_direction)),
-                  neighbor_direction));
+          neighbor_boundary_condition_types[neighbor_direction];
+          tmpl::for_each<PrimalFields>([&](auto tag_v) noexcept {
+            using tag = tmpl::type_from<decltype(tag_v)>;
+            get<elliptic::Tags::BoundaryCondition<tag>>(
+                neighbor_boundary_condition_types[direction]) =
+                boundary_conditions_provider.boundary_condition_type(
+                    overlap_element_maps.at(overlap_id)(
+                        interface_logical_coordinates(
+                            neighbor_mortar_meshes.at(neighbor_mortar_id),
+                            neighbor_direction)),
+                    neighbor_direction, tag{});
+          });
+          overlap_boundary_inertial_coords.at(overlap_id)
+              .emplace(neighbor_direction,
+                       overlap_element_maps.at(overlap_id)(
+                           interface_logical_coordinates(
+                               neighbor_mortar_meshes.at(neighbor_mortar_id),
+                               neighbor_direction)));
         }
-        overlap_face_normals.emplace(
-            overlap_id, std::move(neighbor_face_normals));
+        overlap_face_normals.emplace(overlap_id,
+                                     std::move(neighbor_face_normals));
         overlap_face_normal_magnitudes.emplace(
             overlap_id, std::move(neighbor_face_normal_magnitudes));
         overlap_surface_jacobians.emplace(
@@ -226,20 +266,18 @@ struct InitializeSubdomain {
                                       std::move(neighbor_mortar_meshes));
         overlap_mortar_sizes.emplace(overlap_id,
                                      std::move(neighbor_mortar_sizes));
-        overlap_boundary_conditions.emplace(
-            overlap_id, std::move(neighbor_boundary_conditions));
+        overlap_boundary_condition_types.emplace(
+            overlap_id, std::move(neighbor_boundary_condition_types));
         auto neighbor_inertial_coords = overlap_element_maps.at(overlap_id)(
             logical_coordinates(neighbor_mesh));
         overlap_inertial_coords.emplace(overlap_id,
                                         std::move(neighbor_inertial_coords));
 
         // Neighbor's neighbors
-        ::dg::MortarMap<Dim, Mesh<Dim>>
-            neighbors_neighbor_meshes{};
+        ::dg::MortarMap<Dim, Mesh<Dim>> neighbors_neighbor_meshes{};
         ::dg::MortarMap<Dim, Scalar<DataVector>>
             neighbors_neighbor_face_normal_magnitudes{};
-        ::dg::MortarMap<Dim, Mesh<Dim - 1>>
-            neighbors_neighbor_mortar_meshes{};
+        ::dg::MortarMap<Dim, Mesh<Dim - 1>> neighbors_neighbor_mortar_meshes{};
         ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>
             neighbors_neighbor_mortar_sizes{};
         for (const auto& neighbor_direction_and_neighbors :
@@ -299,54 +337,129 @@ struct InitializeSubdomain {
             overlap_id, std::move(neighbors_neighbor_mortar_meshes));
         overlap_neighbor_mortar_sizes.emplace(
             overlap_id, std::move(neighbors_neighbor_mortar_sizes));
-      }  // neighbors in direction
-    } // directions
 
-    return std::make_tuple(
-        ::Initialization::merge_into_databox<
-            InitializeSubdomain,
-            db::AddSimpleTags<
-                overlaps_tag<domain::Tags::Mesh<Dim>>,
-                overlaps_tag<elliptic::dg::Tags::OverlapExtent>,
-                overlaps_tag<domain::Tags::Element<Dim>>,
-                overlaps_tag<domain::Tags::ElementMap<Dim>>,
-                overlaps_tag<domain::Tags::Faces<
-                    Dim, ::Tags::Normalized<
-                             domain::Tags::UnnormalizedFaceNormal<Dim>>>>,
-                overlaps_tag<domain::Tags::Faces<
-                    Dim, ::Tags::Magnitude<
-                             domain::Tags::UnnormalizedFaceNormal<Dim>>>>,
-                overlaps_tag<domain::Tags::Faces<
-                    Dim, domain::Tags::SurfaceJacobian<Frame::Logical,
-                                                       Frame::Inertial>>>,
-                overlaps_tag<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>,
-                overlaps_tag<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>,
-                overlaps_tag<
-                    ::Tags::NeighborMortars<domain::Tags::Mesh<Dim>, Dim>>,
-                overlaps_tag<::Tags::NeighborMortars<
-                    ::Tags::Magnitude<
-                        domain::Tags::UnnormalizedFaceNormal<Dim>>,
-                    Dim>>,
-                overlaps_tag<
-                    ::Tags::NeighborMortars<domain::Tags::Mesh<Dim - 1>, Dim>>,
-                overlaps_tag<
-                    ::Tags::NeighborMortars<::Tags::MortarSize<Dim - 1>, Dim>>,
-                overlaps_tag<domain::Tags::Coordinates<Dim, Frame::Inertial>>,
-                overlaps_tag<domain::Tags::Interface<
-                    domain::Tags::BoundaryDirectionsExterior<Dim>,
-                    elliptic::Tags::BoundaryCondition>>>>(
-            std::move(box), std::move(overlap_meshes),
-            std::move(overlap_extents), std::move(overlap_elements),
-            std::move(overlap_element_maps), std::move(overlap_face_normals),
-            std::move(overlap_face_normal_magnitudes),
-            std::move(overlap_surface_jacobians),
-            std::move(overlap_mortar_meshes), std::move(overlap_mortar_sizes),
-            std::move(overlap_neighbor_meshes),
-            std::move(overlap_neighbor_face_normal_magnitudes),
-            std::move(overlap_neighbor_mortar_meshes),
-            std::move(overlap_neighbor_mortar_sizes),
-            std::move(overlap_inertial_coords),
-            std::move(overlap_boundary_conditions)));
+        if constexpr (sizeof...(BackgroundFields) > 0) {
+          auto background_fields =
+              Parallel::get<typename Metavariables::background_tag>(cache)
+                  .variables(overlap_inertial_coords.at(overlap_id),
+                             tmpl::list<BackgroundFields...>{});
+          tmpl::for_each<tmpl::list<BackgroundFields...>>(
+              [&overlap_id, &background_fields, &overlap_background_fields,
+               &overlap_boundary_background_fields, &neighbor,
+               &neighbor_mesh](const auto tag_v) noexcept {
+                using tag = tmpl::type_from<decltype(tag_v)>;
+                get<overlaps_tag<tag>>(overlap_background_fields)
+                    .emplace(overlap_id,
+                             std::move(get<tag>(background_fields)));
+                get<overlaps_tag<domain::Tags::Interface<
+                    domain::Tags::BoundaryDirectionsInterior<Dim>, tag>>>(
+                    overlap_boundary_background_fields)
+                    .emplace(overlap_id,
+                             std::unordered_map<Direction<Dim>,
+                                                typename tag::type>{});
+                for (const auto& direction_from_neighbor :
+                     neighbor.external_boundaries()) {
+                  get<overlaps_tag<domain::Tags::Interface<
+                      domain::Tags::BoundaryDirectionsInterior<Dim>, tag>>>(
+                      overlap_boundary_background_fields)
+                      .at(overlap_id)
+                      .emplace(
+                          direction_from_neighbor,
+                          data_on_slice(
+                              get<overlaps_tag<tag>>(overlap_background_fields)
+                                  .at(overlap_id),
+                              neighbor_mesh.extents(),
+                              direction_from_neighbor.dimension(),
+                              index_to_slice_at(neighbor_mesh.extents(),
+                                                direction_from_neighbor)));
+                }
+              });
+        }
+        if constexpr (sizeof...(CommunicatedFields) > 0) {
+          tmpl::for_each<tmpl::list<CommunicatedFields...>>(
+              [&overlap_id, overlap_num_points,
+               &overlap_communicated_fields](const auto tag_v) noexcept {
+                using tag = tmpl::type_from<decltype(tag_v)>;
+                if constexpr (tt::is_a_v<Tensor, typename tag::type>) {
+                  get<overlaps_tag<tag>>(overlap_communicated_fields)
+                      .emplace(
+                          overlap_id,
+                          make_with_value<typename tag::type>(
+                              overlap_num_points,
+                              std::numeric_limits<double>::signaling_NaN()));
+                } else {
+                  get<overlaps_tag<tag>>(overlap_communicated_fields)
+                      .emplace(overlap_id, typename tag::type{});
+                }
+              });
+        }
+      }  // neighbors in direction
+    }    // directions
+
+    auto new_box = ::Initialization::merge_into_databox<
+        InitializeSubdomain,
+        db::AddSimpleTags<
+            overlaps_tag<domain::Tags::Mesh<Dim>>,
+            overlaps_tag<elliptic::dg::Tags::OverlapExtent>,
+            overlaps_tag<domain::Tags::Element<Dim>>,
+            overlaps_tag<domain::Tags::ElementMap<Dim>>,
+            overlaps_tag<domain::Tags::Faces<
+                Dim,
+                ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>>,
+            overlaps_tag<domain::Tags::Faces<
+                Dim,
+                ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>>,
+            overlaps_tag<
+                domain::Tags::Faces<Dim, domain::Tags::SurfaceJacobian<
+                                             Frame::Logical, Frame::Inertial>>>,
+            overlaps_tag<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>,
+            overlaps_tag<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>,
+            overlaps_tag<::Tags::NeighborMortars<domain::Tags::Mesh<Dim>, Dim>>,
+            overlaps_tag<::Tags::NeighborMortars<
+                ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>,
+                Dim>>,
+            overlaps_tag<
+                ::Tags::NeighborMortars<domain::Tags::Mesh<Dim - 1>, Dim>>,
+            overlaps_tag<
+                ::Tags::NeighborMortars<::Tags::MortarSize<Dim - 1>, Dim>>,
+            overlaps_tag<domain::Tags::Coordinates<Dim, Frame::Inertial>>>>(
+        std::move(box), std::move(overlap_meshes), std::move(overlap_extents),
+        std::move(overlap_elements), std::move(overlap_element_maps),
+        std::move(overlap_face_normals),
+        std::move(overlap_face_normal_magnitudes),
+        std::move(overlap_surface_jacobians), std::move(overlap_mortar_meshes),
+        std::move(overlap_mortar_sizes), std::move(overlap_neighbor_meshes),
+        std::move(overlap_neighbor_face_normal_magnitudes),
+        std::move(overlap_neighbor_mortar_meshes),
+        std::move(overlap_neighbor_mortar_sizes),
+        std::move(overlap_inertial_coords));
+
+    auto nnew_box = ::Initialization::merge_into_databox<
+        InitializeSubdomain,
+        db::AddSimpleTags<
+            overlaps_tag<domain::Tags::Interface<
+                domain::Tags::BoundaryDirectionsExterior<Dim>,
+                elliptic::Tags::BoundaryConditions<PrimalFields>>>,
+            overlaps_tag<domain::Tags::Interface<
+                domain::Tags::BoundaryDirectionsInterior<Dim>,
+                domain::Tags::Coordinates<Dim, Frame::Inertial>>>,
+            overlaps_tag<BackgroundFields>...,
+            overlaps_tag<domain::Tags::Interface<
+                domain::Tags::BoundaryDirectionsInterior<Dim>,
+                BackgroundFields>>...,
+            overlaps_tag<CommunicatedFields>...>>(
+        std::move(new_box), std::move(overlap_boundary_condition_types),
+        std::move(overlap_boundary_inertial_coords),
+        std::move(
+            get<overlaps_tag<BackgroundFields>>(overlap_background_fields))...,
+        std::move(
+            get<overlaps_tag<domain::Tags::Interface<
+                domain::Tags::BoundaryDirectionsInterior<Dim>,
+                BackgroundFields>>>(overlap_boundary_background_fields))...,
+        std::move(get<overlaps_tag<CommunicatedFields>>(
+            overlap_communicated_fields))...);
+
+    return std::make_tuple(std::move(nnew_box));
   }
 
   template <

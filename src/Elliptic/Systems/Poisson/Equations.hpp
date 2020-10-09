@@ -115,10 +115,13 @@ struct NonEuclideanFluxes {
  *
  * \see Poisson::FirstOrderSystem
  */
+template <size_t Dim>
 struct Sources {
   using argument_tags = tmpl::list<>;
-  static void apply(const gsl::not_null<Scalar<DataVector>*> source_for_field,
-                    const Scalar<DataVector>& /*field*/) noexcept {
+  static void apply(
+      const gsl::not_null<Scalar<DataVector>*> source_for_field,
+      const Scalar<DataVector>& /*field*/,
+      const tnsr::i<DataVector, Dim>& /*field_gradient*/) noexcept {
     get(*source_for_field) = 0.;
   }
 };

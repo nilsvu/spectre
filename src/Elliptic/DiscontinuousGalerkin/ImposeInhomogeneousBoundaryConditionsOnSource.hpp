@@ -162,7 +162,7 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
             domain::Tags::Mesh<volume_dim - 1>,
             domain::Tags::Direction<volume_dim>,
             domain::Tags::Coordinates<volume_dim, Frame::Inertial>,
-            elliptic::Tags::BoundaryCondition,
+            elliptic::Tags::BoundaryConditions<typename system::primal_fields>,
             ::Tags::Normalized<
                 domain::Tags::UnnormalizedFaceNormal<volume_dim>>,
             ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<volume_dim>>,
@@ -176,7 +176,7 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
             const Direction<volume_dim>& direction,
             const tnsr::I<DataVector, volume_dim, Frame::Inertial>&
                 boundary_coordinates,
-            const elliptic::BoundaryCondition& boundary_condition,
+            const auto& boundary_condition_types,
             tnsr::i<DataVector, volume_dim> normalized_face_normal,
             const Scalar<DataVector>& magnitude_of_face_normal,
             const Scalar<DataVector>& surface_jacobian,
@@ -191,7 +191,7 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
                                       fixed_sources_tag>::type
               boundary_normal_dot_numerical_fluxes{
                   face_mesh.number_of_grid_points(), 0.};
-          switch (boundary_condition) {
+          switch (boundary_condition_types) {  // TODO
             case elliptic::BoundaryCondition::Dirichlet: {
               // Compute Dirichlet data on mortar
               Variables<typename system::primal_fields> dirichlet_boundary_data{

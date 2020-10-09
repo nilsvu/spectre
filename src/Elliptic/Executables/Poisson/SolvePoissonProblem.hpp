@@ -144,11 +144,11 @@ struct Metavariables {
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
-  using linear_solver =
-      LinearSolver::gmres::Gmres<Metavariables, typename system::fields_tag,
-                                 SolvePoissonProblem::OptionTags::GmresGroup,
-                                 true,
-                                 LinearSolver::multigrid::Tags::IsFinestLevel>;
+  using linear_solver = LinearSolver::gmres::Gmres<
+      Metavariables, typename system::fields_tag,
+      SolvePoissonProblem::OptionTags::GmresGroup, true,
+      db::add_tag_prefix<::Tags::FixedSource, typename system::fields_tag>,
+      LinearSolver::multigrid::Tags::IsFinestLevel>;
   using linear_solver_iteration_id =
       LinearSolver::Tags::IterationId<typename linear_solver::options_group>;
   // For the GMRES linear solver we need to apply the DG operator to its
@@ -208,7 +208,8 @@ struct Metavariables {
   // fluxes.
   using boundary_scheme = dg::FirstOrderScheme::FirstOrderScheme<
       volume_dim, linear_operand_tag, normal_dot_numerical_flux,
-      combined_iteration_id, massive_operator>;
+      combined_iteration_id, massive_operator,
+      LinearSolver::Tags::OperatorAppliedTo>;
 
   // Collect events and triggers
   // (public for use by the Charm++ registration code)
@@ -273,14 +274,15 @@ struct Metavariables {
           dg::Initialization::slice_tags_to_exterior<>,
           dg::Initialization::face_compute_tags<>,
           dg::Initialization::exterior_compute_tags<>, false, false>,
-      elliptic::Actions::InitializeBoundaryConditions<analytic_solution_tag>,
+      //   elliptic::Actions::InitializeBoundaryConditions<analytic_solution_tag>,
       elliptic::Actions::InitializeFields,
       elliptic::Actions::InitializeFixedSources,
       typename linear_solver::initialize_element,
       typename multigrid::initialize_element,
       typename smoother::initialize_element,
       elliptic::dg::Actions::InitializeSubdomain<
-          volume_dim, typename smoother::options_group, analytic_solution_tag>,
+          volume_dim, typename smoother::options_group, analytic_solution_tag,
+          tmpl::list<>, tmpl::list<>>,
       ::Initialization::Actions::AddComputeTags<
           tmpl::list<combined_iteration_id,
                      LinearSolver::Schwarz::Tags::SummedIntrudingOverlapWeights<

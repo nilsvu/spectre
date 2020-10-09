@@ -65,7 +65,8 @@ struct boundary_data_computer_impl {
  * `db::add_tag_prefix<TemporalIdTag::template step_prefix, VariablesTag>`.
  */
 template <size_t Dim, typename VariablesTag, typename NumericalFluxComputerTag,
-          typename TemporalIdTag, bool MassiveOperator>
+          typename TemporalIdTag, bool MassiveOperator,
+          template <typename> class StepPrefix>
 struct FirstOrderScheme {
   static constexpr size_t volume_dim = Dim;
   using variables_tag = VariablesTag;
@@ -73,8 +74,7 @@ struct FirstOrderScheme {
   using NumericalFlux = typename NumericalFluxComputerTag::type;
   using temporal_id_tag = TemporalIdTag;
   using receive_temporal_id_tag = temporal_id_tag;
-  using dt_variables_tag =
-      db::add_tag_prefix<TemporalIdTag::template step_prefix, variables_tag>;
+  using dt_variables_tag = db::add_tag_prefix<StepPrefix, variables_tag>;
 
   static_assert(
       tt::assert_conforms_to<NumericalFlux, dg::protocols::NumericalFlux>);
