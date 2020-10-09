@@ -5,6 +5,22 @@ import numpy as np
 from scipy.optimize import newton
 
 
+def extrinsic_curvature_trace(x, density, radius):
+    return 0.
+
+
+def longitudinal_shift_minus_dt_conformal_metric_over_lapse_square(
+        x, density, radius):
+    return 0.
+
+
+def energy_density(x, density, radius):
+    if np.linalg.norm(x) <= radius:
+        return density
+    else:
+        return 0.
+
+
 def compute_alpha(density, radius):
     def f(a):
         return density * radius**2 - 3. / (2. * np.pi) * a**10 / (1. + a**2)**6
