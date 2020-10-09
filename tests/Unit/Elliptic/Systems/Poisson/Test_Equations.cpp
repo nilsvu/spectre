@@ -28,12 +28,25 @@
 namespace {
 
 template <size_t Dim>
+void add_non_euclidean_sources(
+    const gsl::not_null<Scalar<DataVector>*> source_for_field,
+    const tnsr::i<DataVector, Dim>& christoffel_contracted,
+    const tnsr::I<DataVector, Dim>& flux_for_field) {
+  std::fill(source_for_field->begin(), source_for_field->end(), 0.);
+  Poisson::add_non_euclidean_sources(source_for_field, christoffel_contracted,
+                                     flux_for_field);
+}
+
+template <size_t Dim>
 void test_equations(const DataVector& used_for_size) {
   pypp::check_with_random_values<1>(&Poisson::euclidean_fluxes<Dim>,
                                     "Equations", {"euclidean_fluxes"},
                                     {{{0., 1.}}}, used_for_size);
   pypp::check_with_random_values<1>(&Poisson::non_euclidean_fluxes<Dim>,
                                     "Equations", {"non_euclidean_fluxes"},
+                                    {{{0., 1.}}}, used_for_size);
+  pypp::check_with_random_values<1>(&add_non_euclidean_sources<Dim>,
+                                    "Equations", {"add_non_euclidean_sources"},
                                     {{{0., 1.}}}, used_for_size);
   pypp::check_with_random_values<1>(
       &Poisson::auxiliary_fluxes<Dim>, "Equations",
@@ -64,8 +77,9 @@ void test_computers(const DataVector& used_for_size) {
             tnsr::I<DataVector, Dim>{num_points, 0.},
             tnsr::Ij<DataVector, Dim>{num_points, 0.});
 
-    const Poisson::EuclideanFluxes<Dim> fluxes_computer{};
-    using argument_tags = typename Poisson::EuclideanFluxes<Dim>::argument_tags;
+    using Fluxes = Poisson::Fluxes<Dim, Poisson::Geometry::Euclidean>;
+    const Fluxes fluxes_computer{};
+    using argument_tags = typename Fluxes::argument_tags;
 
     db::mutate_apply<tmpl::list<field_flux_tag>, argument_tags>(
         fluxes_computer, make_not_null(&box), get<auxiliary_field_tag>(box));
@@ -108,9 +122,9 @@ void test_computers(const DataVector& used_for_size) {
             used_for_size, std::numeric_limits<double>::signaling_NaN()),
         std::move(spatial_metric));
 
-    const Poisson::NonEuclideanFluxes<Dim> fluxes_computer{};
-    using argument_tags =
-        typename Poisson::NonEuclideanFluxes<Dim>::argument_tags;
+    using Fluxes = Poisson::Fluxes<Dim, Poisson::Geometry::NonEuclidean>;
+    const Fluxes fluxes_computer{};
+    using argument_tags = typename Fluxes::argument_tags;
 
     db::mutate_apply<tmpl::list<field_flux_tag>, argument_tags>(
         fluxes_computer, make_not_null(&box), get<auxiliary_field_tag>(box));
@@ -120,7 +134,6 @@ void test_computers(const DataVector& used_for_size) {
         make_not_null(&expected_field_flux),
         get<gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataVector>>(
             box),
-        get<gr::Tags::DetSpatialMetric<DataVector>>(box),
         get<auxiliary_field_tag>(box));
     CHECK(get<field_flux_tag>(box) == expected_field_flux);
 
@@ -141,8 +154,9 @@ void test_computers(const DataVector& used_for_size) {
             tnsr::i<DataVector, Dim>{
                 num_points, std::numeric_limits<double>::signaling_NaN()});
 
-    const Poisson::Sources sources_computer{};
-    using argument_tags = typename Poisson::Sources::argument_tags;
+    using Sources = Poisson::Sources<Dim, Poisson::Geometry::Euclidean>;
+    const Sources sources_computer{};
+    using argument_tags = typename Sources::argument_tags;
 
     db::mutate_apply<tmpl::list<field_source_tag, auxiliary_source_tag>,
                      argument_tags>(
