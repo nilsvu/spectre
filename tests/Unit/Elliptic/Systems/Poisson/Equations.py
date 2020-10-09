@@ -8,10 +8,12 @@ def euclidean_fluxes(field_gradient):
     return field_gradient
 
 
-def non_euclidean_fluxes(inv_spatial_metric, det_spatial_metric,
-                         field_gradient):
-    return np.sqrt(det_spatial_metric) * np.einsum('ij,j', inv_spatial_metric,
-                                                   field_gradient)
+def non_euclidean_fluxes(inv_spatial_metric, field_gradient):
+    return np.einsum('ij,j', inv_spatial_metric, field_gradient)
+
+
+def add_non_euclidean_sources(christoffel_contracted, field_flux):
+    return -np.einsum('i,i', christoffel_contracted, field_flux)
 
 
 def auxiliary_fluxes(field, dim):
