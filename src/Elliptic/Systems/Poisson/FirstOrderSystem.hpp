@@ -28,11 +28,14 @@ namespace Poisson {
  * first-order PDEs
  *
  * \f[
- * -\frac{1}{\sqrt{\gamma}} \partial_i \sqrt{\gamma}\gamma^{ij} v_j(x) = f(x) \\
+ * -\partial_i \gamma^{ij} v_j(x) - \Gamma^i_{ij}\gamma^{jk}v_k = f(x) \\
  * -\partial_i u(x) + v_i(x) = 0
  * \f]
  *
- * where we have chosen the field gradient as an auxiliary variable \f$v_i\f$.
+ * where we have chosen the field gradient as an auxiliary variable \f$v_i\f$
+ * and where \f$\Gamma^i_{jk}=\frac{1}{2}\gamma^{il}\left(\partial_j\gamma_{kl}
+ * +\partial_k\gamma_{jl}-\partial_l\gamma_{jk}\right)\f$ are the Christoffel
+ * symbols of the second kind of the background metric \f$\gamma_{ij}\f$.
  * This scheme also goes by the name of _mixed_ or _flux_ formulation (see e.g.
  * \cite Arnold2002). The reason for the latter name is that we can write the
  * set of coupled first-order PDEs in flux-form
@@ -45,9 +48,9 @@ namespace Poisson {
  * \f$u(x)\f$ and \f$v_i(x)\f$ as
  *
  * \f{align*}
- * F^i_u &= \sqrt{\gamma}\gamma^{ij} v_j(x) \\
- * S_u &= 0 \\
- * f_u &= \sqrt{\gamma} f(x) \\
+ * F^i_u &= \gamma^{ij} v_j(x) \\
+ * S_u &= -\Gamma^i_{ij}\gamma^{jk}v_k \\
+ * f_u &= f(x) \\
  * F^i_{v_j} &= u \delta^i_j \\
  * S_{v_j} &= v_j \\
  * f_{v_j} &= 0 \text{.}
@@ -84,10 +87,8 @@ struct FirstOrderSystem {
   using fields_tag =
       ::Tags::Variables<tmpl::append<primal_fields, auxiliary_fields>>;
 
-  using fluxes =
-      tmpl::conditional_t<BackgroundGeometry == Geometry::Euclidean,
-                          EuclideanFluxes<Dim>, NonEuclideanFluxes<Dim>>;
-  using sources = Sources;
+  using fluxes = Fluxes<Dim, BackgroundGeometry>;
+  using sources = Sources<Dim, BackgroundGeometry>;
 
   // The tag of the operator to compute magnitudes on the manifold, e.g. to
   // normalize vectors on the faces of an element
