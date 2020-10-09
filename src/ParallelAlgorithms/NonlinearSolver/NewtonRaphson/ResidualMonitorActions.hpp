@@ -31,11 +31,10 @@ namespace NonlinearSolver::newton_raphson::detail {
 template <typename FieldsTag, typename OptionsGroup, typename BroadcastTarget>
 struct CheckResidualMagnitude {
   using fields_tag = FieldsTag;
-  using residual_magnitude_tag = db::add_tag_prefix<
-      LinearSolver::Tags::Magnitude,
+  using residual_magnitude_tag = LinearSolver::Tags::Magnitude<
       db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>>;
   using initial_residual_magnitude_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Initial, residual_magnitude_tag>;
+      LinearSolver::Tags::Initial<residual_magnitude_tag>;
 
   template <typename ParallelComponent, typename DataBox,
             typename Metavariables, typename ArrayIndex,
@@ -44,8 +43,9 @@ struct CheckResidualMagnitude {
   static void apply(DataBox& box, Parallel::GlobalCache<Metavariables>& cache,
                     const ArrayIndex& /*array_index*/,
                     const size_t iteration_id,
-                    const size_t /*globalization_iteration_id*/,
-                    const double residual_magnitude) noexcept {
+                    const size_t globalization_iteration_id,
+                    const double residual_magnitude,
+                    const double step_length) noexcept {
     if (UNLIKELY(iteration_id == 0)) {
       db::mutate<initial_residual_magnitude_tag>(
           make_not_null(&box),
@@ -55,20 +55,27 @@ struct CheckResidualMagnitude {
           });
     } else {
       // Make sure we are converging. Far away from the solution this is not
-      // guaranteed, so we emply a globalization strategy to guide the solver
+      // guaranteed, so we employ a globalization strategy to guide the solver
       // towards the solution when the residual doesn't decrease sufficiently.
       // The _sufficient decrease condition_ is the decrease predicted by the
       // Taylor approximation, i.e. ...
       // TODO: Add sufficient decrease condition
-      if (residual_magnitude - get<residual_magnitude_tag>(box) > 0.) {
+      const double sufficient_decrease =
+          get<NonlinearSolver::Tags::SufficientDecreaseParameter<OptionsGroup>>(
+              box);
+      if (globalization_iteration_id < 5 and
+          residual_magnitude > (1. - sufficient_decrease * step_length) *
+                                   get<residual_magnitude_tag>(box)) {
         // Do some logging
         if (UNLIKELY(static_cast<int>(
                          get<LinearSolver::Tags::Verbosity<OptionsGroup>>(
                              box)) >= static_cast<int>(::Verbosity::Verbose))) {
           Parallel::printf(
-              "Apply globalization to decrease nonlinear solver iteration %zu "
-              "residual: %e\n",
-              iteration_id, residual_magnitude);
+              "Step with length %f didn't sufficiently decrease the '" +
+                  Options::name<OptionsGroup>() +
+                  "' iteration %zu residual (possible overshoot). Residual: "
+                  "%e\n",
+              step_length, iteration_id, residual_magnitude);
         }
 
         Parallel::receive_data<Tags::GlobalizationIsComplete<OptionsGroup>>(

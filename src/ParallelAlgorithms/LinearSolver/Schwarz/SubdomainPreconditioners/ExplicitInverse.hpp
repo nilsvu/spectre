@@ -31,6 +31,8 @@ struct ExplicitInverse {
   ExplicitInverse& operator=(ExplicitInverse&& /*rhs*/) = default;
   ~ExplicitInverse() = default;
 
+  void reset() noexcept { size_ = std::numeric_limits<size_t>::max(); }
+
   template <typename SubdomainOperator, typename TagsList>
   ExplicitInverse(const SubdomainOperator& subdomain_operator,
                   const ElementCenteredSubdomainData<Dim, TagsList>&

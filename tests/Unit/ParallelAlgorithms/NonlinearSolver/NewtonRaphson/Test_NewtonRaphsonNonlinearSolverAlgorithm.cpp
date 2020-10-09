@@ -13,7 +13,7 @@
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/InitializationFunctions.hpp"
 #include "Parallel/Main.hpp"
-#include "ParallelAlgorithms/LinearSolver/Richardson/Richardson.hpp"
+#include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -37,8 +37,9 @@ struct Metavariables {
 
   using nonlinear_solver = NonlinearSolver::newton_raphson::NewtonRaphson<
       Metavariables, helpers::fields_tag, NonlinearSolverGroup>;
-  using linear_solver = LinearSolver::Richardson::Richardson<
-      typename nonlinear_solver::linear_solver_fields_tag, LinearSolverGroup,
+  using linear_solver = LinearSolver::gmres::Gmres<
+      Metavariables, typename nonlinear_solver::linear_solver_fields_tag,
+      LinearSolverGroup, false,
       typename nonlinear_solver::linear_solver_source_tag>;
 
   enum class Phase {

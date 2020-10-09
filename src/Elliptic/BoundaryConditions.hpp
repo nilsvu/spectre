@@ -14,12 +14,4 @@ enum class BoundaryCondition { Dirichlet, Neumann };
 std::ostream& operator<<(std::ostream& os,
                          const BoundaryCondition boundary_condition) noexcept;
 
-namespace Tags {
-
-struct BoundaryCondition : db::SimpleTag {
-  using type = ::elliptic::BoundaryCondition;
-};
-
-}  // namespace Tags
-
 }  // namespace elliptic

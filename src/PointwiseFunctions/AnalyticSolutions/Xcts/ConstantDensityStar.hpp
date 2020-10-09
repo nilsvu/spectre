@@ -5,12 +5,16 @@
 
 #include <limits>
 
-#include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
-#include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
-#include "Elliptic/Systems/Xcts/Tags.hpp"       // IWYU pragma: keep
+#include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Tensor/Tensor.hpp"
+#include "Domain/Structure/Direction.hpp"
+#include "Elliptic/BoundaryConditions.hpp"
+#include "Elliptic/Protocols.hpp"
+#include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -87,7 +91,8 @@ namespace Xcts::Solutions {
  * \f$\psi_\mathrm{init}=1\f$ so that a nonlinear iterative numerical solver
  * will converge to the same weak-field solution.
  */
-class ConstantDensityStar {
+class ConstantDensityStar
+    : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  private:
   struct Density {
     using type = double;
@@ -107,8 +112,8 @@ class ConstantDensityStar {
       "A constant density star in general relativity"};
 
   ConstantDensityStar() = default;
-  ConstantDensityStar(const ConstantDensityStar&) noexcept = delete;
-  ConstantDensityStar& operator=(const ConstantDensityStar&) noexcept = delete;
+  ConstantDensityStar(const ConstantDensityStar&) noexcept = default;
+  ConstantDensityStar& operator=(const ConstantDensityStar&) noexcept = default;
   ConstantDensityStar(ConstantDensityStar&&) noexcept = default;
   ConstantDensityStar& operator=(ConstantDensityStar&&) noexcept = default;
   ~ConstantDensityStar() noexcept = default;
@@ -187,10 +192,34 @@ class ConstantDensityStar {
   tuples::TaggedTuple<Tags...> variables(
       const tnsr::I<DataType, 3, Frame::Inertial>& x,
       tmpl::list<Tags...> /*meta*/) const noexcept {
-    static_assert(sizeof...(Tags) > 1,
-                  "The generic template will recurse infinitely if only one "
-                  "tag is being retrieved.");
+    static_assert(sizeof...(Tags) > 1, "The requested tag is not implemented.");
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
+  }
+
+  template <typename DataType>
+  auto boundary_variables(
+      const tnsr::I<DataVector, 3>& /*x*/, const Direction<3>& /*direction*/,
+      const tnsr::i<DataVector, 3>& /*face_normal*/,
+      tmpl::list<::Tags::NormalDotFlux<
+          Xcts::Tags::ConformalFactor<DataType>>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<
+          ::Tags::NormalDotFlux<Xcts::Tags::ConformalFactor<DataType>>> {
+    ASSERT(false, "Not implemented");
+  }
+
+  template <typename DataType, typename... Tags>
+  tuples::TaggedTuple<Tags...> boundary_variables(
+      const tnsr::I<DataVector, 3>& x, const Direction<3>& direction,
+      const tnsr::i<DataVector, 3>& face_normal,
+      tmpl::list<Tags...> /*meta*/) const noexcept {
+    static_assert(sizeof...(Tags) > 1, "An unsupported Tag was requested.");
+    return {tuples::get<Tags>(
+        boundary_variables(x, direction, face_normal, tmpl::list<Tags>{}))...};
+  }
+
+  static elliptic::BoundaryCondition boundary_condition_type(
+      const tnsr::I<DataVector, 3>& /*x*/, const Direction<3>& /*direction*/) {
+    return elliptic::BoundaryCondition::Dirichlet;
   }
 
   // clang-tidy: no pass by reference

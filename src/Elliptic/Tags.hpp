@@ -6,6 +6,7 @@
 #include <string>
 
 #include "DataStructures/DataBox/Tag.hpp"
+#include "Elliptic/BoundaryConditions.hpp"
 #include "Utilities/PrettyType.hpp"
 
 /// Functionality related to solving elliptic partial differential equations
@@ -27,6 +28,13 @@ struct InitialGuess {
   static constexpr Options::String help = "Options for the initial guess";
   using group = InitialGuessGroup;
   using type = InitialGuessType;
+};
+
+template <typename BackgroundType>
+struct Background {
+  static std::string name() noexcept { return Options::name<BackgroundType>(); }
+  static constexpr Options::String help = "Options for the background";
+  using type = BackgroundType;
 };
 
 }  // namespace OptionTags
@@ -65,6 +73,26 @@ struct InitialGuess : db::SimpleTag {
 
   static constexpr bool pass_metavariables = false;
   static type create_from_options(const type& value) noexcept { return value; }
+};
+
+template <typename BackgroundType>
+struct Background : db::SimpleTag {
+  using type = BackgroundType;
+  using option_tags = tmpl::list<OptionTags::Background<BackgroundType>>;
+
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type& value) noexcept { return value; }
+};
+
+template <typename Tag>
+struct BoundaryCondition : db::PrefixTag {
+  using type = elliptic::BoundaryCondition;
+};
+
+template <typename Tags>
+struct BoundaryConditions : db::SimpleTag {
+  using type = tuples::tagged_tuple_from_typelist<
+      db::wrap_tags_in<elliptic::Tags::BoundaryCondition, Tags>>;
 };
 
 }  // namespace Tags

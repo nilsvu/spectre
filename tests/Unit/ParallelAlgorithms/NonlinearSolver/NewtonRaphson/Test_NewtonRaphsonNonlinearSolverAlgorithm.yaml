@@ -14,8 +14,12 @@ NewtonRaphson:
   Verbosity: Quiet
 
 LinearSolver:
-  Iterations: 10
-  RelaxationParameter: 0.2857142857142857
+  # Iterations: 10
+  # RelaxationParameter: 0.2857142857142857
+  ConvergenceCriteria:
+    MaxIterations: 1
+    AbsoluteResidual: 1.e-14
+    RelativeResidual: 0
   Verbosity: Quiet
 
 Observers:

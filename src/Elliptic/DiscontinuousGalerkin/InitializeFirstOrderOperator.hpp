@@ -56,15 +56,31 @@ struct InitializeFirstOrderOperator {
       domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>;
 
   template <typename Directions>
-  using face_tags =
-      tmpl::list<domain::Tags::Slice<Directions, vars_tag>,
-                 domain::Tags::Slice<Directions, fluxes_tag>,
-                 domain::Tags::Slice<Directions, div_fluxes_tag>,
-                 // For the strong first-order DG scheme we also need the
-                 // interface normal dotted into the fluxes
-                 domain::Tags::InterfaceCompute<
-                     Directions, ::Tags::NormalDotFluxCompute<
-                                     vars_tag, volume_dim, Frame::Inertial>>>;
+  using face_tags = tmpl::list<
+      domain::Tags::Slice<Directions, vars_tag>,
+      domain::Tags::Slice<Directions, fluxes_tag>,
+      domain::Tags::Slice<Directions, div_fluxes_tag>,
+      domain::Tags::InterfaceCompute<
+          Directions,
+          elliptic::Tags::FirstOrderFluxesCompute<
+              volume_dim, FluxesComputer, div_fluxes_tag,
+              db::wrap_tags_in<
+                  ::Tags::div,
+                  db::wrap_tags_in<::Tags::Flux, PrimalVariables,
+                                   tmpl::size_t<volume_dim>, Frame::Inertial>>,
+              db::wrap_tags_in<
+                  ::Tags::div,
+                  db::wrap_tags_in<::Tags::Flux, AuxiliaryVariables,
+                                   tmpl::size_t<volume_dim>,
+                                   Frame::Inertial>>>>,
+      domain::Tags::InterfaceCompute<
+          Directions, ::Tags::NormalDotFluxCompute<div_fluxes_tag, volume_dim,
+                                                   Frame::Inertial>>,
+      // For the strong first-order DG scheme we also need the
+      // interface normal dotted into the fluxes
+      domain::Tags::InterfaceCompute<
+          Directions,
+          ::Tags::NormalDotFluxCompute<vars_tag, volume_dim, Frame::Inertial>>>;
 
   using fluxes_compute_tag =
       elliptic::Tags::FirstOrderFluxesCompute<volume_dim, FluxesComputer,
@@ -77,12 +93,13 @@ struct InitializeFirstOrderOperator {
       // On exterior (ghost) boundary faces we compute the fluxes from the
       // data that is being set there to impose boundary conditions. Then, we
       // compute their normal-dot-fluxes.
-      domain::Tags::InterfaceCompute<
-          domain::Tags::BoundaryDirectionsExterior<volume_dim>,
-          fluxes_compute_tag>,
-      domain::Tags::InterfaceCompute<
-          domain::Tags::BoundaryDirectionsExterior<volume_dim>,
-          ::Tags::NormalDotFluxCompute<vars_tag, volume_dim, Frame::Inertial>>,
+      //   domain::Tags::InterfaceCompute<
+      //       domain::Tags::BoundaryDirectionsExterior<volume_dim>,
+      //       fluxes_compute_tag>,
+      //   domain::Tags::InterfaceCompute<
+      //       domain::Tags::BoundaryDirectionsExterior<volume_dim>,
+      //       ::Tags::NormalDotFluxCompute<vars_tag, volume_dim,
+      //       Frame::Inertial>>,
       // We impose the auxiliary constraint equation div(F_v) = v on exterior
       // (ghost) faces so that numerical fluxes that use div(F_v) instead of the
       // auxiliary fields v work with Neumann boundary conditions where we set
@@ -93,7 +110,7 @@ struct InitializeFirstOrderOperator {
       domain::Tags::InterfaceCompute<
           domain::Tags::BoundaryDirectionsExterior<volume_dim>,
           elliptic::Tags::ImposeAuxiliaryConstraint<volume_dim,
-                                                    AuxiliaryVariables>>>;
+                                                    PrimalVariables>>>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -107,11 +124,15 @@ struct InitializeFirstOrderOperator {
                     const ParallelComponent* const /*meta*/) noexcept {
     // Initialize the variables on exterior (ghost) boundary faces. They are
     // updated throughout the algorithm to impose boundary conditions.
-    typename exterior_vars_tag::type exterior_boundary_vars{};
+    using n_dot_fluxes_tag =
+        db::add_tag_prefix<::Tags::NormalDotFlux, vars_tag>;
+    using n_dot_fluxes_exterior_tag = domain::Tags::Interface<
+        domain::Tags::BoundaryDirectionsExterior<volume_dim>, n_dot_fluxes_tag>;
+    typename n_dot_fluxes_exterior_tag::type exterior_boundary_vars{};
     const auto& mesh = db::get<domain::Tags::Mesh<volume_dim>>(box);
     for (const auto& direction : db::get<domain::Tags::Element<volume_dim>>(box)
                                      .external_boundaries()) {
-      exterior_boundary_vars[direction] = typename vars_tag::type{
+      exterior_boundary_vars[direction] = typename n_dot_fluxes_tag::type{
           mesh.slice_away(direction.dimension()).number_of_grid_points()};
     }
     using compute_tags = tmpl::flatten<tmpl::list<
@@ -122,8 +143,9 @@ struct InitializeFirstOrderOperator {
         exterior_tags>>;
     return std::make_tuple(
         ::Initialization::merge_into_databox<
-            InitializeFirstOrderOperator, db::AddSimpleTags<exterior_vars_tag>,
-            compute_tags>(std::move(box), std::move(exterior_boundary_vars)));
+            InitializeFirstOrderOperator,
+            db::AddSimpleTags<n_dot_fluxes_exterior_tag>, compute_tags>(
+            std::move(box), std::move(exterior_boundary_vars)));
   }
 };
 }  // namespace Actions

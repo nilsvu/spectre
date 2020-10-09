@@ -11,6 +11,7 @@
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/BoundaryConditions.hpp"
+#include "Elliptic/Tags.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MergeIntoDataBox.hpp"
 #include "Utilities/TMPL.hpp"

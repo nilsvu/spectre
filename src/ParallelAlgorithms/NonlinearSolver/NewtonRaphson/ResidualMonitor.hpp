@@ -29,9 +29,10 @@ namespace NonlinearSolver::newton_raphson::detail {
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup>
 struct ResidualMonitor {
   using chare_type = Parallel::Algorithms::Singleton;
-  using const_global_cache_tags =
-      tmpl::list<LinearSolver::Tags::Verbosity<OptionsGroup>,
-                 LinearSolver::Tags::ConvergenceCriteria<OptionsGroup>>;
+  using const_global_cache_tags = tmpl::list<
+      LinearSolver::Tags::Verbosity<OptionsGroup>,
+      LinearSolver::Tags::ConvergenceCriteria<OptionsGroup>,
+      NonlinearSolver::Tags::SufficientDecreaseParameter<OptionsGroup>>;
   using metavariables = Metavariables;
   using phase_dependent_action_list = tmpl::list<
       Parallel::PhaseActions<
@@ -62,11 +63,10 @@ template <typename FieldsTag, typename OptionsGroup>
 struct InitializeResidualMonitor {
  private:
   using fields_tag = FieldsTag;
-  using residual_magnitude_tag = db::add_tag_prefix<
-      LinearSolver::Tags::Magnitude,
+  using residual_magnitude_tag = LinearSolver::Tags::Magnitude<
       db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>>;
   using initial_residual_magnitude_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Initial, residual_magnitude_tag>;
+      LinearSolver::Tags::Initial<residual_magnitude_tag>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,

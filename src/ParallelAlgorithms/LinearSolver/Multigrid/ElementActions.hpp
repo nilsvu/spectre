@@ -184,8 +184,15 @@ struct PrepareSolve {
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& inboxes,
       Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ElementId<Dim>& /*element_id*/, const ActionList /*meta*/,
+      const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + ": Prepare solve\n",
+          element_id);
+    }
     // Terminate the algorithm on coarser multigrid levels. The algorithm will
     // be re-started on these levels whenever they receive data. This allows
     // the finest level to control when to terminate the algorithm. We make sure
@@ -223,6 +230,14 @@ struct SendResidualToParent {
     ASSERT(parent_id,
            "Trying to send data to parent but no parent is set on element "
                << element_id << ".");
+
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + ": Send residual to parent\n",
+          element_id);
+    }
 
     db::mutate<db::add_tag_prefix<Tags::PreSmoothingResult, fields_tag>>(
         make_not_null(&box),
@@ -285,7 +300,7 @@ struct RestrictResidualFromChildren {
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box, tuples::TaggedTuple<InboxTags...>& inboxes,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ElementId<Dim>& /*element_id*/, const ActionList /*meta*/,
+      const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     const auto& child_ids = get<Tags::ChildElementIds<Dim>>(box);
 
@@ -307,6 +322,14 @@ struct RestrictResidualFromChildren {
         db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
     const auto temporal_received = inbox.find(temporal_id);
     auto& children_data = temporal_received->second;
+
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf("%s " + Options::name<OptionsGroup>() +
+                           "(%zu): Restrict residual from children\n",
+                       element_id, temporal_id);
+    }
 
     // Assemble restricted data from children
     // TODO: Specialize for when single child is the same element
@@ -450,6 +473,15 @@ struct SendCorrectionToChildren {
         Parallel::get_parallel_component<ParallelComponent>(cache);
     const auto& temporal_id =
         db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
+
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf("%s " + Options::name<OptionsGroup>() +
+                           "(%zu): Send correction to children\n",
+                       element_id, temporal_id);
+    }
+
     for (const auto& child_id : child_ids) {
       Parallel::receive_data<DataFromParentInboxTag<FieldsTag>>(
           receiver_proxy[child_id], temporal_id, get<fields_tag>(box));
@@ -487,6 +519,14 @@ struct ProlongateCorrectionFromParent {
         db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box);
     const auto temporal_received = inbox.find(temporal_id);
     const auto& parent_correction = temporal_received->second;
+
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf("%s " + Options::name<OptionsGroup>() +
+                           "(%zu): Prolongate correction from parent\n",
+                       element_id, temporal_id);
+    }
 
     // Apply prolongation operator
     // TODO: Do nothing when parent is the same element
@@ -584,7 +624,8 @@ struct SkipPostsmoothingAtBottom {
             ? tmpl::index_of<ActionList,
                              SendCorrectionToChildren<FieldsTag, OptionsGroup,
                                                       SourceTag>>::value
-            : tmpl::index_of<ActionList, SkipPostsmoothingAtBottom>::value + 1;
+            : (tmpl::index_of<ActionList, SkipPostsmoothingAtBottom>::value +
+               1);
     return {std::move(box), false, index_of_next_action};
   }
 };

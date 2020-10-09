@@ -434,25 +434,30 @@ struct SolveSubdomain {
                          subdomain_preconditioner);
     const auto& subdomain_solve_has_converged = subdomain_solve_result.first;
     auto& subdomain_solution = subdomain_solve_result.second;
-    if (not subdomain_solve_has_converged or
-        subdomain_solve_has_converged.reason() ==
-            Convergence::Reason::MaxIterations) {
-      Parallel::printf(
-          "%s WARNING: Subdomain solver did not converge in %zu iterations: %e "
-          "-> %e\n",
-          element_id, subdomain_solve_has_converged.num_iterations(),
-          subdomain_solve_has_converged.initial_residual_magnitude(),
-          subdomain_solve_has_converged.residual_magnitude());
-    } else if (UNLIKELY(
-                   static_cast<int>(
-                       get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
-                   static_cast<int>(::Verbosity::Debug))) {
-      Parallel::printf(
-          "%s Subdomain solver converged in %zu iterations (%s): %e -> %e\n",
-          element_id, subdomain_solve_has_converged.num_iterations(),
-          subdomain_solve_has_converged.reason(),
-          subdomain_solve_has_converged.initial_residual_magnitude(),
-          subdomain_solve_has_converged.residual_magnitude());
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Quiet))) {
+      if (not subdomain_solve_has_converged or
+          subdomain_solve_has_converged.reason() ==
+              Convergence::Reason::MaxIterations) {
+        Parallel::printf(
+            "%s WARNING: Subdomain solver did not converge in %zu iterations: "
+            "%e "
+            "-> %e\n",
+            element_id, subdomain_solve_has_converged.num_iterations(),
+            subdomain_solve_has_converged.initial_residual_magnitude(),
+            subdomain_solve_has_converged.residual_magnitude());
+      } else if (UNLIKELY(static_cast<int>(
+                              get<LinearSolver::Tags::Verbosity<OptionsGroup>>(
+                                  box)) >=
+                          static_cast<int>(::Verbosity::Debug))) {
+        Parallel::printf(
+            "%s Subdomain solver converged in %zu iterations (%s): %e -> %e\n",
+            element_id, subdomain_solve_has_converged.num_iterations(),
+            subdomain_solve_has_converged.reason(),
+            subdomain_solve_has_converged.initial_residual_magnitude(),
+            subdomain_solve_has_converged.residual_magnitude());
+      }
     }
 
     const auto observation_key_suffix =

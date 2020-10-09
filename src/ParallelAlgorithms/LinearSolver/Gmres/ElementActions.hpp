@@ -45,13 +45,13 @@ struct NormalizeOperandAndUpdateField;
 namespace LinearSolver::gmres::detail {
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename Label, typename ArraySectionIdTag>
+          typename Label, typename SourceTag, typename ArraySectionIdTag>
 struct PrepareSolve {
  private:
   using fields_tag = FieldsTag;
   using initial_fields_tag =
       db::add_tag_prefix<LinearSolver::Tags::Initial, fields_tag>;
-  using source_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
+  using source_tag = SourceTag;
   using operator_applied_to_fields_tag =
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
   using operand_tag =
@@ -69,9 +69,23 @@ struct PrepareSolve {
       Parallel::GlobalCache<Metavariables>& cache,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + ": Prepare solve\n",
+          array_index);
+    }
+
     // Skip the solve entirely on elements that are not part of the section
     if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
       if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>>(
+            make_not_null(&box),
+            [](const gsl::not_null<size_t*> iteration_id) noexcept {
+              *iteration_id = 0;
+            });
+        // TODO: Handle immediate convergence
         constexpr size_t prepare_step_index =
             tmpl::index_of<ActionList,
                            PrepareStep<FieldsTag, OptionsGroup, Preconditioned,
@@ -172,7 +186,7 @@ struct NormalizeInitialOperand {
   static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
       db::DataBox<DbTagsList>& box, tuples::TaggedTuple<InboxTags...>& inboxes,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     auto received_data = std::move(
         tuples::get<Tags::InitialOrthogonalization<OptionsGroup>>(inboxes)
@@ -181,6 +195,14 @@ struct NormalizeInitialOperand {
             .mapped());
     const double residual_magnitude = get<0>(received_data);
     auto& has_converged = get<1>(received_data);
+
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf("%s " + Options::name<OptionsGroup>() +
+                           ": Normalize initial operand\n",
+                       array_index);
+    }
 
     db::mutate<operand_tag, basis_history_tag,
                LinearSolver::Tags::HasConverged<OptionsGroup>>(
@@ -217,8 +239,17 @@ struct PrepareStep {
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + "(%zu): Prepare step\n",
+          array_index,
+          db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    }
+
     if constexpr (Preconditioned) {
       using fields_tag = FieldsTag;
       using operand_tag =
@@ -265,6 +296,15 @@ struct PerformStep {
       Parallel::GlobalCache<Metavariables>& cache,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + "(%zu): Perform step\n",
+          array_index,
+          db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    }
+
     // Skip the solve entirely on elements that are not part of the section
     if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
       if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
@@ -273,7 +313,7 @@ struct PerformStep {
                            NormalizeOperandAndUpdateField<
                                FieldsTag, OptionsGroup, Preconditioned, Label,
                                ArraySectionIdTag>>::value;
-        return {std::move(box), false, step_end_index + 1};
+        return {std::move(box), false, step_end_index};
       }
     }
 
@@ -316,9 +356,10 @@ struct PerformStep {
     Parallel::ReductionData<
         Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
         Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-        Parallel::ReductionDatum<double, funcl::Plus<>>> reduction_data{
-        get<LinearSolver::Tags::IterationId<OptionsGroup>>(box),
-        get<orthogonalization_iteration_id_tag>(box), local_orthogonalization};
+        Parallel::ReductionDatum<double, funcl::Plus<>>>
+        reduction_data{get<LinearSolver::Tags::IterationId<OptionsGroup>>(box),
+                       get<orthogonalization_iteration_id_tag>(box),
+                       local_orthogonalization};
     if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
       Parallel::contribute_to_reduction<
           StoreOrthogonalization<FieldsTag, OptionsGroup, ParallelComponent>>(
@@ -486,7 +527,7 @@ struct NormalizeOperandAndUpdateField {
   static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
       db::DataBox<DbTagsList>& box, tuples::TaggedTuple<InboxTags...>& inboxes,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     // Retrieve reduction data from inbox
     auto received_data = std::move(
@@ -497,6 +538,40 @@ struct NormalizeOperandAndUpdateField {
     const double normalization = get<0>(received_data);
     const auto& minres = get<1>(received_data);
     auto& has_converged = get<2>(received_data);
+
+    if (UNLIKELY(static_cast<int>(
+                     get<LinearSolver::Tags::Verbosity<OptionsGroup>>(box)) >=
+                 static_cast<int>(::Verbosity::Debug))) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + "(%zu): Complete step\n",
+          array_index,
+          db::get<LinearSolver::Tags::IterationId<OptionsGroup>>(box));
+    }
+
+    // Skip the solve entirely on elements that are not part of the section
+    constexpr size_t this_action_index =
+        tmpl::index_of<ActionList, NormalizeOperandAndUpdateField>::value;
+    constexpr size_t prepare_step_index =
+        tmpl::index_of<ActionList,
+                       PrepareStep<FieldsTag, OptionsGroup, Preconditioned,
+                                   Label, ArraySectionIdTag>>::value;
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        db::mutate<LinearSolver::Tags::IterationId<OptionsGroup>,
+                   LinearSolver::Tags::HasConverged<OptionsGroup>>(
+            make_not_null(&box),
+            [&has_converged](const gsl::not_null<size_t*> iteration_id,
+                             const gsl::not_null<Convergence::HasConverged*>
+                                 local_has_converged) noexcept {
+              ++(*iteration_id);
+              *local_has_converged = std::move(has_converged);
+            });
+        return {std::move(box), false,
+                get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box)
+                    ? (this_action_index + 1)
+                    : (prepare_step_index + 1)};
+      }
+    }
 
     db::mutate<operand_tag, basis_history_tag, fields_tag,
                LinearSolver::Tags::IterationId<OptionsGroup>,
@@ -527,12 +602,6 @@ struct NormalizeOperandAndUpdateField {
         get<preconditioned_basis_history_tag>(box));
 
     // Repeat steps until the solve has converged
-    constexpr size_t this_action_index =
-        tmpl::index_of<ActionList, NormalizeOperandAndUpdateField>::value;
-    constexpr size_t prepare_step_index =
-        tmpl::index_of<ActionList,
-                       PrepareStep<FieldsTag, OptionsGroup, Preconditioned,
-                                   Label, ArraySectionIdTag>>::value;
     return {std::move(box), false,
             get<LinearSolver::Tags::HasConverged<OptionsGroup>>(box)
                 ? (this_action_index + 1)

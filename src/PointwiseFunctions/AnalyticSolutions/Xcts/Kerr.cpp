@@ -176,7 +176,7 @@ tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DataType>>
 Kerr<KerrCoordinates::KerrSchild>::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<Xcts::Tags::ConformalFactor<DataType>> /*meta*/) const noexcept {
-  return {make_with_value<Scalar<DataType>>(x, 0.5)};
+  return {make_with_value<Scalar<DataType>>(x, 1.)};
 }
 
 // Conformal factor gradient
@@ -269,6 +269,19 @@ Kerr<Coords>::variables(
     tmpl::list<Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
         DataType, 3, Frame::Inertial>> /*meta*/) const noexcept {
   return {make_with_value<tnsr::II<DataType, 3>>(x, 0.)};
+}
+
+template <KerrCoordinates Coords>
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::div<Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+        DataType, 3, Frame::Inertial>>>
+Kerr<Coords>::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<::Tags::div<
+        Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+            DataType, 3, Frame::Inertial>>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3>>(x, 0.)};
 }
 
 // Shift excess
@@ -475,6 +488,14 @@ Kerr<Coords>::variables(
       tmpl::list<                                                              \
           Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<       \
               DTYPE(data), 3, Frame::Inertial>>) const noexcept;               \
+  template tuples::TaggedTuple<::Tags::div<                                    \
+      Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<           \
+          DTYPE(data), 3, Frame::Inertial>>>                                   \
+  Kerr<COORDS(data)>::variables(                                               \
+      const tnsr::I<DTYPE(data), 3>&,                                          \
+      tmpl::list<::Tags::div<                                                  \
+          Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<       \
+              DTYPE(data), 3, Frame::Inertial>>>) const noexcept;              \
   template tuples::TaggedTuple<                                                \
       Xcts::Tags::ShiftBackground<DTYPE(data), 3, Frame::Inertial>>            \
   Kerr<COORDS(data)>::variables(                                               \

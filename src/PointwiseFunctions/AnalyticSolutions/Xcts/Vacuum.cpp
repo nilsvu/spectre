@@ -16,6 +16,36 @@ namespace Xcts {
 namespace Solutions {
 
 template <typename DataType>
+tuples::TaggedTuple<gr::Tags::TraceExtrinsicCurvature<DataType>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<gr::Tags::TraceExtrinsicCurvature<DataType>> /*meta*/) const
+    noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<
+        ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>> /*meta*/) const
+    noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
+                                  tmpl::size_t<3>, Frame::Inertial>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
+                             tmpl::size_t<3>, Frame::Inertial>> /*meta*/) const
+    noexcept {
+  return {make_with_value<tnsr::i<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
 tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DataType>> Vacuum::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<Xcts::Tags::ConformalFactor<DataType>> /*meta*/) const noexcept {
@@ -143,50 +173,56 @@ Vacuum::variables(
 }
 
 template <typename DataType>
-tuples::TaggedTuple<gr::Tags::Shift<3, Frame::Inertial, DataType>>
-Vacuum::variables(
-    const tnsr::I<DataType, 3>& x,
-    tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DataType>> /*meta*/) const
-    noexcept {
+tuples::TaggedTuple<Xcts::Tags::ShiftBackground<DataType, 3, Frame::Inertial>>
+Vacuum::variables(const tnsr::I<DataType, 3>& x,
+                  tmpl::list<Xcts::Tags::ShiftBackground<
+                      DataType, 3, Frame::Inertial>> /*meta*/) const noexcept {
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
 template <typename DataType>
-tuples::TaggedTuple<
-    ::Tags::Initial<gr::Tags::Shift<3, Frame::Inertial, DataType>>>
-Vacuum::variables(const tnsr::I<DataType, 3>& x,
-                  tmpl::list<::Tags::Initial<
-                      gr::Tags::Shift<3, Frame::Inertial, DataType>>> /*meta*/)
+tuples::TaggedTuple<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>
+Vacuum::variables(
+    const tnsr::I<DataType, 3>& x,
+    tmpl::list<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>> /*meta*/)
     const noexcept {
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
 template <typename DataType>
 tuples::TaggedTuple<
-    ::Tags::FixedSource<gr::Tags::Shift<3, Frame::Inertial, DataType>>>
+    ::Tags::Initial<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>>
 Vacuum::variables(const tnsr::I<DataType, 3>& x,
-                  tmpl::list<::Tags::FixedSource<
-                      gr::Tags::Shift<3, Frame::Inertial, DataType>>> /*meta*/)
-    const noexcept {
+                  tmpl::list<::Tags::Initial<Xcts::Tags::ShiftExcess<
+                      DataType, 3, Frame::Inertial>>> /*meta*/) const noexcept {
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
 template <typename DataType>
-tuples::TaggedTuple<Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>>
+tuples::TaggedTuple<
+    ::Tags::FixedSource<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>>
+Vacuum::variables(const tnsr::I<DataType, 3>& x,
+                  tmpl::list<::Tags::FixedSource<Xcts::Tags::ShiftExcess<
+                      DataType, 3, Frame::Inertial>>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <typename DataType>
+tuples::TaggedTuple<Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>>
 Vacuum::variables(
     const tnsr::I<DataType, 3>& x,
-    tmpl::list<Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>> /*meta*/)
+    tmpl::list<Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>> /*meta*/)
     const noexcept {
   return {make_with_value<tnsr::ii<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
 template <typename DataType>
 tuples::TaggedTuple<
-    ::Tags::Initial<Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>>>
+    ::Tags::Initial<Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>>>
 Vacuum::variables(
     const tnsr::I<DataType, 3>& x,
     tmpl::list<::Tags::Initial<
-        Xcts::Tags::ShiftStrain<3, Frame::Inertial, DataType>>> /*meta*/) const
+        Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>>> /*meta*/) const
     noexcept {
   return {make_with_value<tnsr::ii<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
@@ -220,6 +256,26 @@ bool operator!=(const Vacuum& /*lhs*/, const Vacuum& /*rhs*/) { return false; }
 
 #define DTYPE(data) BOOST_PP_TUPLE_ELEM(0, data)
 #define INSTANTIATE_VARS(_, data)                                              \
+  template tuples::TaggedTuple<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>> \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>> /*meta*/)     \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>>>              \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::dt<                                                   \
+          gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>>> /*meta*/)           \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>,            \
+                    tmpl::size_t<3>, Frame::Inertial>>                         \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>, \
+                               tmpl::size_t<3>, Frame::Inertial>> /*meta*/)    \
+      const noexcept;                                                          \
   template tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DTYPE(data)>>       \
   Vacuum::variables(                                                           \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
@@ -312,38 +368,46 @@ bool operator!=(const Vacuum& /*lhs*/, const Vacuum& /*rhs*/) { return false; }
                         tmpl::size_t<3>, Frame::Inertial>>> /*meta*/)          \
       const noexcept;                                                          \
   template tuples::TaggedTuple<                                                \
-      gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>                        \
+      Xcts::Tags::ShiftBackground<DTYPE(data), 3, Frame::Inertial>>            \
   Vacuum::variables(                                                           \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
-      tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>> /*meta*/)   \
+      tmpl::list<Xcts::Tags::ShiftBackground<DTYPE(data), 3,                   \
+                                             Frame::Inertial>> /*meta*/)       \
       const noexcept;                                                          \
   template tuples::TaggedTuple<                                                \
-      ::Tags::Initial<gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>>       \
-  Vacuum::variables(                                                           \
-      const tnsr::I<DTYPE(data), 3>& x,                                        \
-      tmpl::list<::Tags::Initial<                                              \
-          gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>> /*meta*/)         \
-      const noexcept;                                                          \
-  template tuples::TaggedTuple<                                                \
-      ::Tags::FixedSource<gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>>   \
-  Vacuum::variables(                                                           \
-      const tnsr::I<DTYPE(data), 3>& x,                                        \
-      tmpl::list<::Tags::FixedSource<                                          \
-          gr::Tags::Shift<3, Frame::Inertial, DTYPE(data)>>> /*meta*/)         \
-      const noexcept;                                                          \
-  template tuples::TaggedTuple<                                                \
-      Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>>                \
+      Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>>                \
   Vacuum::variables(                                                           \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<                                                              \
-          Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>> /*meta*/)  \
+          Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>> /*meta*/)  \
       const noexcept;                                                          \
   template tuples::TaggedTuple<::Tags::Initial<                                \
-      Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>>>               \
+      Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>>>               \
   Vacuum::variables(                                                           \
       const tnsr::I<DTYPE(data), 3>& x,                                        \
       tmpl::list<::Tags::Initial<                                              \
-          Xcts::Tags::ShiftStrain<3, Frame::Inertial, DTYPE(data)>>> /*meta*/) \
+          Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>>> /*meta*/) \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<::Tags::FixedSource<                            \
+      Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>>>               \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::FixedSource<                                          \
+          Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>>> /*meta*/) \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      Xcts::Tags::ShiftStrain<DTYPE(data), 3, Frame::Inertial>>                \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<                                                              \
+          Xcts::Tags::ShiftStrain<DTYPE(data), 3, Frame::Inertial>> /*meta*/)  \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<::Tags::Initial<                                \
+      Xcts::Tags::ShiftStrain<DTYPE(data), 3, Frame::Inertial>>>               \
+  Vacuum::variables(                                                           \
+      const tnsr::I<DTYPE(data), 3>& x,                                        \
+      tmpl::list<::Tags::Initial<                                              \
+          Xcts::Tags::ShiftStrain<DTYPE(data), 3, Frame::Inertial>>> /*meta*/) \
       const noexcept;                                                          \
   template tuples::TaggedTuple<gr::Tags::EnergyDensity<DTYPE(data)>>           \
   Vacuum::variables(const tnsr::I<DTYPE(data), 3>& x,                          \
