@@ -29,6 +29,11 @@ using field_tags = tmpl::list<Xcts::Tags::ConformalFactor<DataVector>>;
 using auxiliary_field_tags =
     tmpl::list<::Tags::deriv<Xcts::Tags::ConformalFactor<DataVector>,
                              tmpl::size_t<3>, Frame::Inertial>>;
+using background_tags = tmpl::list<
+    gr::Tags::TraceExtrinsicCurvature<DataVector>,
+    Xcts::Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<
+        DataVector>,
+    gr::Tags::EnergyDensity<DataVector>>;
 using initial_tags =
     db::wrap_tags_in<Tags::Initial,
                      tmpl::append<field_tags, auxiliary_field_tags>>;
@@ -42,6 +47,11 @@ struct ConstantDensityStarProxy : Xcts::Solutions::ConstantDensityStar {
       noexcept {
     return Xcts::Solutions::ConstantDensityStar::variables(
         x, tmpl::append<field_tags, auxiliary_field_tags>{});
+  }
+  tuples::tagged_tuple_from_typelist<background_tags> background_variables(
+      const tnsr::I<DataVector, 3, Frame::Inertial>& x) const noexcept {
+    return Xcts::Solutions::ConstantDensityStar::variables(x,
+                                                           background_tags{});
   }
   tuples::tagged_tuple_from_typelist<initial_tags> initial_variables(
       const tnsr::I<DataVector, 3, Frame::Inertial>& x) const noexcept {
@@ -60,6 +70,14 @@ void test_solution(const double density, const double radius,
   pypp::check_with_random_values<1, field_tags>(
       &ConstantDensityStarProxy::field_variables, solution,
       "ConstantDensityStar", {"conformal_factor", "conformal_factor_gradient"},
+      {{{-test_radius, test_radius}}}, std::make_tuple(density, radius),
+      DataVector(5));
+  pypp::check_with_random_values<1, background_tags>(
+      &ConstantDensityStarProxy::background_variables, solution,
+      "ConstantDensityStar",
+      {"extrinsic_curvature_trace",
+       "longitudinal_shift_minus_dt_conformal_metric_over_lapse_square",
+       "energy_density"},
       {{{-test_radius, test_radius}}}, std::make_tuple(density, radius),
       DataVector(5));
   pypp::check_with_random_values<1, initial_tags>(
