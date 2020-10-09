@@ -102,13 +102,18 @@ void momentum_sources(
     const tnsr::I<DataVector, 3, Frame::Inertial>& momentum_density,
     const tnsr::i<DataVector, 3, Frame::Inertial>&
         extrinsic_curvature_trace_gradient,
+    const tnsr::I<DataVector, 3, Frame::Inertial>& shift_background,
     const Scalar<DataVector>& conformal_factor,
     const Scalar<DataVector>& lapse_times_conformal_factor,
-    const tnsr::I<DataVector, 3, Frame::Inertial>& shift,
+    const tnsr::I<DataVector, 3, Frame::Inertial>& shift_excess,
     const tnsr::i<DataVector, 3, Frame::Inertial>& conformal_factor_gradient,
     const tnsr::i<DataVector, 3, Frame::Inertial>&
         lapse_times_conformal_factor_gradient,
     const tnsr::ii<DataVector, 3, Frame::Inertial>& shift_strain) noexcept {
+  auto shift = shift_background;
+  for (size_t i = 0; i < 3; ++i) {
+    shift.get(i) += shift_excess.get(i);
+  }
   auto longitudinal_shift =
       make_with_value<tnsr::IJ<DataVector, 3, Frame::Inertial>>(shift_strain,
                                                                 0.);
@@ -156,9 +161,10 @@ void linearized_momentum_sources(
     const tnsr::I<DataVector, 3, Frame::Inertial>& momentum_density,
     const tnsr::i<DataVector, 3, Frame::Inertial>&
         extrinsic_curvature_trace_gradient,
+    const tnsr::I<DataVector, 3, Frame::Inertial>& shift_background,
     const Scalar<DataVector>& conformal_factor,
     const Scalar<DataVector>& lapse_times_conformal_factor,
-    const tnsr::I<DataVector, 3, Frame::Inertial>& shift,
+    const tnsr::I<DataVector, 3, Frame::Inertial>& shift_excess,
     const tnsr::i<DataVector, 3, Frame::Inertial>& conformal_factor_gradient,
     const tnsr::i<DataVector, 3, Frame::Inertial>&
         lapse_times_conformal_factor_gradient,
@@ -172,6 +178,10 @@ void linearized_momentum_sources(
         lapse_times_conformal_factor_gradient_correction,
     const tnsr::ii<DataVector, 3, Frame::Inertial>&
         shift_strain_correction) noexcept {
+  auto shift = shift_background;
+  for (size_t i = 0; i < 3; ++i) {
+    shift.get(i) += shift_excess.get(i);
+  }
   auto longitudinal_shift =
       make_with_value<tnsr::IJ<DataVector, 3, Frame::Inertial>>(shift_strain,
                                                                 0.);

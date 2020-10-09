@@ -26,6 +26,8 @@ enum class Equations {
   HamiltonianLapseAndShift
 };
 
+enum class Geometry { Flat, Curved };
+
 /*!
  * \brief Compute the longitudinal shift \f$\left(L\beta\right)^{ij}=2B^{ij} -
  * \frac{2}{3}\gamma^{ij}\mathrm{Tr}(B)\f$
@@ -221,9 +223,10 @@ void momentum_sources(
     const tnsr::I<DataVector, 3, Frame::Inertial>& momentum_density,
     const tnsr::i<DataVector, 3, Frame::Inertial>&
         extrinsic_curvature_trace_gradient,
+    const tnsr::I<DataVector, 3, Frame::Inertial>& shift_background,
     const Scalar<DataVector>& conformal_factor,
     const Scalar<DataVector>& lapse_times_conformal_factor,
-    const tnsr::I<DataVector, 3, Frame::Inertial>& shift,
+    const tnsr::I<DataVector, 3, Frame::Inertial>& shift_excess,
     const tnsr::i<DataVector, 3, Frame::Inertial>& conformal_factor_gradient,
     const tnsr::i<DataVector, 3, Frame::Inertial>&
         lapse_times_conformal_factor_gradient,
@@ -244,9 +247,10 @@ void linearized_momentum_sources(
     const tnsr::I<DataVector, 3, Frame::Inertial>& momentum_density,
     const tnsr::i<DataVector, 3, Frame::Inertial>&
         extrinsic_curvature_trace_gradient,
+    const tnsr::I<DataVector, 3, Frame::Inertial>& shift_background,
     const Scalar<DataVector>& conformal_factor,
     const Scalar<DataVector>& lapse_times_conformal_factor,
-    const tnsr::I<DataVector, 3, Frame::Inertial>& shift,
+    const tnsr::I<DataVector, 3, Frame::Inertial>& shift_excess,
     const tnsr::i<DataVector, 3, Frame::Inertial>& conformal_factor_gradient,
     const tnsr::i<DataVector, 3, Frame::Inertial>&
         lapse_times_conformal_factor_gradient,
@@ -316,7 +320,8 @@ struct Sources<Equations::HamiltonianLapseAndShift> {
                  gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>,
                  gr::Tags::TraceExtrinsicCurvature<DataVector>,
                  ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
-                               tmpl::size_t<3>, Frame::Inertial>>;
+                               tmpl::size_t<3>, Frame::Inertial>,
+                 Tags::ShiftBackground<DataVector, 3, Frame::Inertial>>;
   static void apply(
       const gsl::not_null<Scalar<DataVector>*> source_for_conformal_factor,
       const gsl::not_null<Scalar<DataVector>*>
@@ -329,9 +334,10 @@ struct Sources<Equations::HamiltonianLapseAndShift> {
       const Scalar<DataVector>& extrinsic_curvature_trace,
       const tnsr::i<DataVector, 3, Frame::Inertial>&
           extrinsic_curvature_trace_gradient,
+      const tnsr::I<DataVector, 3, Frame::Inertial>& shift_background,
       const Scalar<DataVector>& conformal_factor,
       const Scalar<DataVector>& lapse_times_conformal_factor,
-      const tnsr::I<DataVector, 3, Frame::Inertial>& shift,
+      const tnsr::I<DataVector, 3, Frame::Inertial>& shift_excess,
       const tnsr::i<DataVector, 3, Frame::Inertial>& conformal_factor_gradient,
       const tnsr::i<DataVector, 3, Frame::Inertial>&
           lapse_times_conformal_factor_gradient,
@@ -341,12 +347,12 @@ struct Sources<Equations::HamiltonianLapseAndShift> {
     lapse_sources(source_for_lapse_times_conformal_factor, energy_density,
                   stress_trace, extrinsic_curvature_trace, conformal_factor,
                   lapse_times_conformal_factor);
-    momentum_sources(source_for_conformal_factor,
-                     source_for_lapse_times_conformal_factor, source_for_shift,
-                     momentum_density, extrinsic_curvature_trace_gradient,
-                     conformal_factor, lapse_times_conformal_factor, shift,
-                     conformal_factor_gradient,
-                     lapse_times_conformal_factor_gradient, shift_strain);
+    momentum_sources(
+        source_for_conformal_factor, source_for_lapse_times_conformal_factor,
+        source_for_shift, momentum_density, extrinsic_curvature_trace_gradient,
+        shift_background, conformal_factor, lapse_times_conformal_factor,
+        shift_excess, conformal_factor_gradient,
+        lapse_times_conformal_factor_gradient, shift_strain);
   }
 };
 
@@ -359,7 +365,19 @@ struct LinearizedSources<Equations::Hamiltonian> {
       tmpl::list<gr::Tags::EnergyDensity<DataVector>,
                  gr::Tags::TraceExtrinsicCurvature<DataVector>,
                  Xcts::Tags::ConformalFactor<DataVector>>;
-  static constexpr auto apply = linearized_hamiltonian_sources;
+  static void apply(const gsl::not_null<Scalar<DataVector>*>
+                        source_for_conformal_factor_correction,
+                    const Scalar<DataVector>& energy_density,
+                    const Scalar<DataVector>& extrinsic_curvature_trace,
+                    const Scalar<DataVector>& conformal_factor,
+                    const Scalar<DataVector>& conformal_factor_correction,
+                    const tnsr::i<DataVector, 3, Frame::Inertial>&
+                    /*conformal_factor_gradient_correction*/) noexcept {
+    linearized_hamiltonian_sources(source_for_conformal_factor_correction,
+                                   energy_density, extrinsic_curvature_trace,
+                                   conformal_factor,
+                                   conformal_factor_correction);
+  }
 };
 
 template <>
@@ -406,9 +424,10 @@ struct LinearizedSources<Equations::HamiltonianLapseAndShift> {
       gr::Tags::TraceExtrinsicCurvature<DataVector>,
       ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
                     tmpl::size_t<3>, Frame::Inertial>,
+      Xcts::Tags::ShiftBackground<DataVector, 3, Frame::Inertial>,
       Xcts::Tags::ConformalFactor<DataVector>,
       Xcts::Tags::LapseTimesConformalFactor<DataVector>,
-      gr::Tags::Shift<3, Frame::Inertial, DataVector>,
+      Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
       ::Tags::deriv<Xcts::Tags::ConformalFactor<DataVector>, tmpl::size_t<3>,
                     Frame::Inertial>,
       ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactor<DataVector>,
@@ -427,9 +446,10 @@ struct LinearizedSources<Equations::HamiltonianLapseAndShift> {
       const Scalar<DataVector>& extrinsic_curvature_trace,
       const tnsr::i<DataVector, 3, Frame::Inertial>&
           extrinsic_curvature_trace_gradient,
+      const tnsr::I<DataVector, 3, Frame::Inertial>& shift_background,
       const Scalar<DataVector>& conformal_factor,
       const Scalar<DataVector>& lapse_times_conformal_factor,
-      const tnsr::I<DataVector, 3, Frame::Inertial>& shift,
+      const tnsr::I<DataVector, 3, Frame::Inertial>& shift_excess,
       const tnsr::i<DataVector, 3, Frame::Inertial>& conformal_factor_gradient,
       const tnsr::i<DataVector, 3, Frame::Inertial>&
           lapse_times_conformal_factor_gradient,
@@ -456,8 +476,8 @@ struct LinearizedSources<Equations::HamiltonianLapseAndShift> {
         source_for_conformal_factor_correction,
         source_for_lapse_times_conformal_factor_correction,
         source_for_shift_correction, momentum_density,
-        extrinsic_curvature_trace_gradient, conformal_factor,
-        lapse_times_conformal_factor, shift, conformal_factor_gradient,
+        extrinsic_curvature_trace_gradient, shift_background, conformal_factor,
+        lapse_times_conformal_factor, shift_excess, conformal_factor_gradient,
         lapse_times_conformal_factor_gradient, shift_strain,
         conformal_factor_correction, lapse_times_conformal_factor_correction,
         shift_correction, conformal_factor_gradient_correction,

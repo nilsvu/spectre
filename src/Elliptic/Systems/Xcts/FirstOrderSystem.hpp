@@ -21,7 +21,7 @@ class Variables;
 
 namespace Xcts {
 
-template <Equations EnabledEquations>
+template <Equations EnabledEquations, Geometry ConformalGeometry>
 struct LinearizedFirstOrderSystem;
 
 /*!
@@ -96,7 +96,7 @@ struct LinearizedFirstOrderSystem;
  * The template parameter `EnabledEquations` selects which subset of the XCTS
  * equations is being solved.
  */
-template <Equations EnabledEquations>
+template <Equations EnabledEquations, Geometry ConformalGeometry>
 struct FirstOrderSystem {
  private:
   using conformal_factor = Tags::ConformalFactor<DataVector>;
@@ -107,7 +107,7 @@ struct FirstOrderSystem {
   using lapse_times_conformal_factor_gradient =
       ::Tags::deriv<lapse_times_conformal_factor, tmpl::size_t<3>,
                     Frame::Inertial>;
-  using shift = gr::Tags::Shift<3, Frame::Inertial, DataVector>;
+  using shift_excess = Tags::ShiftExcess<DataVector, 3, Frame::Inertial>;
   using shift_strain = Tags::ShiftStrain<3, Frame::Inertial, DataVector>;
 
  public:
@@ -122,7 +122,7 @@ struct FirstOrderSystem {
                           lapse_times_conformal_factor, tmpl::list<>>,
       tmpl::conditional_t<EnabledEquations ==
                               Equations::HamiltonianLapseAndShift,
-                          shift, tmpl::list<>>>>;
+                          shift_excess, tmpl::list<>>>>;
   using auxiliary_fields = tmpl::flatten<tmpl::list<
       conformal_factor_gradient,
       tmpl::conditional_t<EnabledEquations == Equations::HamiltonianAndLapse or
@@ -135,10 +135,27 @@ struct FirstOrderSystem {
   using fields_tag =
       ::Tags::Variables<tmpl::append<primal_fields, auxiliary_fields>>;
 
+  using background_fields = tmpl::flatten<tmpl::list<
+      gr::Tags::EnergyDensity<DataVector>,
+      gr::Tags::TraceExtrinsicCurvature<DataVector>,
+      tmpl::conditional_t<EnabledEquations == Equations::HamiltonianAndLapse or
+                              EnabledEquations ==
+                                  Equations::HamiltonianLapseAndShift,
+                          gr::Tags::StressTrace<DataVector>, tmpl::list<>>,
+      tmpl::conditional_t<
+          EnabledEquations == Equations::HamiltonianLapseAndShift,
+          tmpl::list<
+              gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>,
+              ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
+                            tmpl::size_t<3>, Frame::Inertial>,
+              Tags::ShiftBackground<DataVector, 3, Frame::Inertial>>,
+          tmpl::list<>>>>;
+
   using fluxes = Fluxes<EnabledEquations>;
   using sources = Sources<EnabledEquations>;
 
-  using linearized_system = LinearizedFirstOrderSystem<EnabledEquations>;
+  using linearized_system =
+      LinearizedFirstOrderSystem<EnabledEquations, ConformalGeometry>;
 
   // The tag of the operator to compute magnitudes on the manifold, e.g. to
   // normalize vectors on the faces of an element
@@ -146,10 +163,11 @@ struct FirstOrderSystem {
   using magnitude_tag = ::Tags::EuclideanMagnitude<Tag>;
 };
 
-template <Equations EnabledEquations>
+template <Equations EnabledEquations, Geometry ConformalGeometry>
 struct LinearizedFirstOrderSystem {
  private:
-  using nonlinear_system = FirstOrderSystem<EnabledEquations>;
+  using nonlinear_system =
+      FirstOrderSystem<EnabledEquations, ConformalGeometry>;
 
  public:
   static constexpr size_t volume_dim = 3;
