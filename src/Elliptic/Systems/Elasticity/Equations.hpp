@@ -41,14 +41,47 @@ void primal_fluxes(
     const tnsr::I<DataVector, Dim>& coordinates) noexcept;
 
 /*!
+ * \brief Add the contribution \f$-\Gamma^i_{ik}T^{kj} - \Gamma^j_{ik}T^{ik}\f$
+ * to the displacement source and the contribution \f$\Gamma_{ijk}\xi^i\f$ to
+ * the strain source for the curved-space elasticity equations on a metric
+ * \f$\gamma_{ij}\f$.
+ *
+ * These sources arise from the non-principal part of the divergence on a
+ * non-Euclidean background.
+ */
+template <size_t Dim>
+void add_non_euclidean_sources(
+    gsl::not_null<tnsr::I<DataVector, Dim>*> source_for_displacement,
+    gsl::not_null<tnsr::ii<DataVector, Dim>*> source_for_strain,
+    const tnsr::ijj<DataVector, Dim>& christoffel_first_kind,
+    const tnsr::Ijj<DataVector, Dim>& christoffel_second_kind,
+    const tnsr::i<DataVector, Dim>& christoffel_contracted,
+    const tnsr::I<DataVector, Dim>& displacement,
+    const tnsr::II<DataVector, Dim>& stress) noexcept;
+
+/*!
  * \brief Compute the fluxes \f$F^i_{jk}=\delta^{i}_{(j} \xi_{k)}\f$ for the
- * auxiliary field in the first-order formulation of the Elasticity equation.
+ * auxiliary (strain) field in the first-order formulation of the Elasticity
+ * equation.
  *
  * \see Elasticity::FirstOrderSystem
  */
 template <size_t Dim>
 void auxiliary_fluxes(
     gsl::not_null<tnsr::Ijj<DataVector, Dim>*> flux_for_strain,
+    const tnsr::I<DataVector, Dim>& displacement) noexcept;
+
+/*!
+ * \brief Compute the fluxes \f$F^i_{jk}=\delta^{i}_{(j}\gamma_{k)l}\xi^l\f$
+ * for the auxiliary (strain) field in the first-order formulation of the
+ * curved-space elasticity equations on a metric \f$\gamma_{ij}\f$.
+ *
+ * \see Elasticity::FirstOrderSystem
+ */
+template <size_t Dim>
+void non_euclidean_auxiliary_fluxes(
+    gsl::not_null<tnsr::Ijj<DataVector, Dim>*> flux_for_strain,
+    const tnsr::ii<DataVector, Dim>& metric,
     const tnsr::I<DataVector, Dim>& displacement) noexcept;
 
 /*!
