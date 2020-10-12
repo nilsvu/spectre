@@ -42,15 +42,39 @@ void primal_fluxes(
 }
 
 template <size_t Dim>
+void add_non_euclidean_sources(
+    const gsl::not_null<tnsr::I<DataVector, Dim>*> source_for_displacement,
+    const gsl::not_null<tnsr::ii<DataVector, Dim>*> source_for_strain,
+    const tnsr::ijj<DataVector, Dim>& christoffel_first_kind,
+    const tnsr::Ijj<DataVector, Dim>& christoffel_second_kind,
+    const tnsr::i<DataVector, Dim>& christoffel_contracted,
+    const tnsr::I<DataVector, Dim>& displacement,
+    const tnsr::II<DataVector, Dim>& stress) noexcept {
+  std::fill(source_for_displacement->begin(), source_for_displacement->end(),
+            0.);
+  std::fill(source_for_strain->begin(), source_for_strain->end(), 0.);
+  Elasticity::add_non_euclidean_sources(
+      source_for_displacement, source_for_strain, christoffel_first_kind,
+      christoffel_second_kind, christoffel_contracted, displacement, stress);
+}
+
+template <size_t Dim>
 void test_equations(const DataVector& used_for_size) {
   pypp::check_with_random_values<4>(
       &primal_fluxes<Dim>, "Equations",
       {MakeString{} << "primal_fluxes_" << Dim << "d"},
       {{{-1., 1.}, {-1., 1.}, {0., 1.}, {0., 1.}}}, used_for_size);
+  pypp::check_with_random_values<1>(&Elasticity::auxiliary_fluxes<Dim>,
+                                    "Equations", {"auxiliary_fluxes"},
+                                    {{{-1., 1.}}}, used_for_size);
+  pypp::check_with_random_values<1>(&add_non_euclidean_sources<Dim>,
+                                    "Equations",
+                                    {"add_non_euclidean_sources_displacement",
+                                     "add_non_euclidean_sources_strain"},
+                                    {{{-1., 1.}}}, used_for_size);
   pypp::check_with_random_values<1>(
-      &Elasticity::auxiliary_fluxes<Dim>, "Equations",
-      {MakeString{} << "auxiliary_fluxes_" << Dim << "d"}, {{{-1., 1.}}},
-      used_for_size);
+      &Elasticity::non_euclidean_auxiliary_fluxes<Dim>, "Equations",
+      {"non_euclidean_auxiliary_fluxes"}, {{{-1., 1.}}}, used_for_size);
 }
 
 template <size_t Dim>

@@ -25,16 +25,29 @@ def primal_fluxes_3d(strain, coordinates, bulk_modulus, shear_modulus):
     return -constitutive_relation_3d(strain, bulk_modulus, shear_modulus)
 
 
-def auxiliary_fluxes(field, dim):
+def add_non_euclidean_sources_displacement(christoffel_first_kind,
+                                           christoffel_second_kind,
+                                           christoffel_contracted,
+                                           displacement, stress):
+    return (-np.einsum('i,ij', christoffel_contracted, stress) -
+            np.einsum('ijk,jk', christoffel_second_kind, stress))
+
+
+def add_non_euclidean_sources_strain(christoffel_first_kind,
+                                     christoffel_second_kind,
+                                     christoffel_contracted, displacement,
+                                     stress):
+    return np.einsum('ijk,i', christoffel_first_kind, displacement)
+
+
+def auxiliary_fluxes(displacement):
+    dim = len(displacement)
     # Compute the tensor product with a Kronecker delta and symmetrize the last
     # two indices.
-    tensor_product = np.tensordot(np.eye(dim), field, axes=0)
+    tensor_product = np.tensordot(np.eye(dim), displacement, axes=0)
     return 0.5 * (tensor_product + np.transpose(tensor_product, (0, 2, 1)))
 
 
-def auxiliary_fluxes_2d(field):
-    return auxiliary_fluxes(field, 2)
-
-
-def auxiliary_fluxes_3d(field):
-    return auxiliary_fluxes(field, 3)
+def non_euclidean_auxiliary_fluxes(metric, displacement):
+    co_displacement = np.einsum('ij,j', metric, displacement)
+    return auxiliary_fluxes(co_displacement)
