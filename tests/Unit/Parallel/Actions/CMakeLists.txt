@@ -6,6 +6,7 @@ set(LIBRARY "Test_ParallelActions")
 set(LIBRARY_SOURCES
   Test_Goto.cpp
   Test_TerminatePhase.cpp
+  Test_SetupDataBox.cpp
   )
 
 add_test_library(
