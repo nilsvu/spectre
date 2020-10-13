@@ -1400,9 +1400,12 @@ void test_mutate_apply() noexcept {
         make_not_null(&box));
 
     struct PointerMutateApply {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-local-typedefs"
       using return_tags = tmpl::list<test_databox_tags::Pointer>;
       using argument_tags = tmpl::list<test_databox_tags::PointerToCounter,
                                        test_databox_tags::PointerToSum>;
+#pragma GCC diagnostic pop
       static void apply(const gsl::not_null<std::unique_ptr<int>*> ret,
                         const int& compute,
                         const int& compute_mutating) noexcept {
@@ -1414,8 +1417,11 @@ void test_mutate_apply() noexcept {
     db::mutate_apply<PointerMutateApply>(make_not_null(&box));
 
     struct PointerMutateApplyBase {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-local-typedefs"
       using return_tags = tmpl::list<test_databox_tags::PointerBase>;
       using argument_tags = tmpl::list<test_databox_tags::PointerToCounterBase>;
+#pragma GCC diagnostic pop
       static void apply(const gsl::not_null<std::unique_ptr<int>*> ret,
                         const int& compute_base) noexcept {
         **ret = 8;
@@ -2630,6 +2636,30 @@ void test_serialization() noexcept {
   serialization_of_pointers();
 }
 
+void test_mutate_assign() noexcept {
+  auto box = db::create<
+      db::AddSimpleTags<test_databox_tags::Tag0, test_databox_tags::Tag1>>(
+      0.5, std::vector<double>{1.0, 2.0});
+  db::mutate_assign<test_databox_tags::Tag0>(make_not_null(&box), 1.2);
+  CHECK(db::get<test_databox_tags::Tag0>(box) == 1.2);
+  CHECK(db::get<test_databox_tags::Tag1>(box) == std::vector<double>{1.0, 2.0});
+  db::mutate_assign<test_databox_tags::Tag0, test_databox_tags::Tag1>(
+      make_not_null(&box), 1.5, std::vector<double>{1.6, 2.5, 3.0});
+  CHECK(db::get<test_databox_tags::Tag0>(box) == 1.5);
+  CHECK(db::get<test_databox_tags::Tag1>(box) ==
+        std::vector<double>{1.6, 2.5, 3.0});
+  db::mutate_assign(
+      make_not_null(&box),
+      tmpl::list<test_databox_tags::Tag0, test_databox_tags::Tag1>{}, 3.9,
+      std::vector<double>{3.5});
+  CHECK(db::get<test_databox_tags::Tag0>(box) == 3.9);
+  CHECK(db::get<test_databox_tags::Tag1>(box) == std::vector<double>{3.5});
+  db::mutate_assign(make_not_null(&box), tmpl::list<test_databox_tags::Tag1>{},
+                    std::vector<double>{3.5, 4.2});
+  CHECK(db::get<test_databox_tags::Tag0>(box) == 3.9);
+  CHECK(db::get<test_databox_tags::Tag1>(box) == std::vector<double>{3.5, 4.2});
+}
+
 SPECTRE_TEST_CASE("Unit.DataStructures.DataBox", "[Unit][DataStructures]") {
   test_databox();
   test_create_argument_types();
@@ -2648,6 +2678,7 @@ SPECTRE_TEST_CASE("Unit.DataStructures.DataBox", "[Unit][DataStructures]") {
   test_overload_compute_tags();
   test_with_tagged_tuple();
   test_serialization();
+  test_mutate_assign();
 }
 
 // Test`tag_is_retrievable_v`
