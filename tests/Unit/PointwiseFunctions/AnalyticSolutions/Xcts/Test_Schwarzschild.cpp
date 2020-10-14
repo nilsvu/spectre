@@ -32,12 +32,21 @@ using auxiliary_field_tags =
                ::Tags::deriv<Xcts::Tags::LapseTimesConformalFactor<DataVector>,
                              tmpl::size_t<3>, Frame::Inertial>,
                Xcts::Tags::ShiftStrain<DataVector, 3, Frame::Inertial>>;
-using background_tags =
-    tmpl::list<Xcts::Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
-               gr::Tags::TraceExtrinsicCurvature<DataVector>,
-               ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
-                             tmpl::size_t<3>, Frame::Inertial>,
-               Xcts::Tags::ShiftBackground<DataVector, 3, Frame::Inertial>>;
+using background_tags = tmpl::list<
+    Xcts::Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
+    gr::Tags::TraceExtrinsicCurvature<DataVector>,
+    ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
+                  tmpl::size_t<3>, Frame::Inertial>,
+    ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataVector>>,
+    Xcts::Tags::ShiftBackground<DataVector, 3, Frame::Inertial>,
+    Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+        DataVector, 3, Frame::Inertial>,
+    ::Tags::div<Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+        DataVector, 3, Frame::Inertial>>,
+    Xcts::Tags::LongitudinalShiftMinusDtConformalMetricSquare<DataVector>,
+    Xcts::Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<
+        DataVector>,
+    Xcts::Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector>>;
 using matter_source_tags =
     tmpl::list<gr::Tags::EnergyDensity<DataVector>,
                gr::Tags::StressTrace<DataVector>,
@@ -96,7 +105,11 @@ void test_solution(const double radius_at_horizon,
       {"conformal_spatial_metric_" + py_functions_suffix,
        "extrinsic_curvature_trace_" + py_functions_suffix,
        "extrinsic_curvature_trace_gradient_" + py_functions_suffix,
-       "shift_background"},
+       "dt_extrinsic_curvature_trace", "shift_background",
+       "longitudinal_shift_background", "div_longitudinal_shift_background",
+       "longitudinal_shift_square_" + py_functions_suffix,
+       "longitudinal_shift_over_lapse_square_" + py_functions_suffix,
+       "shift_dot_deriv_extrinsic_curvature_trace_" + py_functions_suffix},
       {{{inner_radius, outer_radius}}}, std::tuple<>{}, DataVector(5));
   pypp::check_with_random_values<1, matter_source_tags>(
       &SchwarzschildProxy<Coords>::matter_source_variables, solution,

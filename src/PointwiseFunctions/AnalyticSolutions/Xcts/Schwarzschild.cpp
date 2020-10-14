@@ -10,7 +10,9 @@
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Elliptic/Systems/Xcts/Equations.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "NumericalAlgorithms/RootFinding/NewtonRaphson.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
@@ -215,6 +217,19 @@ Schwarzschild<SchwarzschildCoordinates::KerrSchildIsotropic>::variables(
   get<1>(extrinsic_curvature_trace_gradient) = isotropic_prefactor * get<1>(x);
   get<2>(extrinsic_curvature_trace_gradient) = isotropic_prefactor * get<2>(x);
   return {std::move(extrinsic_curvature_trace_gradient)};
+}
+
+// Extrinsic curvature trace time derivative
+
+template <SchwarzschildCoordinates Coords>
+template <typename DataType>
+tuples::TaggedTuple<::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>>
+Schwarzschild<Coords>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<
+        ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>> /*meta*/)
+    const noexcept {
+  return {make_with_value<Scalar<DataType>>(x, 0.)};
 }
 
 // Conformal factor
@@ -432,6 +447,31 @@ Schwarzschild<Coords>::variables(
   return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
 }
 
+template <SchwarzschildCoordinates Coords>
+template <typename DataType>
+tuples::TaggedTuple<
+    Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+        DataType, 3, Frame::Inertial>>
+Schwarzschild<Coords>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+        DataType, 3, Frame::Inertial>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::II<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
+template <SchwarzschildCoordinates Coords>
+template <typename DataType>
+tuples::TaggedTuple<
+    ::Tags::div<Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+        DataType, 3, Frame::Inertial>>>
+Schwarzschild<Coords>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<::Tags::div<
+        Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+            DataType, 3, Frame::Inertial>>> /*meta*/) const noexcept {
+  return {make_with_value<tnsr::I<DataType, 3, Frame::Inertial>>(x, 0.)};
+}
+
 template <>
 template <typename DataType>
 tuples::TaggedTuple<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>
@@ -546,6 +586,83 @@ Schwarzschild<SchwarzschildCoordinates::KerrSchildIsotropic>::variables(
   return {std::move(shift_strain)};
 }
 
+// Longitudinal shift square (for Hamiltonian and lapse equations only)
+
+template <SchwarzschildCoordinates Coords>
+template <typename DataType>
+tuples::TaggedTuple<
+    Xcts::Tags::LongitudinalShiftMinusDtConformalMetricSquare<DataType>>
+Schwarzschild<Coords>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<Xcts::Tags::LongitudinalShiftMinusDtConformalMetricSquare<
+        DataType>> /*meta*/) const noexcept {
+  auto longitudinal_shift = make_with_value<tnsr::II<DataType, 3>>(x, 0.);
+  const auto shift_strain =
+      get<Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>>(variables(
+          x,
+          tmpl::list<Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>>{}));
+  Xcts::euclidean_longitudinal_shift(make_not_null(&longitudinal_shift),
+                                     shift_strain);
+  auto longitudinal_shift_square = make_with_value<Scalar<DataType>>(x, 0.);
+  Xcts::fully_contract(make_not_null(&longitudinal_shift_square),
+                       longitudinal_shift, longitudinal_shift);
+  return {std::move(longitudinal_shift_square)};
+}
+
+// Longitudinal shift over lapse square (for Hamiltonian equation only)
+
+template <SchwarzschildCoordinates Coords>
+template <typename DataType>
+tuples::TaggedTuple<
+    Xcts::Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<
+        DataType>>
+Schwarzschild<Coords>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<
+        Xcts::Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<
+            DataType>> /*meta*/) const noexcept {
+  auto longitudinal_shift_over_lapse_square = get<
+      Xcts::Tags::LongitudinalShiftMinusDtConformalMetricSquare<DataType>>(
+      variables(
+          x,
+          tmpl::list<Xcts::Tags::LongitudinalShiftMinusDtConformalMetricSquare<
+              DataType>>{}));
+  const auto conformal_factor = get<
+      Xcts::Tags::ConformalFactor<DataType>>(variables(
+      x,
+      tmpl::list<Xcts::Tags::ConformalFactor<DataType>>{}));
+  const auto lapse_times_conformal_factor =
+      get<Xcts::Tags::LapseTimesConformalFactor<DataType>>(variables(
+          x, tmpl::list<Xcts::Tags::LapseTimesConformalFactor<DataType>>{}));
+  get(longitudinal_shift_over_lapse_square) /=
+      square(get(lapse_times_conformal_factor) / get(conformal_factor));
+  return {std::move(longitudinal_shift_over_lapse_square)};
+}
+
+// Shift dot extrinsic curvature trace gradient (for lapse equation only)
+
+template <SchwarzschildCoordinates Coords>
+template <typename DataType>
+tuples::TaggedTuple<Xcts::Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataType>>
+Schwarzschild<Coords>::variables(
+    const tnsr::I<DataType, 3, Frame::Inertial>& x,
+    tmpl::list<
+        Xcts::Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataType>> /*meta*/)
+    const noexcept {
+  const auto shift =
+      get<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>(variables(
+          x,
+          tmpl::list<Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>{}));
+  const auto extrinsic_curvature_trace_gradient = get<
+      ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
+                    tmpl::size_t<3>, Frame::Inertial>>(
+      variables(
+          x,
+          tmpl::list<::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
+                                   tmpl::size_t<3>, Frame::Inertial>>{}));
+  return {dot_product(shift, extrinsic_curvature_trace_gradient)};
+}
+
 // Fixed sources (all zero)
 
 template <SchwarzschildCoordinates Coords>
@@ -631,6 +748,33 @@ Schwarzschild<Coords>::variables(
       tmpl::list<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>>)              \
       const noexcept;                                                          \
   template tuples::TaggedTuple<                                                \
+      Xcts::Tags::LongitudinalShiftMinusDtConformalMetricSquare<DTYPE(data)>>  \
+  Schwarzschild<COORDS(data)>::variables(                                      \
+      const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \
+      tmpl::list<Xcts::Tags::LongitudinalShiftMinusDtConformalMetricSquare<    \
+          DTYPE(data)>>) const noexcept;                                       \
+  template tuples::TaggedTuple<                                                \
+      Xcts::Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<      \
+          DTYPE(data)>>                                                        \
+  Schwarzschild<COORDS(data)>::variables(                                      \
+      const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \
+      tmpl::list<                                                              \
+          Xcts::Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<  \
+              DTYPE(data)>>) const noexcept;                                   \
+  template tuples::TaggedTuple<                                                \
+      Xcts::Tags::ShiftDotDerivExtrinsicCurvatureTrace<DTYPE(data)>>           \
+  Schwarzschild<COORDS(data)>::variables(                                      \
+      const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \
+      tmpl::list<                                                              \
+          Xcts::Tags::ShiftDotDerivExtrinsicCurvatureTrace<DTYPE(data)>>)      \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>>>              \
+  Schwarzschild<COORDS(data)>::variables(                                      \
+      const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \
+      tmpl::list<::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>>>)  \
+      const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
       ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DTYPE(data)>,            \
                     tmpl::size_t<3>, Frame::Inertial>>                         \
   Schwarzschild<COORDS(data)>::variables(                                      \
@@ -671,6 +815,22 @@ Schwarzschild<Coords>::variables(
       tmpl::list<                                                              \
           Xcts::Tags::ShiftBackground<DTYPE(data), 3, Frame::Inertial>>)       \
       const noexcept;                                                          \
+  template tuples::TaggedTuple<                                                \
+      Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<           \
+          DTYPE(data), 3, Frame::Inertial>>                                    \
+  Schwarzschild<COORDS(data)>::variables(                                      \
+      const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \
+      tmpl::list<                                                              \
+          Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<       \
+              DTYPE(data), 3, Frame::Inertial>>) const noexcept;               \
+  template tuples::TaggedTuple<::Tags::div<                                    \
+      Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<           \
+          DTYPE(data), 3, Frame::Inertial>>>                                   \
+  Schwarzschild<COORDS(data)>::variables(                                      \
+      const tnsr::I<DTYPE(data), 3, Frame::Inertial>&,                         \
+      tmpl::list<::Tags::div<                                                  \
+          Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<       \
+              DTYPE(data), 3, Frame::Inertial>>>) const noexcept;              \
   template tuples::TaggedTuple<                                                \
       Xcts::Tags::ShiftExcess<DTYPE(data), 3, Frame::Inertial>>                \
   Schwarzschild<COORDS(data)>::variables(                                      \
