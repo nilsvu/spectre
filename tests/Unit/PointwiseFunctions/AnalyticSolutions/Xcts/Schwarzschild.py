@@ -20,6 +20,10 @@ def extrinsic_curvature_trace_gradient_isotropic(x, mass):
     return np.zeros(3)
 
 
+def dt_extrinsic_curvature_trace(x, mass):
+    return 0.
+
+
 def conformal_factor_isotropic(x, mass):
     r = np.linalg.norm(x)
     return 1. + 0.5 * mass / r
@@ -44,12 +48,32 @@ def shift_background(x, mass):
     return np.zeros(3)
 
 
+def longitudinal_shift_background(x, mass):
+    return np.zeros((3, 3))
+
+
+def div_longitudinal_shift_background(x, mass):
+    return np.zeros(3)
+
+
 def shift_isotropic(x, mass):
     return np.zeros(3)
 
 
 def shift_strain_isotropic(x, mass):
     return np.zeros((3, 3))
+
+
+def longitudinal_shift_square_isotropic(x, mass):
+    return 0.
+
+
+def longitudinal_shift_over_lapse_square_isotropic(x, mass):
+    return 0.
+
+
+def shift_dot_deriv_extrinsic_curvature_trace_isotropic(x, mass):
+    return 0.
 
 
 # Matter sources

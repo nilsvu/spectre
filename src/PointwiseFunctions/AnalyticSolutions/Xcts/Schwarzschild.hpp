@@ -8,6 +8,7 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
@@ -127,6 +128,14 @@ class Schwarzschild {
   template <typename DataType>
   auto variables(
       const tnsr::I<DataType, 3, Frame::Inertial>& x,
+      tmpl::list<
+          ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>> /*meta*/)
+      const noexcept -> tuples::TaggedTuple<
+          ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>>;
+
+  template <typename DataType>
+  auto variables(
+      const tnsr::I<DataType, 3, Frame::Inertial>& x,
       tmpl::list<Xcts::Tags::ConformalFactor<DataType>> /*meta*/) const noexcept
       -> tuples::TaggedTuple<Xcts::Tags::ConformalFactor<DataType>>;
 
@@ -165,6 +174,25 @@ class Schwarzschild {
   template <typename DataType>
   auto variables(
       const tnsr::I<DataType, 3, Frame::Inertial>& x,
+      tmpl::list<Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+          DataType, 3, Frame::Inertial>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<
+          Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+              DataType, 3, Frame::Inertial>>;
+
+  template <typename DataType>
+  auto variables(
+      const tnsr::I<DataType, 3, Frame::Inertial>& x,
+      tmpl::list<::Tags::div<
+          Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+              DataType, 3, Frame::Inertial>>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<::Tags::div<
+          Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+              DataType, 3, Frame::Inertial>>>;
+
+  template <typename DataType>
+  auto variables(
+      const tnsr::I<DataType, 3, Frame::Inertial>& x,
       tmpl::list<
           Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>> /*meta*/) const
       noexcept -> tuples::TaggedTuple<
@@ -177,6 +205,31 @@ class Schwarzschild {
           Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>> /*meta*/) const
       noexcept -> tuples::TaggedTuple<
           Xcts::Tags::ShiftStrain<DataType, 3, Frame::Inertial>>;
+
+  template <typename DataType>
+  auto variables(
+      const tnsr::I<DataType, 3, Frame::Inertial>& x,
+      tmpl::list<Xcts::Tags::LongitudinalShiftMinusDtConformalMetricSquare<
+          DataType>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<
+          Xcts::Tags::LongitudinalShiftMinusDtConformalMetricSquare<DataType>>;
+
+  template <typename DataType>
+  auto variables(
+      const tnsr::I<DataType, 3, Frame::Inertial>& x,
+      tmpl::list<
+          Xcts::Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<
+              DataType>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<
+          Xcts::Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<
+              DataType>>;
+
+  template <typename DataType>
+  auto variables(const tnsr::I<DataType, 3, Frame::Inertial>& x,
+                 tmpl::list<Xcts::Tags::ShiftDotDerivExtrinsicCurvatureTrace<
+                     DataType>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<
+          Xcts::Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataType>>;
 
   template <typename DataType>
   auto variables(const tnsr::I<DataType, 3, Frame::Inertial>& x,
