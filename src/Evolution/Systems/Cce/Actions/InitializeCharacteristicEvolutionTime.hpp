@@ -101,7 +101,8 @@ struct InitializeCharacteristicEvolutionTime {
     typename ::Tags::HistoryEvolvedVariables<evolved_swsh_variables_tag>::type
         swsh_history;
     db::mutate_assign(make_not_null(&box), simple_tags{},
-                      std::move(initial_time_id), std::move(second_time_id),
+                      std::move(initial_time_id),  // NOLINT
+                      std::move(second_time_id),   // NOLINT
                       fixed_time_step, initial_time_value,
                       std::move(coordinate_history), std::move(swsh_history));
     return std::make_tuple(std::move(box));
