@@ -16,6 +16,10 @@ def extrinsic_curvature_trace_isotropic(x):
     return 0.
 
 
+def dt_extrinsic_curvature_trace(x):
+    return 0.
+
+
 def extrinsic_curvature_trace_gradient_isotropic(x):
     return np.zeros(3)
 
@@ -44,12 +48,32 @@ def shift_background(x):
     return np.zeros(3)
 
 
+def longitudinal_shift_background(x):
+    return np.zeros((3, 3))
+
+
+def div_longitudinal_shift_background(x):
+    return np.zeros(3)
+
+
 def shift_isotropic(x):
     return np.zeros(3)
 
 
 def shift_strain_isotropic(x):
     return np.zeros((3, 3))
+
+
+def longitudinal_shift_square_isotropic(x):
+    return 0.
+
+
+def longitudinal_shift_over_lapse_square_isotropic(x):
+    return 0.
+
+
+def shift_dot_deriv_extrinsic_curvature_trace_isotropic(x):
+    return 0.
 
 
 # Painleve-Gullstrand coordinates
@@ -94,6 +118,21 @@ def shift_strain_painleve_gullstrand(x):
     r = np.linalg.norm(x)
     return (sqrt(2. / r**3) *
             (np.identity(3) - 1.5 * np.tensordot(x, x, axes=0) / r**2))
+
+
+def longitudinal_shift_square_painleve_gullstrand(x):
+    shift_strain = shift_strain_painleve_gullstrand(x)
+    return (4. * (np.einsum('ij,ij', shift_strain, shift_strain) -
+                  1. / 3. * np.trace(shift_strain)**2))
+
+
+def longitudinal_shift_over_lapse_square_painleve_gullstrand(x):
+    return longitudinal_shift_square_painleve_gullstrand(x)
+
+
+def shift_dot_deriv_extrinsic_curvature_trace_painleve_gullstrand(x):
+    return np.dot(shift_painleve_gullstrand(x),
+                  extrinsic_curvature_trace_gradient_painleve_gullstrand(x))
 
 
 # Areal Kerr-Schild coordinates
@@ -248,6 +287,24 @@ def shift_strain_kerr_schild_isotropic(x):
              kerr_schild_isotropic_radius_from_areal_deriv(r_areal) -
              shift_magnitude / r_isotropic) * np.tensordot(x, x, axes=0) /
             r_isotropic**2 + shift_magnitude / r_isotropic * np.eye(3))
+
+
+def longitudinal_shift_square_kerr_schild_isotropic(
+        x):
+    shift_strain = shift_strain_kerr_schild_isotropic(x)
+    return (4. * (np.einsum('ij,ij', shift_strain, shift_strain) -
+                  1. / 3. * np.trace(shift_strain)**2))
+
+
+def longitudinal_shift_over_lapse_square_kerr_schild_isotropic(x):
+    r_areal = kerr_schild_areal_radius_from_isotropic(np.linalg.norm(x))
+    return (longitudinal_shift_square_kerr_schild_isotropic(x) /
+            lapse_kerr_schild(r_areal)**2)
+
+
+def shift_dot_deriv_extrinsic_curvature_trace_kerr_schild_isotropic(x):
+    return np.dot(shift_kerr_schild_isotropic(x),
+                  extrinsic_curvature_trace_gradient_kerr_schild_isotropic(x))
 
 
 # Matter sources
