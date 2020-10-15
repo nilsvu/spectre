@@ -43,13 +43,13 @@ struct FirstOrderFluxesImpl<Dim, tmpl::list<PrimalFields...>,
   }
 };
 
-template <typename PrimalFields, typename AuxiliaryFields,
+template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
           typename SourcesComputer>
 struct FirstOrderSourcesImpl;
 
-template <typename... PrimalFields, typename... AuxiliaryFields,
+template <size_t Dim, typename... PrimalFields, typename... AuxiliaryFields,
           typename SourcesComputer>
-struct FirstOrderSourcesImpl<tmpl::list<PrimalFields...>,
+struct FirstOrderSourcesImpl<Dim, tmpl::list<PrimalFields...>,
                              tmpl::list<AuxiliaryFields...>, SourcesComputer> {
   template <typename VarsTags, typename... SourcesArgs>
   static constexpr void apply(
@@ -57,20 +57,27 @@ struct FirstOrderSourcesImpl<tmpl::list<PrimalFields...>,
           Variables<db::wrap_tags_in<::Tags::Source, VarsTags>>*>
           sources,
       const Variables<VarsTags>& vars,
+      const Variables<db::wrap_tags_in<
+          ::Tags::Flux, VarsTags, tmpl::size_t<Dim>, Frame::Inertial>>& fluxes,
       const SourcesArgs&... sources_args) noexcept {
-    // Compute sources for primal fields
-    SourcesComputer::apply(
-        make_not_null(&get<::Tags::Source<PrimalFields>>(*sources))...,
-        sources_args..., get<PrimalFields>(vars)...);
-    // Compute sources for auxiliary fields. They are just the auxiliary field
-    // values.
+    // Set auxiliary field sources to the auxiliary field values to begin with.
+    // This is the standard choice, since the auxiliary equations define the
+    // auxiliary variables. Source computers can adjust or add to these sources.
     tmpl::for_each<tmpl::list<AuxiliaryFields...>>(
-        [&sources, &vars ](const auto auxiliary_field_tag_v) noexcept {
+        [&sources, &vars](const auto auxiliary_field_tag_v) noexcept {
           using auxiliary_field_tag =
               tmpl::type_from<decltype(auxiliary_field_tag_v)>;
           get<::Tags::Source<auxiliary_field_tag>>(*sources) =
               get<auxiliary_field_tag>(vars);
         });
+    // Call into the sources computer to set primal field sources and possibly
+    // adjust auxiliary field sources
+    SourcesComputer::apply(
+        make_not_null(&get<::Tags::Source<PrimalFields>>(*sources))...,
+        make_not_null(&get<::Tags::Source<AuxiliaryFields>>(*sources))...,
+        sources_args..., get<PrimalFields>(vars)...,
+        get<::Tags::Flux<PrimalFields, tmpl::size_t<Dim>, Frame::Inertial>>(
+            fluxes)...);
   }
 };
 
@@ -120,28 +127,34 @@ auto first_order_fluxes(const Variables<VarsTags>& vars,
  *
  * \see `elliptic::first_order_operator`
  */
-template <typename PrimalFields, typename AuxiliaryFields,
+template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
           typename SourcesComputer, typename VarsTags, typename... SourcesArgs>
 void first_order_sources(
     gsl::not_null<Variables<db::wrap_tags_in<::Tags::Source, VarsTags>>*>
         sources,
     const Variables<VarsTags>& vars,
+    const Variables<db::wrap_tags_in<::Tags::Flux, VarsTags, tmpl::size_t<Dim>,
+                                     Frame::Inertial>>& fluxes,
     const SourcesArgs&... sources_args) noexcept {
   first_order_operator_detail::FirstOrderSourcesImpl<
-      PrimalFields, AuxiliaryFields, SourcesComputer>::apply(std::move(sources),
-                                                             vars,
-                                                             sources_args...);
+      Dim, PrimalFields, AuxiliaryFields,
+      SourcesComputer>::apply(std::move(sources), vars, fluxes,
+                              sources_args...);
 }
 
-template <typename PrimalFields, typename AuxiliaryFields,
+template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
           typename SourcesComputer, typename VarsTags, typename... SourcesArgs>
-auto first_order_sources(const Variables<VarsTags>& vars,
-                         const SourcesArgs&... sources_args) noexcept {
+auto first_order_sources(
+    const Variables<VarsTags>& vars,
+    const Variables<db::wrap_tags_in<::Tags::Flux, VarsTags, tmpl::size_t<Dim>,
+                                     Frame::Inertial>>& fluxes,
+    const SourcesArgs&... sources_args) noexcept {
   Variables<db::wrap_tags_in<::Tags::Source, VarsTags>> sources{
       vars.number_of_grid_points()};
   first_order_operator_detail::FirstOrderSourcesImpl<
-      PrimalFields, AuxiliaryFields,
-      SourcesComputer>::apply(make_not_null(&sources), vars, sources_args...);
+      Dim, PrimalFields, AuxiliaryFields,
+      SourcesComputer>::apply(make_not_null(&sources), vars, fluxes,
+                              sources_args...);
   return sources;
 }
 // @}
