@@ -28,6 +28,5 @@ target_link_libraries(
   INTERFACE
   Elasticity
   GeneralRelativity
-  ParallelNonlinearSolver
   Poisson
   )
