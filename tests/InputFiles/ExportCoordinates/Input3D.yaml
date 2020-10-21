@@ -12,7 +12,7 @@ DomainCreator:
     LowerBound: [-0.5, -0.5, -0.5]
     UpperBound: [0.5, 0.5, 0.5]
     IsPeriodicIn: [false, false, false]
-    InitialRefinement: [0, 0, 0]
+    InitialRefinement: [1, 1, 1]
     InitialGridPoints: [3, 3, 3]
     TimeDependence:
       UniformTranslation:

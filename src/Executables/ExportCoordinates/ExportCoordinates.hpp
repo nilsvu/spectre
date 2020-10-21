@@ -182,6 +182,32 @@ struct FindGlobalMinimumGridSpacing {
     return {std::move(box)};
   }
 };
+
+template <size_t Dim, size_t I>
+struct TensorTag : db::SimpleTag {
+  using type = tnsr::Ijj<DataVector, Dim>;
+};
+
+template <typename Is>
+struct InitializeManyTensors;
+
+template <size_t... Is>
+struct InitializeManyTensors<std::index_sequence<Is...>> {
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            size_t Dim, typename ActionList, typename ParallelComponent>
+  static auto apply(db::DataBox<DbTagsList>& box,
+                    const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+                    const Parallel::GlobalCache<Metavariables>& /*cache*/,
+                    const ElementId<Dim>& /*array_index*/,
+                    const ActionList /*meta*/,
+                    const ParallelComponent* const /*meta*/) noexcept {
+    return std::make_tuple(
+        ::Initialization::merge_into_databox<
+            InitializeManyTensors, db::AddSimpleTags<TensorTag<Dim, Is>...>>(
+            std::move(box), typename TensorTag<Dim, Is>::type{}...));
+  }
+};
+
 }  // namespace Actions
 
 template <size_t Dim, bool EnableTimeDependentMaps>
@@ -231,6 +257,8 @@ struct Metavariables {
                       Initialization::Actions::AddComputeTags<
                           ::domain::Tags::MinimumGridSpacingCompute<
                               Dim, Frame::Inertial>>,
+                      Actions::InitializeManyTensors<
+                          std::make_index_sequence<300>>,
                       ::Initialization::Actions::
                           RemoveOptionsAndTerminatePhase>>,
               Parallel::PhaseActions<
