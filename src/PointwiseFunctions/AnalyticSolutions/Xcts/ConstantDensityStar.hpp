@@ -5,12 +5,14 @@
 
 #include <limits>
 
-#include "DataStructures/DataBox/Prefixes.hpp"  // IWYU pragma: keep
-#include "DataStructures/Tensor/Tensor.hpp"     // IWYU pragma: keep
-#include "Elliptic/Systems/Xcts/Tags.hpp"       // IWYU pragma: keep
+#include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Tensor/Tensor.hpp"
+#include "Elliptic/Protocols.hpp"
+#include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -87,7 +89,8 @@ namespace Xcts::Solutions {
  * \f$\psi_\mathrm{init}=1\f$ so that a nonlinear iterative numerical solver
  * will converge to the same weak-field solution.
  */
-class ConstantDensityStar {
+class ConstantDensityStar
+    : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  private:
   struct Density {
     using type = double;
@@ -107,8 +110,8 @@ class ConstantDensityStar {
       "A constant density star in general relativity"};
 
   ConstantDensityStar() = default;
-  ConstantDensityStar(const ConstantDensityStar&) noexcept = delete;
-  ConstantDensityStar& operator=(const ConstantDensityStar&) noexcept = delete;
+  ConstantDensityStar(const ConstantDensityStar&) noexcept = default;
+  ConstantDensityStar& operator=(const ConstantDensityStar&) noexcept = default;
   ConstantDensityStar(ConstantDensityStar&&) noexcept = default;
   ConstantDensityStar& operator=(ConstantDensityStar&&) noexcept = default;
   ~ConstantDensityStar() noexcept = default;
@@ -187,9 +190,7 @@ class ConstantDensityStar {
   tuples::TaggedTuple<Tags...> variables(
       const tnsr::I<DataType, 3, Frame::Inertial>& x,
       tmpl::list<Tags...> /*meta*/) const noexcept {
-    static_assert(sizeof...(Tags) > 1,
-                  "The generic template will recurse infinitely if only one "
-                  "tag is being retrieved.");
+    static_assert(sizeof...(Tags) > 1, "The requested tag is not implemented.");
     return {tuples::get<Tags>(variables(x, tmpl::list<Tags>{}))...};
   }
 

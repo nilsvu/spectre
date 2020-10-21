@@ -15,10 +15,14 @@
 #include "Elliptic/Systems/Poisson/Geometry.hpp"
 #include "Elliptic/Systems/Poisson/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
+#include "ParallelAlgorithms/NonlinearSolver/Tags.hpp"
 #include "PointwiseFunctions/GeneralRelativity/TagsDeclarations.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace Poisson {
+
+template <size_t Dim, Geometry BackgroundGeometry>
+struct LinearizedFirstOrderSystem;
 
 /*!
  * \brief The Poisson equation formulated as a set of coupled first-order PDEs.
@@ -92,11 +96,43 @@ struct FirstOrderSystem {
 
   // The tag of the operator to compute magnitudes on the manifold, e.g. to
   // normalize vectors on the faces of an element
+  using inv_metric_tag = tmpl::conditional_t<
+      BackgroundGeometry == Geometry::Euclidean, void,
+      gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataVector>>;
   template <typename Tag>
-  using magnitude_tag = tmpl::conditional_t<
-      BackgroundGeometry == Geometry::Euclidean,
-      ::Tags::EuclideanMagnitude<Tag>,
-      ::Tags::NonEuclideanMagnitude<
-          Tag, gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataVector>>>;
+  using magnitude_tag =
+      tmpl::conditional_t<BackgroundGeometry == Geometry::Euclidean,
+                          ::Tags::EuclideanMagnitude<Tag>,
+                          ::Tags::NonEuclideanMagnitude<Tag, inv_metric_tag>>;
+
+  using linearized_system = LinearizedFirstOrderSystem<Dim, BackgroundGeometry>;
+  using background_fields = tmpl::list<>;
 };
+
+template <size_t Dim, Geometry BackgroundGeometry>
+struct LinearizedFirstOrderSystem {
+ private:
+  using nonlinear_system = FirstOrderSystem<Dim, BackgroundGeometry>;
+
+ public:
+  static constexpr size_t volume_dim = Dim;
+
+  using primal_fields =
+      db::wrap_tags_in<NonlinearSolver::Tags::Correction,
+                       typename nonlinear_system::primal_fields>;
+  using auxiliary_fields =
+      db::wrap_tags_in<NonlinearSolver::Tags::Correction,
+                       typename nonlinear_system::auxiliary_fields>;
+  using fields_tag = db::add_tag_prefix<NonlinearSolver::Tags::Correction,
+                                        typename nonlinear_system::fields_tag>;
+
+  using fluxes = typename nonlinear_system::fluxes;
+  using sources = typename nonlinear_system::sources;
+
+  // The tag of the operator to compute magnitudes on the manifold, e.g. to
+  // normalize vectors on the faces of an element
+  template <typename Tag>
+  using magnitude_tag = ::Tags::EuclideanMagnitude<Tag>;
+};
+
 }  // namespace Poisson

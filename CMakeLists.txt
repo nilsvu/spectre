@@ -55,7 +55,6 @@ include(SetupCCache)
 include(SetupCraySupport)
 include(SetupCharm)
 include(SetupCharmProjections)
-include(SetupMacOsx)
 include(EnableWarnings)
 include(SetupGoldOrLldLinker)
 

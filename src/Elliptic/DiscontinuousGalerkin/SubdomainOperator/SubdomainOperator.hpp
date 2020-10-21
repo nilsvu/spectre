@@ -305,9 +305,10 @@ void apply_operator_volume(
   // Compute volume sources
   auto sources = std::apply(
       [&](const auto&... expanded_sources_args) {
-        return elliptic::first_order_sources<PrimalFields, AuxiliaryFields,
+        return elliptic::first_order_sources<Dim, PrimalFields, AuxiliaryFields,
                                              SourcesComputer>(
-            Variables<AllFields>(arg_element_data), expanded_sources_args...);
+            Variables<AllFields>(arg_element_data), *fluxes,
+            expanded_sources_args...);
       },
       sources_args);
   if constexpr (MassiveOperator) {

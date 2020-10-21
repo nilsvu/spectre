@@ -1,0 +1,85 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveSchwarzschildKSI
+# Check: parse;execute
+# ExpectedOutput:
+#   SchwarzschildKSIReductions.h5
+#   SchwarzschildKSIVolume0.h5
+
+AnalyticSolution:
+  Schwarzschild:
+
+# BoundaryCondition:
+#   AnalyticDirichlet:
+
+BoundaryCondition:
+  ApparentHorizon:
+    EnclosingRadius: 5.
+
+InitialGuess:
+  Flatness:
+
+DomainCreator:
+  Shell:
+    InnerRadius: 1.27274
+    OuterRadius: 10.
+    InitialRefinement: 0
+    InitialGridPoints: [5, 5]
+    UseEquiangularMap: False
+    UseLogarithmicMap: True
+
+NumericalFlux:
+  InternalPenalty:
+    PenaltyParameter: 1
+
+Observers:
+  VolumeFileName: "SchwarzschildKSIVolume"
+  ReductionFileName: "SchwarzschildKSIReductions"
+
+NonlinearSolver:
+  NewtonRaphson:
+    ConvergenceCriteria:
+      MaxIterations: 20
+      RelativeResidual: 1e-6
+      AbsoluteResidual: 1e-12
+    Verbosity: Verbose
+
+  LinearSolver:
+    GMRES:
+      ConvergenceCriteria:
+        MaxIterations: 10
+        RelativeResidual: 1e-5
+        AbsoluteResidual: 1e-12
+      Verbosity: Quiet
+
+    Preconditioner:
+      Multigrid:
+        Iterations: 1
+        CoarsestGridPoints: 12
+        Verbosity: Silent
+
+      Smoother:
+        Schwarz:
+          MaxOverlap: 2
+          Iterations: 3
+          Verbosity: Silent
+          SubdomainSolver:
+            ConvergenceCriteria:
+              MaxIterations: 1
+              RelativeResidual: 1.e-8
+              AbsoluteResidual: 1.e-8
+            Verbosity: Silent
+            Restart: 0
+          SubdomainPreconditioner:
+            # ExplicitInverse of subdomain operator on initial nonlinear fields
+            # (the subdomain preconditioner is not re-evaluated on updated
+            # nonlinear fields)
+
+EventsAndTriggers:
+  ? EveryNIterations:
+      N: 1
+  : - ObserveErrorNorms:
+        SubfileName: ErrorNorms
+    - ObserveFields:
+        SubfileName: VolumeData

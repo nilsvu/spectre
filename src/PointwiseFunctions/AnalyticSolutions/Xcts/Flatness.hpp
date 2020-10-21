@@ -33,11 +33,11 @@ class Flatness {
  public:
   using options = tmpl::list<>;
 
-  static constexpr OptionString help = {"Just flat spacetime."};
+  static constexpr Options::String help = {"Just flat spacetime."};
 
   Flatness() = default;
-  Flatness(const Flatness& /*rhs*/) = delete;
-  Flatness& operator=(const Flatness& /*rhs*/) = delete;
+  Flatness(const Flatness& /*rhs*/) = default;
+  Flatness& operator=(const Flatness& /*rhs*/) = default;
   Flatness(Flatness&& /*rhs*/) noexcept = default;
   Flatness& operator=(Flatness&& /*rhs*/) noexcept = default;
   ~Flatness() = default;
@@ -47,6 +47,7 @@ class Flatness {
   tuples::TaggedTuple<Tags...> variables(const tnsr::I<DataType, 3>& x,
                                          tmpl::list<Tags...> /*meta*/) const
       noexcept {
+    static_assert(sizeof...(Tags) > 1, "The requested tag is not implemented.");
     return {get<Tags>(variables(x, tmpl::list<Tags>{}))...};
   }
 
@@ -54,6 +55,10 @@ class Flatness {
   void pup(PUP::er& /*p*/) noexcept {}  //  NOLINT
 
  private:
+  template <typename DataType>
+  using TraceExtrinsicCurvatureGradient =
+      ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
+                    tmpl::size_t<3>, Frame::Inertial>;
   template <typename DataType>
   using ConformalFactorGradient =
       ::Tags::deriv<Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
@@ -63,9 +68,12 @@ class Flatness {
       ::Tags::deriv<Tags::LapseTimesConformalFactor<DataType>, tmpl::size_t<3>,
                     Frame::Inertial>;
   template <typename DataType>
-  using Shift = gr::Tags::Shift<3, Frame::Inertial, DataType>;
+  using ShiftBackground =
+      Xcts::Tags::ShiftBackground<DataType, 3, Frame::Inertial>;
   template <typename DataType>
-  using ShiftStrain = Tags::ShiftStrain<3, Frame::Inertial, DataType>;
+  using ShiftExcess = Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>;
+  template <typename DataType>
+  using ShiftStrain = Tags::ShiftStrain<DataType, 3, Frame::Inertial>;
   template <typename DataType>
   using MomentumDensity =
       gr::Tags::MomentumDensity<3, Frame::Inertial, DataType>;
@@ -81,13 +89,17 @@ class Flatness {
       const tnsr::I<DataType, 3>& x,                                 \
       tmpl::list<::Tags::FixedSource<elem>> /*meta*/) const noexcept;
 
-#define MY_LIST                                                         \
-  BOOST_PP_TUPLE_TO_LIST(                                               \
-      9, (Xcts::Tags::ConformalFactor<DataType>,                        \
-          ConformalFactorGradient<DataType>,                            \
-          Xcts::Tags::LapseTimesConformalFactor<DataType>,              \
-          LapseTimesConformalFactorGradient<DataType>, Shift<DataType>, \
-          ShiftStrain<DataType>, gr::Tags::EnergyDensity<DataType>,     \
+#define MY_LIST                                                     \
+  BOOST_PP_TUPLE_TO_LIST(                                           \
+      9, (gr::Tags::TraceExtrinsicCurvature<DataType>,              \
+          ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>,  \
+          TraceExtrinsicCurvatureGradient<DataType>,                \
+          Xcts::Tags::ConformalFactor<DataType>,                    \
+          ConformalFactorGradient<DataType>,                        \
+          Xcts::Tags::LapseTimesConformalFactor<DataType>,          \
+          LapseTimesConformalFactorGradient<DataType>,              \
+          ShiftBackground<DataType>, ShiftExcess<DataType>,         \
+          ShiftStrain<DataType>, gr::Tags::EnergyDensity<DataType>, \
           gr::Tags::StressTrace<DataType>, MomentumDensity<DataType>))
 
   BOOST_PP_LIST_FOR_EACH(FUNC_DECL, _, MY_LIST)

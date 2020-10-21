@@ -6,12 +6,15 @@
 #include <ostream>
 
 #include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Elliptic/Protocols.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -158,15 +161,16 @@ std::ostream& operator<<(std::ostream& os,
  * systems and for the solution variables in the respective coordinates.
  */
 template <SchwarzschildCoordinates Coords>
-class Schwarzschild {
+class Schwarzschild
+    : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  public:
   using options = tmpl::list<>;
   static constexpr Options::String help{
       "Schwarzschild spacetime in general relativity"};
 
   Schwarzschild() = default;
-  Schwarzschild(const Schwarzschild&) noexcept = delete;
-  Schwarzschild& operator=(const Schwarzschild&) noexcept = delete;
+  Schwarzschild(const Schwarzschild&) noexcept = default;
+  Schwarzschild& operator=(const Schwarzschild&) noexcept = default;
   Schwarzschild(Schwarzschild&&) noexcept = default;
   Schwarzschild& operator=(Schwarzschild&&) noexcept = default;
   ~Schwarzschild() noexcept = default;

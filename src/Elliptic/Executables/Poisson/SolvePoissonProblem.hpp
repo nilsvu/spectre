@@ -299,7 +299,7 @@ struct Metavariables {
           dg::Initialization::slice_tags_to_exterior<>,
           dg::Initialization::face_compute_tags<>,
           dg::Initialization::exterior_compute_tags<>, false, false>,
-      elliptic::Actions::InitializeBoundaryConditions,
+      //   elliptic::Actions::InitializeBoundaryConditions,
       elliptic::Actions::InitializeFields,
       elliptic::Actions::InitializeFixedSources,
       typename linear_solver::initialize_element,
@@ -308,7 +308,8 @@ struct Metavariables {
       elliptic::dg::Actions::InitializeSubdomain<
           volume_dim, typename smoother::options_group,
           linearized_boundary_conditions_tag, primal_variables,
-          typename system::primal_fields>,
+          typename system::primal_fields, tmpl::list<>, tmpl::list<>,
+          tmpl::list<>, void>,
       ::Initialization::Actions::AddComputeTags<tmpl::list<
           combined_iteration_id,
           LinearSolver::Schwarz::Tags::SummedIntrudingOverlapWeightsCompute<

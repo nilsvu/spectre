@@ -6,10 +6,13 @@
 #include <array>
 #include <ostream>
 
+#include "Elliptic/Protocols.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace Xcts::Solutions {
@@ -29,7 +32,7 @@ std::ostream& operator<<(std::ostream& os,
  * coordinates.
  */
 template <KerrCoordinates Coords>
-class Kerr {
+class Kerr : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  public:
   using options = typename gr::Solutions::KerrSchild::options;
   static constexpr Options::String help{"Kerr spacetime in general relativity"};
@@ -52,6 +55,11 @@ class Kerr {
 
   // @{
   /// Retrieve variable at coordinates `x`
+
+  // Missing quantities for the XCTS system (need numeric derivatives):
+  // - Deriv(ExtrinsicCurvatureTrace)
+  // - Conformal Ricci scalar
+
   template <typename DataType>
   auto variables(const tnsr::I<DataType, 3>& x,
                  tmpl::list<Xcts::Tags::ConformalMetric<
@@ -149,9 +157,18 @@ class Kerr {
   template <typename DataType>
   auto variables(
       const tnsr::I<DataType, 3>& x,
-      tmpl::list<
-          Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>> /*meta*/) const
-      noexcept -> tuples::TaggedTuple<
+      tmpl::list<::Tags::div<
+          Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+              DataType, 3, Frame::Inertial>>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<::Tags::div<
+          Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+              DataType, 3, Frame::Inertial>>>;
+
+  template <typename DataType>
+  auto variables(const tnsr::I<DataType, 3>& x,
+                 tmpl::list<Xcts::Tags::ShiftExcess<
+                     DataType, 3, Frame::Inertial>> /*meta*/) const noexcept
+      -> tuples::TaggedTuple<
           Xcts::Tags::ShiftExcess<DataType, 3, Frame::Inertial>>;
 
   template <typename DataType>

@@ -34,10 +34,10 @@ add_spectre_executable(
   # compiled into the executable.
   # ../Elliptic/DiscontinuousGalerkin/SubdomainOperator/Test_SubdomainOperator.cpp
   # ../Elliptic/Systems/Poisson/DgSchemes/Test_FirstOrder.cpp
-  # ../Elliptic/Systems/Xcts/Test_Equations.cpp
+  ../Elliptic/Systems/Xcts/Test_Equations.cpp
   # ../PointwiseFunctions/AnalyticSolutions/Xcts/Test_Schwarzschild.cpp
   # ../PointwiseFunctions/AnalyticSolutions/Xcts/Test_ConstantDensityStar.cpp
-  ../PointwiseFunctions/AnalyticSolutions/Xcts/Test_Kerr.cpp
+  # ../PointwiseFunctions/AnalyticSolutions/Xcts/Test_Kerr.cpp
   )
 
 # Modify which libraries to link for your test case.
@@ -56,7 +56,7 @@ target_link_libraries(
   # Utilities
   # DomainCreators
   Xcts
-  XctsSolutions
+  # XctsSolutions
   )
 
 # Core required libraries

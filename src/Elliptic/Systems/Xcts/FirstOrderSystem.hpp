@@ -201,11 +201,14 @@ struct FirstOrderSystem {
 
   // The tag of the operator to compute magnitudes on the manifold, e.g. to
   // normalize vectors on the faces of an element
+  using inv_metric_tag = tmpl::conditional_t<
+      ConformalGeometry == Geometry::Euclidean, void,
+      Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>>;
   template <typename Tag>
-  using magnitude_tag = tmpl::conditional_t<
-      ConformalGeometry == Geometry::Euclidean, ::Tags::EuclideanMagnitude<Tag>,
-      ::Tags::NonEuclideanMagnitude<
-          Tag, Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>>>;
+  using magnitude_tag =
+      tmpl::conditional_t<ConformalGeometry == Geometry::Euclidean,
+                          ::Tags::EuclideanMagnitude<Tag>,
+                          ::Tags::NonEuclideanMagnitude<Tag, inv_metric_tag>>;
 };
 
 template <Equations EnabledEquations, Geometry ConformalGeometry>
