@@ -203,15 +203,18 @@ namespace Actions {
 template <
     typename BoundaryConditionsTag, typename FieldsTag, typename PrimalFields,
     typename AuxiliaryFields, typename FluxesComputerTag,
-    typename BcArgsTags = typename BoundaryConditionsTag::type::argument_tags>
+    typename BcArgsTags = typename BoundaryConditionsTag::type::argument_tags,
+    typename FluxesArgsTags = typename FluxesComputerTag::type::argument_tags>
 struct ImposeBoundaryConditions;
 
 template <typename BoundaryConditionsTag, typename FieldsTag,
           typename PrimalFields, typename AuxiliaryFields,
-          typename FluxesComputerTag, typename... BcArgsTags>
+          typename FluxesComputerTag, typename... BcArgsTags,
+          typename... FluxesArgsTags>
 struct ImposeBoundaryConditions<BoundaryConditionsTag, FieldsTag, PrimalFields,
                                 AuxiliaryFields, FluxesComputerTag,
-                                tmpl::list<BcArgsTags...>> {
+                                tmpl::list<BcArgsTags...>,
+                                tmpl::list<FluxesArgsTags...>> {
   template <typename DbTags, typename... InboxTags, typename Metavariables,
             size_t Dim, typename ActionList, typename ParallelComponent>
   static std::tuple<db::DataBox<DbTags>&&> apply(
@@ -229,22 +232,47 @@ struct ImposeBoundaryConditions<BoundaryConditionsTag, FieldsTag, PrimalFields,
            const auto& all_exterior_face_normals,
            const auto& all_boundary_condition_types,
            const auto& boundary_conditions, const auto& fluxes_computer,
-           const auto&... boundary_conditions_args) noexcept {
-          for (auto& [direction, exterior_n_dot_fluxes] :
+           const auto& boundary_conditions_args,
+           const auto& fluxes_args) noexcept {
+          for (auto& direction_and_exterior_n_dot_fluxes :
                *all_exterior_n_dot_fluxes) {
-            impose_boundary_conditions<PrimalFields, AuxiliaryFields>(
-                make_not_null(&exterior_n_dot_fluxes),
-                all_interior_vars.at(direction),
-                all_interior_n_dot_fluxes.at(direction),
-                all_exterior_face_normals.at(direction),
-                all_boundary_condition_types.at(direction), boundary_conditions,
-                std::make_tuple(
-                    InterfaceHelpers_detail::unmap_interface_args<
-                        tmpl::list_contains_v<
-                            typename BoundaryConditionsTag::type::volume_tags,
-                            BcArgsTags>>::apply(direction,
-                                                boundary_conditions_args)...),
-                fluxes_computer, std::tuple<>());
+            const auto& direction = direction_and_exterior_n_dot_fluxes.first;
+            auto& exterior_n_dot_fluxes =
+                direction_and_exterior_n_dot_fluxes.second;
+            std::apply(
+                [&](const auto&... expanded_boundary_conditions_args) {
+                  std::apply(
+                      [&](const auto&... expanded_fluxes_args) {
+                        impose_boundary_conditions<PrimalFields,
+                                                   AuxiliaryFields>(
+                            make_not_null(&exterior_n_dot_fluxes),
+                            all_interior_vars.at(direction),
+                            all_interior_n_dot_fluxes.at(direction),
+                            all_exterior_face_normals.at(direction),
+                            all_boundary_condition_types.at(direction),
+                            boundary_conditions,
+                            std::make_tuple(
+                                InterfaceHelpers_detail::unmap_interface_args<
+                                    tmpl::list_contains_v<
+                                        get_volume_tags<
+                                            typename BoundaryConditionsTag::
+                                                type>,
+                                        BcArgsTags>>::
+                                    apply(
+                                        direction,
+                                        expanded_boundary_conditions_args)...),
+                            fluxes_computer,
+                            std::make_tuple(
+                                InterfaceHelpers_detail::unmap_interface_args<
+                                    tmpl::list_contains_v<
+                                        get_volume_tags<
+                                            typename FluxesComputerTag::type>,
+                                        FluxesArgsTags>>::
+                                    apply(direction, expanded_fluxes_args)...));
+                      },
+                      fluxes_args);
+                },
+                boundary_conditions_args);
           }
         },
         get<domain::Tags::Interface<
@@ -260,9 +288,16 @@ struct ImposeBoundaryConditions<BoundaryConditionsTag, FieldsTag, PrimalFields,
             domain::Tags::BoundaryDirectionsExterior<Dim>,
             elliptic::Tags::BoundaryConditions<PrimalFields>>>(box),
         db::get<BoundaryConditionsTag>(box), db::get<FluxesComputerTag>(box),
-        db::get<typename InterfaceHelpers_detail::make_interface_tag_impl<
-            BcArgsTags, domain::Tags::BoundaryDirectionsInterior<Dim>,
-            typename BoundaryConditionsTag::type::volume_tags>::type>(box)...);
+        std::make_tuple(
+            db::get<typename InterfaceHelpers_detail::make_interface_tag_impl<
+                BcArgsTags, domain::Tags::BoundaryDirectionsInterior<Dim>,
+                get_volume_tags<typename BoundaryConditionsTag::type>>::type>(
+                box)...),
+        std::make_tuple(
+            db::get<typename InterfaceHelpers_detail::make_interface_tag_impl<
+                FluxesArgsTags, domain::Tags::BoundaryDirectionsInterior<Dim>,
+                get_volume_tags<typename FluxesComputerTag::type>>::type>(
+                box)...));
 
     return {std::move(box)};
   }

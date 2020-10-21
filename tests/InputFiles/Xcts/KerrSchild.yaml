@@ -13,18 +13,21 @@ AnalyticSolution:
     Spin: [0., 0., 0.]
     Center: [0., 0., 0.]
 
-BoundaryCondition:
-  AnalyticDirichlet:
-  LinearizedAnalyticDirichlet:
-
 # BoundaryCondition:
-#   ApparentHorizon:
-#     EnclosingRadius: 5.
-#   LinearizedApparentHorizon:
-#     EnclosingRadius: 5.
+#   AnalyticDirichlet:
+#   LinearizedAnalyticDirichlet:
+
+BoundaryCondition:
+  ApparentHorizon:
+    EnclosingRadius: 5.
+  LinearizedApparentHorizon:
+    EnclosingRadius: 5.
 
 InitialGuess:
-  Vacuum:
+  Kerr:
+    Mass: 1.
+    Spin: [0., 0., 0.]
+    Center: [0., 0., 0.]
 
 DomainCreator:
   Shell:
@@ -54,7 +57,7 @@ NonlinearSolver:
   LinearSolver:
     GMRES:
       ConvergenceCriteria:
-        MaxIterations: 10
+        MaxIterations: 30
         RelativeResidual: 1e-5
         AbsoluteResidual: 1e-12
       Verbosity: Quiet

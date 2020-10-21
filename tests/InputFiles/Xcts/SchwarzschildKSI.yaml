@@ -1,11 +1,11 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-# Executable: SolveElasticHalfSpaceMirror
+# Executable: SolveSchwarzschildKSI
 # Check: parse;execute
 # ExpectedOutput:
-#   ElasticHalfSpaceMirrorReductions.h5
-#   ElasticHalfSpaceMirrorVolume0.h5
+#   SchwarzschildKSIReductions.h5
+#   SchwarzschildKSIVolume0.h5
 
 AnalyticSolution:
   Schwarzschild:

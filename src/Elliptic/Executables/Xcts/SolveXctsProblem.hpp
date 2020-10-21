@@ -256,10 +256,19 @@ struct Metavariables {
       db::wrap_tags_in<::Tags::Flux, typename system::primal_fields,
                        tmpl::size_t<volume_dim>, Frame::Inertial>,
       tmpl::conditional_t<
-          std::is_same_v<Xcts::BoundaryConditions::ApparentHorizon,
+          std::is_same_v<Xcts::BoundaryConditions::ApparentHorizon<
+                             Xcts::Geometry::Euclidean>,
                          boundary_conditions> or
+              std::is_same_v<Xcts::BoundaryConditions::ApparentHorizon<
+                                 Xcts::Geometry::NonEuclidean>,
+                             boundary_conditions> or
               std::is_same_v<Xcts::BoundaryConditions::Binary<
-                                 Xcts::BoundaryConditions::ApparentHorizon>,
+                                 Xcts::BoundaryConditions::ApparentHorizon<
+                                     Xcts::Geometry::Euclidean>>,
+                             boundary_conditions> or
+              std::is_same_v<Xcts::BoundaryConditions::Binary<
+                                 Xcts::BoundaryConditions::ApparentHorizon<
+                                     Xcts::Geometry::NonEuclidean>>,
                              boundary_conditions>,
           tmpl::list<domain::Tags::Interface<
                          domain::Tags::BoundaryDirectionsInterior<volume_dim>,
@@ -342,14 +351,17 @@ struct Metavariables {
 
   using initialization_actions = tmpl::list<
       dg::Actions::InitializeDomain<volume_dim>,
+      elliptic::Actions::InitializeFixedSources,
       dg::Actions::InitializeInterfaces<
-          system, dg::Initialization::slice_tags_to_face<>,
-          dg::Initialization::slice_tags_to_exterior<>,
+          system,
+          dg::Initialization::slice_tags_to_face<
+              ::Tags::Variables<typename system::background_fields>>,
+          dg::Initialization::slice_tags_to_exterior<
+              ::Tags::Variables<typename system::background_fields>>,
           dg::Initialization::face_compute_tags<
               domain::Tags::BoundaryCoordinates<volume_dim>>,
           dg::Initialization::exterior_compute_tags<>, false, false>,
       elliptic::Actions::InitializeFields,
-      elliptic::Actions::InitializeFixedSources,
       typename nonlinear_solver::initialize_element,
       typename linear_solver::initialize_element,
       typename multigrid::initialize_element,
@@ -358,7 +370,7 @@ struct Metavariables {
           volume_dim, typename smoother::options_group,
           linearized_boundary_conditions_tag,
           typename system::background_fields, communicated_overlap_fields,
-          primal_variables>,
+          primal_variables, typename system::inv_metric_tag>,
       Initialization::Actions::AddComputeTags<
           tmpl::list<combined_iteration_id>>,
       tmpl::conditional_t<has_analytic_solution,

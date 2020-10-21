@@ -67,7 +67,7 @@ add_xcts_executable(
   "Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift, Xcts::Geometry::Euclidean>"
   Xcts::Solutions::Schwarzschild<Xcts::Solutions::SchwarzschildCoordinates::Isotropic>
   # "Xcts::BoundaryConditions::AnalyticDirichlet<3, ::Tags::AnalyticSolutionBase, tmpl::list<Xcts::Tags::ConformalFactor<DataVector>, Xcts::Tags::LapseTimesConformalFactor<DataVector>, Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>>"
-  Xcts::BoundaryConditions::ApparentHorizon
+  Xcts::BoundaryConditions::ApparentHorizon<Xcts::Geometry::Euclidean>
   Xcts::Solutions::Vacuum
   )
 target_link_libraries(
@@ -77,26 +77,26 @@ target_link_libraries(
   )
 # (ii) Conformally-flat Schwarzschild with Kerr-Schild slicing
 add_xcts_executable(
-  SchwarzschildKerrSchildIsotropic
+  SchwarzschildKSI
   "Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift, Xcts::Geometry::Euclidean>"
   Xcts::Solutions::Schwarzschild<Xcts::Solutions::SchwarzschildCoordinates::KerrSchildIsotropic>
   # "Xcts::BoundaryConditions::AnalyticDirichlet<3, ::Tags::AnalyticSolutionBase, tmpl::list<Xcts::Tags::ConformalFactor<DataVector>, Xcts::Tags::LapseTimesConformalFactor<DataVector>, Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>>"
-  Xcts::BoundaryConditions::ApparentHorizon
+  Xcts::BoundaryConditions::ApparentHorizon<Xcts::Geometry::Euclidean>
   Xcts::Solutions::Vacuum
   )
 target_link_libraries(
-  SolveSchwarzschildKerrSchildIsotropic
+  SolveSchwarzschildKSI
   PRIVATE
   XctsSolutions
   )
-# (iii) Kerr solution in Kerr-Schild coordinates (TODO: Handle
-# non-Euclidean magnitude in subdomain operator)
+# (iii) Kerr solution in Kerr-Schild coordinates
 add_xcts_executable(
   KerrSchild
   "Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift, Xcts::Geometry::NonEuclidean>"
   Xcts::Solutions::Kerr<Xcts::Solutions::KerrCoordinates::KerrSchild>
-  "Xcts::BoundaryConditions::AnalyticDirichlet<3, ::Tags::AnalyticSolutionBase, tmpl::list<Xcts::Tags::ConformalFactor<DataVector>, Xcts::Tags::LapseTimesConformalFactor<DataVector>, Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>>"
-  Xcts::Solutions::Vacuum
+  # "Xcts::BoundaryConditions::AnalyticDirichlet<3, ::Tags::AnalyticSolutionBase, tmpl::list<Xcts::Tags::ConformalFactor<DataVector>, Xcts::Tags::LapseTimesConformalFactor<DataVector>, Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>>"
+  Xcts::BoundaryConditions::ApparentHorizon<Xcts::Geometry::NonEuclidean>
+  Xcts::Solutions::Kerr<Xcts::Solutions::KerrCoordinates::KerrSchild>
   )
 target_link_libraries(
   SolveKerrSchild
@@ -110,7 +110,7 @@ add_xcts_executable(
   BbhCFMS
   "Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift, Xcts::Geometry::Euclidean>"
   Xcts::AnalyticData::BlackHoleBinary<Xcts::AnalyticData::BackgroundSpacetime::FlatMaximallySliced>
-  Xcts::BoundaryConditions::Binary<Xcts::BoundaryConditions::ApparentHorizon>
+  Xcts::BoundaryConditions::Binary<Xcts::BoundaryConditions::ApparentHorizon<Xcts::Geometry::Euclidean>>
   Xcts::Solutions::Vacuum
   )
 target_link_libraries(
@@ -123,7 +123,7 @@ add_xcts_executable(
   BbhKSI
   "Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift, Xcts::Geometry::Euclidean>"
   Xcts::AnalyticData::BlackHoleBinary<Xcts::AnalyticData::BackgroundSpacetime::FlatKerrSchildIsotropicSliced>
-  Xcts::BoundaryConditions::Binary<Xcts::BoundaryConditions::ApparentHorizon>
+  Xcts::BoundaryConditions::Binary<Xcts::BoundaryConditions::ApparentHorizon<Xcts::Geometry::Euclidean>>
   Xcts::Solutions::Vacuum
   )
 target_link_libraries(
@@ -137,7 +137,7 @@ add_xcts_executable(
   BbhSKS
   "Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift, Xcts::Geometry::NonEuclidean>"
   Xcts::AnalyticData::BlackHoleBinary<Xcts::AnalyticData::BackgroundSpacetime::SuperposedKerrSchild>
-  Xcts::BoundaryConditions::Binary<Xcts::BoundaryConditions::ApparentHorizon>
+  Xcts::BoundaryConditions::Binary<Xcts::BoundaryConditions::ApparentHorizon<Xcts::Geometry::NonEuclidean>>
   Xcts::Solutions::Vacuum
   )
 target_link_libraries(
@@ -151,7 +151,7 @@ add_xcts_executable(
   BbhSHK
   "Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift, Xcts::Geometry::NonEuclidean>"
   Xcts::AnalyticData::BlackHoleBinary<Xcts::AnalyticData::BackgroundSpacetime::SuperposedHarmonic>
-  Xcts::BoundaryConditions::Binary<Xcts::BoundaryConditions::ApparentHorizon>
+  Xcts::BoundaryConditions::Binary<Xcts::BoundaryConditions::ApparentHorizon<Xcts::Geometry::NonEuclidean>>
   Xcts::Solutions::Vacuum
   )
 target_link_libraries(

@@ -6,11 +6,13 @@
 #include <array>
 #include <ostream>
 
+#include "Elliptic/Protocols.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "Options/Options.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrSchild.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace Xcts::Solutions {
@@ -30,7 +32,7 @@ std::ostream& operator<<(std::ostream& os,
  * coordinates.
  */
 template <KerrCoordinates Coords>
-class Kerr {
+class Kerr : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
  public:
   using options = typename gr::Solutions::KerrSchild::options;
   static constexpr Options::String help{"Kerr spacetime in general relativity"};

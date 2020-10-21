@@ -58,8 +58,7 @@ struct InitializeFields {
     typename fields_tag::type fields{variables_from_tagged_tuple(
         db::get<typename Metavariables::initial_guess_tag>(box).variables(
             db::get<domain::Tags::Coordinates<Dim, Frame::Inertial>>(box),
-            typename db::add_tag_prefix<::Tags::Initial,
-                                        fields_tag>::tags_list{}))};
+            typename fields_tag::tags_list{}))};
 
     return std::make_tuple(
         ::Initialization::merge_into_databox<InitializeFields,
