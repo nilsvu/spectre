@@ -20,3 +20,5 @@ target_link_libraries(
   DataStructures
   Options
   )
+
+add_subdirectory(NewtonRaphson)
