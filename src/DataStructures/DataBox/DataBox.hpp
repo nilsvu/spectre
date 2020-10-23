@@ -33,6 +33,8 @@
 #include "Utilities/TypeTraits/IsA.hpp"
 #include "Utilities/TypeTraits/IsCallable.hpp"
 
+#include "Parallel/Printf.hpp"
+
 // IWYU pragma: no_forward_declare brigand::get_destination
 // IWYU pragma: no_forward_declare brigand::get_source
 
@@ -861,11 +863,14 @@ constexpr DataBox<tmpl::list<Tags...>>::DataBox(
     Box&& old_box, tmpl::list<KeepTags...> /*meta*/,
     tmpl::list<AddTags...> /*meta*/, tmpl::list<AddComputeTags...> /*meta*/,
     Args&&... args) noexcept {
+  Parallel::printf("in constructor...\n");
   expand_pack(
       DataBox_detail::check_argument_type<AddTags, typename AddTags::type,
                                           std::decay_t<Args>>()...);
+  Parallel::printf("a\n");
 
   merge_old_box(std::forward<Box>(old_box), tmpl::list<KeepTags...>{});
+  Parallel::printf("b\n");
 
   // Add in new simple and compute tags
 
@@ -880,10 +885,12 @@ constexpr DataBox<tmpl::list<Tags...>>::DataBox(
 #if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 7
 #pragma GCC diagnostic pop
 #endif  // defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 7
+  Parallel::printf("c\n");
   add_items_to_box<tmpl::list<Tags...>>(
       args_tuple, tmpl::list<AddTags...>{},
       std::make_index_sequence<sizeof...(AddTags)>{},
       tmpl::list<AddComputeTags...>{});
+  Parallel::printf("d\n");
 }
 /// \endcond
 
@@ -1284,6 +1291,11 @@ SPECTRE_ALWAYS_INLINE constexpr auto create_from(Box&& box,
                 "DataBox using db::create_from.");
 #endif  // ifdef SPECTRE_DEBUG
 
+  Parallel::printf("constructing (%zu,%zu,%zu,%zu,%zu)...\n",
+                   tmpl::size<new_tag_list>::value,
+                   tmpl::size<old_tags_to_keep>::value,
+                   tmpl::size<AddTags>::value,
+                   tmpl::size<AddComputeTags>::value, sizeof...(args));
   return DataBox<new_tag_list>(std::forward<Box>(box), old_tags_to_keep{},
                                AddTags{}, AddComputeTags{},
                                std::forward<Args>(args)...);
