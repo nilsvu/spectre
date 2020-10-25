@@ -181,7 +181,8 @@ long_lines_exclude() {
     grep -Ev 'https?://' | \
         grep -v '// IWYU pragma:' | \
         grep -v '// NOLINT' | \
-        grep -v '\\snippet'
+        grep -v '\\snippet' | \
+        grep -v '\\image'
 }
 long_lines() {
     whitelist "$1" \
