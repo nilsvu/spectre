@@ -254,6 +254,7 @@ def parse_args():
     parser.add_argument(
         '--subfile-name',
         '-d',
+        required=True,
         help="Name of the volume data subfile in the H5 files, excluding the "
         "'.vol' extension")
     parser.add_argument("--stride",
