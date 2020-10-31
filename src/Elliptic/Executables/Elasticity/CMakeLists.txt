@@ -21,12 +21,12 @@ set(LIBS_TO_LINK
   )
 
 function(add_elasticity_executable
-  EXECUTABLE_NAME ELASTICITY_SYSTEM INITIAL_GUESS BOUNDARY_CONDITIONS)
+  EXECUTABLE_NAME ELASTICITY_SYSTEM BACKGROUND BOUNDARY_CONDITIONS INITIAL_GUESS)
   add_spectre_parallel_executable(
     "SolveElastic${EXECUTABLE_NAME}"
     SolveElasticityProblem
     Elliptic/Executables/Elasticity
-    "Metavariables<${ELASTICITY_SYSTEM}, ${INITIAL_GUESS}, ${BOUNDARY_CONDITIONS}>"
+    "Metavariables<${ELASTICITY_SYSTEM}, ${BACKGROUND} ${BOUNDARY_CONDITIONS}, ${INITIAL_GUESS}>"
     "${LIBS_TO_LINK}"
     )
 endfunction(add_elasticity_executable)
@@ -37,6 +37,7 @@ add_elasticity_executable(
   "Elasticity::FirstOrderSystem<2>"
   Elasticity::Solutions::BentBeam
   Elasticity::Solutions::BentBeam
+  Elasticity::Solutions::Zero<2>
   )
 target_link_libraries(
   SolveElasticBentBeam2D
@@ -50,6 +51,7 @@ add_elasticity_executable(
   "Elasticity::FirstOrderSystem<3>"
   Elasticity::Solutions::HalfSpaceMirror
   Elasticity::Solutions::HalfSpaceMirror
+  Elasticity::Solutions::Zero<3>
   )
 target_link_libraries(
   SolveElasticHalfSpaceMirror

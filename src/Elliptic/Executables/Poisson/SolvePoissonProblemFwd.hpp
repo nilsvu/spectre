@@ -18,9 +18,12 @@ template <size_t Dim>
 struct Moustache;
 template <size_t Dim>
 struct ProductOfSinusoids;
+template <size_t Dim>
+struct Zero;
 }  // namespace Solutions
 }  // namespace Poisson
 
-template <typename System, typename InitialGuess, typename BoundaryConditions>
+template <typename System, typename Background, typename BoundaryConditions,
+          typename InitialGuess>
 struct Metavariables;
 /// \endcond

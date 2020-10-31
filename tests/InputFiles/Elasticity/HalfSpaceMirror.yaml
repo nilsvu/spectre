@@ -18,6 +18,9 @@ AnalyticSolution:
       BulkModulus: 36.36363636363637
       ShearModulus: 30.76923076923077
 
+InitialGuess:
+  Zero:
+
 DomainCreator:
   Cylinder:
     InnerRadius: 0.08

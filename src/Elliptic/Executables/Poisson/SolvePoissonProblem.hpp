@@ -20,6 +20,7 @@
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/InitializeSubdomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
+#include "Elliptic/Protocols.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Elliptic/Triggers/EveryNIterations.hpp"
@@ -58,9 +59,11 @@
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Lorentzian.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Moustache.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Poisson/Zero.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Utilities/Blas.hpp"
 #include "Utilities/Functional.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace SolvePoissonProblem {
@@ -116,12 +119,17 @@ struct CombinedIterationId : db::ComputeTag {
 }  // namespace SolvePoissonProblem
 
 /// \cond
-template <typename System, typename InitialGuess, typename BoundaryConditions>
+template <typename System, typename Background, typename BoundaryConditions,
+          typename InitialGuess>
 struct Metavariables {
   using system = System;
   static constexpr size_t volume_dim = system::volume_dim;
-  using initial_guess = InitialGuess;
+  using background = Background;
   using boundary_conditions = BoundaryConditions;
+  using initial_guess = InitialGuess;
+
+  static constexpr bool has_analytic_solution =
+      tt::conforms_to_v<Background, elliptic::protocols::AnalyticSolution>;
 
   static constexpr bool massive_operator = true;
 
@@ -135,7 +143,14 @@ struct Metavariables {
   // are all imposed by analytic solutions right now.
   // This will be generalized ASAP. We will also support numeric initial guesses
   // and analytic initial guesses that aren't solutions ("analytic data").
-  using analytic_solution_tag = Tags::AnalyticSolution<boundary_conditions>;
+  using background_tag =
+      tmpl::conditional_t<has_analytic_solution,
+                          ::Tags::AnalyticSolution<background>,
+                          elliptic::Tags::Background<background>>;
+  using boundary_conditions_tag = tmpl::conditional_t<
+      has_analytic_solution and std::is_same_v<boundary_conditions, background>,
+      background_tag, ::Tags::BoundaryCondition<boundary_conditions>>;
+  using initial_guess_tag = elliptic::Tags::InitialGuess<initial_guess>;
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
@@ -236,23 +251,27 @@ struct Metavariables {
                        multigrid_fields>,
       db::wrap_tags_in<LinearSolver::multigrid::Tags::PostSmoothingResidual,
                        multigrid_fields>>;
-  using analytic_solution_fields = system_fields;
-  using events =
+  using analytic_solution_fields =
+      tmpl::conditional_t<has_analytic_solution, system_fields, tmpl::list<>>;
+  using events = tmpl::flatten<
       tmpl::list<dg::Events::Registrars::ObserveFields<
                      volume_dim, linear_solver_iteration_id, observe_fields,
                      analytic_solution_fields,
                      LinearSolver::multigrid::Tags::MultigridLevel>,
-                 dg::Events::Registrars::ObserveErrorNorms<
-                     linear_solver_iteration_id, analytic_solution_fields,
-                     LinearSolver::multigrid::Tags::MultigridLevel>>;
+                 tmpl::conditional_t<
+                     has_analytic_solution,
+                     dg::Events::Registrars::ObserveErrorNorms<
+                         linear_solver_iteration_id, analytic_solution_fields,
+                         LinearSolver::multigrid::Tags::MultigridLevel>,
+                     tmpl::list<>>>>;
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       linear_solver_iteration_id,
       LinearSolver::multigrid::Tags::MultigridLevel>>;
 
   // Collect all items to store in the cache.
   using const_global_cache_tags =
-      tmpl::list<analytic_solution_tag, fluxes_computer_tag,
-                 normal_dot_numerical_flux,
+      tmpl::list<background_tag, boundary_conditions_tag, initial_guess_tag,
+                 fluxes_computer_tag, normal_dot_numerical_flux,
                  Tags::EventsAndTriggers<events, triggers>>;
 
   // Collect all reduction tags for observers
@@ -281,8 +300,10 @@ struct Metavariables {
           combined_iteration_id,
           LinearSolver::Schwarz::Tags::SummedIntrudingOverlapWeightsCompute<
               volume_dim, typename smoother::options_group>>>,
-      elliptic::Actions::InitializeAnalyticSolution<analytic_solution_tag,
-                                                    analytic_solution_fields>,
+      tmpl::conditional_t<has_analytic_solution,
+                          elliptic::Actions::InitializeAnalyticSolution<
+                              background_tag, analytic_solution_fields>,
+                          tmpl::list<>>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           Metavariables>,
       dg::Actions::InitializeMortars<boundary_scheme>,

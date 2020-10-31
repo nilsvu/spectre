@@ -11,6 +11,9 @@ AnalyticSolution:
   ProductOfSinusoids:
     WaveNumbers: [1]
 
+InitialGuess:
+  Zero:
+
 DomainCreator:
   Interval:
     LowerBound: [0]

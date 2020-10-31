@@ -20,12 +20,12 @@ set(LIBS_TO_LINK
   )
 
 function(add_poisson_executable
-  EXECUTABLE_NAME POISSON_SYSTEM INITIAL_GUESS BOUNDARY_CONDITIONS)
+  EXECUTABLE_NAME POISSON_SYSTEM BACKGROUND BOUNDARY_CONDITIONS INITIAL_GUESS)
   add_spectre_parallel_executable(
     "SolvePoisson${EXECUTABLE_NAME}"
     SolvePoissonProblem
     Elliptic/Executables/Poisson
-    "Metavariables<${POISSON_SYSTEM}, ${INITIAL_GUESS}, ${BOUNDARY_CONDITIONS}>"
+    "Metavariables<${POISSON_SYSTEM}, ${BACKGROUND}, ${BOUNDARY_CONDITIONS}, ${INITIAL_GUESS}>"
     "${LIBS_TO_LINK}"
     )
 endfunction(add_poisson_executable)
@@ -37,6 +37,7 @@ add_poisson_executable(
   "Poisson::FirstOrderSystem<3, Poisson::Geometry::Euclidean>"
   Poisson::Solutions::Lorentzian<3>
   Poisson::Solutions::Lorentzian<3>
+  Poisson::Solutions::Zero<3>
   )
 target_link_libraries(
   SolvePoissonLorentzian3D
@@ -52,7 +53,7 @@ function(add_poisson_moustache_executable DIM)
     "Poisson::FirstOrderSystem<${DIM}, Poisson::Geometry::Euclidean>"
     Poisson::Solutions::Moustache<${DIM}>
     Poisson::Solutions::Moustache<${DIM}>
-    "PoissonSolutions"
+    Poisson::Solutions::Zero<${DIM}>
     )
   target_link_libraries(
     SolvePoissonMoustache${DIM}D
@@ -70,7 +71,7 @@ function(add_poisson_product_of_sinusoids_executable DIM)
     "Poisson::FirstOrderSystem<${DIM}, Poisson::Geometry::Euclidean>"
     Poisson::Solutions::ProductOfSinusoids<${DIM}>
     Poisson::Solutions::ProductOfSinusoids<${DIM}>
-    "PoissonSolutions"
+    Poisson::Solutions::Zero<${DIM}>
     )
   target_link_libraries(
     SolvePoissonProductOfSinusoids${DIM}D

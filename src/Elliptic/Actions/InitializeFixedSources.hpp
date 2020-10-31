@@ -42,16 +42,16 @@ struct InitializeFixedSources {
     const auto& inertial_coords =
         get<domain::Tags::Coordinates<Dim, Frame::Inertial>>(box);
 
-    // Retrieve the sources of the elliptic system from the analytic solution,
-    // which defines the problem we want to solve.
-    // We need only retrieve sources for the primal fields, since the auxiliary
-    // fields will never be sourced.
+    // Retrieve the sources of the elliptic system from the background, which
+    // defines the problem we want to solve (along with the boundary
+    // conditions). We need only retrieve sources for the primal fields, since
+    // the auxiliary fields will never be sourced.
     typename fixed_sources_tag::type fixed_sources{num_grid_points, 0.};
     fixed_sources.assign_subset(
-        Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
-            .variables(inertial_coords,
-                       db::wrap_tags_in<::Tags::FixedSource,
-                                        typename system::primal_fields>{}));
+        Parallel::get<typename Metavariables::background_tag>(cache).variables(
+            inertial_coords,
+            db::wrap_tags_in<::Tags::FixedSource,
+                             typename system::primal_fields>{}));
     if constexpr (Metavariables::massive_operator) {
       fixed_sources = mass(
           fixed_sources, mesh,
