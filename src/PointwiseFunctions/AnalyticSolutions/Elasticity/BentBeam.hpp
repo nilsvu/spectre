@@ -109,8 +109,8 @@ class BentBeam : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
       "towards the positive y-axis. It is measured in units of force."};
 
   BentBeam() = default;
-  BentBeam(const BentBeam&) noexcept = delete;
-  BentBeam& operator=(const BentBeam&) noexcept = delete;
+  BentBeam(const BentBeam&) noexcept = default;
+  BentBeam& operator=(const BentBeam&) noexcept = default;
   BentBeam(BentBeam&&) noexcept = default;
   BentBeam& operator=(BentBeam&&) noexcept = default;
   ~BentBeam() noexcept = default;

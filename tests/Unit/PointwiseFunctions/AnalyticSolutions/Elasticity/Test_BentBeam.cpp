@@ -80,6 +80,7 @@ SPECTRE_TEST_CASE(
           "  ShearModulus: 38.75968992248062\n");
   CHECK(created_solution == check_solution);
   test_serialization(check_solution);
+  test_copy_semantics(check_solution);
 
   pypp::SetupLocalPythonEnvironment local_python_env{"PointwiseFunctions"};
   const Elasticity::ConstitutiveRelations::IsotropicHomogeneous<2>

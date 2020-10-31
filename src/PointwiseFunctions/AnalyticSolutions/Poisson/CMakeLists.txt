@@ -29,5 +29,6 @@ target_link_libraries(
   DataStructures
   ErrorHandling
   Options
+  Poisson
   Utilities
   )

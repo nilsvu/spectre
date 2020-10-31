@@ -50,8 +50,8 @@ class Lorentzian
       "A Lorentzian solution to the Poisson equation."};
 
   Lorentzian() = default;
-  Lorentzian(const Lorentzian&) noexcept = delete;
-  Lorentzian& operator=(const Lorentzian&) noexcept = delete;
+  Lorentzian(const Lorentzian&) noexcept = default;
+  Lorentzian& operator=(const Lorentzian&) noexcept = default;
   Lorentzian(Lorentzian&&) noexcept = default;
   Lorentzian& operator=(Lorentzian&&) noexcept = default;
   ~Lorentzian() noexcept = default;

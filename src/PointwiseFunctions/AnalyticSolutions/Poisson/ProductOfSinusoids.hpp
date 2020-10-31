@@ -47,8 +47,8 @@ class ProductOfSinusoids
       "coordinate in each dimension."};
 
   ProductOfSinusoids() = default;
-  ProductOfSinusoids(const ProductOfSinusoids&) noexcept = delete;
-  ProductOfSinusoids& operator=(const ProductOfSinusoids&) noexcept = delete;
+  ProductOfSinusoids(const ProductOfSinusoids&) noexcept = default;
+  ProductOfSinusoids& operator=(const ProductOfSinusoids&) noexcept = default;
   ProductOfSinusoids(ProductOfSinusoids&&) noexcept = default;
   ProductOfSinusoids& operator=(ProductOfSinusoids&&) noexcept = default;
   ~ProductOfSinusoids() noexcept = default;

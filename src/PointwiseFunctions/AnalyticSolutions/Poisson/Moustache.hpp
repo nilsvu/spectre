@@ -56,8 +56,8 @@ class Moustache : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
       "in each dimension"};
 
   Moustache() = default;
-  Moustache(const Moustache&) noexcept = delete;
-  Moustache& operator=(const Moustache&) noexcept = delete;
+  Moustache(const Moustache&) noexcept = default;
+  Moustache& operator=(const Moustache&) noexcept = default;
   Moustache(Moustache&&) noexcept = default;
   Moustache& operator=(Moustache&&) noexcept = default;
   ~Moustache() noexcept = default;
