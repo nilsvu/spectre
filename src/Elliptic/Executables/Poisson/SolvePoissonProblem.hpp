@@ -8,6 +8,7 @@
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/Actions/ApplyLinearOperatorToInitialFields.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/Actions/InitializeFields.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
@@ -340,7 +341,9 @@ struct Metavariables {
       typename smoother::template solve<build_linear_operator_actions, Label>>;
 
   using solve_actions = tmpl::list<
-      elliptic::Actions::InitializeLinearOperator,
+      elliptic::Actions::apply_linear_operator_to_initial_fields<
+          build_linear_operator_actions, typename system::fields_tag,
+          linear_operand_tag, LinearSolver::multigrid::Tags::IsFinestLevel>,
       typename linear_solver::template solve<tmpl::list<
           Actions::RunEventsAndTriggers,
           // TODO: make preconditioning the identity operation if it is
