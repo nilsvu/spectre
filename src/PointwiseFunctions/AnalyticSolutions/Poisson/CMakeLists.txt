@@ -21,6 +21,7 @@ spectre_target_headers(
   Moustache.hpp
   ProductOfSinusoids.hpp
   Solutions.hpp
+  Zero.hpp
   )
 
 target_link_libraries(
