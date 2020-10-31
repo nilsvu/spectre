@@ -10,6 +10,34 @@
 
 /// Functionality related to solving elliptic partial differential equations
 namespace elliptic {
+
+namespace OptionTags {
+
+template <typename BackgroundType>
+struct Background {
+  static std::string name() noexcept { return Options::name<BackgroundType>(); }
+  static constexpr Options::String help = "Options for the background";
+  using type = BackgroundType;
+};
+
+struct InitialGuessGroup {
+  static std::string name() noexcept { return "InitialGuess"; }
+  static constexpr Options::String help =
+      "Initial guess for the elliptic solve";
+};
+
+template <typename InitialGuessType>
+struct InitialGuess {
+  static std::string name() noexcept {
+    return Options::name<InitialGuessType>();
+  }
+  static constexpr Options::String help = "Options for the initial guess";
+  using group = InitialGuessGroup;
+  using type = InitialGuessType;
+};
+
+}  // namespace OptionTags
+
 namespace Tags {
 
 /*!
@@ -35,6 +63,24 @@ struct FluxesComputer : db::SimpleTag {
   static FluxesComputerType create_from_options() {
     return FluxesComputerType{};
   }
+};
+
+template <typename BackgroundType>
+struct Background : db::SimpleTag {
+  using type = BackgroundType;
+  using option_tags = tmpl::list<OptionTags::Background<BackgroundType>>;
+
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type& value) noexcept { return value; }
+};
+
+template <typename InitialGuessType>
+struct InitialGuess : db::SimpleTag {
+  using type = InitialGuessType;
+  using option_tags = tmpl::list<OptionTags::InitialGuess<InitialGuessType>>;
+
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type& value) noexcept { return value; }
 };
 
 }  // namespace Tags
