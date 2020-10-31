@@ -10,6 +10,7 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataBox/Tag.hpp"
 #include "Domain/InterfaceHelpers.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Utilities/Gsl.hpp"
@@ -64,6 +65,44 @@ struct FirstOrderSourcesCompute
     elliptic::first_order_sources<PrimalVariables, AuxiliaryVariables,
                                   SourcesComputer>(sources, vars,
                                                    sources_args...);
+  }
+};
+
+// Sets n.F_u(div(F_v)) <- n.F_u to impose neumann boundary conditions through
+// the internal penalty flux.
+template <size_t Dim, typename PrimalVariables>
+struct ImposeAuxiliaryConstraint;
+
+template <size_t Dim, typename... PrimalVariables>
+struct ImposeAuxiliaryConstraint<Dim, tmpl::list<PrimalVariables...>>
+    : ::Tags::Variables<db::wrap_tags_in<
+          elliptic::dg::Tags::NormalDotDivAuxFlux,
+          tmpl::list<PrimalVariables...>, tmpl::size_t<Dim>, Frame::Inertial>>,
+      db::ComputeTag {
+  using primal_variables = tmpl::list<PrimalVariables...>;
+  using base = ::Tags::Variables<db::wrap_tags_in<
+      elliptic::dg::Tags::NormalDotDivAuxFlux, tmpl::list<PrimalVariables...>,
+      tmpl::size_t<Dim>, Frame::Inertial>>;
+  using argument_tags = tmpl::push_front<
+      db::wrap_tags_in<::Tags::NormalDotFlux, primal_variables>,
+      domain::Tags::Mesh<Dim - 1>>;
+  using return_type = db::item_type<base>;
+
+  template <typename... NDotPrimalFluxes>
+  static void function(
+      const gsl::not_null<return_type*> n_dot_div_aux_fluxes,
+      const Mesh<Dim - 1>& mesh,
+      const NDotPrimalFluxes&... n_dot_primal_fluxes) noexcept {
+    *n_dot_div_aux_fluxes = return_type{mesh.number_of_grid_points()};
+    const auto helper = [](const auto n_dot_div_aux_flux,
+                           const auto& n_dot_primal_flux) noexcept {
+      *n_dot_div_aux_flux = n_dot_primal_flux;
+    };
+    EXPAND_PACK_LEFT_TO_RIGHT(helper(
+        make_not_null(&get<elliptic::dg::Tags::NormalDotDivAuxFlux<
+                          PrimalVariables, tmpl::size_t<Dim>, Frame::Inertial>>(
+            *n_dot_div_aux_fluxes)),
+        n_dot_primal_fluxes));
   }
 };
 

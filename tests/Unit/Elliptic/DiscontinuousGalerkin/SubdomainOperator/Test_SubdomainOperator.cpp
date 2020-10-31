@@ -20,8 +20,10 @@
 #include "Domain/InterfaceHelpers.hpp"
 #include "Domain/SurfaceJacobian.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/BoundaryConditions.hpp"
 #include "Elliptic/DiscontinuousGalerkin/NumericalFluxes/FirstOrderInternalPenalty.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Poisson/Geometry.hpp"
@@ -49,6 +51,12 @@ namespace helpers = TestHelpers::elliptic::dg;
 namespace {
 
 struct DummyOptionsGroup {};
+
+struct BoundaryConditionsTag : db::SimpleTag {
+  struct type {
+    using argument_tags = tmpl::list<>;
+  };
+};
 
 template <typename System, typename FluxesArgsTags,
           typename FluxesArgsVolumeTags, typename FluxesArgsTagsFromCenter,
@@ -114,6 +122,11 @@ void test_subdomain_operator_impl(
           volume_dim, fluxes_computer_tag, primal_fields, auxiliary_fields>;
   const NumericalFlux numerical_fluxes_computer{penalty_parameter};  // C=1.5
 
+  // Choose boundary conditions (they are disabled for the subdomain operator
+  // below, so this is irrelevant and it always imposes homogeneous b.c.)
+  using boundary_conditions_tag = BoundaryConditionsTag;
+  const typename boundary_conditions_tag::type boundary_conditions{};
+
   // Setup the faces and mortars in the subdomain
   // TODO: Support h-refinement in this test
   const auto central_mortars =
@@ -130,6 +143,10 @@ void test_subdomain_operator_impl(
       internal_surface_jacobians;
   std::unordered_map<Direction<volume_dim>, Scalar<DataVector>>
       boundary_surface_jacobians;
+  std::unordered_map<Direction<volume_dim>,
+                     tuples::tagged_tuple_from_typelist<db::wrap_tags_in<
+                         elliptic::Tags::BoundaryCondition, primal_fields>>>
+      boundary_condition_types{};
   dg::MortarMap<volume_dim, Mesh<volume_dim - 1>> central_mortar_meshes;
   dg::MortarMap<volume_dim, dg::MortarSize<volume_dim - 1>>
       central_mortar_sizes;
@@ -152,6 +169,14 @@ void test_subdomain_operator_impl(
       boundary_face_normals[direction] = std::move(face_normal);
       boundary_face_normal_magnitudes[direction] = std::move(normal_magnitude);
       boundary_surface_jacobians[direction] = std::move(surface_jacobian);
+      boundary_condition_types.emplace(
+          std::piecewise_construct, std::make_tuple(direction), std::tuple<>{});
+      tmpl::for_each<primal_fields>([&boundary_condition_types,
+                                     &direction](const auto tag_v) {
+        using tag = tmpl::type_from<decltype(tag_v)>;
+        get<elliptic::Tags::BoundaryCondition<tag>>(boundary_condition_types.at(
+            direction)) = elliptic::BoundaryCondition::Dirichlet;
+      });
     } else {
       internal_face_normals[direction] = std::move(face_normal);
       internal_face_normal_magnitudes[direction] = std::move(normal_magnitude);
@@ -160,6 +185,7 @@ void test_subdomain_operator_impl(
     central_mortar_meshes[mortar_id] = mortar_mesh_and_size.first;
     central_mortar_sizes[mortar_id] = mortar_mesh_and_size.second;
   }
+  CAPTURE(boundary_condition_types);
 
   // Create workspace vars for each element. Fill the operand with random values
   // within the subdomain and with zeros outside. Also construct a subdomain
@@ -222,6 +248,12 @@ void test_subdomain_operator_impl(
   LinearSolver::Schwarz::OverlapMap<
       volume_dim, ::dg::MortarMap<volume_dim, ::dg::MortarSize<volume_dim - 1>>>
       all_overlap_neighbor_mortar_sizes;
+  LinearSolver::Schwarz::OverlapMap<
+      volume_dim, std::unordered_map<
+                      Direction<volume_dim>,
+                      tuples::tagged_tuple_from_typelist<db::wrap_tags_in<
+                          elliptic::Tags::BoundaryCondition, primal_fields>>>>
+      all_overlap_boundary_condition_types;
   for (const auto& direction_and_neighbors :
        central_element.element.neighbors()) {
     const auto& direction = direction_and_neighbors.first;
@@ -368,6 +400,27 @@ void test_subdomain_operator_impl(
           mortar_id, std::move(neighbors_neighbor_mortar_meshes)));
       all_overlap_neighbor_mortar_sizes.emplace(std::make_pair(
           mortar_id, std::move(neighbors_neighbor_mortar_sizes)));
+
+      // Setup neighbor boundary conditions
+      std::unordered_map<Direction<volume_dim>,
+                         tuples::tagged_tuple_from_typelist<db::wrap_tags_in<
+                             elliptic::Tags::BoundaryCondition, primal_fields>>>
+          neighbor_boundary_condition_types{};
+      for (const auto& neighbor_direction :
+           neighbor.element.external_boundaries()) {
+        neighbor_boundary_condition_types.emplace(
+            std::piecewise_construct, std::make_tuple(neighbor_direction),
+            std::tuple<>{});
+        tmpl::for_each<primal_fields>([&neighbor_boundary_condition_types,
+                                       &neighbor_direction](const auto tag_v) {
+          using tag = tmpl::type_from<decltype(tag_v)>;
+          get<elliptic::Tags::BoundaryCondition<tag>>(
+              neighbor_boundary_condition_types.at(neighbor_direction)) =
+              elliptic::BoundaryCondition::Dirichlet;
+        });
+      }
+      all_overlap_boundary_condition_types.emplace(std::make_pair(
+          mortar_id, std::move(neighbor_boundary_condition_types)));
     }
   }
   const auto all_overlap_fluxes_args =
@@ -385,8 +438,7 @@ void test_subdomain_operator_impl(
           const Direction<volume_dim>& direction,
           const tnsr::i<DataVector, volume_dim>& face_normal,
           const Scalar<DataVector>& face_normal_magnitude,
-          const Variables<n_dot_fluxes_tags>& n_dot_fluxes,
-          const Variables<div_fluxes_tags>& div_fluxes,
+          const auto& n_dot_fluxes, const auto& n_dot_div_aux_fluxes,
           const auto& fluxes_args) -> BoundaryData {
     return std::apply(
         [&](const auto&... expanded_fluxes_args) {
@@ -395,9 +447,9 @@ void test_subdomain_operator_impl(
               numerical_fluxes_computer, face_mesh, n_dot_fluxes, volume_mesh,
               direction, face_normal_magnitude,
               get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_fluxes)...,
-              get<::Tags::div<::Tags::Flux<
-                  AuxiliaryFields, tmpl::size_t<volume_dim>, Frame::Inertial>>>(
-                  div_fluxes)...,
+              get<elliptic::dg::Tags::NormalDotDivAuxFlux<
+                  PrimalFields, tmpl::size_t<volume_dim>, Frame::Inertial>>(
+                  n_dot_div_aux_fluxes)...,
               face_normal, fluxes_computer, expanded_fluxes_args...);
         },
         fluxes_args);
@@ -470,22 +522,24 @@ void test_subdomain_operator_impl(
     elliptic::dg::apply_subdomain_face<
         domain::Tags::InternalDirections<volume_dim>,
         typename system::primal_fields, typename system::auxiliary_fields,
-        typename system::sources, MassiveOperator>(
+        typename system::sources, MassiveOperator, true>(
         make_not_null(&subdomain_result), central_element.element,
         central_element.mesh, fluxes_computer, numerical_fluxes_computer,
         direction, direction_and_face_normal.second,
         internal_face_normal_magnitudes.at(direction),
-        internal_surface_jacobians.at(direction), central_mortar_meshes,
-        central_mortar_sizes, all_overlap_extents, all_overlap_meshes,
-        all_overlap_elements, all_overlap_element_maps,
-        all_overlap_face_normals, all_overlap_face_normal_magnitudes,
-        all_overlap_surface_jacobians, all_overlap_mortar_meshes,
+        internal_surface_jacobians.at(direction), boundary_conditions,
+        boundary_condition_types, central_mortar_meshes, central_mortar_sizes,
+        all_overlap_extents, all_overlap_meshes, all_overlap_elements,
+        all_overlap_element_maps, all_overlap_face_normals,
+        all_overlap_face_normal_magnitudes, all_overlap_surface_jacobians,
+        all_overlap_boundary_condition_types, all_overlap_mortar_meshes,
         all_overlap_mortar_sizes, all_overlap_neighbor_meshes,
         all_overlap_neighbor_face_normal_magnitudes,
         all_overlap_neighbor_mortar_meshes, all_overlap_neighbor_mortar_sizes,
         package_fluxes_args(subdomain_center, central_element, direction),
-        all_overlap_fluxes_args, all_overlap_sources_args, subdomain_data,
-        central_fluxes_buffer, central_div_fluxes_buffer,
+        std::tuple<>{}, all_overlap_fluxes_args, all_overlap_sources_args,
+        std::tuple<>{}, subdomain_data, central_fluxes_buffer,
+        central_div_fluxes_buffer,
         make_not_null(&neighbors_boundary_data_cache));
   }
   for (const auto& direction_and_face_normal : boundary_face_normals) {
@@ -493,22 +547,24 @@ void test_subdomain_operator_impl(
     elliptic::dg::apply_subdomain_face<
         domain::Tags::BoundaryDirectionsInterior<volume_dim>,
         typename system::primal_fields, typename system::auxiliary_fields,
-        typename system::sources, MassiveOperator>(
+        typename system::sources, MassiveOperator, true>(
         make_not_null(&subdomain_result), central_element.element,
         central_element.mesh, fluxes_computer, numerical_fluxes_computer,
         direction, direction_and_face_normal.second,
         boundary_face_normal_magnitudes.at(direction),
-        boundary_surface_jacobians.at(direction), central_mortar_meshes,
-        central_mortar_sizes, all_overlap_extents, all_overlap_meshes,
-        all_overlap_elements, all_overlap_element_maps,
-        all_overlap_face_normals, all_overlap_face_normal_magnitudes,
-        all_overlap_surface_jacobians, all_overlap_mortar_meshes,
+        boundary_surface_jacobians.at(direction), boundary_conditions,
+        boundary_condition_types, central_mortar_meshes, central_mortar_sizes,
+        all_overlap_extents, all_overlap_meshes, all_overlap_elements,
+        all_overlap_element_maps, all_overlap_face_normals,
+        all_overlap_face_normal_magnitudes, all_overlap_surface_jacobians,
+        all_overlap_boundary_condition_types, all_overlap_mortar_meshes,
         all_overlap_mortar_sizes, all_overlap_neighbor_meshes,
         all_overlap_neighbor_face_normal_magnitudes,
         all_overlap_neighbor_mortar_meshes, all_overlap_neighbor_mortar_sizes,
         package_fluxes_args(subdomain_center, central_element, direction),
-        all_overlap_fluxes_args, all_overlap_sources_args, subdomain_data,
-        central_fluxes_buffer, central_div_fluxes_buffer,
+        std::tuple<>{}, all_overlap_fluxes_args, all_overlap_sources_args,
+        std::tuple<>{}, subdomain_data, central_fluxes_buffer,
+        central_div_fluxes_buffer,
         make_not_null(&neighbors_boundary_data_cache));
   }
 
@@ -544,7 +600,8 @@ void test_subdomain_operator_impl(
       volume_dim, typename system::primal_fields,
       typename system::auxiliary_fields, fluxes_computer_tag, FluxesArgs,
       typename system::sources, SourcesArgs, numerical_flux_tag,
-      DummyOptionsGroup, FluxesArgsTagsFromCenter, MassiveOperator>;
+      boundary_conditions_tag, DummyOptionsGroup, FluxesArgsTagsFromCenter,
+      MassiveOperator, true>;
   static_assert(tt::assert_conforms_to<
                 SubdomainOperator,
                 LinearSolver::Schwarz::protocols::SubdomainOperator>);
@@ -577,6 +634,11 @@ void test_subdomain_operator_impl(
           domain::Tags::Interface<
               domain::Tags::BoundaryDirectionsInterior<volume_dim>,
               domain::Tags::SurfaceJacobian<Frame::Logical, Frame::Inertial>>,
+          boundary_conditions_tag,
+          domain::Tags::Interface<
+              domain::Tags::BoundaryDirectionsExterior<volume_dim>,
+              elliptic::Tags::BoundaryConditions<
+                  typename system::primal_fields>>,
           ::Tags::Mortars<domain::Tags::Mesh<volume_dim - 1>, volume_dim>,
           ::Tags::Mortars<::Tags::MortarSize<volume_dim - 1>, volume_dim>,
           LinearSolver::Schwarz::Tags::Overlaps<
@@ -604,6 +666,12 @@ void test_subdomain_operator_impl(
               domain::Tags::Faces<
                   volume_dim, domain::Tags::SurfaceJacobian<Frame::Logical,
                                                             Frame::Inertial>>,
+              volume_dim, DummyOptionsGroup>,
+          LinearSolver::Schwarz::Tags::Overlaps<
+              domain::Tags::Interface<
+                  domain::Tags::BoundaryDirectionsExterior<volume_dim>,
+                  elliptic::Tags::BoundaryConditions<
+                      typename system::primal_fields>>,
               volume_dim, DummyOptionsGroup>,
           LinearSolver::Schwarz::Tags::Overlaps<
               ::Tags::Mortars<domain::Tags::Mesh<volume_dim - 1>, volume_dim>,
@@ -643,12 +711,13 @@ void test_subdomain_operator_impl(
       internal_face_normals, boundary_face_normals,
       internal_face_normal_magnitudes, boundary_face_normal_magnitudes,
       internal_surface_jacobians, boundary_surface_jacobians,
-      central_mortar_meshes, central_mortar_sizes,
-      std::move(all_overlap_extents), std::move(all_overlap_meshes),
-      std::move(all_overlap_elements), std::move(all_overlap_element_maps),
-      std::move(all_overlap_face_normals),
+      boundary_conditions, boundary_condition_types, central_mortar_meshes,
+      central_mortar_sizes, std::move(all_overlap_extents),
+      std::move(all_overlap_meshes), std::move(all_overlap_elements),
+      std::move(all_overlap_element_maps), std::move(all_overlap_face_normals),
       std::move(all_overlap_face_normal_magnitudes),
       std::move(all_overlap_surface_jacobians),
+      std::move(all_overlap_boundary_condition_types),
       std::move(all_overlap_mortar_meshes), std::move(all_overlap_mortar_sizes),
       std::move(all_overlap_neighbor_meshes),
       std::move(all_overlap_neighbor_face_normal_magnitudes),

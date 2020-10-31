@@ -86,6 +86,19 @@ struct BoundaryCondition : BoundaryConditionBase, db::SimpleTag {
   }
 };
 
+template <typename BoundaryConditionType>
+struct LinearizedBoundaryCondition : db::SimpleTag {
+  using type = typename BoundaryConditionType::Linearization;
+  using option_tags =
+      tmpl::list<::OptionTags::BoundaryCondition<BoundaryConditionType>>;
+
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(
+      const BoundaryConditionType& boundary_condition) noexcept {
+    return boundary_condition.linearization();
+  }
+};
+
 /// \ingroup DataBoxTagsGroup
 /// \brief Prefix indicating the analytic solution value for a quantity
 ///

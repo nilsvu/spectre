@@ -16,6 +16,7 @@
 #include "DataStructures/Variables.hpp"
 #include "Domain/FaceNormal.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NormalDotFlux.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Protocols.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
@@ -186,12 +187,6 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
   };
 
   template <typename Tag>
-  struct NormalDotDivFlux : db::PrefixTag, db::SimpleTag {
-    using tag = Tag;
-    using type = TensorMetafunctions::remove_first_index<typename Tag::type>;
-  };
-
-  template <typename Tag>
   struct NormalDotNormalDotFlux : db::PrefixTag, db::SimpleTag {
     using tag = Tag;
     using type = TensorMetafunctions::remove_first_index<typename Tag::type>;
@@ -215,6 +210,15 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
   explicit FirstOrderInternalPenalty(const double penalty_parameter) noexcept
       : penalty_parameter_(penalty_parameter) {}
 
+  template <typename LocalFluxesComputerTag, typename LocalFieldTagsList,
+            typename LocalAuxiliaryFieldTagsList>
+  FirstOrderInternalPenalty(const FirstOrderInternalPenalty<
+                            Dim, LocalFluxesComputerTag, LocalFieldTagsList,
+                            LocalAuxiliaryFieldTagsList>& rhs) noexcept
+      : penalty_parameter_(rhs.penalty_parameter()) {}
+
+  double penalty_parameter() const noexcept { return penalty_parameter_; }
+
   // clang-tidy: non-const reference
   void pup(PUP::er& p) noexcept { p | penalty_parameter_; }  // NOLINT
 
@@ -225,8 +229,8 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
       domain::Tags::Direction<Dim>,
       ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>,
       ::Tags::NormalDotFlux<AuxiliaryFieldTags>...,
-      ::Tags::div<::Tags::Flux<AuxiliaryFieldTags, tmpl::size_t<Dim>,
-                               Frame::Inertial>>...,
+      elliptic::dg::Tags::NormalDotDivAuxFlux<FieldTags, tmpl::size_t<Dim>,
+                                              Frame::Inertial>...,
       ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>,
       fluxes_computer_tag>;
   using volume_tags =
@@ -235,7 +239,8 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
 
   using package_field_tags =
       tmpl::list<::Tags::NormalDotFlux<AuxiliaryFieldTags>...,
-                 NormalDotDivFlux<AuxiliaryFieldTags>...,
+                 elliptic::dg::Tags::NormalDotDivAuxFlux<
+                     FieldTags, tmpl::size_t<Dim>, Frame::Inertial>...,
                  NormalDotNormalDotFlux<AuxiliaryFieldTags>..., ElementSize>;
   using package_extra_tags = tmpl::list<PerpendicularNumPoints>;
 
@@ -243,8 +248,9 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
   void package_data(
       const gsl::not_null<typename ::Tags::NormalDotFlux<
           AuxiliaryFieldTags>::type*>... packaged_n_dot_aux_fluxes,
-      const gsl::not_null<typename NormalDotDivFlux<
-          AuxiliaryFieldTags>::type*>... packaged_n_dot_div_aux_fluxes,
+      const gsl::not_null<typename elliptic::dg::Tags::NormalDotDivAuxFlux<
+          FieldTags, tmpl::size_t<Dim>,
+          Frame::Inertial>::type*>... packaged_n_dot_div_aux_fluxes,
       const gsl::not_null<
           typename NormalDotNormalDotFlux<AuxiliaryFieldTags>::
               type*>... packaged_n_dot_principal_n_dot_aux_fluxes,
@@ -254,47 +260,35 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
       const Scalar<DataVector>& face_normal_magnitude,
       const typename ::Tags::NormalDotFlux<
           AuxiliaryFieldTags>::type&... normal_dot_auxiliary_field_fluxes,
-      const typename ::Tags::div<
-          ::Tags::Flux<AuxiliaryFieldTags, tmpl::size_t<Dim>,
-                       Frame::Inertial>>::type&... div_auxiliary_field_fluxes,
+      const typename elliptic::dg::Tags::NormalDotDivAuxFlux<
+          FieldTags, tmpl::size_t<Dim>,
+          Frame::Inertial>::type&... n_dot_div_aux_fluxes,
       const tnsr::i<DataVector, Dim, Frame::Inertial>& interface_unit_normal,
       const FluxesComputer& fluxes_computer,
       const FluxesArgs&... fluxes_args) const noexcept {
     *perpendicular_num_points = volume_mesh.extents(direction.dimension());
     get(*element_size) = 2. / get(face_normal_magnitude);
-    auto principal_div_aux_field_fluxes = make_with_value<Variables<tmpl::list<
-        ::Tags::Flux<FieldTags, tmpl::size_t<Dim>, Frame::Inertial>...>>>(
-        interface_unit_normal, std::numeric_limits<double>::signaling_NaN());
     auto principal_ndot_aux_field_fluxes = make_with_value<Variables<tmpl::list<
         ::Tags::Flux<FieldTags, tmpl::size_t<Dim>, Frame::Inertial>...>>>(
         interface_unit_normal, std::numeric_limits<double>::signaling_NaN());
     fluxes_computer.apply(
         make_not_null(
             &get<::Tags::Flux<FieldTags, tmpl::size_t<Dim>, Frame::Inertial>>(
-                principal_div_aux_field_fluxes))...,
-        fluxes_args..., div_auxiliary_field_fluxes...);
-    fluxes_computer.apply(
-        make_not_null(
-            &get<::Tags::Flux<FieldTags, tmpl::size_t<Dim>, Frame::Inertial>>(
                 principal_ndot_aux_field_fluxes))...,
         fluxes_args..., normal_dot_auxiliary_field_fluxes...);
     const auto apply_normal_dot =
-        [&principal_div_aux_field_fluxes, &principal_ndot_aux_field_fluxes,
-         &interface_unit_normal](
+        [&principal_ndot_aux_field_fluxes, &interface_unit_normal](
             auto field_tag_v, auto packaged_normal_dot_auxiliary_field_flux,
-            auto packaged_normal_dot_div_auxiliary_field_flux,
+            auto packaged_n_dot_div_aux_flux,
             auto packaged_normal_dot_principal_ndot_aux_field_flux,
-            const auto& normal_dot_auxiliary_field_flux) noexcept {
+            const auto& normal_dot_auxiliary_field_flux,
+            const auto& n_dot_div_aux_flux) noexcept {
           using field_tag = decltype(field_tag_v);
           // Compute n.F_v(u)
           *packaged_normal_dot_auxiliary_field_flux =
               normal_dot_auxiliary_field_flux;
           // Compute n.F_u(div(F_v(u))) and n.F_u(n.F_v(u))
-          normal_dot_flux(
-              packaged_normal_dot_div_auxiliary_field_flux,
-              interface_unit_normal,
-              get<::Tags::Flux<field_tag, tmpl::size_t<Dim>, Frame::Inertial>>(
-                  principal_div_aux_field_fluxes));
+          *packaged_n_dot_div_aux_flux = n_dot_div_aux_flux;
           normal_dot_flux(
               packaged_normal_dot_principal_ndot_aux_field_flux,
               interface_unit_normal,
@@ -304,7 +298,7 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
     EXPAND_PACK_LEFT_TO_RIGHT(apply_normal_dot(
         FieldTags{}, packaged_n_dot_aux_fluxes, packaged_n_dot_div_aux_fluxes,
         packaged_n_dot_principal_n_dot_aux_fluxes,
-        normal_dot_auxiliary_field_fluxes));
+        normal_dot_auxiliary_field_fluxes, n_dot_div_aux_fluxes));
   }
 
   template <typename PackagedData>
@@ -329,17 +323,19 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
           AuxiliaryFieldTags>::type*>... numerical_flux_for_auxiliary_fields,
       const typename ::Tags::NormalDotFlux<
           AuxiliaryFieldTags>::type&... normal_dot_auxiliary_flux_interiors,
-      const typename NormalDotDivFlux<
-          AuxiliaryFieldTags>::type&... normal_dot_div_auxiliary_flux_interiors,
+      const typename elliptic::dg::Tags::NormalDotDivAuxFlux<
+          FieldTags, tmpl::size_t<Dim>,
+          Frame::Inertial>::type&... normal_dot_div_auxiliary_flux_interiors,
       const typename NormalDotNormalDotFlux<
           AuxiliaryFieldTags>::type&... ndot_ndot_aux_flux_interiors,
       const Scalar<DataVector>& element_size_interior,
       const size_t perpendicular_num_points_interior,
       const typename ::Tags::NormalDotFlux<AuxiliaryFieldTags>::
           type&... minus_normal_dot_auxiliary_flux_exteriors,
-      const typename NormalDotDivFlux<
-          AuxiliaryFieldTags>::type&... minus_normal_dot_div_aux_flux_exteriors,
-      const typename NormalDotDivFlux<
+      const typename elliptic::dg::Tags::NormalDotDivAuxFlux<
+          FieldTags, tmpl::size_t<Dim>,
+          Frame::Inertial>::type&... minus_normal_dot_div_aux_flux_exteriors,
+      const typename NormalDotNormalDotFlux<
           AuxiliaryFieldTags>::type&... ndot_ndot_aux_flux_exteriors,
       const Scalar<DataVector>& element_size_exterior,
       const size_t perpendicular_num_points_exterior) const noexcept {
@@ -385,83 +381,6 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
         normal_dot_div_auxiliary_flux_interiors, ndot_ndot_aux_flux_interiors,
         minus_normal_dot_auxiliary_flux_exteriors,
         minus_normal_dot_div_aux_flux_exteriors, ndot_ndot_aux_flux_exteriors));
-  }
-
-  // This function computes the boundary contributions from Dirichlet boundary
-  // conditions. This data is what remains to be added to the boundaries when
-  // homogeneous (i.e. zero) boundary conditions are assumed in the calculation
-  // of the numerical fluxes, but we wish to impose inhomogeneous (i.e. nonzero)
-  // boundary conditions. Since this contribution does not depend on the
-  // numerical field values, but only on the Dirichlet boundary data, it may be
-  // added as contribution to the source of the elliptic systems. Then, it
-  // remains to solve the homogeneous problem with the modified source.
-  template <typename... FluxesArgs>
-  void compute_dirichlet_boundary(
-      const gsl::not_null<typename ::Tags::NormalDotNumericalFlux<
-          FieldTags>::type*>... numerical_flux_for_fields,
-      const gsl::not_null<typename ::Tags::NormalDotNumericalFlux<
-          AuxiliaryFieldTags>::type*>... numerical_flux_for_auxiliary_fields,
-      const typename FieldTags::type&... dirichlet_fields,
-      const Mesh<Dim>& volume_mesh, const Direction<Dim>& direction,
-      const tnsr::i<DataVector, Dim, Frame::Inertial>& interface_unit_normal,
-      const Scalar<DataVector>& face_normal_magnitude,
-      const FluxesComputer& fluxes_computer,
-      const FluxesArgs&... fluxes_args) const noexcept {
-    const auto penalty = ::elliptic::dg::NumericalFluxes::penalty(
-        2. / get(face_normal_magnitude),
-        volume_mesh.extents(direction.dimension()), penalty_parameter_);
-
-    // Compute n.F_v(u)
-    auto dirichlet_auxiliary_field_fluxes =
-        make_with_value<Variables<tmpl::list<::Tags::Flux<
-            AuxiliaryFieldTags, tmpl::size_t<Dim>, Frame::Inertial>...>>>(
-            interface_unit_normal,
-            std::numeric_limits<double>::signaling_NaN());
-    fluxes_computer.apply(
-        make_not_null(&get<::Tags::Flux<AuxiliaryFieldTags, tmpl::size_t<Dim>,
-                                        Frame::Inertial>>(
-            dirichlet_auxiliary_field_fluxes))...,
-        fluxes_args..., dirichlet_fields...);
-    const auto apply_normal_dot_aux =
-        [&interface_unit_normal, &dirichlet_auxiliary_field_fluxes ](
-            auto auxiliary_field_tag_v,
-            const auto numerical_flux_for_auxiliary_field) noexcept {
-      using auxiliary_field_tag = decltype(auxiliary_field_tag_v);
-      normal_dot_flux(
-          numerical_flux_for_auxiliary_field, interface_unit_normal,
-          get<::Tags::Flux<auxiliary_field_tag, tmpl::size_t<Dim>,
-                           Frame::Inertial>>(dirichlet_auxiliary_field_fluxes));
-    };
-    EXPAND_PACK_LEFT_TO_RIGHT(apply_normal_dot_aux(
-        AuxiliaryFieldTags{}, numerical_flux_for_auxiliary_fields));
-
-    // Compute 2 * sigma * n.F_u(n.F_v(u))
-    auto principal_dirichlet_auxiliary_field_fluxes =
-        make_with_value<Variables<tmpl::list<
-            ::Tags::Flux<FieldTags, tmpl::size_t<Dim>, Frame::Inertial>...>>>(
-            interface_unit_normal,
-            std::numeric_limits<double>::signaling_NaN());
-    fluxes_computer.apply(
-        make_not_null(
-            &get<::Tags::Flux<FieldTags, tmpl::size_t<Dim>, Frame::Inertial>>(
-                principal_dirichlet_auxiliary_field_fluxes))...,
-        fluxes_args..., *numerical_flux_for_auxiliary_fields...);
-    const auto assemble_dirichlet_penalty = [
-      &interface_unit_normal, &penalty,
-      &principal_dirichlet_auxiliary_field_fluxes
-    ](auto field_tag_v, const auto numerical_flux_for_field) noexcept {
-      using field_tag = decltype(field_tag_v);
-      normal_dot_flux(
-          numerical_flux_for_field, interface_unit_normal,
-          get<::Tags::Flux<field_tag, tmpl::size_t<Dim>, Frame::Inertial>>(
-              principal_dirichlet_auxiliary_field_fluxes));
-      for (auto it = numerical_flux_for_field->begin();
-           it != numerical_flux_for_field->end(); it++) {
-        *it *= 2 * penalty;
-      }
-    };
-    EXPAND_PACK_LEFT_TO_RIGHT(
-        assemble_dirichlet_penalty(FieldTags{}, numerical_flux_for_fields));
   }
 
  private:

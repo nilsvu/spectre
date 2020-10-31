@@ -6,6 +6,7 @@
 #include <string>
 
 #include "DataStructures/DataBox/Tag.hpp"
+#include "Elliptic/BoundaryConditions.hpp"
 #include "Utilities/PrettyType.hpp"
 
 /// Functionality related to solving elliptic partial differential equations
@@ -81,6 +82,17 @@ struct InitialGuess : db::SimpleTag {
 
   static constexpr bool pass_metavariables = false;
   static type create_from_options(const type& value) noexcept { return value; }
+};
+
+template <typename Tag>
+struct BoundaryCondition : db::PrefixTag {
+  using type = elliptic::BoundaryCondition;
+};
+
+template <typename Tags>
+struct BoundaryConditions : db::SimpleTag {
+  using type = tuples::tagged_tuple_from_typelist<
+      db::wrap_tags_in<elliptic::Tags::BoundaryCondition, Tags>>;
 };
 
 }  // namespace Tags

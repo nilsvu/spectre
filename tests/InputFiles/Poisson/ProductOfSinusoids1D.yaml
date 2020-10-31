@@ -11,6 +11,9 @@ AnalyticSolution:
   ProductOfSinusoids:
     WaveNumbers: [1]
 
+BoundaryCondition:
+  AnalyticDirichlet:
+
 InitialGuess:
   Zero:
 

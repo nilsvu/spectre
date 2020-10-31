@@ -16,10 +16,13 @@
 #include "Domain/FaceNormal.hpp"
 #include "Domain/LogicalCoordinates.hpp"
 #include "Domain/Structure/CreateInitialMesh.hpp"
+#include "Domain/Structure/DirectionMap.hpp"
 #include "Domain/Structure/Element.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/BoundaryConditions.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
+#include "Elliptic/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
@@ -44,7 +47,9 @@ namespace elliptic::dg::Actions {
 // TODO: Are h-refined mortars weighted correctly?
 // TODO: Keep in mind that the weighting operation should preserve symmetry of
 // the linear operator
-template <size_t Dim, typename OptionsGroup>
+template <size_t Dim, typename OptionsGroup,
+          typename BoundaryConditionsProviderTag, typename PrimalFields,
+          typename BoundaryConditionFields>
 struct InitializeSubdomain {
   using initialization_tags =
       tmpl::list<domain::Tags::InitialExtents<Dim>,
@@ -77,6 +82,8 @@ struct InitializeSubdomain {
     const auto& domain = db::get<domain::Tags::Domain<Dim>>(box);
     const auto& max_overlap =
         get<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>(box);
+    const auto& boundary_conditions_provider =
+        db::get<BoundaryConditionsProviderTag>(box);
 
     overlaps<Mesh<Dim>> overlap_meshes{};
     overlaps<size_t> overlap_extents{};
@@ -99,6 +106,13 @@ struct InitializeSubdomain {
         overlap_neighbor_mortar_sizes{};
     overlaps<tnsr::I<DataVector, Dim, Frame::Inertial>>
         overlap_inertial_coords{};
+    overlaps<std::unordered_map<
+        Direction<Dim>, tuples::tagged_tuple_from_typelist<db::wrap_tags_in<
+                            elliptic::Tags::BoundaryCondition, PrimalFields>>>>
+        overlap_boundary_condition_types{};
+    overlaps<std::unordered_map<Direction<Dim>,
+                                tnsr::I<DataVector, Dim, Frame::Inertial>>>
+        overlap_boundary_inertial_coords{};
 
     const auto& element = db::get<domain::Tags::Element<Dim>>(box);
     for (const auto& direction_and_neighbors : element.neighbors()) {
@@ -185,6 +199,15 @@ struct InitializeSubdomain {
                                   neighbor_neighbors.orientation()));
           }
         }
+        std::unordered_map<
+            Direction<Dim>,
+            tuples::tagged_tuple_from_typelist<db::wrap_tags_in<
+                elliptic::Tags::BoundaryCondition, PrimalFields>>>
+            neighbor_boundary_condition_types{};
+        overlap_boundary_inertial_coords.emplace(
+            overlap_id,
+            std::unordered_map<Direction<Dim>,
+                               tnsr::I<DataVector, Dim, Frame::Inertial>>{});
         for (const auto& neighbor_direction : neighbor.external_boundaries()) {
           setup_face(neighbor_direction);
           const auto neighbor_mortar_id = std::make_pair(
@@ -195,6 +218,27 @@ struct InitializeSubdomain {
           neighbor_mortar_sizes.emplace(
               neighbor_mortar_id,
               make_array<Dim - 1>(Spectral::MortarSize::Full));
+          neighbor_boundary_condition_types[neighbor_direction];
+          tmpl::for_each<PrimalFields>([&](auto tag_v) noexcept {
+            using tag = tmpl::type_from<decltype(tag_v)>;
+            using boundary_condition_field =
+                tmpl::at<BoundaryConditionFields,
+                         tmpl::index_of<PrimalFields, tag>>;
+            get<elliptic::Tags::BoundaryCondition<tag>>(
+                neighbor_boundary_condition_types[direction]) =
+                boundary_conditions_provider.boundary_condition_type(
+                    overlap_element_maps.at(overlap_id)(
+                        interface_logical_coordinates(
+                            neighbor_mortar_meshes.at(neighbor_mortar_id),
+                            neighbor_direction)),
+                    neighbor_direction, boundary_condition_field{});
+          });
+          overlap_boundary_inertial_coords.at(overlap_id)
+              .emplace(neighbor_direction,
+                       overlap_element_maps.at(overlap_id)(
+                           interface_logical_coordinates(
+                               neighbor_mortar_meshes.at(neighbor_mortar_id),
+                               neighbor_direction)));
         }
         overlap_face_normals.emplace(overlap_id,
                                      std::move(neighbor_face_normals));
@@ -206,6 +250,8 @@ struct InitializeSubdomain {
                                       std::move(neighbor_mortar_meshes));
         overlap_mortar_sizes.emplace(overlap_id,
                                      std::move(neighbor_mortar_sizes));
+        overlap_boundary_condition_types.emplace(
+            overlap_id, std::move(neighbor_boundary_condition_types));
         auto neighbor_inertial_coords = overlap_element_maps.at(overlap_id)(
             logical_coordinates(neighbor_mesh));
         overlap_inertial_coords.emplace(overlap_id,
@@ -295,6 +341,12 @@ struct InitializeSubdomain {
                 overlaps_tag<domain::Tags::Faces<
                     Dim, domain::Tags::SurfaceJacobian<Frame::Logical,
                                                        Frame::Inertial>>>,
+                overlaps_tag<domain::Tags::Interface<
+                    domain::Tags::BoundaryDirectionsExterior<Dim>,
+                    elliptic::Tags::BoundaryConditions<PrimalFields>>>,
+                overlaps_tag<domain::Tags::Interface<
+                    domain::Tags::BoundaryDirectionsExterior<Dim>,
+                    domain::Tags::Coordinates<Dim, Frame::Inertial>>>,
                 overlaps_tag<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>,
                 overlaps_tag<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>,
                 overlaps_tag<
@@ -313,6 +365,8 @@ struct InitializeSubdomain {
             std::move(overlap_element_maps), std::move(overlap_face_normals),
             std::move(overlap_face_normal_magnitudes),
             std::move(overlap_surface_jacobians),
+            std::move(overlap_boundary_condition_types),
+            std::move(overlap_boundary_inertial_coords),
             std::move(overlap_mortar_meshes), std::move(overlap_mortar_sizes),
             std::move(overlap_neighbor_meshes),
             std::move(overlap_neighbor_face_normal_magnitudes),

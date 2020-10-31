@@ -10,6 +10,7 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/ApplyLinearOperatorToInitialFields.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
+#include "Elliptic/Actions/InitializeBoundaryConditions.hpp"
 #include "Elliptic/Actions/InitializeFields.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
 #include "Elliptic/Actions/InitializeLinearOperator.hpp"
@@ -62,6 +63,7 @@
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Zero.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "PointwiseFunctions/BoundaryConditions/AnalyticDirichlet.hpp"
 #include "Utilities/Blas.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/ProtocolHelpers.hpp"
@@ -126,7 +128,6 @@ struct Metavariables {
   using system = System;
   static constexpr size_t volume_dim = system::volume_dim;
   using background = Background;
-  using boundary_conditions = BoundaryConditions;
   using initial_guess = InitialGuess;
 
   static constexpr bool has_analytic_solution =
@@ -148,9 +149,15 @@ struct Metavariables {
       tmpl::conditional_t<has_analytic_solution,
                           ::Tags::AnalyticSolution<background>,
                           elliptic::Tags::Background<background>>;
-  using boundary_conditions_tag = tmpl::conditional_t<
-      has_analytic_solution and std::is_same_v<boundary_conditions, background>,
-      background_tag, ::Tags::BoundaryCondition<boundary_conditions>>;
+  using boundary_conditions = tmpl::conditional_t<
+      std::is_same_v<BoundaryConditions, Background>,
+      ::BoundaryConditions::AnalyticDirichlet<volume_dim, background_tag,
+                                              typename system::primal_fields>,
+      BoundaryConditions>;
+  using boundary_conditions_tag =
+      ::Tags::BoundaryCondition<boundary_conditions>;
+  using linearized_boundary_conditions_tag =
+      ::Tags::LinearizedBoundaryCondition<boundary_conditions>;
   using initial_guess_tag = elliptic::Tags::InitialGuess<initial_guess>;
 
   // The linear solver algorithm. We must use GMRES since the operator is
@@ -195,8 +202,9 @@ struct Metavariables {
   using smoother_subdomain_operator = elliptic::dg::SubdomainOperator<
       volume_dim, primal_variables, auxiliary_variables, fluxes_computer_tag,
       tmpl::list<>, typename system::sources, tmpl::list<>,
-      normal_dot_numerical_flux, SolvePoissonProblem::OptionTags::SchwarzGroup,
-      tmpl::list<>, massive_operator>;
+      normal_dot_numerical_flux, linearized_boundary_conditions_tag,
+      SolvePoissonProblem::OptionTags::SchwarzGroup, tmpl::list<>,
+      massive_operator, true>;
   using smoother_subdomain_preconditioner =
       LinearSolver::Schwarz::subdomain_preconditioners::ExplicitInverse<
           volume_dim>;
@@ -271,7 +279,8 @@ struct Metavariables {
 
   // Collect all items to store in the cache.
   using const_global_cache_tags =
-      tmpl::list<background_tag, boundary_conditions_tag, initial_guess_tag,
+      tmpl::list<background_tag, boundary_conditions_tag,
+                 linearized_boundary_conditions_tag, initial_guess_tag,
                  fluxes_computer_tag, normal_dot_numerical_flux,
                  Tags::EventsAndTriggers<events, triggers>>;
 
@@ -290,13 +299,16 @@ struct Metavariables {
           dg::Initialization::slice_tags_to_exterior<>,
           dg::Initialization::face_compute_tags<>,
           dg::Initialization::exterior_compute_tags<>, false, false>,
+      elliptic::Actions::InitializeBoundaryConditions,
       elliptic::Actions::InitializeFields,
       elliptic::Actions::InitializeFixedSources,
       typename linear_solver::initialize_element,
       typename multigrid::initialize_element,
       typename smoother::initialize_element,
       elliptic::dg::Actions::InitializeSubdomain<
-          volume_dim, typename smoother::options_group>,
+          volume_dim, typename smoother::options_group,
+          linearized_boundary_conditions_tag, primal_variables,
+          typename system::primal_fields>,
       ::Initialization::Actions::AddComputeTags<tmpl::list<
           combined_iteration_id,
           LinearSolver::Schwarz::Tags::SummedIntrudingOverlapWeightsCompute<
@@ -320,8 +332,9 @@ struct Metavariables {
       Actions::MutateApply<elliptic::FirstOrderOperator<
           volume_dim, LinearSolver::Tags::OperatorAppliedTo, linear_operand_tag,
           massive_operator>>,
-      elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
-          linear_operand_tag, primal_variables>,
+      elliptic::dg::Actions::ImposeBoundaryConditions<
+          linearized_boundary_conditions_tag, linear_operand_tag,
+          primal_variables, auxiliary_variables, fluxes_computer_tag>,
       dg::Actions::CollectDataForFluxes<
           boundary_scheme,
           domain::Tags::BoundaryDirectionsInterior<volume_dim>>,

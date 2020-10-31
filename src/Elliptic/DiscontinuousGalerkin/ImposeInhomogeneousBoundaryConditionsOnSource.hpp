@@ -17,11 +17,16 @@
 #include "Domain/InterfaceHelpers.hpp"
 #include "Domain/SurfaceJacobian.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/BoundaryConditions.hpp"
 #include "Elliptic/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/LiftFlux.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NormalDotFlux.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NumericalFluxes/NumericalFluxHelpers.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/SimpleBoundaryData.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "Utilities/TupleSlice.hpp"
 
 /// \cond
 namespace Frame {
@@ -36,132 +41,148 @@ namespace Actions {
 /*!
  * \brief Adds boundary contributions to the sources
  *
- * Imposes boundary conditions by adding contributions to the sources of the
- * elliptic equations. With the source modified, we may then assume homogeneous
- * (i.e. zero) Dirichlet boundary conditions throughout the elliptic solve.
+ * Imposes inhomogeneous boundary conditions by adding contributions to the
+ * sources of the elliptic equations. With the source modified, we may then
+ * assume homogeneous boundary conditions throughout the elliptic solve.
  *
- * \note Only Dirichlet boundary conditions retrieved from the analytic solution
- * are currently supported.
- *
- * With:
- * - `fixed_sources_tag` = `db::add_tag_prefix<Tags::FixedSource, fields_tag>`
- *
- * Uses:
- * - Metavariables:
- *   - `analytic_solution_tag`
- *   - `normal_dot_numerical_flux`
- * - System:
- *   - `volume_dim`
- *   - `fields_tag`
- *   - `primal_fields`
- * - DataBox:
- *   - `Tags::Mesh<volume_dim>`
- *   - `Tags::Coordinates<volume_dim, Frame::Inertial>`
- *   - `Tags::BoundaryDirectionsInterior<volume_dim>`
- *   - `Tags::Interface<Tags::BoundaryDirectionsExterior<volume_dim>,
- *   Tags::Coordinates<volume_dim, Frame::Inertial>>`
- *   - `Tags::Interface<Tags::BoundaryDirectionsInterior<volume_dim>,
- *   Tags::Normalized<Tags::UnnormalizedFaceNormal<volume_dim>>>`
- *   - `Tags::Interface<Tags::BoundaryDirectionsInterior<volume_dim>,
- *   Tags::Magnitude<Tags::UnnormalizedFaceNormal<volume_dim>>>`
- *
- * DataBox:
- * - Modifies:
- *   - `fixed_sources_tag`
+ * In this context "inhomogeneous" means the constant, variable-independent and
+ * therefore nonlinear part of the boundary conditions. For example, standard
+ * non-zero Dirichlet or Neumann boundary conditions are such contributions.
  */
 template <typename Metavariables>
 struct ImposeInhomogeneousBoundaryConditionsOnSource {
   using system = typename Metavariables::system;
   static constexpr size_t volume_dim = system::volume_dim;
+  using fields_tag = typename system::fields_tag;
+  using primal_fields = typename system::primal_fields;
+  using auxiliary_fields = typename system::auxiliary_fields;
+
   using FluxesType = typename system::fluxes;
   using fluxes_computer_tag = elliptic::Tags::FluxesComputer<FluxesType>;
+  using boundary_conditions_tag =
+      typename Metavariables::boundary_conditions_tag;
+  using BoundaryConditions = typename boundary_conditions_tag::type;
 
   using fixed_sources_tag =
       db::add_tag_prefix<::Tags::FixedSource, typename system::fields_tag>;
-
-  template <typename NormalDotNumericalFluxComputer,
-            typename... NumericalFluxTags, typename... BoundaryDataTags,
-            typename... FluxesArgs>
-  static void compute_dirichlet_boundary_normal_dot_numerical_flux(
-      const gsl::not_null<Variables<tmpl::list<NumericalFluxTags...>>*>
-          numerical_fluxes,
-      const NormalDotNumericalFluxComputer& normal_dot_numerical_flux_computer,
-      const Variables<tmpl::list<BoundaryDataTags...>>& boundary_data,
-      const Mesh<volume_dim>& volume_mesh,
-      const Direction<volume_dim>& direction,
-      const tnsr::i<DataVector, volume_dim, Frame::Inertial>&
-          normalized_face_normal,
-      const Scalar<DataVector>& face_normal_magnitude,
-      const FluxesType& fluxes_computer,
-      const FluxesArgs&... fluxes_args) noexcept {
-    normal_dot_numerical_flux_computer.compute_dirichlet_boundary(
-        make_not_null(&get<NumericalFluxTags>(*numerical_fluxes))...,
-        get<BoundaryDataTags>(boundary_data)..., volume_mesh, direction,
-        normalized_face_normal, face_normal_magnitude, fluxes_computer,
-        fluxes_args...);
-  }
 
   template <typename DbTagsList, typename... InboxTags, typename ArrayIndex,
             typename ActionList, typename ParallelComponent>
   static std::tuple<db::DataBox<DbTagsList>&&> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::GlobalCache<Metavariables>& cache,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    const auto& boundary_conditions =
-        Parallel::get<typename Metavariables::boundary_conditions_tag>(cache);
-    const auto& normal_dot_numerical_flux_computer =
-        Parallel::get<typename Metavariables::normal_dot_numerical_flux>(cache);
-
-    // Compute the contribution to the fixed sources from all Dirichlet
-    // boundaries
-    auto dirichlet_boundary_contributions = interface_apply<
+    // Compute the contribution to the fixed sources on all external boundaries
+    auto boundary_contributions = interface_apply<
         domain::Tags::BoundaryDirectionsExterior<volume_dim>,
         tmpl::push_front<
-            typename FluxesType::argument_tags, domain::Tags::Mesh<volume_dim>,
-            domain::Tags::Mesh<volume_dim - 1>,
+            tmpl::append<typename FluxesType::argument_tags,
+                         typename BoundaryConditions::argument_tags>,
+            domain::Tags::Mesh<volume_dim>, domain::Tags::Mesh<volume_dim - 1>,
             domain::Tags::Direction<volume_dim>,
-            domain::Tags::Coordinates<volume_dim, Frame::Inertial>,
+            elliptic::Tags::BoundaryConditions<typename system::primal_fields>,
             ::Tags::Normalized<
                 domain::Tags::UnnormalizedFaceNormal<volume_dim>>,
             ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<volume_dim>>,
             domain::Tags::SurfaceJacobian<Frame::Logical, Frame::Inertial>,
-            fluxes_computer_tag>,
-        tmpl::push_front<get_volume_tags<FluxesType>,
-                         domain::Tags::Mesh<volume_dim>, fluxes_computer_tag>>(
-        [&boundary_conditions, &normal_dot_numerical_flux_computer](
-            const Mesh<volume_dim>& volume_mesh,
-            const Mesh<volume_dim - 1>& face_mesh,
-            const Direction<volume_dim>& direction,
-            const tnsr::I<DataVector, volume_dim, Frame::Inertial>&
-                boundary_coordinates,
-            tnsr::i<DataVector, volume_dim> normalized_face_normal,
-            const Scalar<DataVector>& magnitude_of_face_normal,
-            const Scalar<DataVector>& surface_jacobian,
-            const FluxesType& fluxes_computer, const auto&... fluxes_args) {
+            fluxes_computer_tag, boundary_conditions_tag,
+            typename Metavariables::normal_dot_numerical_flux>,
+        tmpl::push_front<tmpl::append<get_volume_tags<FluxesType>,
+                                      get_volume_tags<BoundaryConditions>>,
+                         domain::Tags::Mesh<volume_dim>, fluxes_computer_tag,
+                         boundary_conditions_tag,
+                         typename Metavariables::normal_dot_numerical_flux>>(
+        [](const Mesh<volume_dim>& volume_mesh,
+           const Mesh<volume_dim - 1>& face_mesh,
+           const Direction<volume_dim>& direction,
+           const auto& boundary_condition_types,
+           const tnsr::i<DataVector, volume_dim>& exterior_face_normal,
+           const Scalar<DataVector>& magnitude_of_face_normal,
+           const Scalar<DataVector>& surface_jacobian,
+           const FluxesType& fluxes_computer,
+           const BoundaryConditions& boundary_conditions,
+           const auto& numerical_fluxes_computer,
+           const auto&... fluxes_and_bc_args_expanded) {
+          const auto fluxes_and_bc_args =
+              std::make_tuple(fluxes_and_bc_args_expanded...);
+          const auto fluxes_args =
+              tuple_head<tmpl::size<typename FluxesType::argument_tags>::value>(
+                  fluxes_and_bc_args);
+          const auto boundary_conditions_args = tuple_tail<
+              tmpl::size<typename BoundaryConditions::argument_tags>::value>(
+              fluxes_and_bc_args);
           const size_t dimension = direction.dimension();
+          const size_t num_points = face_mesh.number_of_grid_points();
           // We get the exterior face normal out of the box, so we flip its sign
           // to obtain the interior face normal
+          auto interior_face_normal = exterior_face_normal;
           for (size_t d = 0; d < volume_dim; d++) {
-            normalized_face_normal.get(d) *= -1.;
+            interior_face_normal.get(d) *= -1.;
           }
-          // Compute Dirichlet data on mortar
-          Variables<typename system::primal_fields> dirichlet_boundary_data{
-              face_mesh.number_of_grid_points(), 0.};
-          dirichlet_boundary_data.assign_subset(boundary_conditions.variables(
-              boundary_coordinates, typename system::primal_fields{}));
-          // Compute the numerical flux contribution from the Dirichlet data
+          // Feed zero variables through the boundary conditions to retrieve
+          // their nonlinear (i.e. constant) part.
+          typename db::add_tag_prefix<::Tags::NormalDotFlux, fields_tag>::type
+              n_dot_fluxes_exterior{num_points};
+          const auto vars_interior =
+              make_with_value<typename fields_tag::type>(num_points, 0.);
+          const auto n_dot_fluxes_interior =
+              make_with_value<typename db::add_tag_prefix<::Tags::NormalDotFlux,
+                                                          fields_tag>::type>(
+                  num_points, 0.);
+          impose_boundary_conditions<primal_fields, auxiliary_fields>(
+              make_not_null(&n_dot_fluxes_exterior), vars_interior,
+              n_dot_fluxes_interior, exterior_face_normal,
+              boundary_condition_types, boundary_conditions,
+              boundary_conditions_args, fluxes_computer, fluxes_args);
+          // Feed through numerical flux
+          using NumericalFlux =
+              std::decay_t<decltype(numerical_fluxes_computer)>;
+          using BoundaryData = ::dg::SimpleBoundaryData<
+              typename NumericalFlux::package_field_tags,
+              typename NumericalFlux::package_extra_tags>;
+          BoundaryData boundary_data_interior{num_points};
+          ::apply<tmpl::append<
+              db::wrap_tags_in<::Tags::NormalDotFlux, auxiliary_fields>,
+              db::wrap_tags_in<::Tags::NormalDotFlux, primal_fields>>>(
+              [&](const auto&... n_dot_fluxes) noexcept {
+                std::apply(
+                    [&](const auto&... expanded_fluxes_args) noexcept {
+                      ::dg::NumericalFluxes::package_data(
+                          make_not_null(&boundary_data_interior),
+                          numerical_fluxes_computer, volume_mesh,
+                          direction.opposite(), magnitude_of_face_normal,
+                          n_dot_fluxes..., interior_face_normal,
+                          fluxes_computer, expanded_fluxes_args...);
+                    },
+                    fluxes_args);
+              },
+              n_dot_fluxes_interior);
+          BoundaryData boundary_data_exterior{num_points};
+          ::apply<tmpl::append<
+              db::wrap_tags_in<::Tags::NormalDotFlux, auxiliary_fields>,
+              db::wrap_tags_in<::Tags::NormalDotFlux, primal_fields>>>(
+              [&](const auto&... n_dot_fluxes) noexcept {
+                std::apply(
+                    [&](const auto&... expanded_fluxes_args) noexcept {
+                      ::dg::NumericalFluxes::package_data(
+                          make_not_null(&boundary_data_exterior),
+                          numerical_fluxes_computer, volume_mesh, direction,
+                          magnitude_of_face_normal, n_dot_fluxes...,
+                          exterior_face_normal, fluxes_computer,
+                          expanded_fluxes_args...);
+                    },
+                    fluxes_args);
+              },
+              n_dot_fluxes_exterior);
           typename db::add_tag_prefix<::Tags::NormalDotNumericalFlux,
                                       fixed_sources_tag>::type
-              boundary_normal_dot_numerical_fluxes{
-                  face_mesh.number_of_grid_points(), 0.};
-          compute_dirichlet_boundary_normal_dot_numerical_flux(
+              boundary_normal_dot_numerical_fluxes{num_points, 0.};
+          ::dg::NumericalFluxes::normal_dot_numerical_fluxes(
               make_not_null(&boundary_normal_dot_numerical_fluxes),
-              normal_dot_numerical_flux_computer,
-              std::move(dirichlet_boundary_data), volume_mesh, direction,
-              normalized_face_normal, magnitude_of_face_normal, fluxes_computer,
-              fluxes_args...);
+              numerical_fluxes_computer, boundary_data_interior,
+              boundary_data_exterior);
           // Flip sign of the boundary contributions, making them
           // contributions to the source
           if constexpr (Metavariables::massive_operator) {
@@ -182,18 +203,17 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource {
     // Add the boundary contributions to the fixed sources
     db::mutate<fixed_sources_tag>(
         make_not_null(&box),
-        [&dirichlet_boundary_contributions](
+        [&boundary_contributions](
             const gsl::not_null<typename fixed_sources_tag::type*>
                 fixed_sources,
             const Mesh<volume_dim>& mesh,
             const std::unordered_set<::Direction<volume_dim>>&
                 directions) noexcept {
           for (const auto& direction : directions) {
-            add_slice_to_data(
-                fixed_sources,
-                std::move(dirichlet_boundary_contributions.at(direction)),
-                mesh.extents(), direction.dimension(),
-                index_to_slice_at(mesh.extents(), direction));
+            add_slice_to_data(fixed_sources,
+                              std::move(boundary_contributions.at(direction)),
+                              mesh.extents(), direction.dimension(),
+                              index_to_slice_at(mesh.extents(), direction));
           }
         },
         get<domain::Tags::Mesh<volume_dim>>(box),

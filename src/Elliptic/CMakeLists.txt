@@ -3,7 +3,13 @@
 
 set(LIBRARY Elliptic)
 
-add_spectre_library(${LIBRARY} INTERFACE)
+add_spectre_library(${LIBRARY})
+
+spectre_target_sources(
+  ${LIBRARY}
+  PRIVATE
+  BoundaryConditions.cpp
+  )
 
 spectre_target_headers(
   ${LIBRARY}
