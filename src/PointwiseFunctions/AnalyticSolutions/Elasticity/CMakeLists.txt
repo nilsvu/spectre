@@ -19,14 +19,18 @@ spectre_target_headers(
   BentBeam.hpp
   HalfSpaceMirror.hpp
   Solutions.hpp
+  Zero.hpp
   )
 
 target_link_libraries(
   ${LIBRARY}
-  PUBLIC ConstitutiveRelations
-  PUBLIC DataStructures
-  PUBLIC ErrorHandling
-  PUBLIC Integration
-  PUBLIC Utilities
-  PRIVATE GSL::gsl
+  PUBLIC
+  ConstitutiveRelations
+  DataStructures
+  Elasticity
+  ErrorHandling
+  Integration
+  Utilities
+  PRIVATE
+  GSL::gsl
   )
