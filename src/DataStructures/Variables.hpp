@@ -792,6 +792,26 @@ void swap(Variables<tmpl::list<TagsLhs...>>& lhs,
   rhs = std::move(temp);
 }
 
+namespace detail {
+
+template <typename F, typename TagsList, typename... ApplyTags>
+constexpr decltype(auto) apply_impl(F&& f, const Variables<TagsList>& t,
+                                    tmpl::list<ApplyTags...> /* meta */) {
+  return std::forward<F>(f)(get<ApplyTags>(t)...);
+}
+
+}  // namespace detail
+
+template <typename ApplyTags, typename F, typename TagsList>
+constexpr decltype(auto) apply(F&& f, const Variables<TagsList>& t) {
+  return detail::apply_impl(std::forward<F>(f), t, ApplyTags{});
+}
+
+template <typename F, typename TagsList>
+constexpr decltype(auto) apply(F&& f, const Variables<TagsList>& t) {
+  return detail::apply_impl(std::forward<F>(f), t, TagsList{});
+}
+
 /// \ingroup DataStructuresGroup
 /// Construct a variables from the `Tensor`s in a `TaggedTuple`.
 template <typename... Tags>
