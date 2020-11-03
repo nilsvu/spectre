@@ -11,6 +11,8 @@
 #include "Domain/Structure/Direction.hpp"
 #include "Elliptic/BoundaryConditions.hpp"
 #include "ErrorHandling/Assert.hpp"
+#include "Options/Options.hpp"
+#include "Options/ParseOptions.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/TMPL.hpp"
