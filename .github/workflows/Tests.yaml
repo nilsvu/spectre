@@ -29,12 +29,13 @@ on:
   push:
     branches-ignore:
       - gh-pages
-  # Once a month we run the tests and release a new version. The scheduled
-  # workflow always runs on the repository's default branch (`develop`).
+  # Once a month we run the tests and release a new version (see the dev guide
+  # on "Automatic versioning"). The scheduled workflow always runs on the
+  # repository's default branch (`develop`).
   schedule:
     - cron: '0 0 1 * *'
   # Also allow running the workflow manually. This can be used to manually
-  # release a version.
+  # release a version. (see the dev guide on "Automatic versioning")
   workflow_dispatch:
     inputs:
       release_version:
