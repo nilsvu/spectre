@@ -191,6 +191,7 @@ long_lines() {
               '.html$' \
               '.min.js$' \
               '.travis.yml$' \
+              '.zenodo.json$' \
               'CMakeLists.txt$' \
               'Doxyfile.in$' \
               'containers/Dockerfile.buildenv$' \
@@ -298,6 +299,7 @@ license() {
               '.png' \
               '.style.yapf' \
               '.svg' \
+              '.zenodo.json$' \
               'LICENSE' \
               'cmake/CodeCoverage.cmake$' \
               'cmake/CodeCoverageDetection.cmake$' \

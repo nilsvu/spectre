@@ -1,0 +1,164 @@
+{
+    "title":"SpECTRE",
+    "description":"<p>SpECTRE is an open-source code for multi-scale, multi-physics problems in astrophysics and gravitational physics. In the future, we hope that it can be applied to problems across discipline boundaries in fluid dynamics, geoscience, plasma physics, nuclear physics, and engineering. It runs at petascale and is designed for future exascale computers.</p><p>SpECTRE is being developed in support of our collaborative Simulating eXtreme Spacetimes (SXS) research program into the multi-messenger astrophysics of neutron star mergers, core-collapse supernovae, and gamma-ray bursts.</p>",
+    "creators": [
+        {
+            "name": "Deppe, Nils",
+            "affiliation": "Theoretical Astrophysics, Walter Burke Institute for Theoretical Physics, California Institute of Technology, Pasadena, CA 91125, USA",
+            "orcid": "0000-0003-4557-4115"
+        },
+        {
+            "name": "Throwe, William",
+            "affiliation": "Cornell Center for Astrophysics and Planetary Science, Cornell University, Ithaca, New York 14853, USA",
+            "orcid": "0000-0001-5059-4378"
+        },
+        {
+            "name": "Kidder, Lawrence E.",
+            "affiliation": "Cornell Center for Astrophysics and Planetary Science, Cornell University, Ithaca, New York 14853, USA",
+            "orcid": "0000-0001-5392-7342"
+        },
+        {
+            "name": "Fischer, Nils L.",
+            "affiliation": "Max Planck Institute for Gravitational Physics (Albert Einstein Institute), Am Mühlenberg 1, Potsdam 14476, Germany",
+            "orcid": "0000-0002-5767-3949"
+        },
+        {
+            "name": "Armaza, Cristóbal",
+            "affiliation": "Cornell Center for Astrophysics and Planetary Science, Cornell University, Ithaca, New York 14853, USA",
+            "orcid": "0000-0002-1791-0743"
+        },
+        {
+            "name": "Bonilla, Gabriel S.",
+            "affiliation": "Cornell Center for Astrophysics and Planetary Science, Cornell University, Ithaca, New York 14853, USA",
+            "orcid": "0000-0003-4502-528X"
+        },
+        {
+            "name": "Hébert, François",
+            "affiliation": "Theoretical Astrophysics, Walter Burke Institute for Theoretical Physics, California Institute of Technology, Pasadena, CA 91125, USA",
+            "orcid": "0000-0001-9009-6955"
+        },
+        {
+            "name": "Kumar, Prayush",
+            "affiliation": "Cornell Center for Astrophysics and Planetary Science, Cornell University, Ithaca, New York 14853, USA",
+            "orcid": "0000-0001-5523-4603"
+        },
+        {
+            "name": "Lovelace, Geoffrey",
+            "affiliation": "Nicholas and Lee Begovich Center for Gravitational-Wave Physics and Astronomy, California State University, Fullerton, Fullerton, California 92831, USA",
+            "orcid": "0000-0002-7084-1070"
+        },
+        {
+            "name": "Moxon, Jordan",
+            "affiliation": "Theoretical Astrophysics, Walter Burke Institute for Theoretical Physics, California Institute of Technology, Pasadena, CA 91125, USA",
+            "orcid": "0000-0001-9891-8677"
+        },
+        {
+            "name": "O'Shea, Eamonn",
+            "affiliation": "Cornell Center for Astrophysics and Planetary Science, Cornell University, Ithaca, New York 14853, USA"
+        },
+        {
+            "name": "Scheel, Mark A.",
+            "affiliation": "Theoretical Astrophysics, Walter Burke Institute for Theoretical Physics, California Institute of Technology, Pasadena, CA 91125, USA",
+            "orcid": "0000-0001-6656-9134"
+        },
+        {
+            "name": "Teukolsky, Saul A.",
+            "affiliation": "Theoretical Astrophysics, Walter Burke Institute for Theoretical Physics, California Institute of Technology, Pasadena, CA 91125, USA and Cornell Center for Astrophysics and Planetary Science, Cornell University, Ithaca, New York 14853, USA",
+            "orcid": "0000-0001-9765-4526"
+        },
+        {
+            "name": "Anantpurkar, Isha",
+            "affiliation": "Cornell Center for Astrophysics and Planetary Science, Cornell University, Ithaca, New York 14853, USA ",
+            "orcid": "0000-0002-5814-4109"
+        },
+        {
+            "name": "Foucart, Francois",
+            "affiliation": "Department of Physics & Astronomy, University of New Hampshire, 9 Library Way, Durham NH 03824, USA",
+            "orcid": "0000-0003-4617-4738"
+
+        },
+        {
+            "name": "Giesler, Matthew",
+            "affiliation": "Cornell Center for Astrophysics and Planetary Science, Cornell University, Ithaca, New York 14853, USA",
+            "orcid": "0000-0003-2300-893X"
+        },
+        {
+            "name": "Iozzo, Dante A. B.",
+            "affiliation": "Cornell Center for Astrophysics and Planetary Science, Cornell University, Ithaca, New York 14853, USA",
+            "orcid": "0000-0002-7244-1900"
+        },
+        {
+            "name": "Legred, Isaac",
+            "affiliation": "Theoretical Astrophysics, Walter Burke Institute for Theoretical Physics, California Institute of Technology, Pasadena, CA 91125, USA",
+            "orcid": "0000-0002-9523-9617"
+        },
+        {
+            "name": "Li, Dongjun",
+
+            "affiliation": "Theoretical Astrophysics, Walter Burke Institute for Theoretical Physics, California Institute of Technology, Pasadena, CA 91125, USA",
+            "orcid": "0000-0002-1962-680X"
+        },
+        {
+            "name": "Macedo, Alex",
+            "affiliation": "Nicholas and Lee Begovich Center for Gravitational-Wave Physics and Astronomy, California State University, Fullerton, Fullerton, California 92831, USA",
+            "orcid": "0000-0001-5139-9013"
+        },
+        {
+            "name": "Melchor, Denyz",
+            "affiliation": "Nicholas and Lee Begovich Center for Gravitational-Wave Physics and Astronomy, California State University, Fullerton, Fullerton, California 92831, USA",
+            "orcid": "0000-0002-7854-1953"
+        },
+        {
+            "name": "Morales, Marlo",
+            "affiliation": "Nicholas and Lee Begovich Center for Gravitational-Wave Physics and Astronomy, California State University, Fullerton, Fullerton, California 92831, USA",
+            "orcid": "0000-0002-0593-4318"
+        },
+        {
+            "name": "Ramirez, Teresa",
+            "affiliation": "Nicholas and Lee Begovich Center for Gravitational-Wave Physics and Astronomy, California State University, Fullerton, Fullerton, California 92831, USA",
+            "orcid": "0000-0003-0994-115X"
+        },
+        {
+            "name": "Rüter, Hannes R.",
+            "affiliation": "Max Planck Institute for Gravitational Physics (Albert Einstein Institute), Am Mühlenberg 1, Potsdam 14476, Germany",
+            "orcid": "0000-0002-3442-5360"
+        },
+        {
+            "name": "Sanchez, Jennifer",
+            "affiliation": "Nicholas and Lee Begovich Center for Gravitational-Wave Physics and Astronomy, California State University, Fullerton, Fullerton, California 92831, USA",
+            "orcid": "0000-0002-5335-4924"
+        },
+        {
+            "name": "Thomas, Sierra",
+            "affiliation": "Nicholas and Lee Begovich Center for Gravitational-Wave Physics and Astronomy, California State University, Fullerton, Fullerton, California 92831, USA",
+            "orcid": "0000-0003-3574-2090"
+        },
+        {
+            "name": "Wlodarczyk, Tom",
+            "affiliation": "Max Planck Institute for Gravitational Physics (Albert Einstein Institute), Am Mühlenberg 1, Potsdam 14476, Germany"
+        }
+    ],
+    "related_identifiers": [
+        {
+            "identifier": "https://spectre-code.org/",
+            "relation": "isDocumentedBy",
+            "scheme": "url",
+            "resource_type": "publication-softwaredocumentation"
+        }
+    ],
+    "language": "eng",
+    "communities": [{"identifier": "sxs"}],
+    "keywords": ["Software",
+                 "Astrophysics",
+                 "General Relativity",
+                 "Numerical Relativity",
+                 "Multiphysics",
+                 "Gravitational Waves",
+                 "Discontinuous Galerkin",
+                 "Finite Difference",
+                 "Finite Volume"],
+    "license": "MIT",
+    "upload_type": "software",
+    "access_right": "open",
+    "version":"2020"
+}
