@@ -64,6 +64,9 @@ struct FirstOrderSystem {
   using fields_tag =
       ::Tags::Variables<tmpl::append<primal_fields, auxiliary_fields>>;
 
+  // The variable-independent fields
+  using background_fields = tmpl::list<>;
+
   // The system equations formulated as fluxes and sources
   using fluxes_computer = Fluxes<Dim>;
   using sources_computer = Sources<Dim>;
