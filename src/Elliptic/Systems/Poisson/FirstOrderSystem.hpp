@@ -84,6 +84,10 @@ struct FirstOrderSystem {
   using fields_tag =
       ::Tags::Variables<tmpl::append<primal_fields, auxiliary_fields>>;
 
+  using background_fields = tmpl::conditional_t<
+      BackgroundGeometry == Geometry::Euclidean, tmpl::list<>,
+      tmpl::list<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataVector>>>;
+
   using fluxes =
       tmpl::conditional_t<BackgroundGeometry == Geometry::Euclidean,
                           EuclideanFluxes<Dim>, NonEuclideanFluxes<Dim>>;

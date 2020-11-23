@@ -67,6 +67,8 @@ struct FirstOrderSystem {
   using fluxes = Fluxes<Dim>;
   using sources = Sources<Dim>;
 
+  using background_fields = tmpl::list<>;
+
   // The tag of the operator to compute magnitudes on the manifold, e.g. to
   // normalize vectors on the faces of an element
   template <typename Tag>

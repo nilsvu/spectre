@@ -9,56 +9,45 @@
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
-#include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
+#include "NumericalAlgorithms/Spectral/Mesh.hpp"
+#include "Parallel/GlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MutateAssign.hpp"
-#include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
-
-/// \cond
-namespace Parallel {
-template <typename Metavariables>
-struct GlobalCache;
-}  // namespace Parallel
-/// \endcond
 
 namespace elliptic::Actions {
 
 /*!
- * \brief Initialize those DataBox tags related to the elliptic system that are
- * independent of the dynamic variables
- *
- * This action initializes the "fixed sources", i.e. the variable-independent
- * source-term \f$f(x)\f$ in an elliptic system of PDEs \f$-div(F) + S =
- * f(x)\f$.
+ * \brief Initialize the dynamic fields of the elliptic system, i.e. those we
+ * solve for.
  *
  * Uses:
  * - Metavariables:
- *   - `background_tag`
+ *   - `initial_guess_tag`
  * - System:
  *   - `fields_tag`
- *   - `primal_fields`
  * - DataBox:
+ *   - `InitialGuessTag`
  *   - `Tags::Coordinates<Dim, Frame::Inertial>`
  *
  * DataBox:
  * - Adds:
- *   - `db::add_tag_prefix<::Tags::FixedSource, fields_tag>`
+ *   - `fields_tag`
  *
  * \note This action relies on the `SetupDataBox` aggregated initialization
  * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
  * phase action list prior to this action.
  */
-template <typename System, typename BackgroundTag>
-struct InitializeFixedSources {
+template <typename System, typename InitialGuessTag>
+struct InitializeFields {
  private:
   using system = System;
   using fields_tag = typename system::fields_tag;
-  using fixed_sources_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
 
  public:
-  using simple_tags = tmpl::list<fixed_sources_tag>;
+  using simple_tags = tmpl::list<fields_tag>;
   using compute_tags = tmpl::list<>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -71,20 +60,14 @@ struct InitializeFixedSources {
       const ParallelComponent* const /*meta*/) noexcept {
     const auto& inertial_coords =
         get<domain::Tags::Coordinates<Dim, Frame::Inertial>>(box);
-    const auto& background = db::get<BackgroundTag>(box);
+    const auto& initial_guess =
+        db::get<typename Metavariables::initial_guess_tag>(box);
 
-    // Retrieve the fixed-sources of the elliptic system from the background,
-    // which (along with the boundary conditions) define the problem we want to
-    // solve. We need only retrieve sources for the primal fields, since the
-    // auxiliary fields will never be sourced.
-    auto fixed_sources =
-        make_with_value<typename fixed_sources_tag::type>(inertial_coords, 0.);
-    fixed_sources.assign_subset(background.variables(
-        inertial_coords, db::wrap_tags_in<::Tags::FixedSource,
-                                          typename system::primal_fields>{}));
-
+    auto initial_fields = variables_from_tagged_tuple(initial_guess.variables(
+        inertial_coords, typename fields_tag::tags_list{}));
     Initialization::mutate_assign<simple_tags>(make_not_null(&box),
-                                               std::move(fixed_sources));
+                                               std::move(initial_fields));
+
     return {std::move(box)};
   }
 };
