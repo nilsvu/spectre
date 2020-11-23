@@ -135,12 +135,12 @@ struct ElementArray {
 template <size_t Dim>
 struct Metavariables {
   using system = System<Dim>;
-  using analytic_solution_tag = Tags::AnalyticSolution<AnalyticSolution<Dim>>;
+  using boundary_conditions_tag = Tags::AnalyticSolution<AnalyticSolution<Dim>>;
   using normal_dot_numerical_flux = Tags::NumericalFlux<NumericalFlux<Dim>>;
   using component_list = tmpl::list<ElementArray<Dim, Metavariables>>;
   using const_global_cache_tags =
       tmpl::list<elliptic::Tags::FluxesComputer<Fluxes<Dim>>,
-                 analytic_solution_tag, normal_dot_numerical_flux>;
+                 boundary_conditions_tag, normal_dot_numerical_flux>;
   enum class Phase { Initialization, Testing, Exit };
 };
 
