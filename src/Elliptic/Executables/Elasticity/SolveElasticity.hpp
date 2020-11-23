@@ -8,6 +8,7 @@
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/Actions/ApplyLinearOperatorToInitialFields.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/Actions/InitializeSystem.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
@@ -94,10 +95,10 @@ struct Metavariables {
   using background_tag = elliptic::Tags::Background<
       Elasticity::AnalyticData::AnalyticData<Dim, background_registrars>>;
 
-  // List the possible initial guesses. We currently only support the trivial
-  // "zero" initial guess. This will be generalized ASAP.
+  // List the possible initial guesses
   using initial_guess_registrars =
-      tmpl::list<Elasticity::Solutions::Registrars::Zero<Dim>>;
+      tmpl::append<tmpl::list<Elasticity::Solutions::Registrars::Zero<Dim>>,
+                   analytic_solution_registrars>;
   using initial_guess_tag = elliptic::Tags::InitialGuess<
       ::AnalyticData<Dim, initial_guess_registrars>>;
 
@@ -220,6 +221,9 @@ struct Metavariables {
                  Parallel::Actions::TerminatePhase>;
 
   using solve_actions = tmpl::list<
+      elliptic::Actions::apply_linear_operator_to_initial_fields<
+          build_linear_operator_actions, typename system::fields_tag,
+          linear_operand_tag>,
       typename linear_solver::template solve<tmpl::list<
           Actions::RunEventsAndTriggers, build_linear_operator_actions>>,
       Actions::RunEventsAndTriggers, Parallel::Actions::TerminatePhase>;
