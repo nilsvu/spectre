@@ -24,7 +24,7 @@
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
-#include "Elliptic/Actions/InitializeSystem.hpp"
+#include "Elliptic/Actions/InitializeFixedSources.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Framework/ActionTesting.hpp"
 #include "Parallel/Actions/SetupDataBox.hpp"
@@ -91,7 +91,7 @@ struct ElementArray {
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Testing,
           tmpl::list<Actions::SetupDataBox,
-                     elliptic::Actions::InitializeSystem<
+                     elliptic::Actions::InitializeFixedSources<
                          typename Metavariables::system,
                          elliptic::Tags::Background<Background<Dim>>>>>>;
 };
@@ -107,7 +107,7 @@ struct Metavariables {
 
 }  // namespace
 
-SPECTRE_TEST_CASE("Unit.Elliptic.Actions.InitializeSystem",
+SPECTRE_TEST_CASE("Unit.Elliptic.Actions.InitializeFields",
                   "[Unit][Elliptic][Actions]") {
   domain::creators::register_derived_with_charm();
   {
