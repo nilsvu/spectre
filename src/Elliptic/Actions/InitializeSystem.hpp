@@ -89,16 +89,17 @@ struct InitializeSystem {
                   num_grid_points, 0.};
         });
 
-    // Retrieve the sources of the elliptic system from the analytic solution,
-    // which defines the problem we want to solve.
-    // We need only retrieve sources for the primal fields, since the auxiliary
-    // fields will never be sourced.
+    // Retrieve the fixed-sources of the elliptic system from the background,
+    // which (along with the boundary conditions) defines the problem we want to
+    // solve. We need only retrieve sources for the primal fields, since the
+    // auxiliary fields will never be sourced.
     typename fixed_sources_tag::type fixed_sources{num_grid_points, 0.};
     fixed_sources.assign_subset(
-        Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
-            .variables(inertial_coords,
-                       db::wrap_tags_in<::Tags::FixedSource,
-                                        typename System::primal_fields>{}));
+        Parallel::get<typename Metavariables::background_tag>(cache).variables(
+            inertial_coords,
+            db::wrap_tags_in<::Tags::FixedSource,
+                             typename System::primal_fields>{}));
+
     Initialization::mutate_assign<simple_tags>(
         make_not_null(&box), std::move(fields), std::move(fixed_sources));
     return std::make_tuple(std::move(box));

@@ -18,6 +18,9 @@ AnalyticSolution:
     AbsoluteTolerance: 1e-12
     RelativeTolerance: 1e-10
 
+InitialGuess:
+  Zero:
+
 DomainCreator:
   Cylinder:
     InnerRadius: 0.08
