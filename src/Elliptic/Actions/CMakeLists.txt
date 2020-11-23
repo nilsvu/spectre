@@ -5,6 +5,7 @@ spectre_target_headers(
   Elliptic
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
+  ApplyLinearOperatorToInitialFields.hpp
   InitializeAnalyticSolution.hpp
   InitializeFields.hpp
   InitializeFixedSources.hpp
