@@ -153,6 +153,44 @@ void test_equations(const DataVector& used_for_size) {
        MakeString{} << "normal_dot_dirichlet_flux_for_auxiliary_field_" << Dim
                     << "d"},
       {{{-1.0, 1.0}}}, used_for_size);
+
+  {
+    INFO("Check package_zero_data and package_data are consistent");
+    using NumericalFlux =
+        elliptic::dg::NumericalFluxes::FirstOrderInternalPenalty<
+            Dim, FluxesComputerTag<Dim>, tmpl::list<ScalarFieldTag>,
+            tmpl::list<AuxiliaryFieldTag<Dim>>>;
+
+    NumericalFlux numerical_flux{1.2};
+
+    const Mesh<Dim> volume_mesh{3, Spectral::Basis::Legendre,
+                                Spectral::Quadrature::GaussLobatto};
+    const auto direction = Direction<Dim>::lower_xi();
+    const auto face_normal_magnitude =
+        make_with_value<Scalar<DataVector>>(used_for_size, 4.);
+    // Should be irrelevant because field values are zero
+    const auto face_normal =
+        make_with_value<tnsr::i<DataVector, Dim>>(used_for_size, 1.);
+    Fluxes<Dim> fluxes_computer{};
+    const double fluxes_argument = 2.;
+
+    // Feed zero fields into package_data and compare with package_zero_data
+    const auto expected_packaged_data =
+        TestHelpers::NumericalFluxes::get_packaged_data(
+            numerical_flux, used_for_size, volume_mesh, direction,
+            face_normal_magnitude,
+            make_with_value<tnsr::i<DataVector, Dim>>(used_for_size, 0.),
+            make_with_value<tnsr::i<DataVector, Dim>>(used_for_size, 0.),
+            face_normal, fluxes_computer, fluxes_argument);
+    std::decay_t<decltype(expected_packaged_data)> zero_packaged_data{
+        used_for_size.size()};
+    numerical_flux.package_zero_data(make_not_null(&zero_packaged_data),
+                                     volume_mesh, direction,
+                                     face_normal_magnitude);
+    CHECK_VARIABLES_APPROX(expected_packaged_data.field_data,
+                           zero_packaged_data.field_data);
+    CHECK(expected_packaged_data.extra_data == zero_packaged_data.extra_data);
+  }
 }
 
 template <size_t Dim>
