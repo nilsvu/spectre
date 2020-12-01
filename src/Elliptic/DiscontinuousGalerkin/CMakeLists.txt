@@ -10,6 +10,7 @@ spectre_target_headers(
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
   DgElementArray.hpp
+  FirstOrderOperator.hpp
   ImposeBoundaryConditions.hpp
   ImposeInhomogeneousBoundaryConditionsOnSource.hpp
   InitializeFirstOrderOperator.hpp
@@ -34,3 +35,4 @@ target_link_libraries(
   )
 
 add_subdirectory(NumericalFluxes)
+add_subdirectory(SubdomainOperator)
