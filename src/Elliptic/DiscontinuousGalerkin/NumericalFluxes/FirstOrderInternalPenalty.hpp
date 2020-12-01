@@ -304,6 +304,25 @@ struct FirstOrderInternalPenalty<Dim, FluxesComputerTag,
         normal_dot_auxiliary_field_fluxes));
   }
 
+  /// The same as `package_data` but assuming all field data is zero. Avoids
+  /// constructing the zero field data and computing fluxes from them, which
+  /// will just turn out to be zero due to the linearity of the fluxes. This
+  /// function is needed to package non-field data for computing penalties on
+  /// faces where we know the field-data is zero.
+  template <typename PackagedData>
+  void package_zero_data(const gsl::not_null<PackagedData*> packaged_data,
+                         const Mesh<Dim>& volume_mesh,
+                         const Direction<Dim>& direction,
+                         const Scalar<DataVector>& face_normal_magnitude) const
+      noexcept {
+    packaged_data->field_data = Variables<typename PackagedData::field_tags>{
+        face_normal_magnitude.begin()->size(), 0.};
+    get<PerpendicularNumPoints>(packaged_data->extra_data) =
+        volume_mesh.extents(direction.dimension());
+    get(get<ElementSize>(packaged_data->field_data)) =
+        2. / get(face_normal_magnitude);
+  }
+
   void operator()(
       const gsl::not_null<typename ::Tags::NormalDotNumericalFlux<
           FieldTags>::type*>... numerical_flux_for_fields,
