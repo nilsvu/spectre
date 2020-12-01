@@ -12,10 +12,19 @@
 #include "DataStructures/DataBox/Tag.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
+#include "Domain/CoordinateMaps/Affine.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.tpp"
+#include "Domain/CoordinateMaps/CoordinateMapHelpers.hpp"
+#include "Domain/CoordinateMaps/ProductMaps.hpp"
+#include "Domain/CoordinateMaps/ProductMaps.tpp"
+#include "Domain/LogicalCoordinates.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
 #include "Framework/TestHelpers.hpp"
 #include "Helpers/DataStructures/MakeWithRandomValues.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
+#include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
@@ -181,6 +190,60 @@ void test_first_order_operator(const DataVector& used_for_size) {
     db::mutate_apply<elliptic::FirstOrderOperator<Dim, Step, vars_tag>>(
         make_not_null(&box));
     CHECK(get<step_tag>(box) == step);
+  }
+  {
+    INFO("First-order operator from vars");
+    Mesh<Dim> mesh{3, Spectral::Basis::Legendre,
+                   Spectral::Quadrature::GaussLobatto};
+    const size_t num_points = mesh.number_of_grid_points();
+    const auto coord_map = []() {
+      using Affine = domain::CoordinateMaps::Affine;
+      if constexpr (Dim == 1) {
+        return domain::CoordinateMap<Frame::Logical, Frame::Inertial, Affine>{
+            {-1., 1., 0., 1.}};
+      } else if constexpr (Dim == 2) {
+        using Affine2D = domain::CoordinateMaps::ProductOf2Maps<Affine, Affine>;
+        return domain::CoordinateMap<Frame::Logical, Frame::Inertial, Affine2D>{
+            {{-1., 1., 0., 1.}, {-1., 1., 0., 1.}}};
+      } else if constexpr (Dim == 3) {
+        using Affine3D =
+            domain::CoordinateMaps::ProductOf3Maps<Affine, Affine, Affine>;
+        return domain::CoordinateMap<Frame::Logical, Frame::Inertial, Affine3D>{
+            {{-1., 1., 0., 1.}, {-1., 1., 0., 1.}, {-1., 1., 0., 1.}}};
+      }
+    }();
+    const auto inv_jacobian = coord_map.inv_jacobian(logical_coordinates(mesh));
+    const double arg = 2.;
+    const Fluxes<Dim> fluxes_computer{};
+    const auto vars = make_with_random_values<typename vars_tag::type>(
+        nn_generator, nn_dist, num_points);
+    typename fluxes_tag::type fluxes{};
+    typename div_fluxes_tag::type div_fluxes{};
+    typename step_tag::type operator_applied_to_vars{};
+    elliptic::first_order_operator<tmpl::list<PrimalField>,
+                                   tmpl::list<AuxiliaryField<Dim>>, Sources>(
+        make_not_null(&operator_applied_to_vars), make_not_null(&fluxes),
+        make_not_null(&div_fluxes), vars, mesh, inv_jacobian, fluxes_computer,
+        std::make_tuple(arg), std::make_tuple(arg));
+    typename fluxes_tag::type expected_fluxes{};
+    typename div_fluxes_tag::type expected_div_fluxes{};
+    typename sources_tag::type expected_sources{};
+    typename step_tag::type expected_operator_applied_to_vars{};
+    elliptic::first_order_fluxes<Dim, tmpl::list<PrimalField>,
+                                 tmpl::list<AuxiliaryField<Dim>>>(
+        make_not_null(&expected_fluxes), vars, fluxes_computer, arg);
+    CHECK_VARIABLES_APPROX(fluxes, expected_fluxes);
+    divergence(make_not_null(&expected_div_fluxes), expected_fluxes, mesh,
+               inv_jacobian);
+    CHECK_VARIABLES_APPROX(div_fluxes, expected_div_fluxes);
+    elliptic::first_order_sources<Dim, tmpl::list<PrimalField>,
+                                  tmpl::list<AuxiliaryField<Dim>>, Sources>(
+        make_not_null(&expected_sources), vars, expected_fluxes, arg);
+    elliptic::first_order_operator(
+        make_not_null(&expected_operator_applied_to_vars), expected_div_fluxes,
+        expected_sources);
+    CHECK_VARIABLES_APPROX(operator_applied_to_vars,
+                           expected_operator_applied_to_vars);
   }
 }
 
