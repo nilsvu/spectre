@@ -164,7 +164,7 @@ struct PrepareAndSendMortarData<System, Linearized, TemporalIdTag, VarsTag,
           const auto& boundary_condition =
               dynamic_cast<const BoundaryConditionsBase&>(
                   *boundary_conditions.at(direction));
-          elliptic::apply_boundary_condition<Linearized>(
+          elliptic::apply_boundary_condition<Linearized, void>(
               boundary_condition, box, direction, fields_and_fluxes...);
         };
 
@@ -453,7 +453,7 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource<
           const auto& boundary_condition =
               dynamic_cast<const BoundaryConditionsBase&>(
                   *boundary_conditions.at(direction));
-          elliptic::apply_boundary_condition<false>(
+          elliptic::apply_boundary_condition<false, void>(
               boundary_condition, box, direction, fields_and_fluxes...);
         };
 
