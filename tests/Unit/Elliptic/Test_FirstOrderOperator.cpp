@@ -147,37 +147,41 @@ void test_first_order_operator(const DataVector& used_for_size) {
   const auto nn_generator = make_not_null(&generator);
   const auto nn_dist = make_not_null(&dist);
 
-  // Compute operator for random values
-  const auto div_fluxes =
-      make_with_random_values<typename div_fluxes_tag::type>(
-          nn_generator, nn_dist, used_for_size);
-  const auto sources = make_with_random_values<typename sources_tag::type>(
-      nn_generator, nn_dist, used_for_size);
-  auto step = make_with_value<typename step_tag::type>(
-      used_for_size, std::numeric_limits<double>::signaling_NaN());
-  elliptic::first_order_operator(make_not_null(&step), div_fluxes, sources);
+  {
+    INFO("First-order operator from fluxes and sources");
+    // Compute operator for random values
+    const auto div_fluxes =
+        make_with_random_values<typename div_fluxes_tag::type>(
+            nn_generator, nn_dist, used_for_size);
+    const auto sources = make_with_random_values<typename sources_tag::type>(
+        nn_generator, nn_dist, used_for_size);
+    auto step = make_with_value<typename step_tag::type>(
+        used_for_size, std::numeric_limits<double>::signaling_NaN());
+    elliptic::first_order_operator(make_not_null(&step), div_fluxes, sources);
 
-  CHECK(get(get<Step<PrimalField>>(step)) ==
-        -get(get<::Tags::div<::Tags::Flux<PrimalField, tmpl::size_t<Dim>,
-                                          Frame::Inertial>>>(div_fluxes)) +
-            get(get<::Tags::Source<PrimalField>>(sources)));
-  for (size_t d = 0; d < Dim; d++) {
-    CHECK(get<Step<AuxiliaryField<Dim>>>(step).get(d) ==
+    CHECK(get(get<Step<PrimalField>>(step)) ==
+          -get(get<::Tags::div<::Tags::Flux<PrimalField, tmpl::size_t<Dim>,
+                                            Frame::Inertial>>>(div_fluxes)) +
+              get(get<::Tags::Source<PrimalField>>(sources)));
+    for (size_t d = 0; d < Dim; d++) {
+      CHECK(
+          get<Step<AuxiliaryField<Dim>>>(step).get(d) ==
           -get<::Tags::div<::Tags::Flux<AuxiliaryField<Dim>, tmpl::size_t<Dim>,
                                         Frame::Inertial>>>(div_fluxes)
                   .get(d) +
               get<::Tags::Source<AuxiliaryField<Dim>>>(sources).get(d));
-  }
+    }
 
-  // Check the mutating DataBox invokable
-  auto box =
-      db::create<db::AddSimpleTags<div_fluxes_tag, sources_tag, step_tag>>(
-          div_fluxes, sources,
-          make_with_value<typename step_tag::type>(
-              used_for_size, std::numeric_limits<double>::signaling_NaN()));
-  db::mutate_apply<elliptic::FirstOrderOperator<Dim, Step, vars_tag>>(
-      make_not_null(&box));
-  CHECK(get<step_tag>(box) == step);
+    // Check the mutating DataBox invokable
+    auto box =
+        db::create<db::AddSimpleTags<div_fluxes_tag, sources_tag, step_tag>>(
+            div_fluxes, sources,
+            make_with_value<typename step_tag::type>(
+                used_for_size, std::numeric_limits<double>::signaling_NaN()));
+    db::mutate_apply<elliptic::FirstOrderOperator<Dim, Step, vars_tag>>(
+        make_not_null(&box));
+    CHECK(get<step_tag>(box) == step);
+  }
 }
 
 }  // namespace
