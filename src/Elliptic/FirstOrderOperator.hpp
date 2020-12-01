@@ -9,6 +9,7 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Variables.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
@@ -101,6 +102,11 @@ void first_order_fluxes(
         fluxes,
     const Variables<VarsTags>& vars, const FluxesComputer& fluxes_computer,
     const FluxesArgs&... fluxes_args) noexcept {
+  // Resize result variables
+  if (UNLIKELY(fluxes->number_of_grid_points() !=
+               vars.number_of_grid_points())) {
+    fluxes->initialize(vars.number_of_grid_points());
+  }
   first_order_operator_detail::FirstOrderFluxesImpl<
       Dim, PrimalFields, AuxiliaryFields>::apply(std::move(fluxes), vars,
                                                  fluxes_computer,
@@ -144,6 +150,10 @@ void first_order_sources(
     const Variables<db::wrap_tags_in<::Tags::Flux, VarsTags, tmpl::size_t<Dim>,
                                      Frame::Inertial>>& fluxes,
     const SourcesArgs&... sources_args) noexcept {
+  if (UNLIKELY(sources->number_of_grid_points() !=
+               vars.number_of_grid_points())) {
+    sources->initialize(vars.number_of_grid_points());
+  }
   first_order_operator_detail::FirstOrderSourcesImpl<
       Dim, PrimalFields, AuxiliaryFields,
       SourcesComputer>::apply(std::move(sources), vars, fluxes,
@@ -167,6 +177,7 @@ auto first_order_sources(
 }
 // @}
 
+//@{
 /*!
  * \brief Compute the bulk contribution to the operator represented by the
  * `OperatorTags`.
@@ -185,6 +196,46 @@ void first_order_operator(
     const Variables<SourcesTags>& sources) noexcept {
   *operator_applied_to_vars = sources - div_fluxes;
 }
+
+template <typename PrimalFields, typename AuxiliaryFields,
+          typename SourcesComputer, typename OperatorTags, typename FluxesTags,
+          typename VarsTags, typename FluxesComputer, size_t Dim,
+          typename... FluxesArgs, typename... SourcesArgs>
+void first_order_operator(
+    const gsl::not_null<Variables<OperatorTags>*> operator_applied_to_vars,
+    const gsl::not_null<Variables<FluxesTags>*> fluxes,
+    const gsl::not_null<Variables<db::wrap_tags_in<::Tags::div, FluxesTags>>*>
+        div_fluxes,
+    const Variables<VarsTags>& vars, const Mesh<Dim>& mesh,
+    const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
+        inv_jacobian,
+    const FluxesComputer& fluxes_computer,
+    const std::tuple<FluxesArgs...>& fluxes_args,
+    const std::tuple<SourcesArgs...>& sources_args) noexcept {
+  using all_fields = tmpl::append<PrimalFields, AuxiliaryFields>;
+  // Compute (volume) fluxes
+  std::apply(
+      [&](const auto&... expanded_fluxes_args) {
+        first_order_fluxes<Dim, PrimalFields, AuxiliaryFields>(
+            fluxes, Variables<all_fields>(vars), fluxes_computer,
+            expanded_fluxes_args...);
+      },
+      fluxes_args);
+  // Compute divergence of volume fluxes
+  divergence(div_fluxes, *fluxes, mesh, inv_jacobian);
+  // Compute sources
+  auto sources = std::apply(
+      [&](const auto&... expanded_sources_args) {
+        return first_order_sources<Dim, PrimalFields, AuxiliaryFields,
+                                   SourcesComputer>(
+            Variables<all_fields>(vars), *fluxes, expanded_sources_args...);
+      },
+      sources_args);
+  // Forward to overload above that subtracts div(fluxes) and sources
+  first_order_operator(operator_applied_to_vars, *div_fluxes,
+                       std::move(sources));
+}
+//@}
 
 /*!
  * \brief Mutating DataBox invokable to compute the bulk contribution to the
