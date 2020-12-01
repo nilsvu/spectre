@@ -8,6 +8,7 @@ set(LIBS_TO_LINK
   DiscontinuousGalerkin
   DomainCreators
   Elasticity
+  ElasticityActions
   ElasticityPointwiseFunctions
   Elliptic
   EllipticDg

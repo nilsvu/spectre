@@ -32,3 +32,5 @@ target_link_libraries(
   PRIVATE
   GeneralRelativity
   )
+
+add_subdirectory(Actions)
