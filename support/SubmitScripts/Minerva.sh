@@ -45,6 +45,11 @@ mkdir -p ${SPECTRE_RUN_DIR} && cd ${SPECTRE_RUN_DIR}
 cp ${SPECTRE_INPUT_FILE} ${SPECTRE_RUN_DIR}/
 
 # Set up the environment
+export MODULEPATH="/home/SPACK2019/share/spack/modules/linux-centos7-haswell:$MODULEPATH"
+export MODULEPATH="/home/nfischer/spack/share/spack/modules/linux-centos7-haswell:$MODULEPATH"
+module purge
+module load gcc-9.2.0-gcc-9.2.0-fjz3awm
+module load llvm-10.0.1-gcc-9.2.0-j22quug
 source /home/nfischer/spack/var/spack/environments/spectre_2020-11-02/loads
 
 # Set permissions for files created with this script
