@@ -253,6 +253,21 @@ struct PrepareSolve {
       }
     }
 
+    // Make the solve the identity operation if no steps are going to be
+    // performed, i.e. assume A=1 so Ax=b solves to x=b. This is useful when the
+    // solver is used as preconditioner, because then we can disable
+    // preconditioning by just not iterating the preconditioner, i.e. by setting
+    // its number of iterations to 0 in the input file. The alternative would be
+    // to keep the fields at their initial guess x=x0, but that's not as useful.
+    if (get<Convergence::Tags::HasConverged<OptionsGroup>>(box)) {
+      db::mutate<fields_tag>(
+          make_not_null(&box),
+          [](const auto fields, const auto& source) noexcept {
+            *fields = source;
+          },
+          get<SourceTag>(box));
+    }
+
     // Skip steps entirely if the solve has already converged
     constexpr size_t step_end_index =
         tmpl::index_of<ActionList,
