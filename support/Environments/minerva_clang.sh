@@ -62,19 +62,20 @@
 #    ```
 
 spectre_setup_modules() {
-    source /home/nfischer/spack/share/spack/setup-env.sh
+    export MODULEPATH="/home/SPACK2019/share/spack/modules/linux-centos7-haswell:$MODULEPATH"
+    export MODULEPATH="/home/nfischer/spack/share/spack/modules/linux-centos7-haswell:$MODULEPATH"
 }
 
 spectre_load_modules() {
     module load gcc-9.2.0-gcc-9.2.0-fjz3awm
     module load llvm-10.0.1-gcc-9.2.0-j22quug
-    spack env activate spectre_2020-11-02
+    source /home/nfischer/spack/var/spack/environments/spectre_2020-11-02/loads
+    export CHARM_ROOT="/home/nfischer/spack/opt/spack/linux-centos7-haswell/clang-10.0.1/charmpp-6.10.2-hdak24er53qpxbjziwptemq7hxlmonpp"
 }
 
 spectre_unload_modules() {
-    module unload gcc-9.2.0-gcc-9.2.0-fjz3awm
-    module unload llvm-10.0.1-gcc-9.2.0-j22quug
-    spack env deactivate
+    echo "Unloading a subset of modules is not supported."
+    echo "Run 'module purge' to unload all modules."
 }
 
 spectre_run_cmake() {
@@ -87,7 +88,7 @@ spectre_run_cmake() {
       -D CMAKE_C_COMPILER=clang \
       -D CMAKE_CXX_COMPILER=clang++ \
       -D CMAKE_Fortran_COMPILER=gfortran \
-      -D CHARM_ROOT=$(spack location -i charmpp) \
+      -D CHARM_ROOT=$CHARM_ROOT \
       -D CMAKE_BUILD_TYPE=Release \
       -D DEBUG_SYMBOLS=OFF \
       -D BUILD_PYTHON_BINDINGS=ON \
