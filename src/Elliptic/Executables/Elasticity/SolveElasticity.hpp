@@ -344,8 +344,6 @@ struct Metavariables {
           linear_operand_tag>,
       typename linear_solver::template solve<tmpl::list<
           Actions::RunEventsAndTriggers,
-          // TODO: make preconditioning the identity operation if it is
-          // disabled
           typename multigrid::template solve<
               smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
               smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
