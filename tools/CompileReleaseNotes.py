@@ -37,6 +37,7 @@ class PullRequest:
     id: int
     title: str
     group: Optional[str] = None
+    upgrade_instructions: Optional[str] = None
 
 
 def get_merged_pull_requests(repo: git.Repo, from_rev: str,
@@ -63,6 +64,33 @@ def get_merged_pull_requests(repo: git.Repo, from_rev: str,
             PullRequest(id=int(merge_commit_match.group(1)),
                         title=' '.join(commit.message.splitlines(False)[2:])))
     return merged_prs
+
+
+def get_upgrade_instructions(pr_description: str):
+    """Parse a section labeled "Upgrade instructions" from the PR description.
+
+    This function looks for a section in the PR description that is enclosed in
+    the HTML-comments `<!-- UPGRADE INSTRUCTIONS -->`. For example:
+
+    ```md
+    ## Upgrade instructions
+
+    <!-- UPGRADE INSTRUCTIONS -->
+    - Add the option `Evolution.InitialTime` to evolution input files. Set it
+      to the value `0.` to keep the behavior the same as before.
+    <!-- UPGRADE INSTRUCTIONS -->
+    ```
+    """
+    FENCE_PATTERN = '<!-- UPGRADE INSTRUCTIONS -->'
+    match = re.search(FENCE_PATTERN + '(.*)' + FENCE_PATTERN,
+                      pr_description,
+                      flags=re.DOTALL)
+    if match is None:
+        return None
+    match = match.group(1).strip()
+    if match.isspace():
+        return None
+    return match
 
 
 if __name__ == "__main__":
@@ -146,7 +174,7 @@ if __name__ == "__main__":
         for pr in tqdm.tqdm(merged_prs, desc="Downloading PR data", unit="PR"):
             # First, download data
             pr_gh = gh_repo.get_pull(pr.id)
-            # Add group information to PRs
+            # Add group information to PR
             labels = [label.name for label in pr_gh.labels]
             for group in pr_groups:
                 if group is None:
@@ -154,6 +182,8 @@ if __name__ == "__main__":
                 if group in labels:
                     pr.group = group
                     break
+            # Add upgrade instructions to PR
+            pr.upgrade_instructions = get_upgrade_instructions(pr_gh.body)
 
     # Sort PRs into their groups, ordered first by group then by the order they
     # were merged (most recently merged to least recently merged)
@@ -171,7 +201,20 @@ if __name__ == "__main__":
                               subsequent_indent='  ') for pr in prs
             ], []))
 
-    release_notes_content = ["## Merged pull-requests", ""]
+    release_notes_content = []
+
+    prs_with_upgrade_instructions = list(
+        filter(lambda pr: pr.upgrade_instructions, merged_prs))
+    if len(prs_with_upgrade_instructions) > 0:
+        release_notes_content += ["## Upgrade instructions", ""]
+        for pr in prs_with_upgrade_instructions:
+            release_notes_content += [f"**From #{pr.id} ({pr.title}):**", ""]
+            release_notes_content += textwrap.wrap(pr.upgrade_instructions,
+                                                   width=80,
+                                                   replace_whitespace=False)
+        release_notes_content += [""]
+
+    release_notes_content += ["## Merged pull-requests", ""]
     if len(merged_prs) > 0:
         for group, prs in grouped_prs:
             group_header = {
