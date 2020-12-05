@@ -54,6 +54,9 @@ struct find_subgroup<Tag, Root, std::void_t<typename Tag::group>> {
   using type = typename find_subgroup<typename Tag::group, Root>::type;
 };
 
+template <typename Tag, typename Root>
+using find_subgroup_t = typename find_subgroup<Tag, Root>::type;
+
 /// Checks if `Tag` is within the group hierarchy of `Group`.
 template <typename Tag, typename Group, typename = std::void_t<>>
 struct is_in_group : std::false_type {};
@@ -68,7 +71,9 @@ struct is_in_group<Tag, Group, std::void_t<typename Tag::group>>
 
 /// The subset of tags in `OptionList` that are in the hierarchy of `Group`
 template <typename OptionList, typename Group>
-using options_in_group = tmpl::filter<OptionList, is_in_group<tmpl::_1, Group>>;
+using options_in_group =
+    tmpl::filter<OptionList,
+                 tmpl::bind<is_in_group, tmpl::_1, tmpl::pin<Group>>>;
 
 // Display a type in a pseudo-YAML form, leaving out likely irrelevant
 // information.

@@ -202,8 +202,9 @@ class Parser {
   /// All top-level options and top-level groups of options. Every option in
   /// `OptionList` is either in this list or in the hierarchy of one of the
   /// groups in this list.
-  using tags_and_subgroups_list = tmpl::remove_duplicates<tmpl::transform<
-      OptionList, Options_detail::find_subgroup<tmpl::_1, Group>>>;
+  using tags_and_subgroups_list = tmpl::remove_duplicates<
+      tmpl::transform<OptionList, tmpl::bind<Options_detail::find_subgroup_t,
+                                             tmpl::_1, tmpl::pin<Group>>>>;
 
   // The maximum length of an option label.
   static constexpr int max_label_size_ = 70;
