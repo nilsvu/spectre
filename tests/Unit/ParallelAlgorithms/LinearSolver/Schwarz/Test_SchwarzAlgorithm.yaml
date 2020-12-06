@@ -48,12 +48,16 @@ SchwarzSmoother:
   Iterations: 9
   Verbosity: Verbose
   SubdomainSolver:
-    ConvergenceCriteria:
-      MaxIterations: 5
-      RelativeResidual: 1.e-14
-      AbsoluteResidual: 1.e-14
-    Verbosity: Verbose
-    Restart: 0
+    ExplicitInverse:
+      DisableResets: False
+    # Gmres:
+    #   ConvergenceCriteria:
+    #     MaxIterations: 1
+    #     RelativeResidual: 1.e-14
+    #     AbsoluteResidual: 1.e-14
+    #   Verbosity: Verbose
+    #   Restart: None
+    #   Preconditioner: ExplicitInverse
 
 ConvergenceReason: NumIterations
 

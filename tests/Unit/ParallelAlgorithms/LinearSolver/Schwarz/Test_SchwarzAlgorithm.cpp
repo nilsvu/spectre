@@ -23,6 +23,7 @@
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/InitializationFunctions.hpp"
 #include "Parallel/Main.hpp"
+#include "Parallel/RegisterDerivedClassesWithCharm.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/ElementCenteredSubdomainData.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Protocols.hpp"
@@ -147,6 +148,19 @@ struct SubdomainElementOperator {
     const size_t num_elements = matrix_slices.size();
     const size_t num_points_per_element = matrix_slices.begin()->columns();
 
+    // Re-size the result buffer if necessary
+    if (UNLIKELY(result->element_data.number_of_grid_points() !=
+                 num_points_per_element)) {
+      result->element_data.initialize(num_points_per_element);
+    }
+    for (const auto& [overlap_id, overlap_data] : subdomain_data.overlap_data) {
+      if (UNLIKELY(result->overlap_data[overlap_id].number_of_grid_points() !=
+                   overlap_data.number_of_grid_points())) {
+        result->overlap_data[overlap_id].initialize(
+            overlap_data.number_of_grid_points());
+      }
+    }
+
     // Assemble full operator matrix
     const auto operator_matrix = combine_matrix_slices(matrix_slices);
 
@@ -204,7 +218,9 @@ struct Metavariables {
 }  // namespace
 
 static const std::vector<void (*)()> charm_init_node_funcs{
-    &setup_error_handling, &domain::creators::register_derived_with_charm};
+    &setup_error_handling, &domain::creators::register_derived_with_charm,
+    &Parallel::register_derived_classes_with_charm<
+        Metavariables::linear_solver::subdomain_solver>};
 static const std::vector<void (*)()> charm_init_proc_funcs{
     &enable_floating_point_exceptions};
 

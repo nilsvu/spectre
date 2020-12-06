@@ -29,6 +29,7 @@
 #include "Informer/Tags.hpp"
 #include "Informer/Verbosity.hpp"
 #include "NumericalAlgorithms/Convergence/Tags.hpp"
+#include "NumericalAlgorithms/LinearSolver/ExplicitInverse.hpp"
 #include "NumericalAlgorithms/LinearSolver/Gmres.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
@@ -122,6 +123,17 @@ struct SubdomainDataBufferTag : db::SimpleTag {
   using type = SubdomainDataType;
 };
 
+// Allow factory-creating any of these serial linear solvers for use as
+// subdomain solver
+template <typename FieldsTag, typename SubdomainOperator,
+          typename SubdomainData = ElementCenteredSubdomainData<
+              SubdomainOperator::volume_dim,
+              typename db::add_tag_prefix<LinearSolver::Tags::Residual,
+                                          FieldsTag>::tags_list>>
+using subdomain_solver = LinearSolver::Serial::LinearSolver<
+    tmpl::list<::LinearSolver::Serial::Registrars::Gmres<SubdomainData>,
+               ::LinearSolver::Serial::Registrars::ExplicitInverse>>;
+
 template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
 struct InitializeElement {
  private:
@@ -131,12 +143,9 @@ struct InitializeElement {
   static constexpr size_t Dim = SubdomainOperator::volume_dim;
   using SubdomainData =
       ElementCenteredSubdomainData<Dim, typename residual_tag::tags_list>;
-  // Here we choose a serial GMRES linear solver to solve subdomain problems.
-  // This can be generalized to allow the user to make this choice once that
-  // becomes necessary.
-  using subdomain_solver_tag =
-      Tags::SubdomainSolver<LinearSolver::Serial::Gmres<SubdomainData>,
-                            OptionsGroup>;
+  using subdomain_solver_tag = Tags::SubdomainSolver<
+      std::unique_ptr<subdomain_solver<FieldsTag, SubdomainOperator>>,
+      OptionsGroup>;
 
  public:
   using initialization_tags =
@@ -291,6 +300,12 @@ struct SolveSubdomain {
     };
 
     // Solve the subdomain problem
+    if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
+                 ::Verbosity::Debug)) {
+      Parallel::printf("%s " + Options::name<OptionsGroup>() +
+                           "(%zu): Solving subdomain problem...\n",
+                       element_id, iteration_id);
+    }
     const auto& subdomain_solver =
         get<Tags::SubdomainSolverBase<OptionsGroup>>(box);
     auto subdomain_solve_initial_guess_in_solution_out =
