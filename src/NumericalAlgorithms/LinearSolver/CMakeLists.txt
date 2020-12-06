@@ -28,6 +28,7 @@ target_link_libraries(
   Convergence
   DataStructures
   Options
+  Parallel
   PRIVATE
   Lapack
   )

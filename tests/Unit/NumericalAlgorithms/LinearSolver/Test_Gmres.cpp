@@ -8,6 +8,7 @@
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/DenseMatrix.hpp"
 #include "DataStructures/DenseVector.hpp"
+#include "Framework/TestCreation.hpp"
 #include "Framework/TestHelpers.hpp"
 #include "Helpers/DataStructures/MakeWithRandomValues.hpp"
 #include "Helpers/NumericalAlgorithms/LinearSolver/TestHelpers.hpp"
@@ -53,7 +54,6 @@ SPECTRE_TEST_CASE("Unit.LinearSolver.Serial.Gmres",
     std::vector<double> recorded_residuals;
     const auto has_converged = gmres.solve(
         make_not_null(&initial_guess_in_solution_out), linear_operator, source,
-        NoPreconditioner{},
         [&recorded_residuals](const Convergence::HasConverged& has_converged) {
           recorded_residuals.push_back(has_converged.residual_magnitude());
         });
@@ -191,15 +191,16 @@ SPECTRE_TEST_CASE("Unit.LinearSolver.Serial.Gmres",
     const DenseVector<double> expected_solution{0.0909090909090909,
                                                 0.6363636363636364};
     const Convergence::Criteria convergence_criteria{2, 1.e-14, 0.};
-    const Gmres<DenseVector<double>> gmres{convergence_criteria,
-                                           ::Verbosity::Verbose};
     SECTION("Exact inverse preconditioner") {
       // Use the exact inverse of the matrix as preconditioner. This
       // should solve the problem in 1 iteration.
       const helpers::ExactInversePreconditioner preconditioner{};
-      const auto has_converged =
-          gmres.solve(make_not_null(&initial_guess_in_solution_out),
-                      linear_operator, source, preconditioner);
+      const Gmres<DenseVector<double>, helpers::ExactInversePreconditioner>
+          preconditioned_gmres{convergence_criteria, ::Verbosity::Verbose,
+                               std::nullopt, preconditioner};
+      const auto has_converged = preconditioned_gmres.solve(
+          make_not_null(&initial_guess_in_solution_out), linear_operator,
+          source);
       REQUIRE(has_converged);
       CHECK(has_converged.reason() == Convergence::Reason::AbsoluteResidual);
       CHECK(has_converged.num_iterations() == 1);
@@ -208,9 +209,12 @@ SPECTRE_TEST_CASE("Unit.LinearSolver.Serial.Gmres",
     SECTION("Diagonal (Jacobi) preconditioner") {
       // Use the inverse of the diagonal as preconditioner.
       const helpers::JacobiPreconditioner preconditioner{};
-      const auto has_converged =
-          gmres.solve(make_not_null(&initial_guess_in_solution_out),
-                      linear_operator, source, preconditioner);
+      const Gmres<DenseVector<double>, helpers::JacobiPreconditioner>
+          preconditioned_gmres{convergence_criteria, ::Verbosity::Verbose,
+                               std::nullopt, preconditioner};
+      const auto has_converged = preconditioned_gmres.solve(
+          make_not_null(&initial_guess_in_solution_out), linear_operator,
+          source);
       REQUIRE(has_converged);
       CHECK(has_converged.reason() == Convergence::Reason::AbsoluteResidual);
       CHECK(has_converged.num_iterations() == 2);
@@ -225,10 +229,13 @@ SPECTRE_TEST_CASE("Unit.LinearSolver.Serial.Gmres",
           0.2857142857142857,
           // Run two Richardson iterations
           2};
+      const Gmres<DenseVector<double>, helpers::RichardsonPreconditioner>
+          preconditioned_gmres{convergence_criteria, ::Verbosity::Verbose,
+                               std::nullopt, preconditioner};
       std::vector<double> recorded_residuals;
-      const auto has_converged = gmres.solve(
+      const auto has_converged = preconditioned_gmres.solve(
           make_not_null(&initial_guess_in_solution_out), linear_operator,
-          source, preconditioner,
+          source,
           [&recorded_residuals](
               const Convergence::HasConverged& has_converged) {
             recorded_residuals.push_back(has_converged.residual_magnitude());
@@ -238,6 +245,57 @@ SPECTRE_TEST_CASE("Unit.LinearSolver.Serial.Gmres",
       CHECK(has_converged.reason() == Convergence::Reason::AbsoluteResidual);
       CHECK(has_converged.num_iterations() == 1);
       CHECK_ITERABLE_APPROX(initial_guess_in_solution_out, expected_solution);
+    }
+    SECTION("Nested linear solver as preconditioner") {
+      // Running another GMRES solver for 2 iterations as preconditioner. It
+      // should already solve the problem, so the preconditioned solve only
+      // needs a single iteration.
+      const Gmres<DenseVector<double>, Gmres<DenseVector<double>>>
+          preconditioned_gmres{convergence_criteria,
+                               ::Verbosity::Verbose,
+                               std::nullopt,
+                               {{{2, 0., 0.}, ::Verbosity::Verbose}}};
+      const auto has_converged = preconditioned_gmres.solve(
+          make_not_null(&initial_guess_in_solution_out), linear_operator,
+          source);
+      REQUIRE(has_converged);
+      CHECK(has_converged.reason() == Convergence::Reason::AbsoluteResidual);
+      CHECK(has_converged.num_iterations() == 1);
+      CHECK_ITERABLE_APPROX(initial_guess_in_solution_out, expected_solution);
+    }
+  }
+  {
+    INFO("Factory-creation");
+    {
+      INFO("Unpreconditioned");
+      TestHelpers::test_creation<Gmres<DenseVector<double>>>(
+          "ConvergenceCriteria:\n"
+          "  MaxIterations: 2\n"
+          "  RelativeResidual: 0.5\n"
+          "  AbsoluteResidual: 0.1\n"
+          "Restart: 50\n"
+          "Verbosity: Verbose\n");
+    }
+    {
+      INFO("Preconditioned");
+      TestHelpers::test_creation<
+          Gmres<DenseVector<double>, helpers::ExactInversePreconditioner>>(
+          "ConvergenceCriteria:\n"
+          "  MaxIterations: 2\n"
+          "  RelativeResidual: 0.5\n"
+          "  AbsoluteResidual: 0.1\n"
+          "Restart: 50\n"
+          "Verbosity: Verbose\n"
+          "Preconditioner: None\n");
+      TestHelpers::test_creation<
+          Gmres<DenseVector<double>, helpers::ExactInversePreconditioner>>(
+          "ConvergenceCriteria:\n"
+          "  MaxIterations: 2\n"
+          "  RelativeResidual: 0.5\n"
+          "  AbsoluteResidual: 0.1\n"
+          "Restart: 50\n"
+          "Verbosity: Verbose\n"
+          "Preconditioner:\n");
     }
   }
 }

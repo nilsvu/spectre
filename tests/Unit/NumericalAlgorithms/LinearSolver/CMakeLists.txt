@@ -7,6 +7,7 @@ set(LIBRARY_SOURCES
   Test_Gmres.cpp
   Test_InnerProduct.cpp
   Test_Lapack.cpp
+  Test_LinearSolver.cpp
   )
 
 add_test_library(

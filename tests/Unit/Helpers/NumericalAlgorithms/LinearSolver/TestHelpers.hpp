@@ -11,6 +11,7 @@
 
 #include "DataStructures/DenseMatrix.hpp"
 #include "DataStructures/DenseVector.hpp"
+#include "Options/Options.hpp"
 #include "Parallel/PupStlCpp17.hpp"
 #include "Utilities/Gsl.hpp"
 
@@ -39,6 +40,10 @@ struct ExactInversePreconditioner {
   void reset() noexcept { inv_matrix_.reset(); }
 
   void pup(PUP::er& p) noexcept { p | inv_matrix_; }  // NOLINT
+
+  // Make option-creatable for factory tests
+  using options = tmpl::list<>;
+  static constexpr Options::String help{"halp"};
 
  private:
   mutable std::optional<DenseMatrix<double>> inv_matrix_{};
