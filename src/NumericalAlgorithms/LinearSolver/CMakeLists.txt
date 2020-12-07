@@ -30,6 +30,7 @@ target_link_libraries(
   DataStructures
   Options
   Parallel
+  PkgConfig::Petsc
   PRIVATE
   Lapack
   )
