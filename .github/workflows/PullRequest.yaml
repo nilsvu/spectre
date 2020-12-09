@@ -1,0 +1,31 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Automations related to pull requests
+name: Pull request
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  # Make sure the PR passes some basic tests before it can be merged. This is
+  # important because release notes are based on the information in PRs.
+  check:
+    name: Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+      - name: Install Python dependencies
+        run: |
+          pip install \
+            PyGithub~=1.54
+      - name: Check pull request
+        run: |
+          python .github/scripts/CheckPullRequest.py \
+            --github-token ${{ secrets.GITHUB_TOKEN }} \
+            --github-repository ${{ github.repository }} \
+            ${{ github.event.number }}
