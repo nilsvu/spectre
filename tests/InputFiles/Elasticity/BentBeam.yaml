@@ -58,3 +58,4 @@ EventsAndTriggers:
     - ObserveFields:
         SubfileName: "element_data"
         VariablesToObserve: [Displacement, Strain]
+        InterpolateToMesh: None
