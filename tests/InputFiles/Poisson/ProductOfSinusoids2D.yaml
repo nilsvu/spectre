@@ -71,3 +71,4 @@ EventsAndTriggers:
       N: 1
   : - ObserveFields:
         SubfileName: VolumeData
+        InterpolateToMesh: None

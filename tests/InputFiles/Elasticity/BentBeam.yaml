@@ -54,3 +54,4 @@ EventsAndTriggers:
         SubfileName: "element_data"
     - ObserveFields:
         SubfileName: "element_data"
+        InterpolateToMesh: None
