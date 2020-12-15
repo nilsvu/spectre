@@ -1,13 +1,13 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-# Executable: SolvePoissonProductOfSinusoids1D
+# Executable: SolvePoisson1D
 # Check: parse;execute
 # ExpectedOutput:
 #   PoissonProductOfSinusoids1DReductions.h5
 #   PoissonProductOfSinusoids1DVolume0.h5
 
-AnalyticSolution:
+Background:
   ProductOfSinusoids:
     WaveNumbers: [1]
 
