@@ -119,7 +119,7 @@ SPECTRE_TEST_CASE("Unit.Elliptic.Actions.InitializeSystem",
     using metavariables = Metavariables<1>;
     using element_array = ElementArray<1, metavariables>;
     ActionTesting::MockRuntimeSystem<metavariables> runner{
-        {Background<1>{}, domain_creator.create_domain()}};
+        {std::make_unique<Background<1>>(), domain_creator.create_domain()}};
     ActionTesting::emplace_component_and_initialize<element_array>(
         &runner, element_id,
         {domain_creator.initial_refinement_levels(),
@@ -163,7 +163,7 @@ SPECTRE_TEST_CASE("Unit.Elliptic.Actions.InitializeSystem",
     using metavariables = Metavariables<2>;
     using element_array = ElementArray<2, metavariables>;
     ActionTesting::MockRuntimeSystem<metavariables> runner{
-        {Background<2>{}, domain_creator.create_domain()}};
+        {std::make_unique<Background<2>>(), domain_creator.create_domain()}};
     ActionTesting::emplace_component_and_initialize<element_array>(
         &runner, element_id,
         {domain_creator.initial_refinement_levels(),
@@ -211,7 +211,7 @@ SPECTRE_TEST_CASE("Unit.Elliptic.Actions.InitializeSystem",
     using metavariables = Metavariables<3>;
     using element_array = ElementArray<3, metavariables>;
     ActionTesting::MockRuntimeSystem<metavariables> runner{
-        {Background<3>{}, domain_creator.create_domain()}};
+        {std::make_unique<Background<3>>(), domain_creator.create_domain()}};
     ActionTesting::emplace_component_and_initialize<element_array>(
         &runner, element_id,
         {domain_creator.initial_refinement_levels(),
