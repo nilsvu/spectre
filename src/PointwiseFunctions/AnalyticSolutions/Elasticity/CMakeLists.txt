@@ -19,7 +19,6 @@ spectre_target_headers(
   AnalyticSolution.hpp
   BentBeam.hpp
   HalfSpaceMirror.hpp
-  Solutions.hpp
   Zero.hpp
   )
 
