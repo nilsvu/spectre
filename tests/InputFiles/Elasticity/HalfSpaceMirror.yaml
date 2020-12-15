@@ -1,13 +1,13 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-# Executable: SolveElasticHalfSpaceMirror
+# Executable: SolveElasticity3D
 # Check: parse;execute
 # ExpectedOutput:
 #   ElasticHalfSpaceMirrorReductions.h5
 #   ElasticHalfSpaceMirrorVolume0.h5
 
-AnalyticSolution:
+Background:
   HalfSpaceMirror:
     BeamWidth: 0.177
     Material:
