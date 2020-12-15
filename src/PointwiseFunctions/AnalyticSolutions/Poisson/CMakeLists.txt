@@ -21,7 +21,6 @@ spectre_target_headers(
   Lorentzian.hpp
   Moustache.hpp
   ProductOfSinusoids.hpp
-  Solutions.hpp
   Zero.hpp
   )
 
