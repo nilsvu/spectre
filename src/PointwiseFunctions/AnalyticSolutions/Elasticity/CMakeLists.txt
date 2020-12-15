@@ -16,6 +16,7 @@ spectre_target_headers(
   ${LIBRARY}
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
+  AnalyticSolution.hpp
   BentBeam.hpp
   HalfSpaceMirror.hpp
   Solutions.hpp
@@ -29,8 +30,8 @@ target_link_libraries(
   DataStructures
   Elasticity
   ErrorHandling
-  Integration
   Utilities
   PRIVATE
   GSL::gsl
+  Integration
   )
