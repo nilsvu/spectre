@@ -52,11 +52,13 @@ SPECTRE_TEST_CASE("Unit.Evolution.ComputeTags", "[Unit][Evolution]") {
           1, AnalyticSolutionTag, tmpl::list<FieldTag>>>>(
       std::move(inertial_coords), AnalyticSolution{}, current_time);
   const DataVector expected{2., 4., 6., 8.};
-  CHECK_ITERABLE_APPROX(get(get<::Tags::Analytic<FieldTag>>(box)), expected);
+  const auto& analytic_solutions = get<::Tags::AnalyticSolutionsBase>(box);
+  REQUIRE(analytic_solutions.has_value());
+  CHECK_ITERABLE_APPROX(
+      get(get<::Tags::Analytic<FieldTag>>(*analytic_solutions)), expected);
 
   TestHelpers::db::test_compute_tag<evolution::Tags::AnalyticCompute<
-      1, AnalyticSolutionTag, tmpl::list<FieldTag>>>(
-      "Variables(Analytic(FieldTag))");
+      1, AnalyticSolutionTag, tmpl::list<FieldTag>>>("AnalyticSolutions");
 }
 
 SPECTRE_TEST_CASE("Unit.Evolution.ComputeTags.Errors",

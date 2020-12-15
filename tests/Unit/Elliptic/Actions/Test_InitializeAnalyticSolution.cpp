@@ -5,6 +5,8 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
+#include <pup.h>
 #include <string>
 
 #include "DataStructures/DataBox/Tag.hpp"
@@ -25,8 +27,23 @@ struct ScalarFieldTag : db::SimpleTag {
   using type = Scalar<DataVector>;
 };
 
+class AnalyticSolutionOrData {
+ public:
+  // Does _not_ provide variables for all system fields
+
+  AnalyticSolutionOrData() = default;
+  AnalyticSolutionOrData(const AnalyticSolutionOrData&) = default;
+  AnalyticSolutionOrData(AnalyticSolutionOrData&&) = default;
+  AnalyticSolutionOrData& operator=(const AnalyticSolutionOrData&) = default;
+  AnalyticSolutionOrData& operator=(AnalyticSolutionOrData&&) = default;
+  virtual ~AnalyticSolutionOrData() = default;
+  // NOLINTNEXTLINE(google-runtime-references)
+  void pup(PUP::er& /*p*/) noexcept {}
+};
+
 template <size_t Dim>
-struct AnalyticSolution {
+class AnalyticSolution : public AnalyticSolutionOrData {
+ public:
   tuples::TaggedTuple<ScalarFieldTag> variables(
       const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
       tmpl::list<ScalarFieldTag> /*meta*/) const noexcept {
@@ -36,13 +53,10 @@ struct AnalyticSolution {
     }
     return {std::move(solution)};
   }
-  // clang-tidy: do not use references
-  void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
 };
 
-template <size_t Dim>
-struct AnalyticSolutionTag : db::SimpleTag {
-  using type = AnalyticSolution<Dim>;
+struct AnalyticSolutionOrDataTag : db::SimpleTag {
+  using type = std::unique_ptr<AnalyticSolutionOrData>;
 };
 
 template <size_t Dim, typename Metavariables>
@@ -58,10 +72,10 @@ struct ElementArray {
 
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Testing,
-          tmpl::list<
-              Actions::SetupDataBox,
-              elliptic::Actions::InitializeAnalyticSolution<
-                  AnalyticSolutionTag<Dim>, tmpl::list<ScalarFieldTag>>>>>;
+          tmpl::list<Actions::SetupDataBox,
+                     elliptic::Actions::InitializeAnalyticSolution<
+                         AnalyticSolutionOrDataTag, AnalyticSolution<Dim>,
+                         tmpl::list<ScalarFieldTag>>>>>;
 };
 
 template <size_t Dim>
@@ -77,22 +91,41 @@ void test_initialize_analytic_solution(
     const Scalar<DataVector>& expected_solution) {
   using metavariables = Metavariables<Dim>;
   using element_array = typename metavariables::element_array;
-  const ElementId<Dim> element_id{0};
-  ActionTesting::MockRuntimeSystem<metavariables> runner{
-      {AnalyticSolution<Dim>{}}};
-  ActionTesting::emplace_component_and_initialize<element_array>(
-      &runner, element_id, {inertial_coords});
-  ActionTesting::set_phase(make_not_null(&runner),
-                           metavariables::Phase::Testing);
-  for (size_t i = 0; i < 2; ++i) {
-    ActionTesting::next_action<element_array>(make_not_null(&runner),
-                                              element_id);
+
+  const auto initialize_analytic_solution =
+      [&inertial_coords](
+          std::unique_ptr<AnalyticSolutionOrData> analytic_solution_or_data) {
+        ActionTesting::MockRuntimeSystem<metavariables> runner{
+            {std::move(analytic_solution_or_data)}};
+        const ElementId<Dim> element_id{0};
+        ActionTesting::emplace_component_and_initialize<element_array>(
+            &runner, element_id, {inertial_coords});
+        ActionTesting::set_phase(make_not_null(&runner),
+                                 metavariables::Phase::Testing);
+        for (size_t i = 0; i < 2; ++i) {
+          ActionTesting::next_action<element_array>(make_not_null(&runner),
+                                                    element_id);
+        }
+        return ActionTesting::get_databox_tag<element_array,
+                                              ::Tags::AnalyticSolutionsBase>(
+            runner, element_id);
+      };
+
+  {
+    INFO("Analytic solution is available");
+    const auto analytic_solutions =
+        initialize_analytic_solution(std::make_unique<AnalyticSolution<Dim>>());
+    REQUIRE(analytic_solutions.has_value());
+    CHECK_ITERABLE_APPROX(
+        get(get<::Tags::Analytic<ScalarFieldTag>>(*analytic_solutions)),
+        get(expected_solution));
   }
-  CHECK_ITERABLE_APPROX(
-      get(ActionTesting::get_databox_tag<element_array,
-                                         ::Tags::Analytic<ScalarFieldTag>>(
-          runner, element_id)),
-      get(expected_solution));
+  {
+    INFO("No analytic solution is available");
+    const auto no_analytic_solutions = initialize_analytic_solution(
+        std::make_unique<AnalyticSolutionOrData>());
+    CHECK_FALSE(no_analytic_solutions.has_value());
+  }
 }
 
 }  // namespace
