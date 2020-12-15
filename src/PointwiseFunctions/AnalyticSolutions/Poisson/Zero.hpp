@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cstddef>
-#include <limits>
 
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
@@ -12,6 +11,7 @@
 #include "Elliptic/Systems/Poisson/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Poisson/AnalyticSolution.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
@@ -26,16 +26,28 @@ class er;
 
 namespace Poisson::Solutions {
 
+/// \cond
+template <size_t Dim, typename Registrars>
+struct Zero;
+
+namespace Registrars {
+template <size_t Dim>
+struct Zero {
+  template <typename Registrars>
+  using f = Solutions::Zero<Dim, Registrars>;
+};
+}  // namespace Registrars
+/// \endcond
+
 /// The trivial solution \f$u=0\f$ of a Poisson equation. Useful as initial
 /// guess.
-template <size_t Dim>
-class Zero : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
- public:
-  using supported_tags =
-      tmpl::list<Tags::Field,
-                 ::Tags::deriv<Tags::Field, tmpl::size_t<Dim>, Frame::Inertial>,
-                 ::Tags::FixedSource<Tags::Field>>;
+template <size_t Dim,
+          typename Registrars = tmpl::list<Solutions::Registrars::Zero<Dim>>>
+class Zero : public AnalyticSolution<Dim, Registrars> {
+ private:
+  using Base = AnalyticSolution<Dim, Registrars>;
 
+ public:
   using options = tmpl::list<>;
   static constexpr Options::String help{
       "The trivial solution, useful as initial guess."};
@@ -45,31 +57,47 @@ class Zero : public tt::ConformsTo<elliptic::protocols::AnalyticSolution> {
   Zero& operator=(const Zero&) noexcept = default;
   Zero(Zero&&) noexcept = default;
   Zero& operator=(Zero&&) noexcept = default;
-  ~Zero() noexcept = default;
+  ~Zero() noexcept override = default;
 
-  /// Retrieve a collection of variables at coordinates `x`
-  template <typename... Tags>
-  tuples::TaggedTuple<Tags...> variables(
-      const tnsr::I<DataVector, Dim, Frame::Inertial>& x,
-      tmpl::list<Tags...> /*meta*/) const noexcept {
-    static_assert(tmpl::size<tmpl::list_difference<tmpl::list<Tags...>,
+  /// \cond
+  explicit Zero(CkMigrateMessage* m) noexcept : Base(m) {}
+  using PUP::able::register_constructor;
+  WRAPPED_PUPable_decl_template(Zero);  // NOLINT
+  /// \endcond
+
+  template <typename DataType, typename... RequestedTags>
+  tuples::TaggedTuple<RequestedTags...> variables(
+      const tnsr::I<DataType, Dim>& x,
+      tmpl::list<RequestedTags...> /*meta*/) const noexcept {
+    using supported_tags = tmpl::list<
+        Tags::Field,
+        ::Tags::deriv<Tags::Field, tmpl::size_t<Dim>, Frame::Inertial>,
+        ::Tags::FixedSource<Tags::Field>>;
+    static_assert(tmpl::size<tmpl::list_difference<tmpl::list<RequestedTags...>,
                                                    supported_tags>>::value == 0,
                   "The requested tag is not supported");
-    return {make_with_value<typename Tags::type>(x, 0.)...};
+    return {make_with_value<typename RequestedTags::type>(x, 0.)...};
   }
 
-  // clang-tidy: no pass by reference
-  void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
+  // NOLINTNEXTLINE(google-runtime-references)
+  void pup(PUP::er& /*p*/) noexcept override {}
 };
 
-template <size_t Dim>
-bool operator==(const Zero<Dim>& /*lhs*/, const Zero<Dim>& /*rhs*/) noexcept {
+/// \cond
+template <size_t Dim, typename Registrars>
+PUP::able::PUP_ID Zero<Dim, Registrars>::my_PUP_ID = 0;  // NOLINT
+/// \endcond
+
+template <size_t Dim, typename Registrars>
+bool operator==(const Zero<Dim, Registrars>& /*lhs*/,
+                const Zero<Dim, Registrars>& /*rhs*/) noexcept {
   return true;
 }
 
-template <size_t Dim>
-bool operator!=(const Zero<Dim>& /*lhs*/, const Zero<Dim>& /*rhs*/) noexcept {
-  return false;
+template <size_t Dim, typename Registrars>
+bool operator!=(const Zero<Dim, Registrars>& lhs,
+                const Zero<Dim, Registrars>& rhs) noexcept {
+  return not(lhs == rhs);
 }
 
 }  // namespace Poisson::Solutions
