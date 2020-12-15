@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include "DataStructures/DataBox/Tag.hpp"
-#include "Utilities/TMPL.hpp"
+#include "PointwiseFunctions/Elasticity/ConstitutiveRelations/ConstitutiveRelation.hpp"
 
 namespace Elasticity {
 namespace Tags {
@@ -27,13 +29,21 @@ struct ConstitutiveRelationBase : db::BaseTag {};
 template <typename ConstitutiveRelationType>
 struct ConstitutiveRelation : ConstitutiveRelationBase, db::SimpleTag {
   using type = ConstitutiveRelationType;
+};
 
-  static constexpr bool pass_metavariables = true;
-  template <typename Metavariables>
-  using option_tags = tmpl::list<
-      typename Metavariables::constitutive_relation_provider_option_tag>;
-  template <typename Metavariables, typename ProviderType>
-  static type create_from_options(const ProviderType& provider) noexcept {
+template <size_t Dim>
+struct ConstitutiveRelationReference : ConstitutiveRelationBase, db::SimpleTag {
+  using type = const ConstitutiveRelations::ConstitutiveRelation<Dim>&;
+};
+
+template <size_t Dim, typename ProviderTag>
+struct ConstitutiveRelationCompute : ConstitutiveRelationReference<Dim>,
+                                     db::ComputeTag {
+  using base = ConstitutiveRelationReference<Dim>;
+  using argument_tags = tmpl::list<ProviderTag>;
+
+  template <typename Provider>
+  static typename base::type function(const Provider& provider) noexcept {
     return provider.constitutive_relation();
   }
 };
