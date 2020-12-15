@@ -108,7 +108,7 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
   using options = tmpl::list<SubfileName>;
   static constexpr Options::String help =
       "Observe the RMS errors in the tensors compared to their analytic\n"
-      "solution.\n"
+      "solution (if one is available).\n"
       "\n"
       "Writes reduction quantities:\n"
       " * ObservationValueTag\n"
@@ -125,34 +125,39 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
   using observed_reduction_data_tags =
       observers::make_reduction_data_tags<tmpl::list<ReductionData>>;
 
-  using argument_tags =
-      tmpl::list<ObservationValueTag, Tensors..., ::Tags::Analytic<Tensors>...>;
+  using argument_tags = tmpl::list<ObservationValueTag, Tensors...,
+                                   ::Tags::AnalyticSolutionsBase>;
 
-  template <typename Metavariables, typename ArrayIndex,
-            typename ParallelComponent>
-  void operator()(
-      const typename ObservationValueTag::type& observation_value,
-      const typename Tensors::type&... tensors,
-      const typename ::Tags::Analytic<Tensors>::type&... analytic_tensors,
-      Parallel::GlobalCache<Metavariables>& cache,
-      const ArrayIndex& array_index,
-      const ParallelComponent* const /*meta*/) const noexcept {
+  template <typename Metavariables, typename AnalyticSolutionTags,
+            typename ArrayIndex, typename ParallelComponent>
+  void operator()(const typename ObservationValueTag::type& observation_value,
+                  const typename Tensors::type&... tensors,
+                  const std::optional<::Variables<AnalyticSolutionTags>>&
+                      analytic_solutions,
+                  Parallel::GlobalCache<Metavariables>& cache,
+                  const ArrayIndex& array_index,
+                  const ParallelComponent* const /*meta*/) const noexcept {
+    if (not analytic_solutions.has_value()) {
+      // Nothing to do if we don't have analytic solutions. We may generalize
+      // this event to observe norms of other quantities.
+      return;
+    }
     tuples::TaggedTuple<LocalSquareError<Tensors>...> local_square_errors;
-    const auto record_errors = [&local_square_errors](
-        const auto tensor_tag_v, const auto& tensor,
-        const auto& analytic_tensor) noexcept {
+    const auto record_errors = [&local_square_errors, &analytic_solutions](
+                                   const auto tensor_tag_v,
+                                   const auto& tensor) noexcept {
       using tensor_tag = tmpl::type_from<decltype(tensor_tag_v)>;
       double local_square_error = 0.0;
       for (size_t i = 0; i < tensor.size(); ++i) {
-        const auto error = tensor[i] - analytic_tensor[i];
+        const auto error = tensor[i] - get<::Tags::Analytic<tensor_tag>>(
+                                           *analytic_solutions)[i];
         local_square_error += alg::accumulate(square(error), 0.0);
       }
       get<LocalSquareError<tensor_tag>>(local_square_errors) =
           local_square_error;
       return 0;
     };
-    expand_pack(
-        record_errors(tmpl::type_<Tensors>{}, tensors, analytic_tensors)...);
+    expand_pack(record_errors(tmpl::type_<Tensors>{}, tensors)...);
     const size_t num_points = get_first_argument(tensors...).begin()->size();
 
     // Send data to reduction observer
