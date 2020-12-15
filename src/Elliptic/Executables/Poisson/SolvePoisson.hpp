@@ -47,6 +47,8 @@
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
+#include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Poisson/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Lorentzian.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/Moustache.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
@@ -57,7 +59,7 @@
 #include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
 
-namespace SolvePoissonProblem {
+namespace SolvePoisson {
 namespace OptionTags {
 struct LinearSolverGroup {
   static std::string name() noexcept { return "LinearSolver"; }
@@ -70,46 +72,47 @@ struct GmresGroup {
   using group = LinearSolverGroup;
 };
 }  // namespace OptionTags
-}  // namespace SolvePoissonProblem
+}  // namespace SolvePoisson
 
 /// \cond
-template <typename System, typename Background, typename BoundaryConditions,
-          typename InitialGuess>
+template <size_t Dim>
 struct Metavariables {
-  using system = System;
-  static constexpr size_t volume_dim = system::volume_dim;
-  using background = Background;
-  using boundary_conditions = BoundaryConditions;
-  using initial_guess = InitialGuess;
+  static constexpr size_t volume_dim = Dim;
 
-  static constexpr bool has_analytic_solution =
-      tt::conforms_to_v<Background, elliptic::protocols::AnalyticSolution>;
+  using system = Poisson::FirstOrderSystem<Dim, Poisson::Geometry::Euclidean>;
+  using analytic_solution_registrars = tmpl::flatten<tmpl::list<
+      Poisson::Solutions::Registrars::ProductOfSinusoids<Dim>,
+      tmpl::conditional_t<Dim == 1 or Dim == 2,
+                          Poisson::Solutions::Registrars::Moustache<Dim>,
+                          tmpl::list<>>,
+      tmpl::conditional_t<Dim == 3,
+                          Poisson::Solutions::Registrars::Lorentzian<Dim>,
+                          tmpl::list<>>>>;
+  using background_registrars = analytic_solution_registrars;
+  // We currently only support the trivial "zero" initial guess. This will be
+  // generalized ASAP.
+  using initial_guess_registrars =
+      tmpl::list<Poisson::Solutions::Registrars::Zero<Dim>>;
 
   static constexpr Options::String help{
       "Find the solution to a Poisson problem."};
 
   using fluxes_computer_tag =
       elliptic::Tags::FluxesComputer<typename system::fluxes>;
-
   using background_tag =
-      tmpl::conditional_t<has_analytic_solution,
-                          ::Tags::AnalyticSolution<background>,
-                          elliptic::Tags::Background<background>>;
-  static_assert(
-      has_analytic_solution and std::is_same_v<boundary_conditions, background>,
-      "Only Dirichlet boundary conditions imposed by an analytic solution are "
-      "currently supported.");
+      elliptic::Tags::Background<::AnalyticData<Dim, background_registrars>>;
+  // We currently only support Dirichlet boundary conditions taken from the
+  // background. This will be generalized ASAP.
   using boundary_conditions_tag = background_tag;
-  static_assert(
-      std::is_same_v<Poisson::Solutions::Zero<volume_dim>, initial_guess>,
-      "Only a zero initial guess is currently supported.");
-  using initial_guess_tag = elliptic::Tags::InitialGuess<initial_guess>;
+  using initial_guess_tag = elliptic::Tags::InitialGuess<
+      ::AnalyticData<Dim, initial_guess_registrars>>;
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not positive-definite for the first-order system.
-  using linear_solver = LinearSolver::gmres::Gmres<
-      Metavariables, typename system::fields_tag,
-      SolvePoissonProblem::OptionTags::LinearSolverGroup, false>;
+  using linear_solver =
+      LinearSolver::gmres::Gmres<Metavariables, typename system::fields_tag,
+                                 SolvePoisson::OptionTags::LinearSolverGroup,
+                                 false>;
   using linear_solver_iteration_id =
       Convergence::Tags::IterationId<typename linear_solver::options_group>;
   // For the GMRES linear solver we need to apply the DG operator to its
@@ -140,24 +143,20 @@ struct Metavariables {
   // (public for use by the Charm++ registration code)
   using system_fields = typename system::fields_tag::tags_list;
   using observe_fields = system_fields;
-  using analytic_solution_fields =
-      tmpl::conditional_t<has_analytic_solution, system_fields, tmpl::list<>>;
-  using events = tmpl::flatten<
+  using analytic_solution_fields = system_fields;
+  using events =
       tmpl::list<dg::Events::Registrars::ObserveFields<
                      volume_dim, linear_solver_iteration_id, observe_fields,
                      analytic_solution_fields>,
-                 tmpl::conditional_t<
-                     has_analytic_solution,
-                     dg::Events::Registrars::ObserveErrorNorms<
-                         linear_solver_iteration_id, analytic_solution_fields>,
-                     tmpl::list<>>>>;
+                 dg::Events::Registrars::ObserveErrorNorms<
+                     linear_solver_iteration_id, analytic_solution_fields>>;
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       linear_solver_iteration_id>>;
 
   // Collect all items to store in the cache.
   using const_global_cache_tags =
-      tmpl::list<background_tag, boundary_conditions_tag, initial_guess_tag,
-                 fluxes_computer_tag, normal_dot_numerical_flux,
+      tmpl::list<background_tag, initial_guess_tag, fluxes_computer_tag,
+                 normal_dot_numerical_flux,
                  Tags::EventsAndTriggers<events, triggers>>;
 
   // Collect all reduction tags for observers
@@ -177,10 +176,10 @@ struct Metavariables {
           dg::Initialization::exterior_compute_tags<>, false, false>,
       typename linear_solver::initialize_element,
       elliptic::Actions::InitializeSystem<system>,
-      tmpl::conditional_t<has_analytic_solution,
-                          elliptic::Actions::InitializeAnalyticSolution<
-                              background_tag, analytic_solution_fields>,
-                          tmpl::list<>>,
+      elliptic::Actions::InitializeAnalyticSolution<
+          background_tag,
+          Poisson::Solutions::AnalyticSolution<Dim, background_registrars>,
+          analytic_solution_fields>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           Metavariables>,
       dg::Actions::InitializeMortars<boundary_scheme>,
@@ -252,8 +251,13 @@ struct Metavariables {
 };
 
 static const std::vector<void (*)()> charm_init_node_funcs{
-    &setup_error_handling, &disable_openblas_multithreading,
+    &setup_error_handling,
+    &disable_openblas_multithreading,
     &domain::creators::register_derived_with_charm,
+    &Parallel::register_derived_classes_with_charm<
+        metavariables::background_tag::type::element_type>,
+    &Parallel::register_derived_classes_with_charm<
+        metavariables::initial_guess_tag::type::element_type>,
     &Parallel::register_derived_classes_with_charm<
         Event<metavariables::events>>,
     &Parallel::register_derived_classes_with_charm<
