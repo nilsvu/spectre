@@ -137,8 +137,8 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
   };
 
   struct InterpolateToMesh {
-    using type = Options::Auto<Mesh<VolumeDim>, Options::AutoLabel::None>;
-    static type suggested_value() noexcept { return {}; }
+    using type = Options::Auto<Mesh<VolumeDim>>;
+    static type default_value() noexcept { return {}; }
     static constexpr Options::String help =
         "An optional mesh to which the variables are interpolated. This mesh "
         "specifies any number of collocation points, basis, and quadrature on "
