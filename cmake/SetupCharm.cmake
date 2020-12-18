@@ -1,43 +1,43 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-find_package(Charm 6.10.2 EXACT REQUIRED)
+find_package(Charm 6.10.2 EXACT REQUIRED
+  COMPONENTS
+  CommonLBs
+  )
 
-spectre_include_directories("${CHARM_INCLUDE_DIRS}")
-set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} -L${CHARM_LIBRARIES}")
+# Note that Charm++ provides a `charmc` script that wraps the compiler. We avoid
+# that to reduce complexity in the build system. The `FindCharm` module provides
+# imported targets that carry the include directories, libraries and compiler
+# flags that the `charmc` script would otherwise set. Here's how we handle
+# `charmc`'s remaining responsibilities:
+# - `charmc` writes a tiny temporary `moduleinit$$.C` file with a few functions
+#   that usually do nothing, compiles it and links it into every Charm module.
+#   We could have `charmc` generate and _not_ clean up this file py passing the
+#   `-save` option to `charmc`, e.g. in our `add_charm_module` CMake function.
+#   However, the `charmc` script does not intend to expose this file so trying
+#   to extract it can be very fragile. Until we actually need any of these
+#   "moduleinit" functions to do something we just provide trivial
+#   implementations for them in `src/Parallel/CharmModuleInit.cpp`. See this
+#   upstream issue for details: https://github.com/UIUC-PPL/charm/issues/3210
 
-if(NOT TARGET Charmxx)
-  add_library(Charmxx INTERFACE IMPORTED)
-  set_property(TARGET Charmxx PROPERTY
-    INTERFACE_INCLUDE_DIRECTORIES ${CHARM_INCLUDE_DIRS})
-  add_interface_lib_headers(
-    TARGET Charmxx
-    HEADERS
-    pup.h
-    pup_stl.h
-    )
-  set_property(
-    GLOBAL APPEND PROPERTY SPECTRE_THIRD_PARTY_LIBS
-    Charmxx
-    )
-endif(NOT TARGET Charmxx)
-
-# SpECTRE must be linked with Charm++'s script charmc. In turn, charmc
-# will call your normal compiler, set at charm++ installation time internally.
-# Note: The -pthread is necessary with Charm v6.10 to get linking working
-#       with GCC
-string(
-    REGEX REPLACE "<CMAKE_CXX_COMPILER>"
-    "${CHARM_COMPILER} -pthread -module CommonLBs -no-charmrun"
-    CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE}")
-
-# When building for trace analysis the PAPI counters passed to charmc
-# aren't handled correctly. Specifically, the quotation marks are stripped
-# while being passed through charmc. Since compilation flags aren't needed
-# for linking, we strip them.
-string(
-    REGEX REPLACE "<FLAGS>" ""
-    CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE}")
+add_interface_lib_headers(
+  TARGET
+  Charmxx::charmxx
+  HEADERS
+  charm++.h
+  )
+add_interface_lib_headers(
+  TARGET
+  Charmxx::pup
+  HEADERS
+  pup.h
+  pup_stl.h
+  )
+set_property(
+  GLOBAL APPEND PROPERTY SPECTRE_THIRD_PARTY_LIBS
+  Charmxx::charmxx Charmxx::pup
+  )
 
 get_filename_component(CHARM_BINDIR ${CHARM_COMPILER} DIRECTORY)
 # In order to avoid problems when compiling in parallel we manually copy the
@@ -49,25 +49,7 @@ configure_file(
 
 include(SetupCharmModuleFunctions)
 
-# Check if Charm++ was built with SMP support
-set(SPECTRE_SHARED_MEMORY_PARALLELISM_BUILD NO)
-if (EXISTS "${CHARM_INCLUDE_DIRS}/conv-mach.h")
-  file(READ "${CHARM_INCLUDE_DIRS}/conv-mach.h" CONV_MACH_HEADER)
-  string(REPLACE "\n" ";" CONV_MACH_HEADER ${CONV_MACH_HEADER})
-  foreach (LINE ${CONV_MACH_HEADER})
-    if (LINE MATCHES "#define[ \t]+CMK_SMP[ \t]+1")
-      set(SPECTRE_SHARED_MEMORY_PARALLELISM_BUILD YES)
-      break()
-    endif()
-  endforeach()
-else()
-  message(FATAL_ERROR
-    "Unable to detect whether or not Charm++ was built with shared "
-    "memory parallelism enabled because the file "
-    "'${CHARM_INCLUDE_DIRS}/conv-mach.h' was not found. Please file "
-    "an issue for support with this error since that file should be "
-    "generated as part of the Charm++ build process.")
-endif()
+set(SPECTRE_SHARED_MEMORY_PARALLELISM_BUILD ${CHARM_SMP})
 if (${SPECTRE_SHARED_MEMORY_PARALLELISM_BUILD})
   message(STATUS "Charm++ built with shared memory parallelism")
   add_definitions(-DSPECTRE_SHARED_MEMORY_PARALLELISM_BUILD)

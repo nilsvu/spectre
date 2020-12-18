@@ -51,6 +51,7 @@ target_link_libraries(
   Informer
   Options
   PUBLIC
+  Charmxx::charmxx
   ErrorHandling
   SystemUtilities
   Utilities

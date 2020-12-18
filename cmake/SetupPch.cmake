@@ -180,6 +180,7 @@ if (USE_PCH)
     PRIVATE
     Blaze
     Brigand
+    Charmxx::charmxx
     )
   target_include_directories(
     ${SPECTRE_PCH_LIB}
