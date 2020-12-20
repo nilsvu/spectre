@@ -9,9 +9,9 @@
 #include <sstream>
 #include <string>
 
+#include "ErrorHandling/Abort.hpp"
 #include "ErrorHandling/AbortWithErrorMessage.hpp"
 #include "ErrorHandling/FloatingPointExceptions.hpp"
-#include "Parallel/Abort.hpp"
 #include "Utilities/Literals.hpp"
 
 /*!
@@ -54,10 +54,10 @@
  * functions where ERROR cannot be.
  * \param m error message as a string, may need to use string literals
  */
-#define CERROR(m)                                                          \
-  do {                                                                     \
-    Parallel::abort("\n################ ERROR ################\nLine: "s + \
-                    std::to_string(__LINE__) + " of file '"s + __FILE__ +  \
-                    "'\n"s + m + /* NOLINT */                              \
-                    "\n#######################################\n"s);       \
+#define CERROR(m)                                                        \
+  do {                                                                   \
+    abort("\n################ ERROR ################\nLine: "s +         \
+          std::to_string(__LINE__) + " of file '"s + __FILE__ + "'\n"s + \
+          m + /* NOLINT */                                               \
+          "\n#######################################\n"s);               \
   } while (false)

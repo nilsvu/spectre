@@ -3,12 +3,11 @@
 
 #include "ErrorHandling/AbortWithErrorMessage.hpp"
 
+#include <charm++.h>
 #include <sstream>
 
+#include "ErrorHandling/Abort.hpp"
 #include "ErrorHandling/Breakpoint.hpp"
-#include "Parallel/Abort.hpp"
-#include "Parallel/Info.hpp"
-#include "Parallel/Printf.hpp"
 
 void abort_with_error_message(const char* expression, const char* file,
                               const int line, const char* pretty_function,
@@ -16,20 +15,20 @@ void abort_with_error_message(const char* expression, const char* file,
   std::ostringstream os;
   os << "\n"
      << "############ ASSERT FAILED ############\n"
-     << "Node: " << Parallel::my_node() << " Proc: " << Parallel::my_proc()
-     << "\n"
+     << "Node: " << CkMyNode() << " Proc: " << CkMyPe() << "\n"
      << "Line: " << line << " of " << file << "\n"
      << "'" << expression << "' violated!\n"
      << "Function: " << pretty_function << "\n"
      << message << "\n"
      << "############ ASSERT FAILED ############\n"
      << "\n";
-  // We use printf instead of abort to print the error message because in the
+  // We use CkError instead of abort to print the error message because in the
   // case of an executable not using Charm++'s main function the call to abort
   // will segfault before anything is printed.
-  Parallel::printf_error(os.str());
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
+  CkError("%s", os.str().c_str());
   breakpoint();
-  Parallel::abort("");
+  abort("");
 }
 
 void abort_with_error_message(const char* file, const int line,
@@ -38,17 +37,17 @@ void abort_with_error_message(const char* file, const int line,
   std::ostringstream os;
   os << "\n"
      << "############ ERROR ############\n"
-     << "Node: " << Parallel::my_node() << " Proc: " << Parallel::my_proc()
-     << "\n"
+     << "Node: " << CkMyNode() << " Proc: " << CkMyPe() << "\n"
      << "Line: " << line << " of " << file << "\n"
      << "Function: " << pretty_function << "\n"
      << message << "\n"
      << "############ ERROR ############\n"
      << "\n";
-  // We use printf instead of abort to print the error message because in the
+  // We use CkError instead of abort to print the error message because in the
   // case of an executable not using Charm++'s main function the call to abort
   // will segfault before anything is printed.
-  Parallel::printf_error(os.str());
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg)
+  CkError("%s", os.str().c_str());
   breakpoint();
-  Parallel::abort("");
+  abort("");
 }
