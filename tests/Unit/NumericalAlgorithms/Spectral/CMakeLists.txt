@@ -31,3 +31,9 @@ add_test_library(
   "${LIBRARY_SOURCES}"
   "Boost::boost;Domain;Spectral;SpectralHelpers"
   )
+
+spectre_add_python_bindings_test(
+        "Unit.Spectral.Python.Mesh"
+        Test_Mesh.py
+        "Unit;Spectral;Python"
+        PySpectral)
