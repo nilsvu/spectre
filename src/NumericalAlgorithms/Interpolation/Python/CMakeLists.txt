@@ -1,20 +1,20 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-set(LIBRARY "PySpectral")
+set(LIBRARY "PyInterpolation")
 
 
 spectre_python_add_module(
-  Spectral
+  Interpolation
   LIBRARY_NAME ${LIBRARY}
   SOURCES
   Bindings.cpp
-  Mesh.cpp
+  RegularGridInterpolant.cpp
 )
 
 spectre_python_link_libraries(
   ${LIBRARY}
   PRIVATE
-  Spectral
+  Interpolation
   pybind11::module
 )

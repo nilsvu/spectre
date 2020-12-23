@@ -30,6 +30,7 @@ void bind_tensordata(py::module& m) {  // NOLINT
       // NOLINTNEXTLINE(misc-redundant-expression)
       .def(py::self != py::self);
 
+  /*
   py::enum_<Spectral::Basis>(m, "SpectralBasis")
       .value("Legendre", Spectral::Basis::Legendre)
       .value("Chebyshev", Spectral::Basis::Chebyshev)
@@ -41,6 +42,7 @@ void bind_tensordata(py::module& m) {  // NOLINT
       .value("CellCentered", Spectral::Quadrature::CellCentered)
       .value("FaceCentered", Spectral::Quadrature::FaceCentered)
       .export_values();
+      */
 
   // Wrapper for ExtentsAndTensorVolumeData
   py::class_<ExtentsAndTensorVolumeData>(m, "ExtentsAndTensorVolumeData")
