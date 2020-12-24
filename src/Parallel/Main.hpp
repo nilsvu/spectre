@@ -246,7 +246,7 @@ Main<Metavariables>::Main(CkArgMsg* msg) noexcept {
           return tuples::tagged_tuple_from_typelist<option_list>(
               std::move(args)...);
         });
-    Parallel::printf("\nOption parsing completed.\n");
+    Parallel::printf("\nOption parsing completed.\n\n");
   } catch (const bpo::error& e) {
     ERROR(e.what());
   }
