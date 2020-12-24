@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -22,6 +23,7 @@
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
 #include "Framework/ActionTesting.hpp"
+#include "Framework/CheckWithRandomValues.hpp"
 #include "Framework/TestCreation.hpp"
 #include "Framework/TestHelpers.hpp"
 #include "IO/Observer/ArrayComponentId.hpp"
@@ -290,8 +292,9 @@ struct ComplicatedSystem {
   }
 };
 
-template <typename System, typename ObserveEvent>
-void test_observe(const std::unique_ptr<ObserveEvent> observe) noexcept {
+template <typename System, bool HasAnalyticSolutions, typename ObserveEvent>
+void test_observe(const std::unique_ptr<ObserveEvent> observe,
+                  const bool has_analytic_solutions) noexcept {
   using metavariables = Metavariables<System>;
   constexpr size_t volume_dim = System::volume_dim;
   using element_component = ElementComponent<metavariables>;
@@ -335,8 +338,19 @@ void test_observe(const std::unique_ptr<ObserveEvent> observe) noexcept {
   const auto box = db::create<db::AddSimpleTags<
       ObservationTimeTag, domain::Tags::Mesh<volume_dim>,
       Tags::Variables<typename decltype(vars)::tags_list>,
-      db::add_tag_prefix<Tags::Analytic, Tags::Variables<solution_variables>>>>(
-      observation_time, mesh, vars, solutions);
+      tmpl::conditional_t<
+          HasAnalyticSolutions, ::Tags::AnalyticSolutions<solution_variables>,
+          ::Tags::AnalyticSolutionsOptional<solution_variables>>>>(
+      observation_time, mesh, vars, [&solutions, &has_analytic_solutions]() {
+        if constexpr (HasAnalyticSolutions) {
+          (void)has_analytic_solutions;
+          // NOLINTNEXTLINE(performance-no-automatic-move)
+          return solutions;
+        } else {
+          return has_analytic_solutions ? std::make_optional(solutions)
+                                        : std::nullopt;
+        }
+      }());
 
   observe->run(box, runner.cache(), array_index,
                std::add_pointer_t<element_component>{});
@@ -386,19 +400,23 @@ void test_observe(const std::unique_ptr<ObserveEvent> observe) noexcept {
                                                const auto... indices) noexcept {
     check_component(name, get<decltype(tag)>(vars).get(indices...));
   });
-  System::solution_for_test::check_data(
-      [&check_component, &errors](const std::string& name, auto tag,
-                                  const auto... indices) noexcept {
-        check_component(name, get<decltype(tag)>(errors).get(indices...));
-      });
+  if (HasAnalyticSolutions or has_analytic_solutions) {
+    System::solution_for_test::check_data(
+        [&check_component, &errors](const std::string& name, auto tag,
+                                    const auto... indices) noexcept {
+          check_component(name, get<decltype(tag)>(errors).get(indices...));
+        });
+  }
   CHECK(results.in_received_tensor_data.size() == num_components_observed);
 }
 
-template <typename System>
-void test_system() noexcept {
+template <typename System, bool HasAnalyticSolutions>
+void test_system(const bool has_analytic_solutions) noexcept {
   INFO(pretty_type::get_name<System>());
-  test_observe<System>(std::make_unique<typename System::ObserveEvent>(
-      System::make_test_object()));
+  test_observe<System, HasAnalyticSolutions>(
+      std::make_unique<typename System::ObserveEvent>(
+          System::make_test_object()),
+      has_analytic_solutions);
 
   INFO("create/serialize");
   using EventType = Event<tmpl::list<dg::Events::Registrars::ObserveFields<
@@ -409,13 +427,16 @@ void test_system() noexcept {
   const auto factory_event = TestHelpers::test_factory_creation<EventType>(
       System::creation_string_for_test);
   auto serialized_event = serialize_and_deserialize(factory_event);
-  test_observe<System>(std::move(serialized_event));
+  test_observe<System, HasAnalyticSolutions>(std::move(serialized_event),
+                                             has_analytic_solutions);
 }
 }  // namespace
 
 SPECTRE_TEST_CASE("Unit.Evolution.dG.ObserveFields", "[Unit][Evolution]") {
-  test_system<ScalarSystem>();
-  test_system<ComplicatedSystem>();
+  INVOKE_TEST_FUNCTION(test_system, (true), (ScalarSystem, ComplicatedSystem),
+                       (true, false));
+  INVOKE_TEST_FUNCTION(test_system, (false), (ScalarSystem, ComplicatedSystem),
+                       (true, false));
 }
 
 // [[OutputRegex, NotAVar is not an available variable.*Scalar]]
