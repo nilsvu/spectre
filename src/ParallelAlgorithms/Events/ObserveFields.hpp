@@ -4,7 +4,9 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <initializer_list>
+#include <optional>
 #include <pup.h>
 #include <string>
 #include <type_traits>
@@ -161,11 +163,11 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
     variables_to_observe_.insert(coordinates_tag::name());
   }
 
-  using argument_tags =
-      tmpl::list<ObservationValueTag, domain::Tags::Mesh<VolumeDim>,
-                 coordinates_tag, AnalyticSolutionTensors...,
-                 ::Tags::Analytic<AnalyticSolutionTensors>...,
-                 NonSolutionTensors...>;
+  using argument_tags = tmpl::flatten<tmpl::list<
+      ObservationValueTag, domain::Tags::Mesh<VolumeDim>, coordinates_tag,
+      AnalyticSolutionTensors..., NonSolutionTensors...,
+      tmpl::conditional_t<(sizeof...(AnalyticSolutionTensors) > 0),
+                          ::Tags::AnalyticSolutionsBase, tmpl::list<>>>>;
 
   template <typename Metavariables, typename ParallelComponent>
   void operator()(
@@ -175,9 +177,10 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
           inertial_coordinates,
       const typename AnalyticSolutionTensors::
           type&... analytic_solution_tensors,
-      const typename ::Tags::Analytic<
-          AnalyticSolutionTensors>::type&... analytic_solutions,
       const typename NonSolutionTensors::type&... non_solution_tensors,
+      const std::optional<std::reference_wrapper<const ::Variables<
+          tmpl::list<::Tags::Analytic<AnalyticSolutionTensors>...>>>>
+          analytic_solutions,
       Parallel::GlobalCache<Metavariables>& cache,
       const ElementId<VolumeDim>& array_index,
       const ParallelComponent* const /*meta*/) const noexcept {
@@ -192,12 +195,14 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
     components.reserve(alg::accumulate(
         std::initializer_list<size_t>{
             inertial_coordinates.size(),
-            2 * AnalyticSolutionTensors::type::size()...,
+            (analytic_solutions.has_value() ? 2 : 1) *
+                AnalyticSolutionTensors::type::size()...,
             NonSolutionTensors::type::size()...},
         0_st));
 
-    const auto record_tensor_components = [ this, &components, &element_name ](
-        const auto tensor_tag_v, const auto& tensor) noexcept {
+    const auto record_tensor_components = [this, &components, &element_name](
+                                              const auto tensor_tag_v,
+                                              const auto& tensor) noexcept {
       using tensor_tag = tmpl::type_from<decltype(tensor_tag_v)>;
       if (variables_to_observe_.count(db::tag_name<tensor_tag>()) == 1) {
         for (size_t i = 0; i < tensor.size(); ++i) {
@@ -214,25 +219,28 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
     EXPAND_PACK_LEFT_TO_RIGHT(record_tensor_components(
         tmpl::type_<NonSolutionTensors>{}, non_solution_tensors));
 
-    const auto record_errors = [ this, &components, &element_name ](
-        const auto tensor_tag_v, const auto& tensor,
-        const auto& analytic_tensor) noexcept {
-      using tensor_tag = tmpl::type_from<decltype(tensor_tag_v)>;
-      if (variables_to_observe_.count(db::tag_name<tensor_tag>()) == 1) {
-        for (size_t i = 0; i < tensor.size(); ++i) {
-          DataVector error = tensor[i] - analytic_tensor[i];
-          components.emplace_back(element_name + "Error(" +
-                                      db::tag_name<tensor_tag>() + ")" +
-                                      tensor.component_suffix(i),
-                                  std::move(error));
-        }
-      }
-    };
-    EXPAND_PACK_LEFT_TO_RIGHT(
-        record_errors(tmpl::type_<AnalyticSolutionTensors>{},
-                      analytic_solution_tensors, analytic_solutions));
+    if (analytic_solutions.has_value()) {
+      const auto record_errors =
+          [this, &components, &element_name, &analytic_solutions](
+              const auto tensor_tag_v, const auto& tensor) noexcept {
+            using tensor_tag = tmpl::type_from<decltype(tensor_tag_v)>;
+            if (variables_to_observe_.count(db::tag_name<tensor_tag>()) == 1) {
+              for (size_t i = 0; i < tensor.size(); ++i) {
+                DataVector error =
+                    tensor[i] - get<::Tags::Analytic<tensor_tag>>(
+                                    analytic_solutions->get())[i];
+                components.emplace_back(element_name + "Error(" +
+                                            db::tag_name<tensor_tag>() + ")" +
+                                            tensor.component_suffix(i),
+                                        std::move(error));
+              }
+            }
+          };
+      EXPAND_PACK_LEFT_TO_RIGHT(record_errors(
+          tmpl::type_<AnalyticSolutionTensors>{}, analytic_solution_tensors));
 
-    (void)(record_errors);  // Silence GCC warning about unused variable
+      (void)(record_errors);  // Silence GCC warning about unused variable
+    }
 
     // Send data to volume observer
     auto& local_observer =
@@ -248,6 +256,49 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
             Parallel::ArrayIndex<ElementId<VolumeDim>>(array_index)),
         std::move(components), mesh.extents(), mesh.basis(),
         mesh.quadrature());
+  }
+
+  // This overload is called when the list of analytic-solution tensors is
+  // empty, i.e. it is clear at compile-time that no analytic solutions are
+  // available
+  template <typename Metavariables, typename ParallelComponent>
+  void operator()(
+      const typename ObservationValueTag::type& observation_value,
+      const Mesh<VolumeDim>& mesh,
+      const tnsr::I<DataVector, VolumeDim, Frame::Inertial>&
+          inertial_coordinates,
+      const typename NonSolutionTensors::type&... non_solution_tensors,
+      Parallel::GlobalCache<Metavariables>& cache,
+      const ElementId<VolumeDim>& array_index,
+      const ParallelComponent* const component) const noexcept {
+    this->operator()(observation_value, mesh, inertial_coordinates,
+                     non_solution_tensors..., std::nullopt, cache, array_index,
+                     component);
+  }
+
+  // This overload is called when the analytic solutions are non-optional. This
+  // overload should not be necessary because a `const Variables&` should
+  // convert to `std::optional<std::reference_wrapper<const Variables>>`, but
+  // for some reason that conversion doesn't happen.
+  template <typename Metavariables, typename ParallelComponent>
+  void operator()(
+      const typename ObservationValueTag::type& observation_value,
+      const Mesh<VolumeDim>& mesh,
+      const tnsr::I<DataVector, VolumeDim, Frame::Inertial>&
+          inertial_coordinates,
+      const typename AnalyticSolutionTensors::
+          type&... analytic_solution_tensors,
+      const typename NonSolutionTensors::type&... non_solution_tensors,
+      const ::Variables<
+          tmpl::list<::Tags::Analytic<AnalyticSolutionTensors>...>>&
+          analytic_solutions,
+      Parallel::GlobalCache<Metavariables>& cache,
+      const ElementId<VolumeDim>& array_index,
+      const ParallelComponent* const component) const noexcept {
+    this->operator()(observation_value, mesh, inertial_coordinates,
+                     analytic_solution_tensors..., non_solution_tensors...,
+                     std::make_optional(std::cref(analytic_solutions)), cache,
+                     array_index, component);
   }
 
   using observation_registration_tags = tmpl::list<>;

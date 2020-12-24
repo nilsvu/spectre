@@ -332,10 +332,10 @@ void test_observe(const std::unique_ptr<ObserveEvent> observe) noexcept {
                                                       element_id);
   ActionTesting::emplace_component<observer_component>(&runner, 0);
 
-  const auto box = db::create<db::AddSimpleTags<
-      ObservationTimeTag, domain::Tags::Mesh<volume_dim>,
-      Tags::Variables<typename decltype(vars)::tags_list>,
-      db::add_tag_prefix<Tags::Analytic, Tags::Variables<solution_variables>>>>(
+  const auto box = db::create<
+      db::AddSimpleTags<ObservationTimeTag, domain::Tags::Mesh<volume_dim>,
+                        Tags::Variables<typename decltype(vars)::tags_list>,
+                        ::Tags::AnalyticSolutions<solution_variables>>>(
       observation_time, mesh, vars, solutions);
 
   observe->run(box, runner.cache(), array_index,

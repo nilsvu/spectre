@@ -251,8 +251,8 @@ void test_observe(const std::unique_ptr<ObserveEvent> observe) noexcept {
 
   const auto box = db::create<db::AddSimpleTags<
       ObservationTimeTag, Tags::Variables<typename decltype(vars)::tags_list>,
-      db::add_tag_prefix<Tags::Analytic, Tags::Variables<solution_variables>>>>(
-      observation_time, vars, solutions);
+      ::Tags::AnalyticSolutions<solution_variables>>>(observation_time, vars,
+                                                      solutions);
 
   const auto ids_to_register =
       observers::get_registration_observation_type_and_key(*observe, box);
