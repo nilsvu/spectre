@@ -146,20 +146,14 @@ struct SubdomainOperator
       NeighborsBufferTag<ExtendedResultBufferTag>>;
 
  public:
-  explicit SubdomainOperator(const size_t central_num_points) noexcept
-      : buffer_{typename fluxes_tag::type{central_num_points},
-                typename div_fluxes_tag::type{central_num_points},
-                NeighborsBoundaryDataCache{},
-                DirectionMap<Dim, typename fluxes_tag::type>{},
-                DirectionMap<Dim, typename div_fluxes_tag::type>{},
-                typename NeighborsBufferTag<vars_tag>::type{},
-                typename NeighborsBufferTag<fluxes_tag>::type{},
-                typename NeighborsBufferTag<div_fluxes_tag>::type{},
-                typename NeighborsBufferTag<
-                    domain::Tags::Faces<Dim, fluxes_tag>>::type{},
-                typename NeighborsBufferTag<
-                    domain::Tags::Faces<Dim, div_fluxes_tag>>::type{},
-                typename NeighborsBufferTag<ExtendedResultBufferTag>::type{}} {}
+  SubdomainOperator() = default;
+  explicit SubdomainOperator(const size_t central_num_points) noexcept {
+    // We're simply leaving the buffer default-constructed. The element- and
+    // face-operators are responsible for resizing and filling it. In fact,
+    // trying to construct it from values sometimes leads to SIGBUS errors when
+    // running on 2 cores or more, which is probably related to
+    // https://github.com/sxs-collaboration/spectre/issues/2524.
+  }
 
   struct element_operator {
     using argument_tags = tmpl::append<
@@ -354,7 +348,7 @@ struct SubdomainOperator
   };
 
  private:
-  Buffer buffer_;
+  Buffer buffer_{};
 };
 
 }  // namespace elliptic::dg::subdomain_operator
