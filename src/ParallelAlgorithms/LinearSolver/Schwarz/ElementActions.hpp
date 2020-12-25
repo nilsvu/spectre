@@ -320,6 +320,7 @@ struct SolveSubdomain {
     const auto apply_subdomain_operator =
         [&box, &subdomain_operator](const gsl::not_null<SubdomainData*> result,
                                     const SubdomainData& operand) noexcept {
+      result->destructive_resize(operand);
       // The subdomain operator can retrieve any information on the subdomain
       // geometry that is available through the DataBox. The user is responsible
       // for communicating this information across neighbors if necessary.
