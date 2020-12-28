@@ -636,6 +636,8 @@ void test_apply() noexcept {
       db::get<test_databox_tags::Tag1>(original_box));
   /// [apply_example]
 
+  // TODO: test std::optional<std::reference_wrapper>
+
   db::apply<tmpl::list<>>(NonCopyableFunctor{}, original_box);
 
   /// [apply_struct_example]
@@ -703,6 +705,42 @@ void test_apply() noexcept {
     }
   };
   db::apply<PointerApplyCallable>(original_box);
+}
+
+struct MapTag : db::SimpleTag {
+  using type = std::map<int, std::string>;
+};
+
+struct NonMapTag : db::SimpleTag {
+  using type = int;
+};
+
+struct NestedMapTag : db::SimpleTag {
+  using type = std::map<int, std::unordered_map<std::string, bool>>;
+};
+
+void test_apply_at() noexcept {
+  const auto box =
+      db::create<db::AddSimpleTags<MapTag, NonMapTag, NestedMapTag>>(
+          std::map<int, std::string>{std::make_pair(0, "A")}, 1,
+          std::map<int, std::unordered_map<std::string, bool>>{
+              std::make_pair(0, std::unordered_map<std::string, bool>{
+                                    std::make_pair("key", true)})});
+  db::apply_at<tmpl::list<NonMapTag, MapTag, NestedMapTag>,
+               tmpl::list<NonMapTag>>(
+      [](const int arg0, const std::string& arg1,
+         const std::unordered_map<std::string, bool>& arg2) {
+        CHECK(arg0 == 1);
+        CHECK(arg1 == "A");
+        CHECK(arg2.at("key") == true);
+      },
+      box, 0);
+  db::apply_at<tmpl::list<NestedMapTag, NonMapTag>, tmpl::list<NonMapTag>>(
+      [](const bool arg0, const int arg1) {
+        CHECK(arg0 == true);
+        CHECK(arg1 == 1);
+      },
+      box, std::make_tuple(0, "key"));
 }
 
 struct Var1 : db::SimpleTag {
@@ -2643,6 +2681,7 @@ SPECTRE_TEST_CASE("Unit.DataStructures.DataBox", "[Unit][DataStructures]") {
   test_get_databox();
   test_mutate();
   test_apply();
+  test_apply_at();
   test_variables();
   test_variables2();
   test_reset_compute_items();
