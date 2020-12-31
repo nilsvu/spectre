@@ -25,6 +25,7 @@
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/ApplyFace.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/Tags.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
+#include "Elliptic/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/BoundarySchemes/FirstOrder/BoundaryData.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
@@ -73,10 +74,12 @@ struct make_overlap_tag {
  */
 template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
           typename FluxesComputerTag, typename SourcesComputer,
-          typename NumericalFluxesComputerTag, typename OptionsGroup,
-          bool MassiveOperator,
+          typename NumericalFluxesComputerTag, typename BoundaryConditionsTag,
+          typename OptionsGroup, bool MassiveOperator,
+          bool DisableBoundaryConditions,
           typename FluxesArgsTagsFromCenter = tmpl::list<>,
-          typename SourcesArgsTagsFromCenter = tmpl::list<>>
+          typename SourcesArgsTagsFromCenter = tmpl::list<>,
+          typename BoundaryConditionsArgsTagsFromCenter = tmpl::list<>>
 struct SubdomainOperator
     : tt::ConformsTo<LinearSolver::Schwarz::protocols::SubdomainOperator> {
  public:
@@ -99,6 +102,13 @@ struct SubdomainOperator
   using FluxesComputerType = typename FluxesComputerTag::type;
   using fluxes_args_tags = typename FluxesComputerType::argument_tags;
   static constexpr size_t num_fluxes_args = tmpl::size<fluxes_args_tags>::value;
+  using boundary_conditions_args_tags =
+      tmpl::conditional_t<DisableBoundaryConditions, tmpl::list<>,
+                          InterfaceHelpers_detail::get_interface_argument_tags<
+                              typename BoundaryConditionsTag::type,
+                              domain::Tags::BoundaryDirectionsExterior<Dim>>>;
+  static constexpr size_t num_boundary_conditions_args =
+      tmpl::size<boundary_conditions_args_tags>::value;
   using sources_args_tags = typename SourcesComputer::argument_tags;
   static constexpr size_t num_sources_args =
       tmpl::size<sources_args_tags>::value;
@@ -215,6 +225,9 @@ struct SubdomainOperator
                 ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
             domain::Tags::Faces<Dim, domain::Tags::SurfaceJacobian<
                                          Frame::Logical, Frame::Inertial>>,
+            domain::Tags::Interface<
+                domain::Tags::BoundaryDirectionsExterior<Dim>,
+                elliptic::Tags::BoundaryConditions<PrimalFields>>,
             ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
             ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>,
             Tags::NeighborMortars<domain::Tags::Mesh<Dim>, Dim>,
@@ -239,6 +252,15 @@ struct SubdomainOperator
         fluxes_args_tags,
         tmpl::bind<tmpl::list_contains, tmpl::pin<FluxesArgsTagsFromCenter>,
                    tmpl::_1>>;
+    using overlap_boundary_conditions_args_tags = tmpl::transform<
+        boundary_conditions_args_tags,
+        make_overlap_tag<tmpl::_1, tmpl::pin<tmpl::size_t<Dim>>,
+                         tmpl::pin<OptionsGroup>,
+                         tmpl::pin<BoundaryConditionsArgsTagsFromCenter>>>;
+    using overlap_boundary_conditions_args_are_from_center = tmpl::transform<
+        boundary_conditions_args_tags,
+        tmpl::bind<tmpl::list_contains,
+                   tmpl::pin<BoundaryConditionsArgsTagsFromCenter>, tmpl::_1>>;
     using fluxes_face_args_tags = tmpl::transform<
         fluxes_args_tags,
         make_face_tag<tmpl::_1,
@@ -269,16 +291,22 @@ struct SubdomainOperator
         ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>,
         ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>,
         domain::Tags::SurfaceJacobian<Frame::Logical, Frame::Inertial>,
+        domain::Tags::Interface<
+            domain::Tags::BoundaryDirectionsExterior<Dim>,
+            elliptic::Tags::BoundaryConditions<PrimalFields>>,
+        BoundaryConditionsTag,
         ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
         ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>, overlap_tags,
-        fluxes_args_tags, overlap_fluxes_args_tags,
+        fluxes_args_tags, boundary_conditions_args_tags,
+        overlap_fluxes_args_tags, overlap_boundary_conditions_args_tags,
         overlap_fluxes_face_args_tags, overlap_sources_args_tags>>;
     using volume_tags = tmpl::flatten<tmpl::list<
         domain::Tags::Element<Dim>, domain::Tags::Mesh<Dim>, FluxesComputerTag,
         NumericalFluxesComputerTag,
         ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
         ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>, overlap_tags,
-        get_volume_tags<FluxesComputerType>, overlap_fluxes_args_tags,
+        get_volume_tags<FluxesComputerType>, boundary_conditions_args_tags,
+        overlap_fluxes_args_tags, overlap_boundary_conditions_args_tags,
         overlap_fluxes_face_args_tags, overlap_sources_args_tags>>;
 
     template <typename... Args>
@@ -307,6 +335,11 @@ struct SubdomainOperator
                 // fluxes_args_tags
                 tuple_slice<num_standard_args,
                             num_standard_args + num_fluxes_args>(all_args),
+                // Boundary conditions args
+                // TODO: Select the boundary condition args at runtime somehow?
+                tuple_slice<num_boundary_conditions_args,
+                            num_fluxes_args + num_boundary_conditions_args>(
+                    remaining_args),
                 // overlap_fluxes_args_tags
                 tuple_slice<num_standard_args + num_fluxes_args,
                             num_standard_args + 2 * num_fluxes_args>(all_args),

@@ -7,10 +7,12 @@
 #include <cstddef>
 
 #include "DataStructures/ApplyMatrices.hpp"
+#include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Matrix.hpp"
 #include "DataStructures/Variables.hpp"
+#include "Domain/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
@@ -201,7 +203,8 @@ void first_order_operator(
   *operator_applied_to_vars = sources - div_fluxes;
 }
 
-// template <typename OperatorTags, typename DivFluxesTags, typename SourcesTags,
+// template <typename OperatorTags, typename DivFluxesTags, typename
+// SourcesTags,
 //           size_t Dim>
 // void first_order_operator_massive(
 //     const gsl::not_null<Variables<OperatorTags>*> operator_applied_to_vars,
@@ -263,13 +266,14 @@ void first_order_operator(
 }
 
 // template <typename PrimalFields, typename AuxiliaryFields,
-//           typename SourcesComputer, typename OperatorTags, typename FluxesTags,
-//           typename VarsTags, typename FluxesComputer, size_t Dim,
+//           typename SourcesComputer, typename OperatorTags, typename
+//           FluxesTags, typename VarsTags, typename FluxesComputer, size_t Dim,
 //           typename... FluxesArgs, typename... SourcesArgs>
 // void first_order_operator_massive(
 //     const gsl::not_null<Variables<OperatorTags>*> operator_applied_to_vars,
 //     const gsl::not_null<Variables<FluxesTags>*> fluxes,
-//     const gsl::not_null<Variables<db::wrap_tags_in<::Tags::div, FluxesTags>>*>
+//     const gsl::not_null<Variables<db::wrap_tags_in<::Tags::div,
+//     FluxesTags>>*>
 //         div_fluxes,
 //     const Variables<VarsTags>& vars, const Mesh<Dim>& mesh,
 //     const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
@@ -360,5 +364,79 @@ struct FirstOrderOperator {
     }
   }
 };
+
+template <size_t Dim, typename... PrimalFields, typename... AuxiliaryFields,
+          typename BoundaryConditions, typename... BoundaryConditionsArgs,
+          typename FluxesComputer, typename... FluxesArgs>
+void impose_first_order_boundary_conditions(
+    const gsl::not_null<
+        Variables<tmpl::list<::Tags::NormalDotFlux<PrimalFields>...,
+                             ::Tags::NormalDotFlux<AuxiliaryFields>...>>*>
+        exterior_n_dot_fluxes,
+    const gsl::not_null<Variables<tmpl::list<PrimalFields...>>*>
+        primal_vars_buffer,
+    const gsl::not_null<Variables<tmpl::list<
+        ::Tags::Flux<AuxiliaryFields, tmpl::size_t<Dim>, Frame::Inertial>...>>*>
+        auxiliary_fluxes_buffer,
+    const Variables<tmpl::list<PrimalFields..., AuxiliaryFields...>>&
+        interior_vars,
+    const Variables<tmpl::list<::Tags::NormalDotFlux<PrimalFields>...,
+                               ::Tags::NormalDotFlux<AuxiliaryFields>...>>&
+        interior_n_dot_fluxes,
+    const tnsr::i<DataVector, Dim>& exterior_face_normal,
+    const BoundaryConditions& boundary_conditions,
+    const std::tuple<BoundaryConditionsArgs...>& boundary_conditions_args,
+    const FluxesComputer& fluxes_computer,
+    const std::tuple<FluxesArgs...>& fluxes_args) noexcept {
+  // Copy interior n.F over to the exterior. We invert the sign to account for
+  // the inverted normal on exterior faces. Neumann-type boundary conditions
+  // will directly modify the "primal" n.F in this return variable.
+  *exterior_n_dot_fluxes = -interior_n_dot_fluxes;
+  // Also copy interior vars over to the exterior. Dirichlet-type boundary
+  // conditions will modify these so we can compute the "auxiliary" n.F in the
+  // `exterior_n_dot_fluxes` return variable. The `primal_vars_buffer` and the
+  // other memory buffers are not considered return variables.
+  *primal_vars_buffer =
+      interior_vars.extract_subset<tmpl::list<PrimalFields...>>();
+  // Apply the boundary conditions
+  std::apply(boundary_conditions,
+             std::tuple_cat(
+                 boundary_conditions_args,
+                 std::make_tuple(
+                     make_not_null(&get<PrimalFields>(*primal_vars_buffer))...,
+                     make_not_null(&get<::Tags::NormalDotFlux<PrimalFields>>(
+                         *exterior_n_dot_fluxes))...)));
+  // Compute fluxes from the Dirichlet fields
+  std::apply(
+      [&fluxes_computer, &auxiliary_fluxes_buffer,
+       &primal_vars_buffer](const auto&... expanded_fluxes_args) noexcept {
+        fluxes_computer.apply(
+            make_not_null(&get<::Tags::Flux<AuxiliaryFields, tmpl::size_t<Dim>,
+                                            Frame::Inertial>>(
+                *auxiliary_fluxes_buffer))...,
+            expanded_fluxes_args..., get<PrimalFields>(*primal_vars_buffer)...);
+      },
+      fluxes_args);
+  // Compute n.F from the Dirichlet fields
+  tmpl::for_each<tmpl::list<AuxiliaryFields...>>(
+      [&exterior_n_dot_fluxes, &auxiliary_fluxes_buffer,
+       &exterior_face_normal](auto tag_v) noexcept {
+        using aux_tag = tmpl::type_from<decltype(tag_v)>;
+        normal_dot_flux(
+            make_not_null(
+                &get<::Tags::NormalDotFlux<aux_tag>>(*exterior_n_dot_fluxes)),
+            exterior_face_normal,
+            get<::Tags::Flux<aux_tag, tmpl::size_t<Dim>, Frame::Inertial>>(
+                *auxiliary_fluxes_buffer));
+      });
+  // Impose boundary conditions through the fluxes, i.e. on the boundary flux
+  // average:
+  // n_i {{F^i}} = n_i (F^i_int + F^i_ext) / 2 = n_i F^i_boundary
+  // => n_i F^i_ext = 2 * F^i_boundary - n_i F^i_int.
+  // Just setting F^i_ext = F^i_boundary also works, but converges way slower.
+  *exterior_n_dot_fluxes *= 2.;
+  // This sign is inverted to account for the opposite signs of the normals
+  *exterior_n_dot_fluxes += interior_n_dot_fluxes;
+}
 
 }  // namespace elliptic

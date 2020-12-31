@@ -17,6 +17,10 @@ Background:
       BulkModulus: 79.36507936507935
       ShearModulus: 38.75968992248062
 
+BoundaryCondition:
+  AnalyticDirichlet:
+    Displacement: Dirichlet
+
 InitialGuess:
   Zero:
 

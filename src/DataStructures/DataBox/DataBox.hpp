@@ -1368,11 +1368,13 @@ SPECTRE_ALWAYS_INLINE constexpr auto apply_at(F&& f,
 }
 
 namespace detail {
-template <typename... ReturnTags, typename... ArgumentTags, typename F,
-          typename BoxTags, typename... Args>
+template <typename... ReturnTags, typename... ArgumentTags,
+          typename PassthroughTags, typename F, typename BoxTags,
+          typename... MapKeys, typename... Args>
 SPECTRE_ALWAYS_INLINE constexpr void mutate_apply(
     F&& f, const gsl::not_null<db::DataBox<BoxTags>*> box,
-    tmpl::list<ReturnTags...> /*meta*/, tmpl::list<ArgumentTags...> /*meta*/,
+    const std::tuple<MapKeys...>& map_keys, tmpl::list<ReturnTags...> /*meta*/,
+    tmpl::list<ArgumentTags...> /*meta*/, PassthroughTags /*meta*/,
     Args&&... args) noexcept {
   static_assert(
       not tmpl2::flat_any_v<std::is_same_v<ArgumentTags, Tags::DataBox>...> and
@@ -1458,7 +1460,8 @@ SPECTRE_ALWAYS_INLINE constexpr void mutate_apply(
     Args&&... args) noexcept {
   detail::check_tags_are_in_databox(BoxTags{}, MutateTags{});
   detail::check_tags_are_in_databox(BoxTags{}, ArgumentTags{});
-  detail::mutate_apply(std::forward<F>(f), box, MutateTags{}, ArgumentTags{},
+  detail::mutate_apply(std::forward<F>(f), box, std::tuple<>{}, MutateTags{},
+                       ArgumentTags{}, tmpl::append<MutateTags, ArgumentTags>{},
                        std::forward<Args>(args)...);
 }
 
@@ -1477,6 +1480,18 @@ SPECTRE_ALWAYS_INLINE constexpr void mutate_apply(
   mutate_apply(F{}, box, std::forward<Args>(args)...);
 }
 // @}
+
+template <typename MutateTags, typename ArgumentTags, typename PassthroughTags,
+          typename F, typename BoxTags, typename... MapKeys, typename... Args>
+SPECTRE_ALWAYS_INLINE constexpr void mutate_apply_at(
+    F&& f, const gsl::not_null<DataBox<BoxTags>*> box,
+    const std::tuple<MapKeys...>& map_keys, Args&&... args) noexcept {
+  detail::check_tags_are_in_databox(BoxTags{}, MutateTags{});
+  detail::check_tags_are_in_databox(BoxTags{}, ArgumentTags{});
+  detail::mutate_apply(std::forward<F>(f), box, map_keys, MutateTags{},
+                       ArgumentTags{}, PassthroughTags{},
+                       std::forward<Args>(args)...);
+}
 
 /*!
  * \ingroup DataBoxGroup

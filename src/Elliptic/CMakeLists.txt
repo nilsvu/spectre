@@ -3,7 +3,7 @@
 
 set(LIBRARY Elliptic)
 
-add_spectre_library(${LIBRARY} INTERFACE)
+add_spectre_library(${LIBRARY})
 
 spectre_target_headers(
   ${LIBRARY}
@@ -24,6 +24,7 @@ target_link_libraries(
   )
 
 add_subdirectory(Actions)
+add_subdirectory(BoundaryConditions)
 add_subdirectory(DiscontinuousGalerkin)
 add_subdirectory(Executables)
 add_subdirectory(Systems)

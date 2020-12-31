@@ -10,6 +10,7 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/ApplyLinearOperatorToInitialFields.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
+#include "Elliptic/Actions/InitializeBoundaryConditions.hpp"
 #include "Elliptic/Actions/InitializeFields.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
@@ -65,6 +66,7 @@
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/HalfSpaceMirror.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/Zero.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "PointwiseFunctions/BoundaryConditions/AnalyticDirichlet.hpp"
 #include "PointwiseFunctions/Elasticity/PotentialEnergy.hpp"
 #include "Utilities/Blas.hpp"
 #include "Utilities/Functional.hpp"
@@ -135,6 +137,11 @@ struct Metavariables {
   // We currently only have analytic solutions implemented, but will add
   // non-solution backgrounds ASAP.
   using background_registrars = analytic_solution_registrars;
+  // Use the analytic solution to impose boundary conditions for now. Will add
+  // fixed (zero Dirichlet) and free (zero Neumann) conditions ASAP.
+  using boundary_condition_registrars =
+      tmpl::list<::BoundaryConditions::Registrars::AnalyticDirichlet<
+          volume_dim, typename system::primal_fields>>;
   // We currently only support the trivial "zero" initial guess. This will be
   // generalized ASAP.
   using initial_guess_registrars =
@@ -198,8 +205,8 @@ struct Metavariables {
       elliptic::dg::subdomain_operator::SubdomainOperator<
           volume_dim, primal_variables, auxiliary_variables,
           fluxes_computer_tag, typename system::sources,
-          normal_dot_numerical_flux, SolveElasticity::OptionTags::SchwarzGroup,
-          massive_operator,
+          normal_dot_numerical_flux, linearized_boundary_conditions_tag,
+          SolveElasticity::OptionTags::SchwarzGroup, massive_operator,
           tmpl::list<::Elasticity::Tags::ConstitutiveRelationBase>>;
   using smoother = LinearSolver::Schwarz::Schwarz<
       typename multigrid::smooth_fields_tag,
@@ -248,8 +255,9 @@ struct Metavariables {
 
   // Collect all items to store in the cache.
   using const_global_cache_tags =
-      tmpl::list<background_tag, initial_guess_tag, fluxes_computer_tag,
-                 normal_dot_numerical_flux,
+      tmpl::list<background_tag, boundary_conditions_tag,
+                 linearized_boundary_conditions_tag, initial_guess_tag,
+                 fluxes_computer_tag, normal_dot_numerical_flux,
                  Tags::EventsAndTriggers<events, triggers>>;
 
   // Collect all reduction tags for observers
@@ -274,9 +282,12 @@ struct Metavariables {
       elliptic::dg::Actions::InitializeSubdomain<
           volume_dim, typename smoother::options_group>,
       SolveElasticity::Actions::InitializeSubdomain<
-          volume_dim, typename smoother::options_group>,
+          volume_dim, typename smoother::options_group,
+          linearized_boundary_conditions_tag, primal_variables,
+          typename system::primal_fields>,
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       elliptic::Actions::InitializeFixedSources<system, background_tag>,
+      elliptic::Actions::InitializeBoundaryConditions,
       Initialization::Actions::AddComputeTags<tmpl::list<
           Elasticity::Tags::ConstitutiveRelationCompute<volume_dim,
                                                         background_tag>,
@@ -298,16 +309,16 @@ struct Metavariables {
           boundary_scheme, domain::Tags::InternalDirections<volume_dim>>,
       dg::Actions::SendDataForFluxes<boundary_scheme>,
       Actions::MutateApply<elliptic::FirstOrderOperator<
-          volume_dim, LinearSolver::Tags::OperatorAppliedTo,
-          linear_operand_tag, massive_operator>>,
-      elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
-          linear_operand_tag, primal_variables>,
+          volume_dim, LinearSolver::Tags::OperatorAppliedTo, linear_operand_tag,
+          massive_operator>>,
+      elliptic::dg::Actions::ImposeBoundaryConditions<
+          linearized_boundary_conditions_tag, linear_operand_tag,
+          primal_variables, auxiliary_variables, fluxes_computer_tag>,
       dg::Actions::CollectDataForFluxes<
           boundary_scheme,
           domain::Tags::BoundaryDirectionsInterior<volume_dim>>,
       dg::Actions::ReceiveDataForFluxes<boundary_scheme>,
       Actions::MutateApply<boundary_scheme>>;
-
 
   using register_actions =
       tmpl::list<observers::Actions::RegisterEventsWithObservers,

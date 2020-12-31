@@ -11,6 +11,10 @@ Background:
   ProductOfSinusoids:
     WaveNumbers: [1, 1, 1]
 
+BoundaryCondition:
+  AnalyticDirichlet:
+    Field: Dirichlet
+
 InitialGuess:
   Zero:
 
