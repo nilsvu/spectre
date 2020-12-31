@@ -28,6 +28,7 @@
 #include "Utilities/Overloader.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
+#include "Utilities/TupleSlice.hpp"
 #include "Utilities/TypeTraits.hpp"
 #include "Utilities/TypeTraits/CreateIsCallable.hpp"
 #include "Utilities/TypeTraits/IsA.hpp"
@@ -1194,31 +1195,96 @@ constexpr bool check_tags_are_in_databox(
   return true;
 }
 
-template <typename... ArgumentTags, typename F, typename BoxTags,
-          typename... Args>
+template <bool PassThrough, typename... MapKeys>
+struct unmap_arg;
+
+template <typename... MapKeys>
+struct unmap_arg<true, MapKeys...> {
+  template <typename T>
+  using f = T;
+
+  template <typename T>
+  static constexpr const T& apply(
+      const T& arg, const std::tuple<MapKeys...>& /*map_keys*/) noexcept {
+    return arg;
+  }
+
+  template <typename T>
+  static constexpr gsl::not_null<T*> apply(
+      const gsl::not_null<T*> arg,
+      const std::tuple<MapKeys...>& /*map_keys*/) noexcept {
+    return arg;
+  }
+};
+
+template <typename FirstMapKey, typename... MapKeys>
+struct unmap_arg<false, FirstMapKey, MapKeys...> {
+  template <typename T>
+  using f = typename unmap_arg<sizeof...(MapKeys) == 0,
+                               MapKeys...>::template f<typename T::mapped_type>;
+
+  template <typename T>
+  static constexpr decltype(auto) apply(
+      const T& arg,
+      const std::tuple<FirstMapKey, MapKeys...>& map_keys) noexcept {
+    return unmap_arg<sizeof...(MapKeys) == 0, MapKeys...>::apply(
+        arg.at(get<0>(map_keys)), tuple_tail<sizeof...(MapKeys)>(map_keys));
+  }
+
+  template <typename T>
+  static constexpr decltype(auto) apply(
+      const gsl::not_null<T*> arg,
+      const std::tuple<FirstMapKey, MapKeys...>& map_keys) noexcept {
+    return unmap_arg<sizeof...(MapKeys) == 0, MapKeys...>::apply(
+        make_not_null(&arg->at(get<0>(map_keys))),
+        tuple_tail<sizeof...(MapKeys)>(map_keys));
+  }
+};
+
+template <typename... ArgumentTags, typename PassthroughArgumentTags,
+          typename F, typename BoxTags, typename... MapKeys, typename... Args>
 static constexpr auto apply(F&& f, const DataBox<BoxTags>& box,
+                            const std::tuple<MapKeys...>& map_keys,
                             tmpl::list<ArgumentTags...> /*meta*/,
+                            PassthroughArgumentTags /*meta*/,
                             Args&&... args) noexcept {
   if constexpr (is_apply_callable_v<
-                    F, const const_item_type<ArgumentTags, BoxTags>&...,
+                    F,
+                    const typename unmap_arg<
+                        tmpl::list_contains_v<PassthroughArgumentTags,
+                                              ArgumentTags>,
+                        MapKeys...>::template f<const_item_type<ArgumentTags,
+                                                                BoxTags>>&...,
                     Args...>) {
-    return F::apply(::db::get<ArgumentTags>(box)...,
-                    std::forward<Args>(args)...);
-  } else if constexpr (::tt::is_callable_v<
-                           std::remove_pointer_t<F>,
-                           tmpl::conditional_t<
-                               std::is_same_v<ArgumentTags, ::Tags::DataBox>,
-                               const DataBox<BoxTags>&,
-                               const_item_type<ArgumentTags, BoxTags>>...,
-                           Args...>) {
-    return std::forward<F>(f)(::db::get<ArgumentTags>(box)...,
-                              std::forward<Args>(args)...);
+    return F::apply(
+        unmap_arg<tmpl::list_contains_v<PassthroughArgumentTags, ArgumentTags>,
+                  MapKeys...>::apply(::db::get<ArgumentTags>(box), map_keys)...,
+        std::forward<Args>(args)...);
+  } else if constexpr (
+      ::tt::is_callable_v<
+          std::remove_pointer_t<F>,
+          tmpl::conditional_t<
+              std::is_same_v<ArgumentTags, ::Tags::DataBox>,
+              const DataBox<BoxTags>&,
+              const typename unmap_arg<
+                  tmpl::list_contains_v<PassthroughArgumentTags, ArgumentTags>,
+                  MapKeys...>::template f<const_item_type<ArgumentTags,
+                                                          BoxTags>>&>...,
+          Args...>) {
+    return std::forward<F>(f)(
+        unmap_arg<tmpl::list_contains_v<PassthroughArgumentTags, ArgumentTags>,
+                  MapKeys...>::apply(::db::get<ArgumentTags>(box), map_keys)...,
+        std::forward<Args>(args)...);
   } else {
     error_function_not_callable<
         std::remove_pointer_t<F>,
-        tmpl::conditional_t<std::is_same_v<ArgumentTags, ::Tags::DataBox>,
-                            const DataBox<BoxTags>&,
-                            const_item_type<ArgumentTags, BoxTags>>...,
+        tmpl::conditional_t<
+            std::is_same_v<ArgumentTags, ::Tags::DataBox>,
+            const DataBox<BoxTags>&,
+            const typename unmap_arg<
+                tmpl::list_contains_v<PassthroughArgumentTags, ArgumentTags>,
+                MapKeys...>::template f<const_item_type<ArgumentTags,
+                                                        BoxTags>>&>...,
         Args...>();
   }
 }
@@ -1274,8 +1340,8 @@ SPECTRE_ALWAYS_INLINE constexpr auto apply(F&& f, const DataBox<BoxTags>& box,
                                            Args&&... args) noexcept {
   detail::check_tags_are_in_databox(
       BoxTags{}, tmpl::remove<ArgumentTags, ::Tags::DataBox>{});
-  return detail::apply(std::forward<F>(f), box, ArgumentTags{},
-                       std::forward<Args>(args)...);
+  return detail::apply(std::forward<F>(f), box, std::tuple<>{}, ArgumentTags{},
+                       ArgumentTags{}, std::forward<Args>(args)...);
 }
 
 template <typename F, typename BoxTags, typename... Args>
@@ -1292,12 +1358,38 @@ SPECTRE_ALWAYS_INLINE constexpr auto apply(const DataBox<BoxTags>& box,
 }
 // @}
 
+template <typename ArgumentTags, typename PassthroughArgumentTags,
+          typename... MapKeys, typename F, typename BoxTags, typename... Args>
+SPECTRE_ALWAYS_INLINE constexpr auto apply_at(
+    F&& f, const DataBox<BoxTags>& box, const std::tuple<MapKeys...>& map_keys,
+    Args&&... args) noexcept {
+  detail::check_tags_are_in_databox(
+      BoxTags{}, tmpl::remove<ArgumentTags, ::Tags::DataBox>{});
+  return detail::apply(std::forward<F>(f), box, map_keys, ArgumentTags{},
+                       PassthroughArgumentTags{}, std::forward<Args>(args)...);
+}
+
+template <typename ArgumentTags, typename PassthroughArgumentTags,
+          typename MapKey, typename F, typename BoxTags, typename... Args>
+SPECTRE_ALWAYS_INLINE constexpr auto apply_at(F&& f,
+                                              const DataBox<BoxTags>& box,
+                                              const MapKey& map_key,
+                                              Args&&... args) noexcept {
+  detail::check_tags_are_in_databox(
+      BoxTags{}, tmpl::remove<ArgumentTags, ::Tags::DataBox>{});
+  return detail::apply(std::forward<F>(f), box, std::forward_as_tuple(map_key),
+                       ArgumentTags{}, PassthroughArgumentTags{},
+                       std::forward<Args>(args)...);
+}
+
 namespace detail {
-template <typename... ReturnTags, typename... ArgumentTags, typename F,
-          typename BoxTags, typename... Args>
+template <typename... ReturnTags, typename... ArgumentTags,
+          typename PassthroughTags, typename F, typename BoxTags,
+          typename... MapKeys, typename... Args>
 SPECTRE_ALWAYS_INLINE constexpr void mutate_apply(
     F&& f, const gsl::not_null<db::DataBox<BoxTags>*> box,
-    tmpl::list<ReturnTags...> /*meta*/, tmpl::list<ArgumentTags...> /*meta*/,
+    const std::tuple<MapKeys...>& map_keys, tmpl::list<ReturnTags...> /*meta*/,
+    tmpl::list<ArgumentTags...> /*meta*/, PassthroughTags /*meta*/,
     Args&&... args) noexcept {
   static_assert(
       not tmpl2::flat_any_v<std::is_same_v<ArgumentTags, Tags::DataBox>...> and
@@ -1305,37 +1397,76 @@ SPECTRE_ALWAYS_INLINE constexpr void mutate_apply(
       "Cannot pass a DataBox to mutate_apply since the db::get won't work "
       "inside mutate_apply.");
   if constexpr (is_apply_callable_v<
-                    F, const gsl::not_null<item_type<ReturnTags, BoxTags>*>...,
-                    const const_item_type<ArgumentTags, BoxTags>&...,
+                    F,
+                    const gsl::not_null<typename unmap_arg<
+                        tmpl::list_contains_v<PassthroughTags, ReturnTags>,
+                        MapKeys...>::template f<item_type<ReturnTags,
+                                                          BoxTags>>*>...,
+                    const typename unmap_arg<
+                        tmpl::list_contains_v<PassthroughTags, ArgumentTags>,
+                        MapKeys...>::template f<const_item_type<ArgumentTags,
+                                                                BoxTags>>&...,
                     Args...>) {
     ::db::mutate<ReturnTags...>(
         box,
-        [
-        ](const gsl::not_null<item_type<ReturnTags, BoxTags>*>... mutated_items,
-          const const_item_type<ArgumentTags, BoxTags>&... args_items,
-          decltype(std::forward<Args>(args))... l_args) noexcept {
-          return std::decay_t<F>::apply(mutated_items..., args_items...,
-                                        std::forward<Args>(l_args)...);
+        [&map_keys](
+            const gsl::not_null<
+                item_type<ReturnTags, BoxTags>*>... mutated_items,
+            const typename unmap_arg<
+                tmpl::list_contains_v<PassthroughTags, ArgumentTags>,
+                MapKeys...>::
+                template f<
+                    const_item_type<ArgumentTags, BoxTags>>&... args_items,
+            decltype(std::forward<Args>(args))... l_args) noexcept {
+          return std::decay_t<F>::apply(
+              unmap_arg<tmpl::list_contains_v<PassthroughTags, ReturnTags>,
+                        MapKeys...>::apply(mutated_items, map_keys)...,
+              args_items..., std::forward<Args>(l_args)...);
         },
-        db::get<ArgumentTags>(*box)..., std::forward<Args>(args)...);
+        unmap_arg<tmpl::list_contains_v<PassthroughTags, ArgumentTags>,
+                  MapKeys...>::apply(::db::get<ArgumentTags>(*box),
+                                     map_keys)...,
+        std::forward<Args>(args)...);
   } else if constexpr (
       ::tt::is_callable_v<
-          F, const gsl::not_null<item_type<ReturnTags, BoxTags>*>...,
-          const const_item_type<ArgumentTags, BoxTags>&..., Args...>) {
+          F,
+          const gsl::not_null<typename unmap_arg<
+              tmpl::list_contains_v<PassthroughTags, ReturnTags>,
+              MapKeys...>::template f<item_type<ReturnTags, BoxTags>>*>...,
+          const typename unmap_arg<
+              tmpl::list_contains_v<PassthroughTags, ArgumentTags>,
+              MapKeys...>::template f<const_item_type<ArgumentTags,
+                                                      BoxTags>>&...,
+          Args...>) {
     ::db::mutate<ReturnTags...>(
         box,
-        [&f](const gsl::not_null<
-                 item_type<ReturnTags, BoxTags>*>... mutated_items,
-             const const_item_type<ArgumentTags, BoxTags>&... args_items,
-             decltype(std::forward<Args>(args))... l_args) noexcept {
-          return f(mutated_items..., args_items...,
-                   std::forward<Args>(l_args)...);
+        [&f, &map_keys](
+            const gsl::not_null<
+                item_type<ReturnTags, BoxTags>*>... mutated_items,
+            const typename unmap_arg<
+                tmpl::list_contains_v<PassthroughTags, ArgumentTags>,
+                MapKeys...>::
+                template f<
+                    const_item_type<ArgumentTags, BoxTags>>&... args_items,
+            decltype(std::forward<Args>(args))... l_args) noexcept {
+          return f(unmap_arg<tmpl::list_contains_v<PassthroughTags, ReturnTags>,
+                             MapKeys...>::apply(mutated_items, map_keys)...,
+                   args_items..., std::forward<Args>(l_args)...);
         },
-        db::get<ArgumentTags>(*box)..., std::forward<Args>(args)...);
+        unmap_arg<tmpl::list_contains_v<PassthroughTags, ArgumentTags>,
+                  MapKeys...>::apply(::db::get<ArgumentTags>(*box),
+                                     map_keys)...,
+        std::forward<Args>(args)...);
   } else {
     error_function_not_callable<
-        F, gsl::not_null<item_type<ReturnTags, BoxTags>*>...,
-        const const_item_type<ArgumentTags, BoxTags>&..., Args...>();
+        F,
+        gsl::not_null<typename unmap_arg<
+            tmpl::list_contains_v<PassthroughTags, ReturnTags>,
+            MapKeys...>::template f<item_type<ReturnTags, BoxTags>>*>...,
+        const typename unmap_arg<
+            tmpl::list_contains_v<PassthroughTags, ArgumentTags>,
+            MapKeys...>::template f<const_item_type<ArgumentTags, BoxTags>>&...,
+        Args...>();
   }
 }
 }  // namespace detail
@@ -1383,7 +1514,8 @@ SPECTRE_ALWAYS_INLINE constexpr void mutate_apply(
     Args&&... args) noexcept {
   detail::check_tags_are_in_databox(BoxTags{}, MutateTags{});
   detail::check_tags_are_in_databox(BoxTags{}, ArgumentTags{});
-  detail::mutate_apply(std::forward<F>(f), box, MutateTags{}, ArgumentTags{},
+  detail::mutate_apply(std::forward<F>(f), box, std::tuple<>{}, MutateTags{},
+                       ArgumentTags{}, tmpl::append<MutateTags, ArgumentTags>{},
                        std::forward<Args>(args)...);
 }
 
@@ -1402,6 +1534,30 @@ SPECTRE_ALWAYS_INLINE constexpr void mutate_apply(
   mutate_apply(F{}, box, std::forward<Args>(args)...);
 }
 // @}
+
+template <typename MutateTags, typename ArgumentTags, typename PassthroughTags,
+          typename F, typename BoxTags, typename... MapKeys, typename... Args>
+SPECTRE_ALWAYS_INLINE constexpr void mutate_apply_at(
+    F&& f, const gsl::not_null<DataBox<BoxTags>*> box,
+    const std::tuple<MapKeys...>& map_keys, Args&&... args) noexcept {
+  detail::check_tags_are_in_databox(BoxTags{}, MutateTags{});
+  detail::check_tags_are_in_databox(BoxTags{}, ArgumentTags{});
+  detail::mutate_apply(std::forward<F>(f), box, map_keys, MutateTags{},
+                       ArgumentTags{}, PassthroughTags{},
+                       std::forward<Args>(args)...);
+}
+
+template <typename MutateTags, typename ArgumentTags, typename PassthroughTags,
+          typename F, typename BoxTags, typename MapKey, typename... Args>
+SPECTRE_ALWAYS_INLINE constexpr void mutate_apply_at(
+    F&& f, const gsl::not_null<DataBox<BoxTags>*> box, const MapKey& map_key,
+    Args&&... args) noexcept {
+  detail::check_tags_are_in_databox(BoxTags{}, MutateTags{});
+  detail::check_tags_are_in_databox(BoxTags{}, ArgumentTags{});
+  detail::mutate_apply(std::forward<F>(f), box, std::forward_as_tuple(map_key),
+                       MutateTags{}, ArgumentTags{}, PassthroughTags{},
+                       std::forward<Args>(args)...);
+}
 
 /*!
  * \ingroup DataBoxGroup
