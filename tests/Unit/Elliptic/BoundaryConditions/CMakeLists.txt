@@ -4,6 +4,7 @@
 set(LIBRARY "Test_EllipticBoundaryConditions")
 
 set(LIBRARY_SOURCES
+  Test_AnalyticSolution.cpp
   Test_BoundaryConditionType.cpp
   Test_Tags.cpp
   )
@@ -12,5 +13,5 @@ add_test_library(
   ${LIBRARY}
   "Elliptic/BoundaryConditions/"
   "${LIBRARY_SOURCES}"
-  "Elliptic;Utilities"
+  "DataStructures;DomainStructure;Elliptic;Utilities"
   )
