@@ -12,7 +12,11 @@
 #include "Elliptic/Actions/InitializeSystem.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/ImposeBoundaryConditions.hpp"
-#include "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
+// #include
+// "Elliptic/DiscontinuousGalerkin/ImposeInhomogeneousBoundaryConditionsOnSource.hpp"
+#include "Elliptic/BoundaryConditions/AnalyticSolution.hpp"
+#include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
+#include "Elliptic/BoundaryConditions/Zero.hpp"
 #include "Elliptic/DiscontinuousGalerkin/InitializeFirstOrderOperator.hpp"
 #include "Elliptic/DiscontinuousGalerkin/NumericalFluxes/FirstOrderInternalPenalty.hpp"
 #include "Elliptic/FirstOrderOperator.hpp"
@@ -43,6 +47,7 @@
 #include "ParallelAlgorithms/Events/ObserveErrorNorms.hpp"
 #include "ParallelAlgorithms/Events/ObserveFields.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/Actions/RunEventsAndTriggers.hpp"
+#include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
@@ -86,6 +91,13 @@ struct Metavariables {
       tmpl::conditional_t<Dim == 3,
                           Poisson::Solutions::Registrars::Lorentzian<Dim>,
                           tmpl::list<>>>>;
+  // We use the analytic solution to impose boundary conditions. Also allow Zero
+  // boundary conditions to (and perhaps other kinds in the future).
+  using boundary_condition_registrars =
+      tmpl::list<elliptic::BoundaryConditions::Registrars::AnalyticSolution<
+                     volume_dim, typename system::primal_fields>,
+                 elliptic::BoundaryConditions::Registrars::Zero<
+                     volume_dim, typename system::primal_fields>>;
   // We currently only support the trivial "zero" initial guess. This will be
   // generalized ASAP.
   using initial_guess_registrars =
@@ -98,9 +110,12 @@ struct Metavariables {
       elliptic::Tags::FluxesComputer<typename system::fluxes>;
   using analytic_solution_tag = elliptic::Tags::Background<
       Poisson::Solutions::AnalyticSolution<Dim, analytic_solution_registrars>>;
-  // We currently only support Dirichlet boundary conditions taken from the
-  // background. This will be generalized ASAP.
-  using boundary_conditions_tag = analytic_solution_tag;
+  using boundary_conditions_tag = elliptic::Tags::BoundaryConditions<
+      elliptic::BoundaryConditions::BoundaryCondition<
+          Dim, boundary_condition_registrars>>;
+  using linearized_boundary_conditions_tag =
+      elliptic::Tags::LinearizedBoundaryConditions<
+          typename boundary_conditions_tag::type::element_type>;
   using initial_guess_tag = elliptic::Tags::InitialGuess<
       ::AnalyticData<Dim, initial_guess_registrars>>;
 
@@ -151,8 +166,9 @@ struct Metavariables {
 
   // Collect all items to store in the cache.
   using const_global_cache_tags =
-      tmpl::list<analytic_solution_tag, initial_guess_tag, fluxes_computer_tag,
-                 normal_dot_numerical_flux,
+      tmpl::list<analytic_solution_tag, boundary_conditions_tag,
+                 linearized_boundary_conditions_tag, initial_guess_tag,
+                 fluxes_computer_tag, normal_dot_numerical_flux,
                  Tags::EventsAndTriggers<events, triggers>>;
 
   // Collect all reduction tags for observers
@@ -174,8 +190,8 @@ struct Metavariables {
       elliptic::Actions::InitializeSystem<system, analytic_solution_tag>,
       elliptic::Actions::InitializeAnalyticSolution<analytic_solution_tag,
                                                     analytic_solution_fields>,
-      elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
-          Metavariables>,
+      //   elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
+      //       Metavariables>,
       dg::Actions::InitializeMortars<boundary_scheme>,
       elliptic::dg::Actions::InitializeFirstOrderOperator<
           volume_dim, typename system::fluxes, typename system::sources,
@@ -189,8 +205,9 @@ struct Metavariables {
       Actions::MutateApply<elliptic::FirstOrderOperator<
           volume_dim, LinearSolver::Tags::OperatorAppliedTo,
           linear_operand_tag>>,
-      elliptic::dg::Actions::ImposeHomogeneousDirichletBoundaryConditions<
-          linear_operand_tag, primal_variables>,
+      elliptic::dg::Actions::ImposeBoundaryConditions<
+          linearized_boundary_conditions_tag, linear_operand_tag,
+          primal_variables, auxiliary_variables, fluxes_computer_tag>,
       dg::Actions::CollectDataForFluxes<
           boundary_scheme,
           domain::Tags::BoundaryDirectionsInterior<volume_dim>>,
@@ -252,6 +269,10 @@ static const std::vector<void (*)()> charm_init_node_funcs{
         metavariables::analytic_solution_tag::type::element_type>,
     &Parallel::register_derived_classes_with_charm<
         metavariables::initial_guess_tag::type::element_type>,
+    &Parallel::register_derived_classes_with_charm<
+        metavariables::boundary_conditions_tag::type::element_type>,
+    &Parallel::register_derived_classes_with_charm<
+        metavariables::linearized_boundary_conditions_tag::type::element_type>,
     &Parallel::register_derived_classes_with_charm<
         Event<metavariables::events>>,
     &Parallel::register_derived_classes_with_charm<

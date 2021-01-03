@@ -3,7 +3,7 @@
 
 set(LIBRARY Elliptic)
 
-add_spectre_library(${LIBRARY} INTERFACE)
+add_spectre_library(${LIBRARY})
 
 spectre_target_headers(
   ${LIBRARY}
@@ -16,11 +16,13 @@ spectre_target_headers(
 
 target_link_libraries(
   ${LIBRARY}
+  PUBLIC
+  ErrorHandling
+  Options
   INTERFACE
   DataStructures
   Domain
   LinearOperators
-  Utilities
   )
 
 add_subdirectory(Actions)

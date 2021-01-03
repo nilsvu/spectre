@@ -9,7 +9,15 @@
 #include <utility>
 
 #include "DataStructures/DataBox/DataBox.hpp"
+#include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
+#include "Domain/InterfaceHelpers.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/BoundaryConditions/BoundaryConditionType.hpp"
+#include "Elliptic/BoundaryConditions/Tags.hpp"
+#include "Elliptic/FirstOrderOperator.hpp"
+#include "Elliptic/Tags.hpp"
+#include "ErrorHandling/Error.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NormalDotFlux.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
@@ -21,102 +29,110 @@ struct GlobalCache;
 }  // namespace Parallel
 /// \endcond
 
-namespace elliptic {
-namespace dg {
+namespace elliptic::dg::Actions {
 
-/*!
- * \brief Set the `exterior_vars` so that they represent homogeneous (zero)
- * Dirichlet boundary conditions.
- *
- * To impose homogeneous Dirichlet boundary conditions we mirror the
- * `interior_vars` and invert their sign. Variables that are not in the
- * `DirichletTags` list are mirrored without changing their sign, so no boundary
- * conditions are imposed on them.
- */
-template <typename DirichletTags, typename TagsList>
-void homogeneous_dirichlet_boundary_conditions(
-    const gsl::not_null<Variables<TagsList>*> exterior_vars,
-    const Variables<TagsList>& interior_vars) noexcept {
-  // By default, use the variables on the external boundary for the
-  // exterior
-  *exterior_vars = interior_vars;
-  // For those variables where we have boundary conditions, impose
-  // zero Dirichlet b.c. here. The non-zero boundary conditions are
-  // handled as contributions to the source in InitializeElement.
-  // Imposing them here would not work because we are working with the
-  // linear solver operand.
-  tmpl::for_each<DirichletTags>(
-      [&exterior_vars](auto dirichlet_tag_val) noexcept {
-        using dirichlet_tag = tmpl::type_from<decltype(dirichlet_tag_val)>;
-        // Use mirror principle
-        auto& exterior_dirichlet_field = get<dirichlet_tag>(*exterior_vars);
-        for (size_t i = 0; i < exterior_dirichlet_field.size(); i++) {
-          exterior_dirichlet_field[i] *= -1.;
-        }
-      });
-}
-
-namespace Actions {
-
-/*!
- * \brief Set field data on external boundaries so that they represent
- * homogeneous (zero) Dirichlet boundary conditions.
- *
- * This action imposes homogeneous boundary conditions on all `DirichletTags`
- *
- * \see `elliptic::dg::homogeneous_dirichlet_boundary_conditions`
- *
- * \note We cannot impose inhomogeneous boundary conditions here because it
- * would break linearity of the DG operator: If in the system of equations
- * \f$A(x)=b\f$ the DG operator \f$A\f$ had non-zero boundary contributions then
- * \f$A(x=0)\neq 0\f$, which breaks linearity. Instead, inhomogeneous
- * boundary conditions are handled as contributions to the source \f$b\f$
- * during initialization.
- *
- * With:
- * - `interior<Tag> =
- *   Tags::Interface<Tags::BoundaryDirectionsInterior<volume_dim>, Tag>`
- * - `exterior<Tag> =
- *   Tags::Interface<Tags::BoundaryDirectionsExterior<volume_dim>, Tag>`
- *
- * Uses:
- * - DataBox:
- *   - `interior<VariablesTag>`
- *
- * DataBox changes:
- * - Modifies:
- *   - `exterior<VariablesTag>`
- */
-template <typename VariablesTag, typename DirichletTags>
-struct ImposeHomogeneousDirichletBoundaryConditions {
-  template <typename DbTags, typename... InboxTags, typename Metavariables,
+template <typename BoundaryConditionsTag, typename FieldsTag,
+          typename PrimalFields, typename AuxiliaryFields,
+          typename FluxesComputerTag>
+struct ImposeBoundaryConditions {
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             size_t Dim, typename ActionList, typename ParallelComponent>
-  static auto apply(db::DataBox<DbTags>& box,
-                    const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-                    const Parallel::GlobalCache<Metavariables>& /*cache*/,
-                    const ElementId<Dim>& /*array_index*/,
-                    const ActionList /*meta*/,
-                    const ParallelComponent* const /*meta*/) noexcept {
-    // Set the data on exterior (ghost) faces to impose the boundary conditions
-    db::mutate<domain::Tags::Interface<
-        domain::Tags::BoundaryDirectionsExterior<Dim>, VariablesTag>>(
-        make_not_null(&box),
-        [](const auto exterior_boundary_vars,
-           const auto& interior_vars) noexcept {
-          for (auto& exterior_direction_and_vars : *exterior_boundary_vars) {
-            auto& direction = exterior_direction_and_vars.first;
-            homogeneous_dirichlet_boundary_conditions<DirichletTags>(
-                make_not_null(&exterior_direction_and_vars.second),
-                interior_vars.at(direction));
-          }
-        },
-        get<domain::Tags::Interface<
-            domain::Tags::BoundaryDirectionsInterior<Dim>, VariablesTag>>(box));
+  static std::tuple<db::DataBox<DbTagsList>&&> apply(
+      db::DataBox<DbTagsList>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
+      const ElementId<Dim>& /*array_index*/, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    const auto& boundary_conditions = get<BoundaryConditionsTag>(box);
+    using BoundaryConditions = std::decay_t<decltype(boundary_conditions)>;
+    const auto& fluxes_computer = get<FluxesComputerTag>(box);
+    using FluxesComputer = std::decay_t<decltype(fluxes_computer)>;
+    const auto& element = get<domain::Tags::Element<Dim>>(box);
 
-    return std::forward_as_tuple(std::move(box));
+    for (const auto& direction : element.external_boundaries()) {
+      // Get fluxes args out of DataBox
+      const auto fluxes_args = db::apply_at<
+          tmpl::transform<
+              typename FluxesComputer::argument_tags,
+              make_interface_tag<
+                  tmpl::_1,
+                  tmpl::pin<domain::Tags::BoundaryDirectionsExterior<Dim>>,
+                  tmpl::pin<get_volume_tags<FluxesComputer>>>>,
+          get_volume_tags<FluxesComputer>>(
+          [](const auto&... args) noexcept {
+            return std::forward_as_tuple(args...);
+          },
+          box, direction);
+      // Dispatch to derived boundary conditions class
+      call_with_dynamic_type<void,
+                             typename BoundaryConditions::creatable_classes>(
+          &boundary_conditions,
+          [&box, &direction, &fluxes_computer,
+           &fluxes_args](auto* const derived_boundary_conditions) noexcept {
+            using DerivedBoundaryConditions = std::decay_t<
+                std::remove_pointer_t<decltype(derived_boundary_conditions)>>;
+            // Get boundary conditions args out of DataBox
+            const auto boundary_conditions_args = db::apply_at<
+                tmpl::transform<
+                    typename DerivedBoundaryConditions::argument_tags,
+                    make_interface_tag<
+                        tmpl::_1,
+                        tmpl::pin<
+                            domain::Tags::BoundaryDirectionsExterior<Dim>>,
+                        tmpl::pin<get_volume_tags<DerivedBoundaryConditions>>>>,
+                get_volume_tags<DerivedBoundaryConditions>>(
+                [](const auto&... args) noexcept {
+                  return std::forward_as_tuple(args...);
+                },
+                box, direction);
+            // Apply the boundary conditions, mutating the buffers in the
+            // DataBox
+            db::mutate_apply_at<
+                tmpl::list<
+                    domain::Tags::Interface<
+                        domain::Tags::BoundaryDirectionsExterior<Dim>,
+                        db::add_tag_prefix<::Tags::NormalDotFlux, FieldsTag>>,
+                    domain::Tags::Interface<
+                        domain::Tags::BoundaryDirectionsExterior<Dim>,
+                        ::Tags::Variables<PrimalFields>>,
+                    domain::Tags::Interface<
+                        domain::Tags::BoundaryDirectionsExterior<Dim>,
+                        ::Tags::Variables<db::wrap_tags_in<
+                            ::Tags::Flux, AuxiliaryFields, tmpl::size_t<Dim>,
+                            Frame::Inertial>>>>,
+                tmpl::list<
+                    domain::Tags::Interface<
+                        domain::Tags::BoundaryDirectionsInterior<Dim>,
+                        FieldsTag>,
+                    domain::Tags::Interface<
+                        domain::Tags::BoundaryDirectionsInterior<Dim>,
+                        db::add_tag_prefix<::Tags::NormalDotFlux, FieldsTag>>,
+                    domain::Tags::Interface<
+                        domain::Tags::BoundaryDirectionsExterior<Dim>,
+                        ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<
+                            Dim, Frame::Inertial>>>>,
+                tmpl::list<>>(
+                [&derived_boundary_conditions, &boundary_conditions_args,
+                 &fluxes_computer,
+                 &fluxes_args](const auto exterior_n_dot_fluxes,
+                               const auto primal_vars_buffer,
+                               const auto auxiliary_fluxes_buffer,
+                               const auto& interior_vars,
+                               const auto& interior_n_dot_fluxes,
+                               const auto& exterior_face_normal) noexcept {
+                  elliptic::impose_first_order_boundary_conditions(
+                      exterior_n_dot_fluxes, primal_vars_buffer,
+                      auxiliary_fluxes_buffer, interior_vars,
+                      interior_n_dot_fluxes, exterior_face_normal,
+                      *derived_boundary_conditions, boundary_conditions_args,
+                      fluxes_computer, fluxes_args);
+                },
+                make_not_null(&box), direction);
+          });  // call_with_dynamic_type
+    }          // loop external directions
+
+    return {std::move(box)};
   }
 };
 
-}  // namespace Actions
-}  // namespace dg
-}  // namespace elliptic
+}  // namespace elliptic::dg::Actions

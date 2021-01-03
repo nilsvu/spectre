@@ -56,6 +56,7 @@
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/HalfSpaceMirror.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/Zero.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "PointwiseFunctions/BoundaryConditions/AnalyticDirichlet.hpp"
 #include "PointwiseFunctions/Elasticity/PotentialEnergy.hpp"
 #include "Utilities/Blas.hpp"
 #include "Utilities/Functional.hpp"
@@ -89,6 +90,11 @@ struct Metavariables {
   // We currently only have analytic solutions implemented, but will add
   // non-solution backgrounds ASAP.
   using background_registrars = analytic_solution_registrars;
+  // Use the analytic solution to impose boundary conditions for now. Will add
+  // fixed (zero Dirichlet) and free (zero Neumann) conditions ASAP.
+  using boundary_condition_registrars =
+      tmpl::list<::BoundaryConditions::Registrars::AnalyticDirichlet<
+          volume_dim, typename system::primal_fields>>;
   // We currently only support the trivial "zero" initial guess. This will be
   // generalized ASAP.
   using initial_guess_registrars =
@@ -157,8 +163,9 @@ struct Metavariables {
 
   // Collect all items to store in the cache.
   using const_global_cache_tags =
-      tmpl::list<background_tag, initial_guess_tag, fluxes_computer_tag,
-                 normal_dot_numerical_flux,
+      tmpl::list<background_tag, boundary_conditions_tag,
+                 linearized_boundary_conditions_tag, initial_guess_tag,
+                 fluxes_computer_tag, normal_dot_numerical_flux,
                  Tags::EventsAndTriggers<events, triggers>>;
 
   // Collect all reduction tags for observers
