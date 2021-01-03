@@ -33,6 +33,12 @@ struct InitialGuess {
   using type = std::unique_ptr<InitialGuessType>;
 };
 
+template <typename BoundaryConditionType>
+struct BoundaryConditions {
+  static constexpr Options::String help = "The boundary conditions";
+  using type = std::unique_ptr<BoundaryConditionType>;
+};
+
 }  // namespace OptionTags
 
 namespace Tags {
@@ -85,6 +91,32 @@ struct InitialGuess : db::SimpleTag {
   static constexpr bool pass_metavariables = false;
   static type create_from_options(const type& value) noexcept {
     return deserialize<type>(serialize<type>(value).data());
+  }
+};
+
+template <typename BoundaryConditionType>
+struct BoundaryConditions : db::SimpleTag {
+  using type = std::unique_ptr<BoundaryConditionType>;
+  using option_tags =
+      tmpl::list<OptionTags::BoundaryConditions<BoundaryConditionType>>;
+
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type& value) noexcept {
+    return deserialize<type>(serialize<type>(value).data());
+  }
+};
+
+template <typename BoundaryConditionType>
+struct LinearizedBoundaryConditions : db::SimpleTag {
+  using type =
+      std::unique_ptr<typename BoundaryConditionType::linearization_type>;
+  using option_tags =
+      tmpl::list<OptionTags::BoundaryConditions<BoundaryConditionType>>;
+
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const std::unique_ptr<BoundaryConditionType>&
+                                      boundary_conditions) noexcept {
+    return boundary_conditions->linearization();
   }
 };
 
