@@ -185,5 +185,105 @@ void test_first_order_sources_computer(const DataVector& used_for_size) {
   CHECK(expected_sources == get<sources_tag>(box));
 }
 
+namespace detail {
+template <typename Tag>
+struct Correction : db::PrefixTag, db::SimpleTag {
+  using type = typename Tag::type;
+  using tag = Tag;
+};
+template <typename Tag>
+struct Corrected : db::PrefixTag, db::SimpleTag {
+  using type = typename Tag::type;
+  using tag = Tag;
+};
+}  // namespace detail
+
+/// Test the `System` has a `linearized_system` and that it is actually the
+/// linearization of its nonlinear fluxes and sources to the order given by
+/// the `correction_magnitude`
+template <typename System>
+void test_linearization(const double correction_magnitude,
+                        const DataVector& used_for_size) {
+  CAPTURE(correction_magnitude);
+
+  using system = System;
+  using linearized_system = typename system::linearized_system;
+  static constexpr size_t Dim = system::volume_dim;
+
+  using fields_tag = typename system::fields_tag;
+  using Fields = typename fields_tag::type;
+  using fluxes_tag = db::add_tag_prefix<::Tags::Flux, fields_tag,
+                                        tmpl::size_t<Dim>, Frame::Inertial>;
+  using Fluxes = typename fluxes_tag::type;
+
+  using primal_fields = typename system::primal_fields;
+  using auxiliary_fields = typename system::auxiliary_fields;
+
+  using fields_correction_tag =
+      db::add_tag_prefix<detail::Correction, fields_tag>;
+  using fluxes_correction_tag =
+      db::add_tag_prefix<::Tags::Flux, fields_correction_tag, tmpl::size_t<Dim>,
+                         Frame::Inertial>;
+  using fields_corrected_tag =
+      db::add_tag_prefix<detail::Corrected, fields_tag>;
+  using fluxes_corrected_tag =
+      db::add_tag_prefix<::Tags::Flux, fields_corrected_tag, tmpl::size_t<Dim>,
+                         Frame::Inertial>;
+
+  MAKE_GENERATOR(generator);
+  std::uniform_real_distribution<> dist(0.5, 1.);
+  std::uniform_real_distribution<> dist_eps(-correction_magnitude,
+                                            correction_magnitude);
+  Approx custom_approx =
+      Approx::custom().epsilon(correction_magnitude).scale(1.);
+
+  const auto background_fields =
+      make_with_random_values<Variables<typename system::background_fields>>(
+          make_not_null(&generator), make_not_null(&dist), used_for_size);
+  const auto fields = make_with_random_values<Fields>(
+      make_not_null(&generator), make_not_null(&dist), used_for_size);
+  const auto fluxes = make_with_random_values<Fluxes>(
+      make_not_null(&generator), make_not_null(&dist), used_for_size);
+  const auto fields_correction =
+      make_with_random_values<typename fields_correction_tag::type>(
+          make_not_null(&generator), make_not_null(&dist_eps), used_for_size);
+  const auto fluxes_correction =
+      make_with_random_values<typename fluxes_correction_tag::type>(
+          make_not_null(&generator), make_not_null(&dist_eps), used_for_size);
+  const typename fields_corrected_tag::type fields_corrected{fields +
+                                                             fields_correction};
+  const typename fluxes_corrected_tag::type fluxes_corrected{fluxes +
+                                                             fluxes_correction};
+
+  auto box = db::create<
+      db::AddSimpleTags<::Tags::Variables<typename system::background_fields>,
+                        fields_tag, fluxes_tag, fields_correction_tag,
+                        fluxes_correction_tag, fields_corrected_tag,
+                        fluxes_corrected_tag>,
+      db::AddComputeTags<
+          ::elliptic::Tags::FirstOrderSourcesCompute<
+              Dim, typename system::sources, fields_tag, primal_fields,
+              auxiliary_fields>,
+          ::elliptic::Tags::FirstOrderSourcesCompute<
+              Dim, typename system::sources, fields_corrected_tag,
+              db::wrap_tags_in<detail::Corrected, primal_fields>,
+              db::wrap_tags_in<detail::Corrected, auxiliary_fields>>,
+          ::elliptic::Tags::FirstOrderSourcesCompute<
+              Dim, typename linearized_system::sources, fields_correction_tag,
+              db::wrap_tags_in<detail::Correction, primal_fields>,
+              db::wrap_tags_in<detail::Correction, auxiliary_fields>>>>(
+      background_fields, fields, fluxes, fields_correction, fluxes_correction,
+      fields_corrected, fluxes_corrected);
+
+  const typename db::add_tag_prefix<::Tags::Source, fields_correction_tag>::type
+      sources_diff{
+          get<db::add_tag_prefix<::Tags::Source, fields_corrected_tag>>(box) -
+          get<db::add_tag_prefix<::Tags::Source, fields_tag>>(box)};
+  const auto& sources_diff_linear =
+      get<db::add_tag_prefix<::Tags::Source, fields_correction_tag>>(box);
+  CHECK_VARIABLES_CUSTOM_APPROX(sources_diff, sources_diff_linear,
+                                custom_approx);
+}
+
 }  // namespace elliptic
 }  // namespace TestHelpers
