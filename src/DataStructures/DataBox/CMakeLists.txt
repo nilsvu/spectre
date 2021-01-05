@@ -5,6 +5,7 @@ spectre_target_headers(
   DataStructures
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
+  ApplyAt.hpp
   DataBox.hpp
   DataBoxTag.hpp
   DataOnSlice.hpp
