@@ -242,20 +242,15 @@ configure_file(
 
 # Use the charm building blocks to construct imported targets
 # - Imported target with all Charm libs
-add_library(Charmxx::libs INTERFACE IMPORTED)
-target_include_directories(Charmxx::libs INTERFACE ${CHARM_INCLUDE_DIR})
-target_link_libraries(Charmxx::libs INTERFACE ${CHARM_LIBS})
-target_compile_options(Charmxx::libs INTERFACE ${CHARM_CXX_FLAGS})
-target_link_options(Charmxx::libs INTERFACE ${CHARM_LDXX_FLAGS})
-# - Target that provides the generated definitions of the module-init functions.
-add_library(CharmModuleInit ${CMAKE_BINARY_DIR}/CharmModuleInit.C)
-target_link_libraries(CharmModuleInit PRIVATE Charmxx::libs)
-# - Target that combines the libs and the module-init functions. This can be
-#   used to link with all of Charm++ without having to define special functions.
 add_library(Charmxx::charmxx INTERFACE IMPORTED)
-target_link_libraries(Charmxx::charmxx INTERFACE Charmxx::libs CharmModuleInit)
-# - Target that defines the Charm++ main function. Used to link parallel
-#   executables.
+target_include_directories(Charmxx::charmxx INTERFACE ${CHARM_INCLUDE_DIR})
+target_link_libraries(Charmxx::charmxx INTERFACE ${CHARM_LIBS})
+target_compile_options(Charmxx::charmxx INTERFACE ${CHARM_CXX_FLAGS})
+target_link_options(Charmxx::charmxx INTERFACE ${CHARM_LDXX_FLAGS})
+# - Target that provides the generated definitions of the module-init functions.
+add_library(CharmModuleInit OBJECT ${CMAKE_BINARY_DIR}/CharmModuleInit.C)
+target_link_libraries(CharmModuleInit PRIVATE Charmxx::charmxx)
+# - Target that defines the Charm++ main function.
 add_library(Charmxx::main INTERFACE IMPORTED)
 target_link_libraries(
   Charmxx::main

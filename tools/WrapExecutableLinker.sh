@@ -6,17 +6,6 @@
 temp_files=()
 trap 'rm -r "${temp_files[@]}"' EXIT
 
-pushd @CMAKE_SOURCE_DIR@ >/dev/null
-git_description="@GIT_DESCRIPTION@"
-git_branch="@GIT_BRANCH@"
-if [ -z "$git_description" ]; then
-    git_description="NOT_IN_GIT_REPO"
-fi
-if [ -z "$git_branch" ]; then
-    git_branch="NOT_IN_GIT_REPO"
-fi
-popd >/dev/null
-
 # Create a copy of InfoAtLink.cpp based on the output filename.
 # When compiling an executable from a cpp file, charmc writes a
 # temporary file called ${basename}.o to the current directory, so we
@@ -40,17 +29,12 @@ cp @CMAKE_BINARY_DIR@/Informer/InfoAtLink.cpp "${InfoAtLink_file}"
 
 # - Formaline through the linker doesn't work on macOS and since we won't
 #   be doing production runs on macOS we disable it.
-# - Since InfoAtLink.cpp depends on Boost headers but is not part of the build
-#   system, we pass the Boost include directory explicitly.
 if [ -f @CMAKE_BINARY_DIR@/tmp/Formaline.sh ]; then
     . @CMAKE_BINARY_DIR@/tmp/Formaline.sh $(basename "${!oindex}")
     temp_files+=("${formaline_output}" "${formaline_object_output}")
-    "$@" -DGIT_DESCRIPTION=$git_description -DGIT_BRANCH=$git_branch \
-         -I@Boost_INCLUDE_DIRS@ -std=c++17 "${InfoAtLink_file}" \
-         "${formaline_output}" ${formaline_object_output}
+    "$@" "${formaline_output}" ${formaline_object_output}
 else
-    "$@" -DGIT_DESCRIPTION=$git_description -DGIT_BRANCH=$git_branch \
-         -I@Boost_INCLUDE_DIRS@ -std=c++17 "${InfoAtLink_file}"
+    "$@"
 fi
 
 if @WRAP_EXECUTABLE_LINKER_USE_STUB_OBJECT_FILES@; then

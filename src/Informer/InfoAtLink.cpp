@@ -10,10 +10,10 @@ namespace {
 std::string link_date() { return std::string(__TIMESTAMP__); }
 
 std::string git_description() {
-  return std::string(BOOST_PP_STRINGIZE(GIT_DESCRIPTION));
+  return std::string("@GIT_DESCRIPTION@");
 }
 
-std::string git_branch() { return std::string(BOOST_PP_STRINGIZE(GIT_BRANCH)); }
+std::string git_branch() { return std::string("@GIT_BRANCH@"); }
 }  // namespace
 
 std::string info_from_build() {

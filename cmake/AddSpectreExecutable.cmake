@@ -1,6 +1,13 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
+add_custom_target(
+  TouchInfoAtLink
+  COMMAND ${CMAKE_COMMAND} -E touch_nocreate
+  ${CMAKE_BINARY_DIR}/Informer/InfoAtLink.cpp)
+add_library(InfoAtLink OBJECT ${CMAKE_BINARY_DIR}/Informer/InfoAtLink.cpp)
+add_dependencies(InfoAtLink TouchInfoAtLink)
+
 # Adds an executable by wrapping CMake's 'add_executable' but allows
 # us to inject dependencies, flags, etc. into the targets.
 function(add_spectre_executable TARGET_NAME)
@@ -37,6 +44,8 @@ function(add_spectre_executable TARGET_NAME)
     ${TARGET_NAME}
     PRIVATE
     SpectreFlags
+    CharmModuleInit
+    InfoAtLink
     )
 endfunction()
 
