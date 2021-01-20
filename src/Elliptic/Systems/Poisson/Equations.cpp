@@ -13,7 +13,6 @@
 #include "Utilities/MakeWithValue.hpp"
 
 namespace Poisson {
-
 template <size_t Dim>
 void euclidean_fluxes(
     const gsl::not_null<tnsr::I<DataVector, Dim>*> flux_for_field,
