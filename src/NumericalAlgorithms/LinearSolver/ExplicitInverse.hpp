@@ -123,7 +123,8 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
    * ordering. Specifically, the `SourceType` must have a `size()` function as
    * well as `begin()` and `end()` iterators that point into the data. If the
    * iterators have a `reset()` function it is used to avoid repeatedly
-   * re-creating the `begin()` iterator.
+   * re-creating the `begin()` iterator. The `reset()` function must not
+   * invalidate the `end()` iterator.
    */
   template <typename LinearOperator, typename VarsType, typename SourceType>
   Convergence::HasConverged solve(gsl::not_null<VarsType*> solution,
@@ -203,7 +204,7 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
       linear_operator(make_not_null(&result_buffer), unit_vector);
       // Set the unit vector back to zero
       unit_vector_data = 0.;
-      // Reset the iterator by calling its `reset` member function or
+      // Reset the iterator by calling its `reset` member function or by
       // re-creating it
       if constexpr (detail::is_reset_callable_v<decltype(
                         result_iterator_begin)>) {
