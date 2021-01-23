@@ -90,6 +90,8 @@ struct ElementCenteredSubdomainData {
   iterator end() noexcept { return {}; }
   const_iterator begin() const noexcept { return {this}; }
   const_iterator end() const noexcept { return {}; }
+  const_iterator cbegin() const noexcept { return begin(); }
+  const_iterator cend() const noexcept { return end(); }
 
   void pup(PUP::er& p) noexcept {  // NOLINT
     p | element_data;
@@ -247,6 +249,12 @@ std::vector<OverlapId<Dim>> ordered_overlap_ids(
 /*!
  * \brief Iterate over `LinearSolver::Schwarz::ElementCenteredSubdomainData`
  *
+ * This iterator guarantees that it steps through the data in the same order as
+ * long as these conditions are satisfied:
+ *
+ * - The set of overlap IDs in the `overlap_data` doesn't change
+ * - The extents of the `element_data` and the `overlap_data doesn't change
+ *
  * Iterating requires sorting the overlap IDs. If you find this impacts
  * performance, be advised to implement the internal data storage in
  * `ElementCenteredSubdomainData` so it stores its data contiguously, e.g. by
@@ -312,11 +320,17 @@ struct ElementCenteredSubdomainDataIterator {
   }
 
  private:
+  friend bool operator==(
+      const ElementCenteredSubdomainDataIterator& lhs,
+      const ElementCenteredSubdomainDataIterator& rhs) noexcept {
+    return lhs.overlap_index_ == rhs.overlap_index_ and
+           lhs.data_index_ == rhs.data_index_;
+  }
+
   friend bool operator!=(
       const ElementCenteredSubdomainDataIterator& lhs,
       const ElementCenteredSubdomainDataIterator& rhs) noexcept {
-    return lhs.overlap_index_ != rhs.overlap_index_ or
-           lhs.data_index_ != rhs.data_index_;
+    return not(lhs == rhs);
   }
 
   PtrType data_;
