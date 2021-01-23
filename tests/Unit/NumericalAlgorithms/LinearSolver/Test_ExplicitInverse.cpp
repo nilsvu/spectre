@@ -45,7 +45,8 @@ SPECTRE_TEST_CASE("Unit.LinearSolver.Serial.ExplicitInverse",
     const auto has_converged =
         solver.solve(make_not_null(&solution), linear_operator, source);
     REQUIRE(has_converged);
-    CHECK_MATRIX_APPROX(solver.matrix_representation(), blaze::inv(matrix));
+    DenseMatrix<double> matrix_repr{solver.matrix_representation()};
+    CHECK_MATRIX_APPROX(matrix_repr, blaze::inv(matrix));
     CHECK_ITERABLE_APPROX(solution, expected_solution);
     {
       INFO("Resetting");
@@ -59,8 +60,8 @@ SPECTRE_TEST_CASE("Unit.LinearSolver.Serial.ExplicitInverse",
                                                    0.6363636363636364};
       resetting_solver.solve(make_not_null(&solution), linear_operator2,
                              source);
-      CHECK_MATRIX_APPROX(resetting_solver.matrix_representation(),
-                          blaze::inv(matrix2));
+      matrix_repr = resetting_solver.matrix_representation();
+      CHECK_MATRIX_APPROX(matrix_repr, blaze::inv(matrix2));
       CHECK_ITERABLE_APPROX(solution, expected_solution2);
       // When resetting is disabled, the solver should keep applying the cached
       // inverse even when solving a different operator
@@ -71,8 +72,8 @@ SPECTRE_TEST_CASE("Unit.LinearSolver.Serial.ExplicitInverse",
       non_resetting_solver.solve(make_not_null(&solution), linear_operator2,
                                  source);
       // Still the inverse of the operator we solved first
-      CHECK_MATRIX_APPROX(non_resetting_solver.matrix_representation(),
-                          blaze::inv(matrix));
+      matrix_repr = non_resetting_solver.matrix_representation();
+      CHECK_MATRIX_APPROX(matrix_repr, blaze::inv(matrix));
       CHECK_ITERABLE_APPROX(solution, blaze::inv(matrix) * source);
     }
   }
@@ -116,11 +117,12 @@ SPECTRE_TEST_CASE("Unit.LinearSolver.Serial.ExplicitInverse",
     auto solution = make_with_value<SubdomainData>(source, 0.);
     solver.solve(make_not_null(&solution), linear_operator, source);
     CHECK(solver.size() == 5);
-    Matrix expected_matrix(5, 5, 0.);
+    DenseMatrix<double> expected_matrix(5, 5, 0.);
     blaze::submatrix(expected_matrix, 0, 0, 3, 3) = matrix_element;
     blaze::submatrix(expected_matrix, 3, 3, 2, 2) = matrix_overlap;
     blaze::invert(expected_matrix);
-    CHECK_MATRIX_APPROX(solver.matrix_representation(), expected_matrix);
+    const DenseMatrix<double> matrix_repr{solver.matrix_representation()};
+    CHECK_MATRIX_APPROX(matrix_repr, expected_matrix);
     CHECK_VARIABLES_APPROX(solution.element_data,
                            expected_solution.element_data);
     CHECK_VARIABLES_APPROX(solution.overlap_data.at(overlap_id),

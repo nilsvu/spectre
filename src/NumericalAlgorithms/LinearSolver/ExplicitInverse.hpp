@@ -4,15 +4,18 @@
 #pragma once
 
 #include <algorithm>
+#include <blaze/math/CompressedMatrix.h>
+#include <blaze/math/DynamicMatrix.h>
 #include <cstddef>
 #include <vector>
 
-#include "DataStructures/DenseMatrix.hpp"
 #include "DataStructures/DenseVector.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
 #include "NumericalAlgorithms/LinearSolver/LinearSolver.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
+#include "Utilities/Blaze.hpp"
+#include "Utilities/Blaze/Pup.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TypeTraits/CreateIsCallable.hpp"
@@ -76,6 +79,8 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
   using Base = LinearSolver<LinearSolverRegistrars>;
 
  public:
+  using matrix_type = blaze::CompressedMatrix<double, blaze::columnMajor>;
+
   struct EnableResets {
     using type = bool;
     static constexpr Options::String help =
@@ -145,9 +150,7 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
 
   /// The matrix representation of the solver. This matrix approximates the
   /// inverse of the subdomain operator.
-  const DenseMatrix<double>& matrix_representation() const noexcept {
-    return inverse_;
-  }
+  const matrix_type& matrix_representation() const noexcept { return inverse_; }
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) noexcept override {
@@ -169,7 +172,7 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
 
   // Caches for successive solves of the same operator
   mutable size_t size_ = std::numeric_limits<size_t>::max();
-  mutable DenseMatrix<double, blaze::columnMajor> inverse_{};
+  mutable matrix_type inverse_{};
 
   // Buffers to avoid re-allocating memory for applying the operator
   mutable DenseVector<double> source_workspace_{};
@@ -187,12 +190,13 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
     size_ = used_for_size.size();
     source_workspace_.resize(size_);
     solution_workspace_.resize(size_);
-    inverse_.resize(size_, size_);
     // Construct explicit matrix representation by "sniffing out" the operator,
     // i.e. feeding it unit vectors
     auto unit_vector = make_with_value<VarsType>(used_for_size, 0.);
     auto result_buffer = make_with_value<SourceType>(used_for_size, 0.);
-    auto& operator_matrix = inverse_;
+    // Blaze can't invert sparse matrices, so we construct a dense matrix first
+    blaze::DynamicMatrix<double, blaze::columnMajor> operator_matrix{size_,
+                                                                     size_};
     size_t i = 0;
     // Re-using the iterators for all operator invocations
     auto result_iterator_begin = result_buffer.begin();
@@ -220,11 +224,13 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
     }
     // Directly invert the matrix
     try {
-      blaze::invert(inverse_);
+      blaze::invert(operator_matrix);
     } catch (const std::invalid_argument& e) {
       ERROR("Could not invert subdomain matrix (size " << size_
                                                        << "): " << e.what());
     }
+    // Copy operator matrix inverse into sparse storage
+    inverse_ = operator_matrix;
   }
   // Copy source into contiguous workspace. In cases where the source and
   // solution data are already stored contiguously we might avoid the copy and

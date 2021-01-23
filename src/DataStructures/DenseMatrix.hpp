@@ -52,11 +52,13 @@ class DenseMatrix : public blaze::DynamicMatrix<T, SO> {
     if (p.isUnpacking()) {
       blaze::DynamicMatrix<T, SO>::resize(rows, columns);
     }
-    auto spacing = blaze::DynamicMatrix<T, SO>::spacing();
+    const size_t total_num_elements =
+        blaze::DynamicMatrix<T, SO>::spacing() *
+        (SO == blaze::columnMajor ? columns : rows);
     if (std::is_fundamental_v<T>) {
-      PUParray(p, blaze::DynamicMatrix<T, SO>::data(), columns * spacing);
+      PUParray(p, blaze::DynamicMatrix<T, SO>::data(), total_num_elements);
     } else {
-      for (size_t i = 0; i < columns * spacing; i++) {
+      for (size_t i = 0; i < total_num_elements; ++i) {
         p | blaze::DynamicMatrix<T, SO>::data()[i];
       }
     }
