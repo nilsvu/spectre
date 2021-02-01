@@ -85,8 +85,6 @@ struct FirstOrderSystem {
   // The physical fields to solve for
   using primal_fields = tmpl::list<field>;
   using auxiliary_fields = tmpl::list<field_gradient>;
-  using fields_tag =
-      ::Tags::Variables<tmpl::append<primal_fields, auxiliary_fields>>;
 
   // Tags for the first-order fluxes. We just use the standard `Flux` prefix
   // because the fluxes don't have symmetries and we don't need to give them a
