@@ -1,38 +1,31 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-set(LIBRARY Elasticity)
+set(LIBRARY ElasticityBoundaryConditions)
 
 add_spectre_library(${LIBRARY})
 
 spectre_target_sources(
   ${LIBRARY}
   PRIVATE
-  Equations.cpp
+  LaserBeam.cpp
   )
 
 spectre_target_headers(
   ${LIBRARY}
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
-  Equations.hpp
-  FirstOrderSystem.hpp
-  Tags.hpp
+  LaserBeam.hpp
   )
 
 target_link_libraries(
   ${LIBRARY}
   PUBLIC
-  ConstitutiveRelations
   DataStructures
-  Domain
+  Options
   Utilities
   INTERFACE
-  ElasticityBoundaryConditions
-  LinearOperators
-  PRIVATE
-  GeneralRelativity
+  Domain
+  Elliptic
+  Parallel
   )
-
-add_subdirectory(Actions)
-add_subdirectory(BoundaryConditions)
