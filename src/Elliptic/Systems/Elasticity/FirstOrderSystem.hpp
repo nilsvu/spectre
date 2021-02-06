@@ -12,6 +12,7 @@
 #include "Elliptic/BoundaryConditions/AnalyticSolution.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
 #include "Elliptic/Systems/Elasticity/BoundaryConditions/LaserBeam.hpp"
+#include "Elliptic/Systems/Elasticity/BoundaryConditions/Zero.hpp"
 #include "Elliptic/Systems/Elasticity/Equations.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
@@ -83,6 +84,10 @@ struct FirstOrderSystem {
       elliptic::BoundaryConditions::BoundaryCondition<
           Dim, tmpl::list<elliptic::BoundaryConditions::Registrars::
                               AnalyticSolution<FirstOrderSystem>,
+                          BoundaryConditions::Registrars::Zero<
+                              Dim, elliptic::BoundaryConditionType::Dirichlet>,
+                          BoundaryConditions::Registrars::Zero<
+                              Dim, elliptic::BoundaryConditionType::Neumann>,
                           BoundaryConditions::Registrars::LaserBeam>>;
 
   // The tag of the operator to compute magnitudes on the manifold, e.g. to

@@ -5,6 +5,7 @@ set(LIBRARY "Test_ElasticityBoundaryConditions")
 
 set(LIBRARY_SOURCES
   Test_LaserBeam.cpp
+  Test_Zero.cpp
   )
 
 add_test_library(
