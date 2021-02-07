@@ -70,6 +70,24 @@ using reduction_data = Parallel::ReductionData<
     Parallel::ReductionDatum<size_t, funcl::Max<>>>;
 
 template <typename OptionsGroup>
+struct SubdomainStatsFormatter
+    : tt::ConformsTo<observers::protocols::ReductionDataFormatter> {
+  using reduction_data = Schwarz::detail::reduction_data;
+  std::string operator()(const size_t iteration_id, const size_t num_subdomains,
+                         const size_t avg_subdomain_its,
+                         const size_t min_subdomain_its,
+                         const size_t max_subdomain_its) const noexcept {
+    return "'" + Options::name<OptionsGroup>() + "' iteration " +
+           get_output(iteration_id) + " completed all subdomain solves (" +
+           get_output(num_subdomains) + "). Average of number of iterations: " +
+           get_output(avg_subdomain_its) + " (min " +
+           get_output(min_subdomain_its) + ", max " +
+           get_output(max_subdomain_its) + ").";
+  }
+  void pup(PUP::er& /*p*/) noexcept {}
+};
+
+template <typename OptionsGroup>
 struct RegisterObservers {
   template <typename ParallelComponent, typename DbTagsList,
             typename ArrayIndex>
@@ -96,6 +114,11 @@ void contribute_to_subdomain_stats_observation(
       *Parallel::get_parallel_component<observers::Observer<Metavariables>>(
            cache)
            .ckLocalBranch();
+  auto formatter =
+      UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
+               ::Verbosity::Verbose)
+          ? std::make_optional(SubdomainStatsFormatter<OptionsGroup>{})
+          : std::nullopt;
   Parallel::simple_action<observers::Actions::ContributeReductionData>(
       local_observer,
       observers::ObservationId(
@@ -109,7 +132,8 @@ void contribute_to_subdomain_stats_observation(
                                "MinNumIterations", "MaxNumIterations"},
       reduction_data{iteration_id, 1, subdomain_solve_num_iterations,
                      subdomain_solve_num_iterations,
-                     subdomain_solve_num_iterations});
+                     subdomain_solve_num_iterations},
+      std::move(formatter));
 }
 
 template <typename SubdomainDataType, typename OptionsGroup>
