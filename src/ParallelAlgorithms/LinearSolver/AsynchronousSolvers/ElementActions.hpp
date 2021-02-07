@@ -17,6 +17,7 @@
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObservationId.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
+#include "IO/Observer/Protocols/ReductionDataFormatter.hpp"
 #include "IO/Observer/ReductionActions.hpp"
 #include "IO/Observer/TypeOfObservation.hpp"
 #include "Informer/Tags.hpp"
@@ -35,6 +36,7 @@
 #include "Utilities/GetOutput.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/PrettyType.hpp"
+#include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -60,6 +62,25 @@ using reduction_data = Parallel::ReductionData<
     // Residual
     Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>;
 
+template <typename OptionsGroup>
+struct ResidualReductionFormatter
+    : tt::ConformsTo<observers::protocols::ReductionDataFormatter> {
+  using reduction_data = async_solvers::reduction_data;
+  std::string operator()(const size_t iteration_id, const double residual) const
+      noexcept {
+    if (iteration_id == 0) {
+      return "Linear solver '" + Options::name<OptionsGroup>() +
+             "' initialized with residual: " + get_output(residual);
+    } else {
+      return "Linear solver '" + Options::name<OptionsGroup>() +
+             "' iteration " + get_output(iteration_id) +
+             " complete. Remaining residual: " + get_output(residual);
+    }
+  }
+  // NOLINTNEXTLINE(google-runtime-references)
+  void pup(PUP::er& /*p*/) noexcept {}
+};
+
 template <typename OptionsGroup, typename ParallelComponent,
           typename Metavariables, typename ArrayIndex>
 void contribute_to_residual_observation(
@@ -70,6 +91,11 @@ void contribute_to_residual_observation(
       *Parallel::get_parallel_component<observers::Observer<Metavariables>>(
            cache)
            .ckLocalBranch();
+  auto formatter =
+      UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
+               ::Verbosity::Quiet)
+          ? std::make_optional(ResidualReductionFormatter<OptionsGroup>{})
+          : std::nullopt;
   Parallel::simple_action<observers::Actions::ContributeReductionData>(
       local_observer,
       observers::ObservationId(iteration_id,
@@ -79,20 +105,20 @@ void contribute_to_residual_observation(
           Parallel::ArrayIndex<ArrayIndex>(array_index)},
       std::string{"/" + Options::name<OptionsGroup>() + "Residuals"},
       std::vector<std::string>{"Iteration", "Residual"},
-      reduction_data{iteration_id, residual_magnitude_square});
+      reduction_data{iteration_id, residual_magnitude_square},
+      std::move(formatter));
   if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
-               ::Verbosity::Verbose)) {
+               ::Verbosity::Debug)) {
     if (iteration_id == 0) {
-      Parallel::printf(
-          "Linear solver '" + Options::name<OptionsGroup>() +
-              "' initialized on element %s. Remaining local residual: %e\n",
-          get_output(array_index), sqrt(residual_magnitude_square));
+      Parallel::printf("%s " + Options::name<OptionsGroup>() +
+                           ": Initialized with local residual: %e\n",
+                       get_output(array_index),
+                       sqrt(residual_magnitude_square));
     } else {
-      Parallel::printf("Linear solver '" +
-                           Options::name<OptionsGroup>() +
-                           "' iteration %zu done on element %s. Remaining "
+      Parallel::printf("%s " + Options::name<OptionsGroup>() +
+                           "(%zu): Iteration complete. Remaining "
                            "local residual: %e\n",
-                       iteration_id, get_output(array_index),
+                       get_output(array_index), iteration_id,
                        sqrt(residual_magnitude_square));
     }
   }
