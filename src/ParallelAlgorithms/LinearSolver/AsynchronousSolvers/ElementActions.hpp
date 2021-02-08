@@ -63,8 +63,13 @@ using reduction_data = Parallel::ReductionData<
     // Residual
     Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>;
 
+template <typename OptionsGroup>
 struct ResidualReductionFormatter
     : tt::ConformsTo<observers::protocols::ReductionDataFormatter> {
+  using reduction_data = async_solvers::reduction_data;
+  ResidualReductionFormatter() noexcept = default;
+  ResidualReductionFormatter(std::string local_observation_key_suffix) noexcept
+      : observation_key_suffix(std::move(local_observation_key_suffix)) {}
   std::string operator()(const size_t iteration_id, const double residual) const
       noexcept {
     if (iteration_id == 0) {
@@ -79,7 +84,7 @@ struct ResidualReductionFormatter
     }
   }
   void pup(PUP::er& p) noexcept { p | observation_key_suffix; }
-  std::string observation_key_suffix;
+  std::string observation_key_suffix{};
 };
 
 template <typename OptionsGroup, typename ParallelComponent,

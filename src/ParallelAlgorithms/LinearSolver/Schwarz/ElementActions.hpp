@@ -74,6 +74,9 @@ template <typename OptionsGroup>
 struct SubdomainStatsFormatter
     : tt::ConformsTo<observers::protocols::ReductionDataFormatter> {
   using reduction_data = Schwarz::detail::reduction_data;
+  SubdomainStatsFormatter() noexcept = default;
+  SubdomainStatsFormatter(std::string local_observation_key_suffix) noexcept
+      : observation_key_suffix(std::move(local_observation_key_suffix)) {}
   std::string operator()(const size_t iteration_id, const size_t num_subdomains,
                          const size_t avg_subdomain_its,
                          const size_t min_subdomain_its,
@@ -87,7 +90,7 @@ struct SubdomainStatsFormatter
            get_output(max_subdomain_its) + ").";
   }
   void pup(PUP::er& p) noexcept { p | observation_key_suffix; }
-  std::string observation_key_suffix;
+  std::string observation_key_suffix{};
 };
 
 template <typename OptionsGroup, typename ArraySectionIdTag>
