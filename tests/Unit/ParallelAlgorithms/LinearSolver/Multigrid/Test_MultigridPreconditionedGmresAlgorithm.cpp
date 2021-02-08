@@ -56,8 +56,6 @@ struct Metavariables {
 
   static constexpr size_t volume_dim = 1;
 
-  static constexpr bool massive_operator = true;
-
   using fields_tag = typename helpers_mg::fields_tag;
 
   using linear_solver =

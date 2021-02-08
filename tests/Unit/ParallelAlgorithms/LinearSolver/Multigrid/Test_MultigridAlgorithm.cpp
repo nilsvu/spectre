@@ -7,7 +7,7 @@
 
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
-#include "ErrorHandling/FloatingPointExceptions.hpp"
+#include "Helpers/Domain/BoundaryConditions/BoundaryCondition.hpp"
 #include "Helpers/ParallelAlgorithms/LinearSolver/LinearSolverAlgorithmTestHelpers.hpp"
 #include "Helpers/ParallelAlgorithms/LinearSolver/Multigrid/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
@@ -21,6 +21,7 @@
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Multigrid.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Tags.hpp"
 #include "ParallelAlgorithms/LinearSolver/Richardson/Richardson.hpp"
+#include "Utilities/ErrorHandling/FloatingPointExceptions.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace helpers = LinearSolverAlgorithmTestHelpers;
@@ -43,14 +44,14 @@ struct Metavariables {
       "Test the Multigrid linear solver algorithm on multiple elements"};
 
   static constexpr size_t volume_dim = 1;
-
-  static constexpr bool massive_operator = true;
+  using system =
+      TestHelpers::domain::BoundaryConditions::SystemWithoutBoundaryConditions<
+          volume_dim>;
 
   using fields_tag = typename helpers_mg::fields_tag;
 
-  using multigrid =
-      LinearSolver::multigrid::Multigrid<Metavariables, fields_tag,
-                                         MultigridSolver>;
+  using multigrid = LinearSolver::multigrid::Multigrid<volume_dim, fields_tag,
+                                                       MultigridSolver>;
 
   using smoother = LinearSolver::Richardson::Richardson<
       typename multigrid::smooth_fields_tag, RichardsonSmoother,

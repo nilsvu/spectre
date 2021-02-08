@@ -12,9 +12,7 @@
 #include "DataStructures/FixedHashMap.hpp"
 #include "DataStructures/Matrix.hpp"
 #include "Domain/Structure/ElementId.hpp"
-#include "ErrorHandling/Assert.hpp"
 #include "IO/Observer/Tags.hpp"
-#include "Informer/LogActions.hpp"
 #include "Informer/Tags.hpp"
 #include "NumericalAlgorithms/Convergence/Tags.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
@@ -30,15 +28,9 @@
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Tags.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/ConstantExpressions.hpp"
+#include "Utilities/ErrorHandling/Assert.hpp"
 #include "Utilities/GetOutput.hpp"
 #include "Utilities/TaggedTuple.hpp"
-
-/// \cond
-namespace logging {
-template <typename Metavariables>
-struct Logger;
-}  // namespace logging
-/// \endcond
 
 namespace LinearSolver::multigrid::detail {
 
@@ -67,8 +59,6 @@ struct InitializeElement {
                  Tags::ParentMesh<Dim>,
                  observers::Tags::ObservationKeySuffix<Tags::MultigridLevel>,
                  observers::Tags::ObservationKeySuffix<Tags::IsFinestLevel>,
-                 Tags::RestrictionOperator<Dim, OptionsGroup>,
-                 Tags::ProlongationOperator<Dim, OptionsGroup>,
                  db::add_tag_prefix<Tags::PreSmoothingInitial, fields_tag>,
                  db::add_tag_prefix<Tags::PreSmoothingSource, fields_tag>,
                  db::add_tag_prefix<Tags::PreSmoothingResult, fields_tag>,
@@ -77,11 +67,7 @@ struct InitializeElement {
                  db::add_tag_prefix<Tags::PostSmoothingSource, fields_tag>,
                  db::add_tag_prefix<Tags::PostSmoothingResult, fields_tag>,
                  db::add_tag_prefix<Tags::PostSmoothingResidual, fields_tag>>;
-  using compute_tags = tmpl::list<
-      domain::Tags::JacobianComputeFromMap<
-          domain::Tags::ElementMap<Dim>,
-          domain::Tags::Coordinates<Dim, Frame::Logical>>,
-      domain::Tags::DetJacobianCompute<Dim, Frame::Logical, Frame::Inertial>>;
+  using compute_tags = tmpl::list<>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ActionList, typename ParallelComponent>
@@ -126,19 +112,6 @@ struct InitializeElement {
                            : Mesh<Dim>{};
     // Parallel::printf("Mesh: %s with parent mesh %s\n", mesh, parent_mesh);
 
-    auto restriction_operator =
-        parent_id ? LinearSolver::multigrid::restriction_operator<
-                        Metavariables::massive_operator>(
-                        mesh, parent_mesh, element_id.segment_ids(),
-                        parent_id->segment_ids())
-                  : std::array<Matrix, Dim>{};
-
-    auto prolongation_operator =
-        parent_id ? LinearSolver::multigrid::prolongation_operator(
-                        parent_mesh, mesh, element_id.segment_ids(),
-                        parent_id->segment_ids())
-                  : std::array<Matrix, Dim>{};
-
     const size_t num_points = mesh.number_of_grid_points();
     Initialization::mutate_assign<simple_tags>(
         make_not_null(&box), std::move(parent_id), std::move(child_ids),
@@ -146,7 +119,6 @@ struct InitializeElement {
         get<Tags::MultigridLevel>(box) == 0
             ? observation_key_suffix
             : std::optional<std::string>{std::nullopt},
-        std::move(restriction_operator), std::move(prolongation_operator),
         // The `PrepareSolve` action populates these
         // tags with initial values.
         typename db::add_tag_prefix<Tags::PreSmoothingInitial,
@@ -302,24 +274,24 @@ struct SkipPostsmoothingAtBottom {
         not get<Tags::ParentElementId<Dim>>(box).has_value();
 
     // Do some logging
-    if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
-                 ::Verbosity::Verbose)) {
-      Parallel::contribute_to_reduction<
-          logging::Actions::Log<PreSmoothingLogFormatter<OptionsGroup>>,
-          ParallelComponent, Tags::MultigridLevel>(
-          Parallel::ReductionData<
-              Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-              Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-              Parallel::ReductionDatum<bool, funcl::AssertEqual<>>>{
-              get<Convergence::Tags::IterationId<OptionsGroup>>(box),
-              get<Tags::MultigridLevel>(box), is_coarsest_level},
-          Parallel::get_parallel_component<ParallelComponent>(
-              cache)[element_id],
-          Parallel::get_parallel_component<logging::Logger<Metavariables>>(
-              cache),
-          *get<Parallel::Tags::SectionBase<Tags::MultigridLevel>>(box),
-          get<Tags::MultigridLevel>(box));
-    }
+    // if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
+    //              ::Verbosity::Verbose)) {
+    //   Parallel::contribute_to_reduction<
+    //       logging::Actions::Log<PreSmoothingLogFormatter<OptionsGroup>>,
+    //       ParallelComponent, Tags::MultigridLevel>(
+    //       Parallel::ReductionData<
+    //           Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+    //           Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+    //           Parallel::ReductionDatum<bool, funcl::AssertEqual<>>>{
+    //           get<Convergence::Tags::IterationId<OptionsGroup>>(box),
+    //           get<Tags::MultigridLevel>(box), is_coarsest_level},
+    //       Parallel::get_parallel_component<ParallelComponent>(
+    //           cache)[element_id],
+    //       Parallel::get_parallel_component<logging::Logger<Metavariables>>(
+    //           cache),
+    //       *get<Parallel::Tags::SectionBase<Tags::MultigridLevel>>(box),
+    //       get<Tags::MultigridLevel>(box));
+    // }
 
     // Record pre-smoothing result for debugging
     db::mutate<db::add_tag_prefix<Tags::PreSmoothingResult, fields_tag>>(
@@ -378,24 +350,24 @@ struct SendCorrectionToFinerGrid {
     const bool is_coarsest_level =
         not get<Tags::ParentElementId<Dim>>(box).has_value();
 
-    if (not is_coarsest_level and
-        UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
-                 ::Verbosity::Verbose)) {
-      Parallel::contribute_to_reduction<
-          logging::Actions::Log<PostSmoothingLogFormatter<OptionsGroup>>,
-          ParallelComponent, Tags::MultigridLevel>(
-          Parallel::ReductionData<
-              Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-              Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>>{
-              get<Convergence::Tags::IterationId<OptionsGroup>>(box),
-              get<Tags::MultigridLevel>(box)},
-          Parallel::get_parallel_component<ParallelComponent>(
-              cache)[element_id],
-          Parallel::get_parallel_component<logging::Logger<Metavariables>>(
-              cache),
-          *get<Parallel::Tags::SectionBase<Tags::MultigridLevel>>(box),
-          get<Tags::MultigridLevel>(box));
-    }
+    // if (not is_coarsest_level and
+    //     UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
+    //              ::Verbosity::Verbose)) {
+    //   Parallel::contribute_to_reduction<
+    //       logging::Actions::Log<PostSmoothingLogFormatter<OptionsGroup>>,
+    //       ParallelComponent, Tags::MultigridLevel>(
+    //       Parallel::ReductionData<
+    //           Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+    //           Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>>{
+    //           get<Convergence::Tags::IterationId<OptionsGroup>>(box),
+    //           get<Tags::MultigridLevel>(box)},
+    //       Parallel::get_parallel_component<ParallelComponent>(
+    //           cache)[element_id],
+    //       Parallel::get_parallel_component<logging::Logger<Metavariables>>(
+    //           cache),
+    //       *get<Parallel::Tags::SectionBase<Tags::MultigridLevel>>(box),
+    //       get<Tags::MultigridLevel>(box));
+    // }
 
     const auto& child_ids = get<Tags::ChildElementIds<Dim>>(box);
     db::mutate<db::add_tag_prefix<Tags::PostSmoothingResult, fields_tag>>(
@@ -469,15 +441,16 @@ struct ReceiveCorrectionFromCoarserGrid {
     // We should always have a `parent_id` at this point because we skip this
     // part of the algorithm on the coarsest grid with the
     // `SkipPostsmoothingAtBottom` action
-    ASSERT(parent_id,
+    ASSERT(parent_id.has_value(),
            "Trying to receive data from parent but no parent is set on element "
                << element_id << ".");
 
-    auto& inbox = tuples::get<CorrectionInboxTag<FieldsTag>>(inboxes);
     const auto& temporal_id =
         db::get<Convergence::Tags::IterationId<OptionsGroup>>(box);
-    const auto temporal_received = inbox.find(temporal_id);
-    const auto& parent_correction = temporal_received->second;
+    auto parent_correction =
+        std::move(tuples::get<CorrectionInboxTag<FieldsTag>>(inboxes)
+                      .extract(temporal_id)
+                      .mapped());
 
     if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
                  ::Verbosity::Debug)) {
@@ -488,16 +461,16 @@ struct ReceiveCorrectionFromCoarserGrid {
 
     // Apply prolongation operator
     // TODO: Do nothing when parent is the same element
+    const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
+    const auto& parent_mesh = db::get<Tags::ParentMesh<Dim>>(box);
+    const auto prolongation_operator = multigrid::prolongation_operator(
+        parent_mesh, mesh, element_id.segment_ids(), parent_id->segment_ids());
     db::mutate<fields_tag>(
-        make_not_null(&box),
-        [&](const auto fields,
-            const std::array<Matrix, Dim>& prolongation_operator,
-            const Mesh<Dim>& parent_mesh) noexcept {
+        make_not_null(&box), [&parent_correction, &prolongation_operator,
+                              &parent_mesh](const auto fields) noexcept {
           *fields += apply_matrices(prolongation_operator, parent_correction,
                                     parent_mesh.extents());
-        },
-        db::get<Tags::ProlongationOperator<Dim, OptionsGroup>>(box),
-        db::get<Tags::ParentMesh<Dim>>(box));
+        });
 
     db::mutate<db::add_tag_prefix<Tags::PostSmoothingInitial, fields_tag>>(
         make_not_null(&box),
@@ -507,8 +480,6 @@ struct ReceiveCorrectionFromCoarserGrid {
         make_not_null(&box),
         [](const auto x, const auto& y) noexcept { *x = y; },
         db::get<SourceTag>(box));
-
-    inbox.erase(temporal_received);
     return {std::move(box)};
   }
 };

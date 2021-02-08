@@ -11,7 +11,6 @@
 #include "DataStructures/FixedHashMap.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "IO/Observer/Tags.hpp"
-#include "Informer/LogActions.hpp"
 #include "Informer/Tags.hpp"
 #include "NumericalAlgorithms/Convergence/Tags.hpp"
 #include "Parallel/GlobalCache.hpp"
@@ -45,6 +44,8 @@ struct DataFromChildrenInboxTag
 
 namespace Actions {
 
+// This action restricts _massless_ fields. It needs adjustment when restricting
+// massive quantities.
 template <typename FieldsTag, typename OptionsGroup,
           typename ReceiveTag = FieldsTag>
 struct SendFieldsToCoarserGrid {
@@ -58,7 +59,7 @@ struct SendFieldsToCoarserGrid {
       const ParallelComponent* const /*meta*/) noexcept {
     // Skip restriction on coarsest level
     const auto& parent_id = get<Tags::ParentElementId<Dim>>(box);
-    if (not parent_id) {
+    if (not parent_id.has_value()) {
       return {std::move(box)};
     }
 
@@ -71,25 +72,18 @@ struct SendFieldsToCoarserGrid {
                        element_id, temporal_id);
     }
 
-    // TODO: Move jacobian ratio into restriction operator
-    // TODO: Make sure the jacobians are handled correctly on curved meshes
-    // TODO: Resolve the jacobian by numerically integrating the mass matrix
-    // including the jacobian.
-    auto fields = typename ReceiveTag::type(db::get<FieldsTag>(box));
-    if constexpr (not Metavariables::massive_operator) {
-      fields *= get(
-          db::get<domain::Tags::DetJacobian<Frame::Logical, Frame::Inertial>>(
-              box));
-    }
-
-    // Restrict the residual to the coarser (parent) grid and treat as source.
+    // Restrict the fields to the coarser (parent) grid.
     // We restrict before sending the data so the restriction operation is
     // parellelized. The parent only needs to sum up all child contributions.
     // TODO: Do nothing when parent is the same element
-    auto restricted_fields = apply_matrices(
-        db::get<Tags::RestrictionOperator<Dim, OptionsGroup>>(box), fields,
+    const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
+    const auto& parent_mesh = db::get<Tags::ParentMesh<Dim>>(box);
+    const auto restriction_operator = multigrid::restriction_operator(
+        mesh, parent_mesh, element_id.segment_ids(), parent_id->segment_ids());
+    auto restricted_fields = typename ReceiveTag::type(apply_matrices(
+        restriction_operator, db::get<FieldsTag>(box),
         // TODO: make sure apply_matrices works for non-square matrices
-        db::get<domain::Tags::Mesh<Dim>>(box).extents());
+        mesh.extents()));
 
     auto& receiver_proxy =
         Parallel::get_parallel_component<ParallelComponent>(cache);
@@ -166,19 +160,13 @@ struct ReceiveFieldsFromFinerGrid {
     // TODO: Specialize for when single child is the same element
     db::mutate<ReceiveTag>(
         make_not_null(&box),
-        [&children_data](const auto source, const Mesh<Dim>& mesh,
-                         const Scalar<DataVector>& det_jacobian) noexcept {
+        [&children_data](const auto source, const Mesh<Dim>& mesh) noexcept {
           *source = typename ReceiveTag::type{mesh.number_of_grid_points(), 0.};
           for (auto& child_id_and_data : children_data) {
             *source += child_id_and_data.second;
           }
-          if constexpr (not Metavariables::massive_operator) {
-            *source /= get(det_jacobian);
-          }
         },
-        db::get<domain::Tags::Mesh<Dim>>(box),
-        db::get<domain::Tags::DetJacobian<Frame::Logical, Frame::Inertial>>(
-            box));
+        db::get<domain::Tags::Mesh<Dim>>(box));
 
     return {std::move(box)};
   }

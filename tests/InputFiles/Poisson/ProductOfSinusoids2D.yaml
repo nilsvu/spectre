@@ -33,7 +33,7 @@ LinearSolver:
     MaxIterations: 100
     AbsoluteResidual: 1e-14
     RelativeResidual: 1e-8
-  Verbosity: Verbose
+  Verbosity: Quiet
 
   SchwarzSmoother:
     Iterations: 3
@@ -42,6 +42,11 @@ LinearSolver:
     SubdomainSolver:
       ExplicitInverse:
         EnableResets: True
+
+  Multigrid:
+    Iterations: 1
+    CoarsestGridPoints: 12
+    Verbosity: Verbose
 
 EventsAndTriggers:
   ? EveryNIterations:

@@ -15,7 +15,6 @@ target_link_libraries(
   PUBLIC
   DataStructures
   Domain
-
   PRIVATE
   Spectral
   )

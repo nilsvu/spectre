@@ -13,6 +13,7 @@
 #include "Parallel/Tags.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/MeshHierarchy.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Tags.hpp"
+#include "Utilities/System/ParallelInfo.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
 #include "Parallel/Printf.hpp"
@@ -103,7 +104,7 @@ struct ElementsAllocator {
               : std::nullopt;
       // Create the elements for this refinement level and distribute them among
       // processors
-      const int number_of_procs = Parallel::number_of_procs();
+      const int number_of_procs = sys::number_of_procs();
       for (size_t i = 0; i < all_element_ids.size(); ++i) {
         element_array(all_element_ids[i])
             .insert(global_cache, initialization_items,
