@@ -83,7 +83,8 @@ namespace LinearSolver::gmres {
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup,
           bool Preconditioned,
           typename SourceTag =
-              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>>
+              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>,
+          typename ArraySectionIdTag = void>
 struct Gmres {
   using fields_tag = FieldsTag;
   using options_group = OptionsGroup;
@@ -120,16 +121,18 @@ struct Gmres {
   template <typename ApplyOperatorActions, typename Label = OptionsGroup>
   using solve = tmpl::list<
       detail::PrepareSolve<FieldsTag, OptionsGroup, Preconditioned, Label,
-                           SourceTag>,
+                           SourceTag, ArraySectionIdTag>,
       detail::NormalizeInitialOperand<FieldsTag, OptionsGroup, Preconditioned,
-                                      Label>,
-      detail::PrepareStep<FieldsTag, OptionsGroup, Preconditioned, Label>,
+                                      Label, ArraySectionIdTag>,
+      detail::PrepareStep<FieldsTag, OptionsGroup, Preconditioned, Label,
+                          ArraySectionIdTag>,
       ApplyOperatorActions,
-      detail::PerformStep<FieldsTag, OptionsGroup, Preconditioned, Label>,
+      detail::PerformStep<FieldsTag, OptionsGroup, Preconditioned, Label,
+                          ArraySectionIdTag>,
       detail::OrthogonalizeOperand<FieldsTag, OptionsGroup, Preconditioned,
-                                   Label>,
-      detail::NormalizeOperandAndUpdateField<FieldsTag, OptionsGroup,
-                                             Preconditioned, Label>>;
+                                   Label, ArraySectionIdTag>,
+      detail::NormalizeOperandAndUpdateField<
+          FieldsTag, OptionsGroup, Preconditioned, Label, ArraySectionIdTag>>;
 };
 
 }  // namespace LinearSolver::gmres
