@@ -18,6 +18,7 @@
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/Invoke.hpp"
 #include "Parallel/Reduction.hpp"
+#include "Parallel/Tags/Section.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/ResidualMonitorActions.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Tags/InboxTags.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
@@ -36,7 +37,10 @@ namespace LinearSolver::gmres::detail {
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup>
 struct ResidualMonitor;
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename Label>
+          typename Label, typename ArraySectionIdTag>
+struct PrepareStep;
+template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
+          typename Label, typename ArraySectionIdTag>
 struct NormalizeOperandAndUpdateField;
 }  // namespace LinearSolver::gmres::detail
 /// \endcond
@@ -44,7 +48,7 @@ struct NormalizeOperandAndUpdateField;
 namespace LinearSolver::gmres::detail {
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename Label, typename SourceTag>
+          typename Label, typename SourceTag, typename ArraySectionIdTag>
 struct PrepareSolve {
  private:
   using fields_tag = FieldsTag;
@@ -61,12 +65,40 @@ struct PrepareSolve {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&> apply(
-      db::DataBox<DbTagsList>& box,
-      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      Parallel::GlobalCache<Metavariables>& cache,
-      const ArrayIndex& array_index, const ActionList /*meta*/,
-      const ParallelComponent* const /*meta*/) noexcept {
+  static std::tuple<db::DataBox<DbTagsList>&&, Parallel::AlgorithmExecution,
+                    size_t>
+  apply(db::DataBox<DbTagsList>& box,
+        const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+        Parallel::GlobalCache<Metavariables>& cache,
+        const ArrayIndex& array_index, const ActionList /*meta*/,
+        const ParallelComponent* const /*meta*/) noexcept {
+    if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
+                 ::Verbosity::Debug)) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + ": Prepare solve\n",
+          array_index);
+    }
+
+    // Skip the solve entirely on elements that are not part of the section
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<
+              Parallel::Tags::Section<ParallelComponent, ArraySectionIdTag>>(
+              box)) {
+        db::mutate<Convergence::Tags::IterationId<OptionsGroup>>(
+            make_not_null(&box),
+            [](const gsl::not_null<size_t*> iteration_id) noexcept {
+              *iteration_id = 0;
+            });
+        // TODO: Handle immediate convergence
+        constexpr size_t prepare_step_index =
+            tmpl::index_of<ActionList,
+                           PrepareStep<FieldsTag, OptionsGroup, Preconditioned,
+                                       Label, ArraySectionIdTag>>::value;
+        return {std::move(box), Parallel::AlgorithmExecution::Continue,
+                prepare_step_index + 1};
+      }
+    }
+
     db::mutate<Convergence::Tags::IterationId<OptionsGroup>, operand_tag,
                initial_fields_tag, basis_history_tag>(
         make_not_null(&box),
@@ -82,14 +114,25 @@ struct PrepareSolve {
         get<source_tag>(box), get<operator_applied_to_fields_tag>(box),
         get<fields_tag>(box));
 
+    Parallel::ReductionData<
+        Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>
+        reduction_data{
+            inner_product(get<operand_tag>(box), get<operand_tag>(box))};
     Parallel::contribute_to_reduction<InitializeResidualMagnitude<
         FieldsTag, OptionsGroup, ParallelComponent>>(
-        Parallel::ReductionData<
-            Parallel::ReductionDatum<double, funcl::Plus<>, funcl::Sqrt<>>>{
-            inner_product(get<operand_tag>(box), get<operand_tag>(box))},
+        std::move(reduction_data),
         Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
         Parallel::get_parallel_component<
-            ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+            ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache),
+        [&box]() noexcept -> decltype(auto) {
+          if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+            return Parallel::NoSection{};
+          } else {
+            return *get<
+                Parallel::Tags::Section<ParallelComponent, ArraySectionIdTag>>(
+                box);
+          }
+        }());
 
     if constexpr (Preconditioned) {
       using preconditioned_operand_tag =
@@ -105,12 +148,15 @@ struct PrepareSolve {
           });
     }
 
-    return {std::move(box)};
+    constexpr size_t next_action_index =
+        tmpl::index_of<ActionList, PrepareSolve>::value + 1;
+    return {std::move(box), Parallel::AlgorithmExecution::Continue,
+            next_action_index};
   }
 };
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename Label>
+          typename Label, typename ArraySectionIdTag>
 struct NormalizeInitialOperand {
  private:
   using fields_tag = FieldsTag;
@@ -130,7 +176,7 @@ struct NormalizeInitialOperand {
   apply(db::DataBox<DbTagsList>& box,
         tuples::TaggedTuple<InboxTags...>& inboxes,
         const Parallel::GlobalCache<Metavariables>& /*cache*/,
-        const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+        const ArrayIndex& array_index, const ActionList /*meta*/,
         const ParallelComponent* const /*meta*/) noexcept {
     auto& inbox = get<Tags::InitialOrthogonalization<OptionsGroup>>(inboxes);
     if (inbox.find(db::get<Convergence::Tags::IterationId<OptionsGroup>>(
@@ -146,6 +192,13 @@ struct NormalizeInitialOperand {
     const double residual_magnitude = get<0>(received_data);
     auto& has_converged = get<1>(received_data);
 
+    if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
+                 ::Verbosity::Debug)) {
+      Parallel::printf("%s " + Options::name<OptionsGroup>() +
+                           ": Normalize initial operand\n",
+                       array_index);
+    }
+
     db::mutate<operand_tag, basis_history_tag,
                Convergence::Tags::HasConverged<OptionsGroup>>(
         make_not_null(&box), [residual_magnitude, &has_converged](
@@ -159,8 +212,9 @@ struct NormalizeInitialOperand {
 
     // Skip steps entirely if the solve has already converged
     constexpr size_t step_end_index = tmpl::index_of<
-        ActionList, NormalizeOperandAndUpdateField<
-                        FieldsTag, OptionsGroup, Preconditioned, Label>>::value;
+        ActionList,
+        NormalizeOperandAndUpdateField<FieldsTag, OptionsGroup, Preconditioned,
+                                       Label, ArraySectionIdTag>>::value;
     constexpr size_t this_action_index =
         tmpl::index_of<ActionList, NormalizeInitialOperand>::value;
     return {std::move(box), Parallel::AlgorithmExecution::Continue,
@@ -171,7 +225,7 @@ struct NormalizeInitialOperand {
 };
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename Label>
+          typename Label, typename ArraySectionIdTag>
 struct PrepareStep {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
@@ -180,8 +234,16 @@ struct PrepareStep {
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
+                 ::Verbosity::Debug)) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + "(%zu): Prepare step\n",
+          array_index,
+          db::get<Convergence::Tags::IterationId<OptionsGroup>>(box));
+    }
+
     if constexpr (Preconditioned) {
       using fields_tag = FieldsTag;
       using operand_tag =
@@ -209,7 +271,7 @@ struct PrepareStep {
 };
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename Label>
+          typename Label, typename ArraySectionIdTag>
 struct PerformStep {
  private:
   using fields_tag = FieldsTag;
@@ -222,12 +284,36 @@ struct PerformStep {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&> apply(
-      db::DataBox<DbTagsList>& box,
-      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      Parallel::GlobalCache<Metavariables>& cache,
-      const ArrayIndex& array_index, const ActionList /*meta*/,
-      const ParallelComponent* const /*meta*/) noexcept {
+  static std::tuple<db::DataBox<DbTagsList>&&, Parallel::AlgorithmExecution,
+                    size_t>
+  apply(db::DataBox<DbTagsList>& box,
+        const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+        Parallel::GlobalCache<Metavariables>& cache,
+        const ArrayIndex& array_index, const ActionList /*meta*/,
+        const ParallelComponent* const /*meta*/) noexcept {
+    if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
+                 ::Verbosity::Debug)) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + "(%zu): Perform step\n",
+          array_index,
+          db::get<Convergence::Tags::IterationId<OptionsGroup>>(box));
+    }
+
+    // Skip the solve entirely on elements that are not part of the section
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<
+              Parallel::Tags::Section<ParallelComponent, ArraySectionIdTag>>(
+              box)) {
+        constexpr size_t step_end_index =
+            tmpl::index_of<ActionList,
+                           NormalizeOperandAndUpdateField<
+                               FieldsTag, OptionsGroup, Preconditioned, Label,
+                               ArraySectionIdTag>>::value;
+        return {std::move(box), Parallel::AlgorithmExecution::Continue,
+                step_end_index};
+      }
+    }
+
     using operator_tag = db::add_tag_prefix<
         LinearSolver::Tags::OperatorAppliedTo,
         std::conditional_t<Preconditioned, preconditioned_operand_tag,
@@ -261,26 +347,41 @@ struct PerformStep {
         },
         get<operator_tag>(box));
 
+    const double local_orthogonalization =
+        inner_product(get<basis_history_tag>(box)[0], get<operand_tag>(box));
+
+    Parallel::ReductionData<
+        Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+        Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+        Parallel::ReductionDatum<double, funcl::Plus<>>>
+        reduction_data{get<Convergence::Tags::IterationId<OptionsGroup>>(box),
+                       get<orthogonalization_iteration_id_tag>(box),
+                       local_orthogonalization};
     Parallel::contribute_to_reduction<
         StoreOrthogonalization<FieldsTag, OptionsGroup, ParallelComponent>>(
-        Parallel::ReductionData<
-            Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-            Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-            Parallel::ReductionDatum<double, funcl::Plus<>>>{
-            get<Convergence::Tags::IterationId<OptionsGroup>>(box),
-            get<orthogonalization_iteration_id_tag>(box),
-            inner_product(get<basis_history_tag>(box)[0],
-                          get<operand_tag>(box))},
+        std::move(reduction_data),
         Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
         Parallel::get_parallel_component<
-            ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+            ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache),
+        [&box]() noexcept -> decltype(auto) {
+          if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+            return Parallel::NoSection{};
+          } else {
+            return *get<
+                Parallel::Tags::Section<ParallelComponent, ArraySectionIdTag>>(
+                box);
+          }
+        }());
 
-    return {std::move(box)};
+    constexpr size_t this_action_index =
+        tmpl::index_of<ActionList, PerformStep>::value;
+    return {std::move(box), Parallel::AlgorithmExecution::Continue,
+            this_action_index + 1};
   }
 };
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename Label>
+          typename Label, typename ArraySectionIdTag>
 struct OrthogonalizeOperand {
  private:
   using fields_tag = FieldsTag;
@@ -342,17 +443,27 @@ struct OrthogonalizeOperand {
                                     next_orthogonalization_iteration_id),
                       get<operand_tag>(box));
 
+    Parallel::ReductionData<
+        Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+        Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
+        Parallel::ReductionDatum<double, funcl::Plus<>>>
+        reduction_data{iteration_id, next_orthogonalization_iteration_id,
+                       local_orthogonalization};
     Parallel::contribute_to_reduction<
         StoreOrthogonalization<FieldsTag, OptionsGroup, ParallelComponent>>(
-        Parallel::ReductionData<
-            Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-            Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-            Parallel::ReductionDatum<double, funcl::Plus<>>>{
-            iteration_id, next_orthogonalization_iteration_id,
-            local_orthogonalization},
+        std::move(reduction_data),
         Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
         Parallel::get_parallel_component<
-            ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+            ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache),
+        [&box]() noexcept -> decltype(auto) {
+          if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+            return Parallel::NoSection{};
+          } else {
+            return *get<
+                Parallel::Tags::Section<ParallelComponent, ArraySectionIdTag>>(
+                box);
+          }
+        }());
 
     // Repeat this action until orthogonalization is complete
     constexpr size_t this_action_index =
@@ -364,7 +475,7 @@ struct OrthogonalizeOperand {
 };
 
 template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
-          typename Label>
+          typename Label, typename ArraySectionIdTag>
 struct NormalizeOperandAndUpdateField {
  private:
   using fields_tag = FieldsTag;
@@ -390,7 +501,7 @@ struct NormalizeOperandAndUpdateField {
   apply(db::DataBox<DbTagsList>& box,
         tuples::TaggedTuple<InboxTags...>& inboxes,
         const Parallel::GlobalCache<Metavariables>& /*cache*/,
-        const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+        const ArrayIndex& array_index, const ActionList /*meta*/,
         const ParallelComponent* const /*meta*/) noexcept {
     auto& inbox = get<Tags::FinalOrthogonalization<OptionsGroup>>(inboxes);
     if (inbox.find(db::get<Convergence::Tags::IterationId<OptionsGroup>>(
@@ -407,6 +518,41 @@ struct NormalizeOperandAndUpdateField {
     const double normalization = get<0>(received_data);
     const auto& minres = get<1>(received_data);
     auto& has_converged = get<2>(received_data);
+
+    if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
+                 ::Verbosity::Debug)) {
+      Parallel::printf(
+          "%s " + Options::name<OptionsGroup>() + "(%zu): Complete step\n",
+          array_index,
+          db::get<Convergence::Tags::IterationId<OptionsGroup>>(box));
+    }
+
+    // Skip the solve entirely on elements that are not part of the section
+    constexpr size_t this_action_index =
+        tmpl::index_of<ActionList, NormalizeOperandAndUpdateField>::value;
+    constexpr size_t prepare_step_index =
+        tmpl::index_of<ActionList,
+                       PrepareStep<FieldsTag, OptionsGroup, Preconditioned,
+                                   Label, ArraySectionIdTag>>::value;
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<
+              Parallel::Tags::Section<ParallelComponent, ArraySectionIdTag>>(
+              box)) {
+        db::mutate<Convergence::Tags::IterationId<OptionsGroup>,
+                   Convergence::Tags::HasConverged<OptionsGroup>>(
+            make_not_null(&box),
+            [&has_converged](const gsl::not_null<size_t*> iteration_id,
+                             const gsl::not_null<Convergence::HasConverged*>
+                                 local_has_converged) noexcept {
+              ++(*iteration_id);
+              *local_has_converged = std::move(has_converged);
+            });
+        return {std::move(box), Parallel::AlgorithmExecution::Continue,
+                get<Convergence::Tags::HasConverged<OptionsGroup>>(box)
+                    ? (this_action_index + 1)
+                    : (prepare_step_index + 1)};
+      }
+    }
 
     db::mutate<operand_tag, basis_history_tag, fields_tag,
                Convergence::Tags::IterationId<OptionsGroup>,
@@ -437,11 +583,6 @@ struct NormalizeOperandAndUpdateField {
         get<preconditioned_basis_history_tag>(box));
 
     // Repeat steps until the solve has converged
-    constexpr size_t this_action_index =
-        tmpl::index_of<ActionList, NormalizeOperandAndUpdateField>::value;
-    constexpr size_t prepare_step_index =
-        tmpl::index_of<ActionList, PrepareStep<FieldsTag, OptionsGroup,
-                                               Preconditioned, Label>>::value;
     return {std::move(box), Parallel::AlgorithmExecution::Continue,
             get<Convergence::Tags::HasConverged<OptionsGroup>>(box)
                 ? (this_action_index + 1)

@@ -186,6 +186,12 @@ struct StoreOrthogonalization {
 
     // Do some logging
     if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
+                 ::Verbosity::Verbose)) {
+      Parallel::printf("%s(%zu) minres vector:\n%s",
+                       Options::name<OptionsGroup>(), completed_iterations,
+                       minres);
+    }
+    if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
                  ::Verbosity::Quiet)) {
       Parallel::printf("%s(%zu) iteration complete. Remaining residual: %e\n",
                        Options::name<OptionsGroup>(), completed_iterations,
