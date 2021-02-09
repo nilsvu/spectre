@@ -104,14 +104,14 @@ struct InitializeRandomInitialData {
       const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     // Make random initial data distributed around the solution
-    auto initial_fields = get<::Tags::AnalyticSolutionsBase>(box);
-    std::mt19937 generator(std::hash<ElementId<Dim>>{}(element_id));
-    std::uniform_real_distribution<> dist(-1., 1.);
-    initial_fields += make_with_random_values<typename fields_tag::type>(
-        make_not_null(&generator), make_not_null(&dist), initial_fields);
+    // auto initial_fields = get<::Tags::AnalyticSolutionsBase>(box);
+    // std::mt19937 generator(std::hash<ElementId<Dim>>{}(element_id));
+    // std::uniform_real_distribution<> dist(-1., 1.);
+    // initial_fields += make_with_random_values<typename fields_tag::type>(
+    //     make_not_null(&generator), make_not_null(&dist), initial_fields);
 
-    // auto initial_fields = db::item_type<fields_tag>{
-    //     get<domain::Tags::Mesh<Dim>>(box).number_of_grid_points(), 0.};
+    auto initial_fields = typename fields_tag::type{
+        get<domain::Tags::Mesh<Dim>>(box).number_of_grid_points(), 0.};
 
     Initialization::mutate_assign<simple_tags>(make_not_null(&box),
                                                std::move(initial_fields));
