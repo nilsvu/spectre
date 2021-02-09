@@ -127,8 +127,25 @@ struct Metavariables {
 
   // Collect events and triggers
   // (public for use by the Charm++ registration code)
-  using observe_fields = typename system::primal_fields;
-  using analytic_solution_fields = observe_fields;
+  using observe_fields = tmpl::append<
+      typename system::primal_fields,
+      db::wrap_tags_in<LinearSolver::multigrid::Tags::PreSmoothingInitial,
+                       typename multigrid::fields_tag::tags_list>,
+      db::wrap_tags_in<LinearSolver::multigrid::Tags::PreSmoothingSource,
+                       typename multigrid::fields_tag::tags_list>,
+      db::wrap_tags_in<LinearSolver::multigrid::Tags::PreSmoothingResult,
+                       typename multigrid::fields_tag::tags_list>,
+      db::wrap_tags_in<LinearSolver::multigrid::Tags::PreSmoothingResidual,
+                       typename multigrid::fields_tag::tags_list>,
+      db::wrap_tags_in<LinearSolver::multigrid::Tags::PostSmoothingInitial,
+                       typename multigrid::fields_tag::tags_list>,
+      db::wrap_tags_in<LinearSolver::multigrid::Tags::PostSmoothingSource,
+                       typename multigrid::fields_tag::tags_list>,
+      db::wrap_tags_in<LinearSolver::multigrid::Tags::PostSmoothingResult,
+                       typename multigrid::fields_tag::tags_list>,
+      db::wrap_tags_in<LinearSolver::multigrid::Tags::PostSmoothingResidual,
+                       typename multigrid::fields_tag::tags_list>>;
+  using analytic_solution_fields = typename system::primal_fields;
   using events =
       tmpl::list<dg::Events::Registrars::ObserveFields<
                      volume_dim, linear_solver_iteration_id, observe_fields,

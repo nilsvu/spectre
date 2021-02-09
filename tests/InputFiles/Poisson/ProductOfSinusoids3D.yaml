@@ -18,13 +18,13 @@ DomainCreator:
     LowerBound: [0, 0, 0]
     UpperBound: [3.141592653589793, 3.141592653589793, 3.141592653589793]
     IsPeriodicIn: [false, false, false]
-    InitialRefinement: [3, 3, 3]
-    InitialGridPoints: [6, 6, 6]
+    InitialRefinement: [2, 2, 2]
+    InitialGridPoints: [4, 4, 4]
     TimeDependence: None
 
 Discretization:
   DiscontinuousGalerkin:
-    PenaltyParameter: 1.5
+    PenaltyParameter: 1.
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids3DVolume"
@@ -58,5 +58,5 @@ EventsAndTriggers:
         SubfileName: Errors
     - ObserveFields:
         SubfileName: VolumeData
-        VariablesToObserve: [Field]
+        VariablesToObserve: [Field, PreSmoothingInitial(Preconditioned(LinearOperand(Field))),PreSmoothingSource(Preconditioned(LinearOperand(Field))),PreSmoothingResult(Preconditioned(LinearOperand(Field))),PreSmoothingResidual(Preconditioned(LinearOperand(Field))),PostSmoothingInitial(Preconditioned(LinearOperand(Field))),PostSmoothingSource(Preconditioned(LinearOperand(Field))),PostSmoothingResult(Preconditioned(LinearOperand(Field))),PostSmoothingResidual(Preconditioned(LinearOperand(Field)))]
         InterpolateToMesh: None
