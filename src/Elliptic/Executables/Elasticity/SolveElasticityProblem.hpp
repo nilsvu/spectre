@@ -13,6 +13,9 @@
 #include "Elliptic/Actions/InitializeSystem.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/ApplyOperator.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
+#include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/InitializeSubdomain.hpp"
+#include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
+#include "Elliptic/Systems/Elasticity/Actions/InitializeSubdomain.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "Elliptic/Tags.hpp"
@@ -39,6 +42,7 @@
 #include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/BentBeam.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/HalfSpaceMirror.hpp"
@@ -60,6 +64,11 @@ struct LinearSolverGroup {
 struct GmresGroup {
   static std::string name() noexcept { return "GMRES"; }
   static constexpr Options::String help = "Options for the GMRES linear solver";
+  using group = LinearSolverGroup;
+};
+struct SchwarzSmootherGroup {
+  static std::string name() noexcept { return "SchwarzSmoother"; }
+  static constexpr Options::String help = "Options for the Schwarz smoother";
   using group = LinearSolverGroup;
 };
 }  // namespace OptionTags
@@ -99,9 +108,19 @@ struct Metavariables {
   using linear_solver =
       LinearSolver::gmres::Gmres<Metavariables, fields_tag,
                                  SolveElasticityProblem::OptionTags::GmresGroup,
-                                 false>;
+                                 true>;
   using linear_solver_iteration_id =
       Convergence::Tags::IterationId<typename linear_solver::options_group>;
+  // Precondition each linear solver iteration with a number of Schwarz
+  // smoothing steps
+  using subdomain_operator =
+      elliptic::dg::subdomain_operator::SubdomainOperator<
+          system, SolveElasticityProblem::OptionTags::SchwarzSmootherGroup,
+          tmpl::list<Elasticity::Tags::ConstitutiveRelationBase>>;
+  using schwarz_smoother = LinearSolver::Schwarz::Schwarz<
+      typename linear_solver::operand_tag,
+      SolveElasticityProblem::OptionTags::SchwarzSmootherGroup,
+      subdomain_operator, typename linear_solver::preconditioner_source_tag>;
   // For the GMRES linear solver we need to apply the DG operator to its
   // internal "operand" in every iteration of the algorithm.
   using vars_tag = typename linear_solver::operand_tag;
@@ -134,9 +153,9 @@ struct Metavariables {
       Tags::EventsAndTriggers<events, triggers>>;
 
   // Collect all reduction tags for observers
-  using observed_reduction_data_tags =
-      observers::collect_reduction_data_tags<tmpl::flatten<tmpl::list<
-          typename Event<events>::creatable_classes, linear_solver>>>;
+  using observed_reduction_data_tags = observers::collect_reduction_data_tags<
+      tmpl::flatten<tmpl::list<typename Event<events>::creatable_classes,
+                               linear_solver, schwarz_smoother>>>;
 
   // Specify all global synchronization points.
   enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
@@ -144,6 +163,7 @@ struct Metavariables {
   using initialization_actions = tmpl::list<
       Actions::SetupDataBox, dg::Actions::InitializeDomain<volume_dim>,
       typename linear_solver::initialize_element,
+      typename schwarz_smoother::initialize_element,
       elliptic::Actions::InitializeSystem<system>,
       Initialization::Actions::AddComputeTags<tmpl::list<
           Elasticity::Tags::StrainCompute<volume_dim>,
@@ -161,6 +181,10 @@ struct Metavariables {
                      domain::Tags::InterfaceCompute<
                          domain::Tags::BoundaryDirectionsInterior<volume_dim>,
                          domain::Tags::BoundaryCoordinates<volume_dim>>>>,
+      elliptic::dg::Actions::InitializeSubdomain<
+          volume_dim, typename schwarz_smoother::options_group>,
+      Elasticity::Actions::InitializeSubdomain<
+          volume_dim, typename schwarz_smoother::options_group>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           system, fixed_sources_tag>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
@@ -171,11 +195,15 @@ struct Metavariables {
 
   using register_actions =
       tmpl::list<observers::Actions::RegisterEventsWithObservers,
+                 typename schwarz_smoother::register_element,
                  Parallel::Actions::TerminatePhase>;
 
   using solve_actions = tmpl::list<
-      typename linear_solver::template solve<tmpl::list<
-          Actions::RunEventsAndTriggers, build_linear_operator_actions>>,
+      typename linear_solver::template solve<
+          tmpl::list<Actions::RunEventsAndTriggers,
+                     tmpl::list<build_linear_operator_actions,
+                                typename schwarz_smoother::template solve<
+                                    build_linear_operator_actions>>>>,
       Actions::RunEventsAndTriggers, Parallel::Actions::TerminatePhase>;
 
   using dg_element_array = elliptic::DgElementArray<
@@ -189,6 +217,7 @@ struct Metavariables {
   // Specify all parallel components that will execute actions at some point.
   using component_list = tmpl::flatten<
       tmpl::list<dg_element_array, typename linear_solver::component_list,
+                 typename schwarz_smoother::component_list,
                  observers::Observer<Metavariables>,
                  observers::ObserverWriter<Metavariables>>>;
 
@@ -222,6 +251,8 @@ static const std::vector<void (*)()> charm_init_node_funcs{
     &domain::creators::register_derived_with_charm,
     &Parallel::register_derived_classes_with_charm<
         metavariables::system::boundary_conditions_base>,
+    &Parallel::register_derived_classes_with_charm<
+        metavariables::schwarz_smoother::subdomain_solver>,
     &Parallel::register_derived_classes_with_charm<
         Event<metavariables::events>>,
     &Parallel::register_derived_classes_with_charm<
