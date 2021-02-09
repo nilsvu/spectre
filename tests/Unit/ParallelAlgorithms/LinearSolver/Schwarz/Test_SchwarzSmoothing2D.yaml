@@ -11,7 +11,7 @@ DomainCreator:
     UpperBound: [3.141592653589793, 3.141592653589793]
     IsPeriodicIn: [false, false]
     InitialRefinement: [2, 2]
-    InitialGridPoints: [4, 4]
+    InitialGridPoints: [6, 6]
 
 NumericalFlux:
   InternalPenalty:

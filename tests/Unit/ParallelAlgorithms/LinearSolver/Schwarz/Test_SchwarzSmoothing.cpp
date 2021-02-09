@@ -99,14 +99,14 @@ struct InitializeRandomInitialData {
         db::add_tag_prefix<::Tags::Analytic, fields_tag>;
 
     // Make random initial data distributed around the solution
-    auto initial_fields = get<analytic_fields_tag>(box);
-    std::mt19937 generator(std::hash<ElementId<Dim>>{}(element_id));
-    std::uniform_real_distribution<> dist(-1., 1.);
-    initial_fields += make_with_random_values<db::item_type<fields_tag>>(
-        make_not_null(&generator), make_not_null(&dist), initial_fields);
+    // auto initial_fields = get<analytic_fields_tag>(box);
+    // std::mt19937 generator(std::hash<ElementId<Dim>>{}(element_id));
+    // std::uniform_real_distribution<> dist(-1., 1.);
+    // initial_fields += make_with_random_values<db::item_type<fields_tag>>(
+    //     make_not_null(&generator), make_not_null(&dist), initial_fields);
 
-    // auto initial_fields = db::item_type<fields_tag>{
-    //     get<domain::Tags::Mesh<Dim>>(box).number_of_grid_points(), 0.};
+    auto initial_fields = db::item_type<fields_tag>{
+        get<domain::Tags::Mesh<Dim>>(box).number_of_grid_points(), 0.};
 
     return std::make_tuple(
         ::Initialization::merge_into_databox<InitializeRandomInitialData,
@@ -352,7 +352,7 @@ struct Metavariables {
 
 }  // namespace
 
-using metavariables = Metavariables<2>;
+using metavariables = Metavariables<3>;
 
 static const std::vector<void (*)()> charm_init_node_funcs{
     &setup_error_handling, &domain::creators::register_derived_with_charm,
