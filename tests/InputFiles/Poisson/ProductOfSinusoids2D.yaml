@@ -29,12 +29,6 @@ Observers:
   ReductionFileName: "PoissonProductOfSinusoids2DReductions"
 
 LinearSolver:
-  ConvergenceCriteria:
-    MaxIterations: 100
-    AbsoluteResidual: 1e-14
-    RelativeResidual: 1e-8
-  Verbosity: Quiet
-
   SchwarzSmoother:
     Iterations: 3
     MaxOverlap: 2
@@ -56,5 +50,5 @@ EventsAndTriggers:
         SubfileName: Errors
     - ObserveFields:
         SubfileName: VolumeData
-        VariablesToObserve: [Field]
+        VariablesToObserve: [Field,PreSmoothingInitial(Field),PreSmoothingSource(Field),PreSmoothingResult(Field),PreSmoothingResidual(Field),PostSmoothingInitial(Field),PostSmoothingSource(Field),PostSmoothingResult(Field),PostSmoothingResidual(Field)]
         InterpolateToMesh: None

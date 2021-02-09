@@ -129,6 +129,8 @@ struct Metavariables {
   // (public for use by the Charm++ registration code)
   using observe_fields = tmpl::append<
       typename system::primal_fields,
+      typename linear_solver::operand_tag::tags_list,
+      typename linear_solver::preconditioner_source_tag::tags_list,
       db::wrap_tags_in<LinearSolver::multigrid::Tags::PreSmoothingInitial,
                        typename multigrid::fields_tag::tags_list>,
       db::wrap_tags_in<LinearSolver::multigrid::Tags::PreSmoothingSource,
