@@ -182,6 +182,13 @@ struct StoreOrthogonalization {
         OptionsGroup, ParallelComponent>(completed_iterations,
                                          residual_magnitude, cache);
 
+    if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
+                 ::Verbosity::Verbose)) {
+      Parallel::printf("'" + Options::name<OptionsGroup>() +
+                           "'(%zu): Minimal residual vector:\n%s\n",
+                       completed_iterations, minres);
+    }
+
     // Determine whether the linear solver has converged
     Convergence::HasConverged has_converged{
         get<Convergence::Tags::Criteria<OptionsGroup>>(box),
