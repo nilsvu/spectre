@@ -117,7 +117,8 @@ struct SubdomainOperator
           ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
       ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
       ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>,
-      elliptic::dg::Tags::PenaltyParameter>;
+      elliptic::dg::Tags::PenaltyParameter,
+      elliptic::dg::Tags::Massive>;
   using fluxes_args_tags = typename System::fluxes_computer::argument_tags;
   using sources_args_tags = typename System::sources_computer::argument_tags;
 
@@ -129,7 +130,7 @@ struct SubdomainOperator
   // These tags can be taken directly from the central element's DataBox, even
   // when evaluating neighbors
   using args_tags_from_center = tmpl::remove_duplicates<tmpl::push_back<
-      ArgsTagsFromCenter, elliptic::dg::Tags::PenaltyParameter>>;
+      ArgsTagsFromCenter, elliptic::dg::Tags::PenaltyParameter, elliptic::dg::Tags::Massive>>;
 
   // Data on neighbors is stored in the central element's DataBox in
   // `LinearSolver::Schwarz::Tags::Overlaps` maps, so we wrap the argument tags

@@ -153,8 +153,9 @@ void test_dg_operator(
   // Initialize all elements in the domain
   ActionTesting::MockRuntimeSystem<Metavars> runner{
       tuples::TaggedTuple<domain::Tags::Domain<Dim>,
-                          ::elliptic::dg::Tags::PenaltyParameter>{
-          std::move(domain), 1.5}};
+                          ::elliptic::dg::Tags::PenaltyParameter,
+                          ::elliptic::dg::Tags::Massive>{
+          std::move(domain), 1.5, false}};
   for (const auto& element_id : all_element_ids) {
     ActionTesting::emplace_component_and_initialize<element_array>(
         &runner, element_id, {initial_ref_levs, initial_extents, 0_st});

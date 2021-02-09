@@ -23,12 +23,19 @@ DomainCreator:
 Discretization:
   DiscontinuousGalerkin:
     PenaltyParameter: 1.
+    Massive: True
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids1DVolume"
   ReductionFileName: "PoissonProductOfSinusoids1DReductions"
 
 LinearSolver:
+  ConvergenceCriteria:
+    MaxIterations: 100
+    AbsoluteResidual: 1e-14
+    RelativeResidual: 1e-10
+  Verbosity: Verbose
+
   SchwarzSmoother:
     Iterations: 3
     MaxOverlap: 2
@@ -50,5 +57,5 @@ EventsAndTriggers:
         SubfileName: Errors
     - ObserveFields:
         SubfileName: VolumeData
-        VariablesToObserve: [Field,PreSmoothingInitial(Field),PreSmoothingSource(Field),PreSmoothingResult(Field),PreSmoothingResidual(Field),PostSmoothingInitial(Field),PostSmoothingSource(Field),PostSmoothingResult(Field),PostSmoothingResidual(Field)]
+        VariablesToObserve: [Field,PreSmoothingInitial(Preconditioned(LinearOperand(Field))),PreSmoothingSource(Preconditioned(LinearOperand(Field))),PreSmoothingResult(Preconditioned(LinearOperand(Field))),PreSmoothingResidual(Preconditioned(LinearOperand(Field))),PostSmoothingInitial(Preconditioned(LinearOperand(Field))),PostSmoothingSource(Preconditioned(LinearOperand(Field))),PostSmoothingResult(Preconditioned(LinearOperand(Field))),PostSmoothingResidual(Preconditioned(LinearOperand(Field)))]
         InterpolateToMesh: None

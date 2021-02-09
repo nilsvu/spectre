@@ -32,7 +32,8 @@ template <size_t Dim>
 std::array<std::reference_wrapper<const Matrix>, Dim> restriction_operator(
     const Mesh<Dim>& fine_mesh, const Mesh<Dim>& coarse_mesh,
     const std::array<SegmentId, Dim>& child_segment_ids,
-    const std::array<SegmentId, Dim>& parent_segment_ids) noexcept;
+    const std::array<SegmentId, Dim>& parent_segment_ids,
+    bool massive) noexcept;
 
 template <size_t Dim>
 std::array<std::reference_wrapper<const Matrix>, Dim> prolongation_operator(

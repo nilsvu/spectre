@@ -109,6 +109,7 @@ struct Metavariables {
   using multigrid = LinearSolver::multigrid::Multigrid<
       volume_dim, typename linear_solver::operand_tag,
       SolvePoissonProblem::OptionTags::MultigridGroup,
+      elliptic::dg::Tags::Massive,
       typename linear_solver::preconditioner_source_tag>;
   // Smooth each multigrid level with a number of Schwarz smoothing steps
   using subdomain_operator =

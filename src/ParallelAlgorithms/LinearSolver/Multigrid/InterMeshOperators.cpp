@@ -39,7 +39,8 @@ template <size_t Dim>
 std::array<std::reference_wrapper<const Matrix>, Dim> restriction_operator(
     const Mesh<Dim>& fine_mesh, const Mesh<Dim>& coarse_mesh,
     const std::array<SegmentId, Dim>& child_segment_ids,
-    const std::array<SegmentId, Dim>& parent_segment_ids) noexcept {
+    const std::array<SegmentId, Dim>& parent_segment_ids,
+    const bool massive) noexcept {
   const Matrix identity{};
   auto restriction_operator = make_array<Dim>(std::cref(identity));
   for (size_t d = 0; d < Dim; d++) {
@@ -47,10 +48,20 @@ std::array<std::reference_wrapper<const Matrix>, Dim> restriction_operator(
     const auto coarse_mesh_d = coarse_mesh.slice_through(d);
     if (child_segment_ids.at(d) != parent_segment_ids.at(d) or
         fine_mesh_d != coarse_mesh_d) {
+      if (massive) {
+        // No need to multiply with mass matrices, since they are absorbed in
+        // the operand. The restriction operator is just the transpose of the
+        // prolongation operator, i.e. an interpolation matrix transpose
+      restriction_operator.at(d) =
+          Spectral::projection_matrix_mortar_to_element_massive(
+              mortar_size(child_segment_ids.at(d), parent_segment_ids.at(d)),
+              coarse_mesh_d, fine_mesh_d);
+      } else {
       restriction_operator.at(d) =
           Spectral::projection_matrix_mortar_to_element(
               mortar_size(child_segment_ids.at(d), parent_segment_ids.at(d)),
               coarse_mesh_d, fine_mesh_d);
+      }
     }
   }
   return restriction_operator;
@@ -84,7 +95,7 @@ std::array<std::reference_wrapper<const Matrix>, Dim> prolongation_operator(
   restriction_operator(                                                     \
       const Mesh<DIM(data)>& fine_mesh, const Mesh<DIM(data)>& coarse_mesh, \
       const std::array<SegmentId, DIM(data)>& child_segment_ids,            \
-      const std::array<SegmentId, DIM(data)>& parent_segment_ids) noexcept; \
+      const std::array<SegmentId, DIM(data)>& parent_segment_ids, bool massive) noexcept; \
   template std::array<std::reference_wrapper<const Matrix>, DIM(data)>      \
   prolongation_operator(                                                    \
       const Mesh<DIM(data)>& fine_mesh, const Mesh<DIM(data)>& coarse_mesh, \

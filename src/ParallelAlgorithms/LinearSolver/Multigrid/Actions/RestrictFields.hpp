@@ -44,9 +44,8 @@ struct DataFromChildrenInboxTag
 
 namespace Actions {
 
-// This action restricts _massless_ fields. It needs adjustment when restricting
-// massive quantities.
 template <typename FieldsTag, typename OptionsGroup,
+          typename FieldIsMassiveTag,
           typename ReceiveTag = FieldsTag>
 struct SendFieldsToCoarserGrid {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -76,10 +75,15 @@ struct SendFieldsToCoarserGrid {
     // We restrict before sending the data so the restriction operation is
     // parellelized. The parent only needs to sum up all child contributions.
     // TODO: Do nothing when parent is the same element
+    bool massive = false;
+    if constexpr (not std::is_same_v<FieldIsMassiveTag, void>) {
+      massive = db::get<FieldIsMassiveTag>(box);
+    }
     const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
     const auto& parent_mesh = db::get<Tags::ParentMesh<Dim>>(box);
     const auto restriction_operator = multigrid::restriction_operator(
-        mesh, parent_mesh, element_id.segment_ids(), parent_id->segment_ids());
+        mesh, parent_mesh, element_id.segment_ids(), parent_id->segment_ids(),
+        massive);
     auto restricted_fields = typename ReceiveTag::type(apply_matrices(
         restriction_operator, db::get<FieldsTag>(box),
         // TODO: make sure apply_matrices works for non-square matrices

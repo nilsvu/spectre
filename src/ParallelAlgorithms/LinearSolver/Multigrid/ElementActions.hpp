@@ -175,9 +175,10 @@ struct PrepareSolve {
   }
 };
 
-template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
+template <typename FieldsTag, typename OptionsGroup, typename ResidualIsMassiveTag, typename SourceTag>
 using SendResidualToCoarserGrid = Actions::SendFieldsToCoarserGrid<
     db::add_tag_prefix<LinearSolver::Tags::Residual, FieldsTag>, OptionsGroup,
+    ResidualIsMassiveTag,
     SourceTag>;
 
 template <size_t Dim, typename FieldsTag, typename OptionsGroup,

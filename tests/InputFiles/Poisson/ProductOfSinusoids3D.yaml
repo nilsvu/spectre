@@ -25,6 +25,7 @@ DomainCreator:
 Discretization:
   DiscontinuousGalerkin:
     PenaltyParameter: 1.
+    Massive: True
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids3DVolume"

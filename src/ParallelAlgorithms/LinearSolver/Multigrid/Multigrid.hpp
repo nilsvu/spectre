@@ -26,6 +26,7 @@ struct VcycleUpLabel {};
  * operator applied to the fields must be up-to-date.
  */
 template <size_t Dim, typename FieldsTag, typename OptionsGroup,
+typename ResidualIsMassiveTag,
           typename SourceTag =
               db::add_tag_prefix<::Tags::FixedSource, FieldsTag>>
 struct Multigrid {
@@ -62,7 +63,7 @@ struct Multigrid {
       detail::PreparePreSmoothing<FieldsTag, OptionsGroup, SourceTag>,
       PreSmootherActions,
       detail::SkipPostsmoothingAtBottom<FieldsTag, OptionsGroup, SourceTag>,
-      detail::SendResidualToCoarserGrid<FieldsTag, OptionsGroup, SourceTag>,
+      detail::SendResidualToCoarserGrid<FieldsTag, OptionsGroup, ResidualIsMassiveTag, SourceTag>,
       detail::ReceiveCorrectionFromCoarserGrid<Dim, FieldsTag, OptionsGroup,
                                                SourceTag>,
       PostSmootherActions,
