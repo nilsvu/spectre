@@ -18,6 +18,7 @@
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Variables.hpp"
 #include "DataStructures/VariablesTag.hpp"
+#include "Elliptic/Systems/GetSourcesComputer.hpp"
 #include "Framework/TestHelpers.hpp"
 #include "Framework/TestingFramework.hpp"
 #include "Helpers/DataStructures/MakeWithRandomValues.hpp"
@@ -30,6 +31,12 @@ namespace TestHelpers {
 /// Helper functions to test elliptic first-order systems
 namespace elliptic {
 namespace detail {
+
+template <typename Tag>
+struct Correction : db::PrefixTag, db::SimpleTag {
+  using type = typename Tag::type;
+  using tag = Tag;
+};
 
 template <typename FluxesComputer, typename... PrimalFields,
           typename... AuxiliaryFields, typename... PrimalFluxes,
@@ -183,13 +190,127 @@ void test_first_order_sources_computer_impl(
  * - It can be applied to a DataBox, i.e. its argument tags are consistent with
  *   its apply function.
  */
-template <typename System>
+template <typename System, bool Linearized = false>
 void test_first_order_sources_computer(const DataVector& used_for_size) {
-  using sources_computer = typename System::sources_computer;
+  using sources_computer = ::elliptic::get_sources_computer<System, Linearized>;
   detail::test_first_order_sources_computer_impl<sources_computer>(
-      used_for_size, typename System::primal_fields{},
-      typename System::auxiliary_fields{}, typename System::primal_fluxes{},
+      used_for_size,
+      tmpl::conditional_t<
+          Linearized,
+          db::wrap_tags_in<detail::Correction, typename System::primal_fields>,
+          typename System::primal_fields>{},
+      tmpl::conditional_t<Linearized,
+                          db::wrap_tags_in<detail::Correction,
+                                           typename System::auxiliary_fields>,
+                          typename System::auxiliary_fields>{},
+      tmpl::conditional_t<
+          Linearized,
+          db::wrap_tags_in<detail::Correction, typename System::primal_fluxes>,
+          typename System::primal_fluxes>{},
       typename sources_computer::argument_tags{});
+}
+
+namespace detail {
+
+template <typename SourcesComputer, typename SourcesComputerLinearized,
+          typename... PrimalFields, typename... AuxiliaryFields,
+          typename... PrimalFluxes, typename... SourcesArgsTags,
+          typename... LinearizedSourcesArgsTags>
+void test_linearization_impl(
+    const double correction_magnitude, const DataVector& used_for_size,
+    tmpl::list<PrimalFields...> /*meta*/,
+    tmpl::list<AuxiliaryFields...> /*meta*/,
+    tmpl::list<PrimalFluxes...> /*meta*/,
+    tmpl::list<SourcesArgsTags...> /*meta*/,
+    tmpl::list<LinearizedSourcesArgsTags...> /*meta*/) {
+  CAPTURE(correction_magnitude);
+  using FieldsType = Variables<tmpl::list<PrimalFields...>>;
+  using FluxesType = Variables<tmpl::list<PrimalFluxes...>>;
+  using SourcesType = Variables<tmpl::list<::Tags::Source<PrimalFields>...,
+                                           ::Tags::Source<AuxiliaryFields>...>>;
+
+  MAKE_GENERATOR(generator);
+  std::uniform_real_distribution<> dist(0.5, 1.);
+  std::uniform_real_distribution<> dist_eps(-correction_magnitude / 2.,
+                                            correction_magnitude / 2.);
+  Approx custom_approx =
+      Approx::custom().epsilon(correction_magnitude).scale(1.);
+
+  // Generate two sets of random fields that differ by O(correction_magnitude)
+  const auto fields = make_with_random_values<FieldsType>(
+      make_not_null(&generator), make_not_null(&dist), used_for_size);
+  const auto fluxes = make_with_random_values<FluxesType>(
+      make_not_null(&generator), make_not_null(&dist), used_for_size);
+  const auto fields_correction = make_with_random_values<FieldsType>(
+      make_not_null(&generator), make_not_null(&dist_eps), used_for_size);
+  const auto fluxes_correction = make_with_random_values<FluxesType>(
+      make_not_null(&generator), make_not_null(&dist_eps), used_for_size);
+  const FieldsType fields_corrected = fields + fields_correction;
+  const FluxesType fluxes_corrected = fluxes + fluxes_correction;
+
+  // Generate random background fields
+  auto sources_args = make_with_random_values<
+      Variables<tmpl::append<typename SourcesComputer::argument_tags,
+                             tmpl::list<PrimalFields..., PrimalFluxes...>>>>(
+      make_not_null(&generator), make_not_null(&dist), used_for_size);
+  // The linearized sources may use the nonlinear fields and fluxes as
+  // background
+  sources_args.assign_subset(fields);
+  sources_args.assign_subset(fluxes);
+
+  // Apply the nonlinear sources to both sets of fields and take the difference
+  SourcesType sources{used_for_size.size(), 0.};
+  SourcesComputer::apply(
+      make_not_null(&get<::Tags::Source<AuxiliaryFields>>(sources))...,
+      get<SourcesArgsTags>(sources_args)..., get<PrimalFields>(fields)...);
+  SourcesComputer::apply(
+      make_not_null(&get<::Tags::Source<PrimalFields>>(sources))...,
+      get<SourcesArgsTags>(sources_args)..., get<PrimalFields>(fields)...,
+      get<PrimalFluxes>(fluxes)...);
+  SourcesType sources_corrected{used_for_size.size(), 0.};
+  SourcesComputer::apply(make_not_null(&get<::Tags::Source<AuxiliaryFields>>(
+                             sources_corrected))...,
+                         get<SourcesArgsTags>(sources_args)...,
+                         get<PrimalFields>(fields_corrected)...);
+  SourcesComputer::apply(
+      make_not_null(&get<::Tags::Source<PrimalFields>>(sources_corrected))...,
+      get<SourcesArgsTags>(sources_args)...,
+      get<PrimalFields>(fields_corrected)...,
+      get<PrimalFluxes>(fluxes_corrected)...);
+  const SourcesType sources_diff = sources_corrected - sources;
+
+  // Apply the linearized sources to the difference in the fields. This should
+  // be the same as the difference of the nonlinear sources, to the order of the
+  // correction_magnitude.
+  SourcesType sources_linearized{used_for_size.size(), 0.};
+  SourcesComputerLinearized::apply(
+      make_not_null(
+          &get<::Tags::Source<AuxiliaryFields>>(sources_linearized))...,
+      get<LinearizedSourcesArgsTags>(sources_args)...,
+      get<PrimalFields>(fields_correction)...);
+  SourcesComputerLinearized::apply(
+      make_not_null(&get<::Tags::Source<PrimalFields>>(sources_linearized))...,
+      get<LinearizedSourcesArgsTags>(sources_args)...,
+      get<PrimalFields>(fields_correction)...,
+      get<PrimalFluxes>(fluxes_correction)...);
+  CHECK_VARIABLES_CUSTOM_APPROX(sources_diff, sources_linearized,
+                                custom_approx);
+}
+
+}  // namespace detail
+
+/// Test the `System` has linearized sources and that they are actually the
+/// linearization of the nonlinear sources to the order given by the
+/// `correction_magnitude`
+template <typename System>
+void test_linearization(const double correction_magnitude,
+                        const DataVector& used_for_size) {
+  detail::test_linearization_impl<typename System::sources_computer,
+                                  typename System::sources_computer_linearized>(
+      correction_magnitude, used_for_size, typename System::primal_fields{},
+      typename System::auxiliary_fields{}, typename System::primal_fluxes{},
+      typename System::sources_computer::argument_tags{},
+      typename System::sources_computer_linearized::argument_tags{});
 }
 
 }  // namespace elliptic
