@@ -42,6 +42,10 @@ const Matrix& projection_matrix_mortar_to_element(
     MortarSize size, const Mesh<1>& element_mesh,
     const Mesh<1>& mortar_mesh) noexcept;
 
+const Matrix& projection_matrix_mortar_to_element_massive(
+    MortarSize size, const Mesh<1>& element_mesh,
+    const Mesh<1>& mortar_mesh) noexcept;
+
 /// The projection matrix from a 1D element to a mortar.  See
 /// projection_matrix_mortar_to_element() for details.
 const Matrix& projection_matrix_element_to_mortar(
