@@ -188,8 +188,9 @@ void test_dg_operator(
   ActionTesting::MockRuntimeSystem<Metavars> runner{
       tuples::TaggedTuple<domain::Tags::Domain<Dim>,
                           ::elliptic::dg::Tags::PenaltyParameter,
+                          ::elliptic::dg::Tags::Massive,
                           ::Tags::AnalyticSolution<AnalyticSolution>>{
-          std::move(domain), penalty_parameter, analytic_solution}};
+          std::move(domain), penalty_parameter, false, analytic_solution}};
 
   // DataBox shortcuts
   const auto get_tag = [&runner](

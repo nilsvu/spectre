@@ -9,9 +9,13 @@
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Matrix.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/Mass.hpp"
+#include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "ParallelAlgorithms/Initialization/MutateAssign.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
@@ -75,6 +79,14 @@ struct InitializeFixedSources {
     // solve.
     auto fixed_sources = variables_from_tagged_tuple(background.variables(
         inertial_coords, typename fixed_sources_tag::type::tags_list{}));
+
+    if (db::get<elliptic::dg::Tags::Massive>(box)) {
+      const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
+      const auto& det_inv_jacobian = db::get<
+          domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>>(box);
+      fixed_sources /= get(det_inv_jacobian);
+      ::dg::apply_mass(make_not_null(&fixed_sources), mesh);
+    }
 
     ::Initialization::mutate_assign<simple_tags>(make_not_null(&box),
                                                  std::move(fixed_sources));

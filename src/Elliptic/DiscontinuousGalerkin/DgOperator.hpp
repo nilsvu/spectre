@@ -11,7 +11,9 @@
 #include <utility>
 
 #include "DataStructures/DataVector.hpp"
+#include "DataStructures/Matrix.hpp"
 #include "DataStructures/SliceVariables.hpp"
+#include "DataStructures/Tensor/EagerMath/Determinant.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Domain/Structure/Direction.hpp"
@@ -622,7 +624,8 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
           external_face_normal_magnitudes,
       const ::dg::MortarMap<Dim, Mesh<Dim - 1>>& all_mortar_meshes,
       const ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>& all_mortar_sizes,
-      const double penalty_parameter, const TemporalId& temporal_id,
+      const double penalty_parameter, const bool massive,
+      const TemporalId& temporal_id,
       const std::tuple<SourcesArgs...>& sources_args,
       const DirectionsPredicate& directions_predicate =
           AllDirections{}) noexcept {
@@ -816,6 +819,13 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
       add_slice_to_data(operator_applied_to_vars, primal_boundary_corrections,
                         mesh.extents(), direction.dimension(), slice_index);
     }  // loop over all mortars
+
+    // Apply mass matrix
+    if (massive) {
+      const auto det_inv_jacobian = determinant(inv_jacobian);
+      *operator_applied_to_vars /= get(det_inv_jacobian);
+      ::dg::apply_mass(operator_applied_to_vars, mesh);
+    }
   }
 
   template <typename... FixedSourcesTags, typename ApplyBoundaryCondition,
@@ -836,7 +846,7 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
           external_face_normal_magnitudes,
       const ::dg::MortarMap<Dim, Mesh<Dim - 1>>& all_mortar_meshes,
       const ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>& all_mortar_sizes,
-      const double penalty_parameter,
+      const double penalty_parameter, const bool massive,
       const ApplyBoundaryCondition& apply_boundary_condition,
       const std::tuple<FluxesArgs...>& fluxes_args,
       const std::tuple<SourcesArgs...>& sources_args,
@@ -881,8 +891,8 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
                          make_not_null(&all_mortar_data), zero_primal_vars,
                          primal_fluxes_buffer, mesh, inv_jacobian, {},
                          external_face_normal_magnitudes, all_mortar_meshes,
-                         all_mortar_sizes, penalty_parameter, temporal_id,
-                         sources_args);
+                         all_mortar_sizes, penalty_parameter, massive,
+                         temporal_id, sources_args);
     // Impose the nonlinear (constant) boundary contribution as fixed sources on
     // the RHS of the equations
     *fixed_sources -= operator_applied_to_zero_vars;
