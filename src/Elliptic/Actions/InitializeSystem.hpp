@@ -9,10 +9,13 @@
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
+#include "DataStructures/Matrix.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
+#include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MutateAssign.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
@@ -96,6 +99,23 @@ struct InitializeSystem {
             .variables(inertial_coords,
                        db::wrap_tags_in<::Tags::FixedSource,
                                         typename System::primal_fields>{}));
+
+    if (db::get<elliptic::dg::Tags::Massive>(box)) {
+      const auto& det_inv_jacobian = db::get<
+          domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>>(box);
+      fixed_sources /= get(det_inv_jacobian);
+      // This is the full mass matrix (no diagonal approximation). The lifting
+      // operation uses the diagonal approximation. Problem?
+      const Matrix identity{};
+      auto mass_matrices = make_array<Dim>(std::cref(identity));
+      for (size_t d = 0; d < Dim; ++d) {
+        gsl::at(mass_matrices, d) =
+            Spectral::mass_matrix(mesh.slice_through(d));
+      }
+      fixed_sources =
+          apply_matrices(mass_matrices, fixed_sources, mesh.extents());
+    }
+
     Initialization::mutate_assign<simple_tags>(
         make_not_null(&box), std::move(fields), std::move(fixed_sources));
     return std::make_tuple(std::move(box));
