@@ -395,7 +395,8 @@ struct ReceiveMortarDataAndApplyOperator<
 
  public:
   using const_global_cache_tags =
-      tmpl::list<elliptic::dg::Tags::PenaltyParameter>;
+      tmpl::list<elliptic::dg::Tags::PenaltyParameter,
+                 elliptic::dg::Tags::Massive>;
   using inbox_tags = tmpl::list<mortar_data_inbox_tag>;
 
   template <typename DbTags, typename... InboxTags, typename Metavariables,
@@ -458,7 +459,8 @@ struct ReceiveMortarDataAndApplyOperator<
             ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>>(box),
         db::get<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>(box),
         db::get<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>(box),
-        db::get<elliptic::dg::Tags::PenaltyParameter>(box), temporal_id,
+        db::get<elliptic::dg::Tags::PenaltyParameter>(box),
+        db::get<elliptic::dg::Tags::Massive>(box), temporal_id,
         std::forward_as_tuple(db::get<SourcesArgsTags>(box)...));
 
     return {std::move(box)};
@@ -537,7 +539,8 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource<
 
  public:
   using const_global_cache_tags =
-      tmpl::list<elliptic::dg::Tags::PenaltyParameter>;
+      tmpl::list<elliptic::dg::Tags::PenaltyParameter,
+                 elliptic::dg::Tags::Massive>;
 
   template <typename DbTags, typename... InboxTags, typename Metavariables,
             typename ActionList, typename ParallelComponent>
@@ -599,7 +602,7 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource<
         db::get<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>(box),
         db::get<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>(box),
         db::get<elliptic::dg::Tags::PenaltyParameter>(box),
-        apply_boundary_condition,
+        db::get<elliptic::dg::Tags::Massive>(box), apply_boundary_condition,
         std::forward_as_tuple(db::get<FluxesArgsTags>(box)...),
         std::forward_as_tuple(db::get<SourcesArgsTags>(box)...),
         interface_apply<domain::Tags::InternalDirections<Dim>,

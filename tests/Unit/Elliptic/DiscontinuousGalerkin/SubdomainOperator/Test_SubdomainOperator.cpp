@@ -280,8 +280,8 @@ void test_subdomain_operator(
     ActionTesting::MockRuntimeSystem<metavariables> runner{tuples::TaggedTuple<
         domain::Tags::Domain<Dim>,
         LinearSolver::Schwarz::Tags::MaxOverlap<DummyOptionsGroup>,
-        elliptic::dg::Tags::PenaltyParameter>{std::move(domain), overlap,
-                                              penalty_parameter}};
+        elliptic::dg::Tags::PenaltyParameter, elliptic::dg::Tags::Massive>{
+        std::move(domain), overlap, penalty_parameter, false}};
 
     // Initialize all elements, generating random subdomain data
     for (const auto& element_id : element_ids) {
