@@ -15,17 +15,17 @@
 
 Background:
   ProductOfSinusoids:
-    WaveNumbers: [1]
+    WaveNumbers: [3.141592653589793]
 
 InitialGuess:
   Zero:
 
 DomainCreator:
   Interval:
-    LowerBound: [0]
-    UpperBound: [3.141592653589793]
+    LowerBound: [-0.5]
+    UpperBound: [1.]
     InitialRefinement: [1]
-    InitialGridPoints: [3]
+    InitialGridPoints: [4]
     TimeDependence: None
     BoundaryConditions:
       LowerBoundary:
@@ -33,10 +33,10 @@ DomainCreator:
           Field: Dirichlet
       UpperBoundary:
         AnalyticSolution:
-          Field: Dirichlet
+          Field: Neumann
 
-NumericalFlux:
-  InternalPenalty:
+Discretization:
+  DiscontinuousGalerkin:
     PenaltyParameter: 1.
 
 Observers:
@@ -45,9 +45,9 @@ Observers:
 
 LinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 7
-    AbsoluteResidual: 1e-10
-    RelativeResidual: 1e-10
+    MaxIterations: 8
+    AbsoluteResidual: 1.e-10
+    RelativeResidual: 1.e-10
   Verbosity: Verbose
 
 EventsAndTriggers:
@@ -55,8 +55,8 @@ EventsAndTriggers:
       N: 1
       Offset: 6
   : - ObserveErrorNorms:
-        SubfileName: Errors
+        SubfileName: ErrorNorms
     - ObserveFields:
         SubfileName: VolumeData
-        VariablesToObserve: [Field, deriv(Field)]
+        VariablesToObserve: [Field]
         InterpolateToMesh: None
