@@ -85,7 +85,6 @@ struct SendFieldsToCoarserGrid {
         massive);
     auto restricted_fields = typename ReceiveTag::type(apply_matrices(
         restriction_operator, db::get<FieldsTag>(box),
-        // TODO: make sure apply_matrices works for non-square matrices
         mesh.extents()));
 
     auto& receiver_proxy =
