@@ -33,7 +33,7 @@ DomainCreator:
     OuterRadius: 0.6
     LowerBound: 0
     UpperBound: 0.3
-    InitialRefinement: 0
+    InitialRefinement: 1
     InitialGridPoints: [3, 3, 4]
     UseEquiangularMap: True
     RadialPartitioning: []
@@ -52,6 +52,7 @@ DomainCreator:
 Discretization:
   DiscontinuousGalerkin:
     PenaltyParameter: 1.
+    Massive: True
 
 Observers:
   VolumeFileName: "ElasticHalfSpaceMirrorVolume"
@@ -60,8 +61,8 @@ Observers:
 LinearSolver:
   GMRES:
     ConvergenceCriteria:
-      MaxIterations: 2
-      RelativeResidual: 1.e-4
+      MaxIterations: 6
+      RelativeResidual: 1.e-6
       AbsoluteResidual: 1.e-12
     Verbosity: Verbose
 
@@ -71,10 +72,16 @@ LinearSolver:
     Verbosity: Quiet
     SubdomainSolver: ExplicitInverse
 
+  Multigrid:
+    Iterations: 1
+    MaxLevels: Auto
+    CoarsestGridPoints: 12
+    Verbosity: Quiet
+
 EventsAndTriggers:
   ? EveryNIterations:
       N: 1
-      Offset: 2
+      Offset: 0
   : - ObserveErrorNorms:
         SubfileName: ErrorNorms
     - ObserveVolumeIntegrals:
