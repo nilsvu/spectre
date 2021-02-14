@@ -32,7 +32,6 @@ namespace Actions {
  * - Metavariables:
  *   - `analytic_solution_tag`
  * - System:
- *   - `fields_tag`
  *   - `primal_fields`
  * - DataBox:
  *   - `Tags::Mesh<Dim>`
@@ -40,8 +39,8 @@ namespace Actions {
  *
  * DataBox:
  * - Adds:
- *   - `fields_tag`
- *   - `db::add_tag_prefix<::Tags::FixedSource, fields_tag>`
+ *   - `::Tags::Variables<primal_fields>`
+ *   - `::Tags::Variables<db::wrap_tags_in<::Tags::FixedSource, primal_fields>>`
  *
  * \note This action relies on the `SetupDataBox` aggregated initialization
  * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
@@ -49,9 +48,8 @@ namespace Actions {
  */
 template <typename System>
 struct InitializeSystem {
-  using fields_tag = typename System::fields_tag;
-  using fixed_sources_tag =
-      db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
+  using fields_tag = ::Tags::Variables<typename System::primal_fields>;
+  using fixed_sources_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
 
   using simple_tags = tmpl::list<fields_tag, fixed_sources_tag>;
   using compute_tags = tmpl::list<>;
@@ -93,8 +91,7 @@ struct InitializeSystem {
     // which defines the problem we want to solve.
     // We need only retrieve sources for the primal fields, since the auxiliary
     // fields will never be sourced.
-    typename fixed_sources_tag::type fixed_sources{num_grid_points, 0.};
-    fixed_sources.assign_subset(
+    auto fixed_sources = variables_from_tagged_tuple(
         Parallel::get<typename Metavariables::analytic_solution_tag>(cache)
             .variables(inertial_coords,
                        db::wrap_tags_in<::Tags::FixedSource,
