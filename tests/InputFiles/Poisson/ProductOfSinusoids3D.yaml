@@ -34,6 +34,7 @@ DomainCreator:
 Discretization:
   DiscontinuousGalerkin:
     PenaltyParameter: 1.
+    Massive: True
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids3DVolume"
@@ -51,6 +52,12 @@ LinearSolver:
     MaxOverlap: 2
     Verbosity: Quiet
     SubdomainSolver: ExplicitInverse
+
+  Multigrid:
+    Iterations: 1
+    MaxLevels: Auto
+    CoarsestGridPoints: 12
+    Verbosity: Verbose
 
 EventsAndTriggers:
   ? EveryNIterations:
