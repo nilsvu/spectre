@@ -51,7 +51,7 @@ function(add_single_input_file_test INPUT_FILE EXECUTABLE CHECK_TYPE TIMEOUT)
       # Make sure we run the test in the build directory for cleaning its output
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
       )
-  elseif("${CHECK_TYPE}" STREQUAL "execute_check_h5")
+  elseif("${CHECK_TYPE}" STREQUAL "execute_check_output")
     add_test(
       NAME "${CTEST_NAME}"
       # This script is written below, and only once
@@ -186,7 +186,7 @@ ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/CleanOutput.py -v \
 # Write command to execute an input file and clean its output into a shell
 # script, which makes it easier to chain multiple commands
 configure_file(
-  ${CMAKE_SOURCE_DIR}/tools/ExecuteCheckOutputFilesAndClean.sh
+  ${CMAKE_SOURCE_DIR}/cmake/ExecuteCheckOutputFilesAndClean.sh
   ${PROJECT_BINARY_DIR}/tmp/ExecuteCheckOutputFilesAndClean.sh
   )
 

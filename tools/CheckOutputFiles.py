@@ -1,10 +1,13 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
+import ast
 import argparse
 import glob
 import h5py
+import logging
 import numpy as np
+import numpy.testing as npt
 import os
 import yaml
 
@@ -32,7 +35,8 @@ class H5Check:
         relative_tolerance: The relative tolerance for approximation checks
     """
     def __init__(self, unit_test, test_h5_label, h5_glob, test_h5_entity,
-                 expected_h5_entity, absolute_tolerance, relative_tolerance):
+                 expected_h5_entity, absolute_tolerance, relative_tolerance,
+                 skip_columns):
         """Initializer for H5Check
 
         Note: the `unit_test` argument must be the unit test object -- this
@@ -48,6 +52,7 @@ class H5Check:
         self.absolute_tolerance = float(absolute_tolerance)
         self.relative_tolerance = (0.0 if relative_tolerance is None else
                                    float(relative_tolerance))
+        self.skip_columns = ([] if skip_columns is None else skip_columns)
 
     def check_h5_file(self, h5_file, test_entity, expected_entity):
         """Perform the unit test comparisons between the dataset or group
@@ -62,9 +67,16 @@ class H5Check:
         """
 
         if isinstance(h5_file[test_entity], h5py.Dataset):
+            logging.info("Checking dataset : " + test_entity)
             with self.unit_test.subTest(test_entity=test_entity,
                                         expected_entity=expected_entity):
                 test_data = h5_file[test_entity][()]
+                column_mask = [
+                    x not in self.skip_columns
+                    for x in range(test_data.shape[1])
+                ]
+                print(column_mask)
+                print(test_data[:, column_mask])
                 if self.expected_h5_entity is not None:
                     expected_data = h5_file[expected_entity][()]
                     self.unit_test.assertEqual(
@@ -77,25 +89,19 @@ class H5Check:
                         " types.")
                     if (test_data.dtype == np.dtype(np.float) or
                             test_data.dtype == np.dtype(np.complexfloating)):
-                        for index in np.ndindex(test_data.shape):
-                            with self.unit_test.subTest(index=index):
-                                self.unit_test.assertTrue(
-                                    np.isclose(test_data[index],
-                                               expected_data[index],
-                                               self.relative_tolerance,
-                                               self.absolute_tolerance),
-                                    msg="Compare " + str(test_data[index]) +
-                                    " to " + str(expected_data[index]))
+                        npt.assert_allclose(test_data[:, column_mask],
+                                            expected_data[:, column_mask],
+                                            rtol=self.relative_tolerance,
+                                            atol=self.absolute_tolerance)
                     else:
                         self.unit_test.assertEqual(test_data, expected_data)
                 else:
-                    if (test_data.dtype == np.dtype(np.floating) or
+                    if (test_data.dtype == np.dtype(np.float) or
                             test_data.dtype == np.dtype(np.complexfloating)):
-                        for index in np.ndindex(test_data.shape):
-                            with self.unit_test.subTest(index=index):
-                                self.unit_test.assertTrue(
-                                    np.isclose(test_data[index], 0.0, 0.0,
-                                               self.absolute_tolerance))
+                        npt.assert_allclose(test_data[:, column_mask],
+                                            0.0,
+                                            rtol=self.relative_tolerance,
+                                            atol=self.absolute_tolerance)
                     else:
                         self.assertTrue(
                             False,
@@ -134,9 +140,10 @@ class H5Check:
         as an error in the executable.
         """
         checks_performed = False
-        print(os.path.join(run_directory, self.h5_glob))
+        logging.info("Performing checks: " +
+                     os.path.join(run_directory, self.h5_glob))
         for filename in glob.glob(os.path.join(run_directory, self.h5_glob)):
-            print(filename)
+            logging.info("Checking file: " + filename)
             with self.unit_test.subTest(filename=filename):
                 with h5py.File(filename, 'r') as check_h5:
                     if self.test_h5_entity in check_h5 or (
@@ -172,7 +179,7 @@ def read_h5_checks_config_lines(input_filename):
         raise RuntimeError(
             "Could not find '# OutputFileChecks:' in input file. Please"
             " specify the h5 fields to check in the test yaml."
-            " See tools/CheckH5.py for syntax details.")
+            " See tools/CheckOutputFiles.py for syntax details.")
 
 
 class H5CheckTestCase(unittest.TestCase):
@@ -197,22 +204,27 @@ class H5CheckTestCase(unittest.TestCase):
     #     ExpectedDataSubfile: "/expected_h5_group_name"
     #     AbsoluteTolerance: 1e-11
     #     RelativeTolerance: 1e-6
+    #     SkipColumns: [0, 1]
     ```
     In particular, the entire comment block starting from `# OutputFileChecks:`
-    and ending where the indentation or comment breaks must be parsable as yaml
+    and ending where the indentation or comment breaks must be parsable as yaml.
+    `SkipColumns` must be a list in brackets of the indices of columns to omit
+    from the test.
     """
     def test_h5_output(self):
         h5_check_list = []
         config_lines = read_h5_checks_config_lines(self.input_filename)
         parsed_yaml = yaml.safe_load(''.join(config_lines))
         for check_block in parsed_yaml['OutputFileChecks']:
+            logging.info("Parsed File check : " + check_block.get("Label"))
             h5_check_list.append(
                 H5Check(self, check_block.get("Label"),
                         check_block.get("FileGlob"),
                         check_block.get("Subfile"),
                         check_block.get("ExpectedDataSubfile"),
                         check_block.get("AbsoluteTolerance"),
-                        check_block.get("RelativeTolerance")))
+                        check_block.get("RelativeTolerance"),
+                        check_block.get("SkipColumns")))
         for h5_check in h5_check_list:
             with self.subTest(test=h5_check.test_h5_label):
                 h5_check.perform_check(self.run_directory)
@@ -222,9 +234,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-filename')
     parser.add_argument('--run-directory')
-    _, remaining_args = parser.parse_known_args(namespace=H5CheckTestCase)
+    logging.basicConfig(level=logging.INFO)
+    duplicate_test_case, remaining_args = parser.parse_known_args(
+        namespace=H5CheckTestCase)
+    del duplicate_test_case
     # Use of full command-line arguments breaks the unit-test framework
     # (which needs to take its own command-line arguments), so we only pass
     # on the remaining args after we've retrieved the ones used by
     # `H5CheckTestCase`.
-    unittest.main(argv=[parser.prog] + remaining_args)
+    unittest.main(argv=[parser.prog] + remaining_args, verbosity=2)
