@@ -41,7 +41,7 @@ std::array<std::reference_wrapper<const Matrix>, Dim> restriction_operator(
     const std::array<SegmentId, Dim>& child_segment_ids,
     const std::array<SegmentId, Dim>& parent_segment_ids,
     const bool massive) noexcept {
-  const Matrix identity{};
+  static const Matrix identity{};
   auto restriction_operator = make_array<Dim>(std::cref(identity));
   for (size_t d = 0; d < Dim; d++) {
     const auto fine_mesh_d = fine_mesh.slice_through(d);
@@ -72,7 +72,7 @@ std::array<std::reference_wrapper<const Matrix>, Dim> prolongation_operator(
     const Mesh<Dim>& coarse_mesh, const Mesh<Dim>& fine_mesh,
     const std::array<SegmentId, Dim>& child_segment_ids,
     const std::array<SegmentId, Dim>& parent_segment_ids) noexcept {
-  const Matrix identity{};
+  static const Matrix identity{};
   auto prolongation_operator = make_array<Dim>(std::cref(identity));
   for (size_t d = 0; d < Dim; d++) {
     const auto fine_mesh_d = fine_mesh.slice_through(d);
