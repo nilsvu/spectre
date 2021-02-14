@@ -38,6 +38,7 @@ DomainCreator:
 Discretization:
   DiscontinuousGalerkin:
     PenaltyParameter: 1.
+    Massive: True
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids1DVolume"
@@ -45,7 +46,7 @@ Observers:
 
 LinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 4
+    MaxIterations: 3
     AbsoluteResidual: 1.e-10
     RelativeResidual: 1.e-10
   Verbosity: Verbose
@@ -58,10 +59,15 @@ LinearSolver:
       ExplicitInverse:
         EnableResets: True
 
+  Multigrid:
+    Iterations: 1
+    CoarsestGridPoints: 12
+    Verbosity: Quiet
+
 EventsAndTriggers:
   ? EveryNIterations:
       N: 1
-      Offset: 4
+      Offset: 3
   : - ObserveErrorNorms:
         SubfileName: ErrorNorms
     - ObserveFields:
