@@ -25,6 +25,7 @@ DomainCreator:
 Discretization:
   DiscontinuousGalerkin:
     PenaltyParameter: 1.
+    Massive: True
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids2DVolume"
@@ -44,6 +45,11 @@ LinearSolver:
     SubdomainSolver:
       ExplicitInverse:
         EnableResets: True
+
+  Multigrid:
+    Iterations: 1
+    CoarsestGridPoints: 12
+    Verbosity: Verbose
 
 EventsAndTriggers:
   ? EveryNIterations:
