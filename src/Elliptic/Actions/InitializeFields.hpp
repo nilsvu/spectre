@@ -25,14 +25,14 @@ namespace elliptic::Actions {
  *
  * Uses:
  * - System:
- *   - `fields_tag`
+ *   - `primal_fields`
  * - DataBox:
  *   - `InitialGuessTag`
  *   - `Tags::Coordinates<Dim, Frame::Inertial>`
  *
  * DataBox:
  * - Adds:
- *   - `fields_tag`
+ *   - `primal_fields`
  *
  * \note This action relies on the `SetupDataBox` aggregated initialization
  * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
@@ -42,7 +42,7 @@ template <typename System, typename InitialGuessTag>
 struct InitializeFields {
  private:
   using system = System;
-  using fields_tag = typename system::fields_tag;
+  using fields_tag = ::Tags::Variables<typename system::primal_fields>;
 
  public:
   using simple_tags = tmpl::list<fields_tag>;
