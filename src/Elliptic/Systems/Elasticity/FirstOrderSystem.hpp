@@ -11,6 +11,9 @@
 #include "DataStructures/VariablesTag.hpp"
 #include "Elliptic/BoundaryConditions/AnalyticSolution.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
+#include "Elliptic/BoundaryConditions/BoundaryConditionType.hpp"
+#include "Elliptic/Systems/Elasticity/BoundaryConditions/LaserBeam.hpp"
+#include "Elliptic/Systems/Elasticity/BoundaryConditions/Zero.hpp"
 #include "Elliptic/Systems/Elasticity/Equations.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
@@ -55,6 +58,7 @@ struct FirstOrderSystem {
  private:
   using displacement = Tags::Displacement<Dim>;
   using strain = Tags::Strain<Dim>;
+  using minus_stress = Tags::MinusStress<Dim>;
 
  public:
   static constexpr size_t volume_dim = Dim;
@@ -62,13 +66,9 @@ struct FirstOrderSystem {
   // The physical fields to solve for
   using primal_fields = tmpl::list<displacement>;
   using auxiliary_fields = tmpl::list<strain>;
-  using fields_tag =
-      ::Tags::Variables<tmpl::append<primal_fields, auxiliary_fields>>;
 
-  // Tags for the first-order fluxes. We can use the symmetric stress here as an
-  // optimization once the DG operator supports fluxes with symmetries.
-  using primal_fluxes = tmpl::list<
-      ::Tags::Flux<displacement, tmpl::size_t<Dim>, Frame::Inertial>>;
+  // Tags for the first-order fluxes
+  using primal_fluxes = tmpl::list<minus_stress>;
   using auxiliary_fluxes =
       tmpl::list<::Tags::Flux<strain, tmpl::size_t<Dim>, Frame::Inertial>>;
 
@@ -84,12 +84,17 @@ struct FirstOrderSystem {
   // factory-created from this base class.
   using boundary_conditions_base =
       elliptic::BoundaryConditions::BoundaryCondition<
-          Dim, tmpl::list<elliptic::BoundaryConditions::Registrars::
-                              AnalyticSolution<FirstOrderSystem>>>;
-
-  // The tag of the operator to compute magnitudes on the manifold, e.g. to
-  // normalize vectors on the faces of an element
-  template <typename Tag>
-  using magnitude_tag = ::Tags::EuclideanMagnitude<Tag>;
+          Dim,
+          tmpl::append<
+              tmpl::list<elliptic::BoundaryConditions::Registrars::
+                             AnalyticSolution<FirstOrderSystem>,
+                         BoundaryConditions::Registrars::Zero<
+                             Dim, elliptic::BoundaryConditionType::Dirichlet>,
+                         BoundaryConditions::Registrars::Zero<
+                             Dim, elliptic::BoundaryConditionType::Neumann>>,
+              tmpl::conditional_t<
+                  Dim == 3,
+                  tmpl::list<BoundaryConditions::Registrars::LaserBeam>,
+                  tmpl::list<>>>>;
 };
 }  // namespace Elasticity
