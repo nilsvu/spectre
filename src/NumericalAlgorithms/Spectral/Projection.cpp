@@ -212,6 +212,87 @@ const Matrix& projection_matrix_mortar_to_element(
   }
 }
 
+const Matrix& projection_matrix_mortar_to_element_massive(
+    const MortarSize size, const Mesh<1>& element_mesh,
+    const Mesh<1>& mortar_mesh) noexcept {
+  ASSERT(element_mesh.basis(0) == Basis::Legendre and
+             mortar_mesh.basis(0) == Basis::Legendre,
+         "Projections only implemented on Legendre basis");
+  ASSERT(
+      element_mesh.extents(0) <= maximum_number_of_points<Basis::Legendre> and
+          mortar_mesh.extents(0) <= maximum_number_of_points<Basis::Legendre>,
+      "Mesh has more points than supported by its quadrature.");
+  ASSERT(element_mesh.extents(0) <= mortar_mesh.extents(0),
+         "Requested projection matrix from mortar with fewer points ("
+             << mortar_mesh.extents(0) << ") than the element ("
+             << element_mesh.extents(0) << ")");
+
+  const auto make_interpolators = [](auto interval_transform) noexcept {
+    return [interval_transform = std::move(interval_transform)](
+               const Quadrature quadrature_mortar, const size_t extents_mortar,
+               const Quadrature quadrature_element,
+               const size_t extents_element) noexcept -> Matrix {
+      if (extents_mortar < extents_element) {
+        return Matrix{};
+      }
+      const Mesh<1> mesh_element(extents_element, Basis::Legendre,
+                                 quadrature_element);
+      const Mesh<1> mesh_mortar(extents_mortar, Basis::Legendre,
+                                quadrature_mortar);
+      return blaze::trans(interpolation_matrix(
+          mesh_element, interval_transform(collocation_points(mesh_mortar))));
+    };
+  };
+
+  switch (size) {
+    case MortarSize::Full: {
+      const static auto cache = make_static_cache<
+          CacheEnumeration<Quadrature, Quadrature::Gauss,
+                           Quadrature::GaussLobatto>,
+          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>,
+          CacheEnumeration<Quadrature, Quadrature::Gauss,
+                           Quadrature::GaussLobatto>,
+          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>>(
+          make_interpolators([](const DataVector& x) noexcept { return x; }));
+      return cache(mortar_mesh.quadrature(0), mortar_mesh.extents(0),
+                   element_mesh.quadrature(0), element_mesh.extents(0));
+    }
+
+    case MortarSize::UpperHalf: {
+      const static auto cache = make_static_cache<
+          CacheEnumeration<Quadrature, Quadrature::Gauss,
+                           Quadrature::GaussLobatto>,
+          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>,
+          CacheEnumeration<Quadrature, Quadrature::Gauss,
+                           Quadrature::GaussLobatto>,
+          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>>(
+          make_interpolators([](const DataVector& x) noexcept {
+            return DataVector(0.5 * (x + 1.));
+          }));
+      return cache(mortar_mesh.quadrature(0), mortar_mesh.extents(0),
+                   element_mesh.quadrature(0), element_mesh.extents(0));
+    }
+
+    case MortarSize::LowerHalf: {
+      const static auto cache = make_static_cache<
+          CacheEnumeration<Quadrature, Quadrature::Gauss,
+                           Quadrature::GaussLobatto>,
+          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>,
+          CacheEnumeration<Quadrature, Quadrature::Gauss,
+                           Quadrature::GaussLobatto>,
+          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>>(
+          make_interpolators([](const DataVector& x) noexcept {
+            return DataVector(0.5 * (x - 1.));
+          }));
+      return cache(mortar_mesh.quadrature(0), mortar_mesh.extents(0),
+                   element_mesh.quadrature(0), element_mesh.extents(0));
+    }
+
+    default:
+      ERROR("Invalid MortarSize");
+  }
+}
+
 const Matrix& projection_matrix_element_to_mortar(
     const MortarSize size, const Mesh<1>& mortar_mesh,
     const Mesh<1>& element_mesh) noexcept {
