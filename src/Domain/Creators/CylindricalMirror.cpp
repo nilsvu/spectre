@@ -21,7 +21,7 @@
 #include "Domain/DomainHelpers.hpp"
 #include "Domain/Structure/Direction.hpp"
 #include "Domain/Structure/OrientationMap.hpp"
-#include "ErrorHandling/Assert.hpp"
+#include "Utilities/ErrorHandling/Assert.hpp"
 #include "Utilities/MakeArray.hpp"
 
 namespace Frame {
