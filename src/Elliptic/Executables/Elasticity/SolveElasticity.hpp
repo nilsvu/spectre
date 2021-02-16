@@ -17,7 +17,6 @@
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/InitializeSubdomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
-#include "Elliptic/Systems/Elasticity/Actions/InitializeSubdomain.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "Elliptic/Tags.hpp"
@@ -224,17 +223,8 @@ struct Metavariables {
       elliptic::dg::Actions::initialize_operator<
           system, linear_solver_iteration_id, vars_tag,
           operator_applied_to_vars_tag>,
-      ::Initialization::Actions::AddComputeTags<
-          tmpl::list<domain::Tags::InterfaceCompute<
-                         domain::Tags::InternalDirections<volume_dim>,
-                         domain::Tags::BoundaryCoordinates<volume_dim>>,
-                     domain::Tags::InterfaceCompute<
-                         domain::Tags::BoundaryDirectionsInterior<volume_dim>,
-                         domain::Tags::BoundaryCoordinates<volume_dim>>>>,
       elliptic::dg::Actions::InitializeSubdomain<
-          volume_dim, typename schwarz_smoother::options_group>,
-      Elasticity::Actions::InitializeSubdomain<
-          volume_dim, typename schwarz_smoother::options_group>,
+          system, background_tag, typename schwarz_smoother::options_group>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           system, fixed_sources_tag>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;

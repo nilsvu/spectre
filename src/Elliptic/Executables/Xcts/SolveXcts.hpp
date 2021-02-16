@@ -10,6 +10,7 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/ApplyLinearOperatorToInitialFields.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
+#include "Elliptic/Actions/InitializeBackgroundFields.hpp"
 #include "Elliptic/Actions/InitializeFields.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/ApplyOperator.hpp"
@@ -55,7 +56,7 @@
 #include "Utilities/TMPL.hpp"
 
 // TODO:
-// - Init background fields, also on faces and on overlaps
+// - [x] Init background fields, also on faces and on overlaps
 // - Compute primal fluxes (for linearized sources): Have DG operator write them
 //   into DataBox instead of discarding
 // - Use linearized sources computer when available and `Linearized` is true
@@ -213,6 +214,7 @@ struct Metavariables {
       typename schwarz_smoother::initialize_element,
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       elliptic::Actions::InitializeFixedSources<system, background_tag>,
+      elliptic::Actions::InitializeBackgroundFields<system, background_tag>,
       elliptic::Actions::InitializeOptionalAnalyticSolution<
           background_tag,
           tmpl::append<typename system::primal_fields,
@@ -225,7 +227,7 @@ struct Metavariables {
           system, linear_solver_iteration_id, correction_vars_tag,
           operator_applied_to_correction_vars_tag>,
       elliptic::dg::Actions::InitializeSubdomain<
-          volume_dim, typename schwarz_smoother::options_group>,
+          system, background_tag, typename schwarz_smoother::options_group>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
   template <bool Linearized>

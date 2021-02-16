@@ -7,6 +7,7 @@ spectre_target_headers(
   HEADERS
   ApplyLinearOperatorToInitialFields.hpp
   InitializeAnalyticSolution.hpp
+  InitializeBackgroundFields.hpp
   InitializeFields.hpp
   InitializeFixedSources.hpp
   )
