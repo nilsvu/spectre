@@ -50,10 +50,14 @@ namespace elliptic::dg::Actions {
  * Initializes tags that define the geometry of overlap regions with neighboring
  * elements. The data needs to be updated if the geometry of neighboring
  * elements changes.
+ *
+ * Note that the geometry depends on the system and on the choice of background
+ * through the normalization of face normals, which involves a metric.
  */
-template <size_t Dim, typename OptionsGroup>
+template <typename System, typename BackgroundTag, typename OptionsGroup>
 struct InitializeSubdomain {
  private:
+  static constexpr size_t Dim = System::volume_dim;
   template <typename Tag>
   using overlaps_tag =
       LinearSolver::Schwarz::Tags::Overlaps<Tag, Dim, OptionsGroup>;
@@ -72,7 +76,25 @@ struct InitializeSubdomain {
           domain::Tags::Mesh<Dim>,
           elliptic::dg::subdomain_operator::Tags::ExtrudingExtent,
           domain::Tags::Element<Dim>, domain::Tags::ElementMap<Dim>,
+          domain::Tags::Coordinates<Dim, Frame::Inertial>,
           domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
+          ::Tags::Variables<typename System::background_fields>,
+          // Possible optimization: Only include the background fields that are
+          // strictly necessary for the DG operator, i.e. the background fields
+          // in the System::fluxes_computer::argument_tags on internal faces,
+          // and possibly additional background fields for boundary conditions.
+          domain::Tags::Interface<
+              domain::Tags::InternalDirections<Dim>,
+              ::Tags::Variables<typename System::background_fields>>,
+          domain::Tags::Interface<
+              domain::Tags::BoundaryDirectionsInterior<Dim>,
+              ::Tags::Variables<typename System::background_fields>>,
+          domain::Tags::Interface<
+              domain::Tags::InternalDirections<Dim>,
+              domain::Tags::Coordinates<Dim, Frame::Inertial>>,
+          domain::Tags::Interface<
+              domain::Tags::BoundaryDirectionsInterior<Dim>,
+              domain::Tags::Coordinates<Dim, Frame::Inertial>>,
           domain::Tags::Interface<
               domain::Tags::InternalDirections<Dim>,
               ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
@@ -116,13 +138,27 @@ struct InitializeSubdomain {
     const auto& domain = db::get<domain::Tags::Domain<Dim>>(box);
     const auto& max_overlap =
         get<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>(box);
+    const auto& background = db::get<BackgroundTag>(box);
 
     overlaps<Mesh<Dim>> overlap_meshes{};
     overlaps<size_t> overlap_extents{};
     overlaps<Element<Dim>> overlap_elements{};
     overlaps<ElementMap<Dim, Frame::Inertial>> overlap_element_maps{};
+    overlaps<tnsr::I<DataVector, Dim>> overlap_inertial_coords{};
     overlaps<InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>>
         overlap_inv_jacobians{};
+    overlaps<Variables<typename System::background_fields>>
+        overlap_background_fields{};
+    overlaps<std::unordered_map<Direction<Dim>, tnsr::I<DataVector, Dim>>>
+        overlap_face_inertial_coords_internal{};
+    overlaps<std::unordered_map<Direction<Dim>, tnsr::I<DataVector, Dim>>>
+        overlap_face_inertial_coords_external{};
+    overlaps<std::unordered_map<Direction<Dim>,
+                                Variables<typename System::background_fields>>>
+        overlap_face_background_fields_internal{};
+    overlaps<std::unordered_map<Direction<Dim>,
+                                Variables<typename System::background_fields>>>
+        overlap_face_background_fields_external{};
     overlaps<std::unordered_map<Direction<Dim>, tnsr::i<DataVector, Dim>>>
         overlap_face_normals_internal{};
     overlaps<std::unordered_map<Direction<Dim>, tnsr::i<DataVector, Dim>>>
@@ -172,12 +208,36 @@ struct InitializeSubdomain {
             ElementMap<Dim, Frame::Inertial>{
                 neighbor_id, neighbor_block.stationary_map().get_clone()});
         const auto& neighbor_element_map = overlap_element_maps.at(overlap_id);
-        // Jacobian
+        // Inertial coords
         const auto neighbor_logical_coords = logical_coordinates(neighbor_mesh);
+        const auto& neighbor_inertial_coords =
+            *overlap_inertial_coords
+                 .emplace(overlap_id,
+                          neighbor_element_map(neighbor_logical_coords))
+                 .first;
+        // Jacobian
         overlap_inv_jacobians.emplace(
             overlap_id,
             neighbor_element_map.inv_jacobian(neighbor_logical_coords));
+        // Background fields
+        const auto& neighbor_background_fields =
+            *overlap_background_fields
+                 .emplace(overlap_id,
+                          variables_from_tagged_tuple(background.variables(
+                              neighbor_inertial_coords,
+                              typename System::background_fields{})))
+                 .first;
         // Faces and mortars, internal and external
+        std::unordered_map<Direction<Dim>, tnsr::I<DataVector, Dim>>
+            neighbor_face_inertial_coords_internal{};
+        std::unordered_map<Direction<Dim>, tnsr::I<DataVector, Dim>>
+            neighbor_face_inertial_coords_external{};
+        std::unordered_map<Direction<Dim>,
+                           Variables<typename System::background_fields>>
+            neighbor_face_background_fields_internal{};
+        std::unordered_map<Direction<Dim>,
+                           Variables<typename System::background_fields>>
+            neighbor_face_background_fields_external{};
         std::unordered_map<Direction<Dim>, tnsr::i<DataVector, Dim>>
             neighbor_face_normals_internal{};
         std::unordered_map<Direction<Dim>, tnsr::i<DataVector, Dim>>
@@ -190,8 +250,14 @@ struct InitializeSubdomain {
             [&neighbor_face_normals_internal, &neighbor_face_normals_external,
              &neighbor_face_normal_magnitudes_internal,
              &neighbor_face_normal_magnitudes_external, &neighbor_mesh,
-             &neighbor_element_map](const Direction<Dim>& local_direction,
-                                    const bool is_external) {
+             &neighbor_element_map, &neighbor_background_fields](
+                const Direction<Dim>& local_direction, const bool is_external) {
+              auto& neighbor_face_inertial_coords =
+                  is_external ? neighbor_face_inertial_coords_external
+                              : neighbor_face_inertial_coords_internal;
+              auto& neighbor_face_background_fields =
+                  is_external ? neighbor_face_background_fields_external
+                              : neighbor_face_background_fields_internal;
               auto& neighbor_face_normals =
                   is_external ? neighbor_face_normals_external
                               : neighbor_face_normals_internal;
@@ -200,12 +266,36 @@ struct InitializeSubdomain {
                               : neighbor_face_normal_magnitudes_internal;
               const auto neighbor_face_mesh =
                   neighbor_mesh.slice_away(local_direction.dimension());
+              neighbor_face_inertial_coords.emplace(
+                  local_direction,
+                  neighbor_element_map(interface_logical_coordinates(
+                      neighbor_face_mesh, local_direction)));
+              // Slicing the background fields to the face instead of evaluating
+              // them on the face coords to avoid re-computing them, and because
+              // this is also what the DG operator currently does. Should be
+              // equivalent on Gauss-Lobatto grids anyway.
+              neighbor_face_background_fields.emplace(
+                  local_direction,
+                  data_on_slice(neighbor_background_fields,
+                                neighbor_mesh.extents(),
+                                local_direction.dimension(),
+                                index_to_slice_at(neighbor_mesh.extents(),
+                                                  local_direction)));
               auto neighbor_face_normal = unnormalized_face_normal(
                   neighbor_face_mesh, neighbor_element_map, local_direction);
               Scalar<DataVector> neighbor_normal_magnitude{
                   neighbor_face_mesh.number_of_grid_points()};
-              magnitude(make_not_null(&neighbor_normal_magnitude),
-                        neighbor_face_normal);
+              if constexpr (std::is_same_v<typename System::inv_metric_tag,
+                                           void>) {
+                magnitude(make_not_null(&neighbor_normal_magnitude),
+                          neighbor_face_normal);
+              } else {
+                magnitude(
+                    make_not_null(&neighbor_normal_magnitude),
+                    neighbor_face_normal,
+                    get<typename System::inv_metric_tag>(
+                        neighbor_face_background_fields.at(local_direction)));
+              }
               for (size_t d = 0; d < Dim; d++) {
                 neighbor_face_normal.get(d) /= get(neighbor_normal_magnitude);
               }
@@ -251,6 +341,14 @@ struct InitializeSubdomain {
               neighbor_mortar_id,
               make_array<Dim - 1>(Spectral::MortarSize::Full));
         }
+        overlap_face_inertial_coords_internal.emplace(
+            overlap_id, std::move(neighbor_face_inertial_coords_internal));
+        overlap_face_inertial_coords_external.emplace(
+            overlap_id, std::move(neighbor_face_inertial_coords_external));
+        overlap_face_background_fields_internal.emplace(
+            overlap_id, std::move(neighbor_face_background_fields_internal));
+        overlap_face_background_fields_external.emplace(
+            overlap_id, std::move(neighbor_face_background_fields_external));
         overlap_face_normals_internal.emplace(
             overlap_id, std::move(neighbor_face_normals_internal));
         overlap_face_normals_external.emplace(
@@ -304,8 +402,23 @@ struct InitializeSubdomain {
                                          direction_from_neighbors_neighbor);
             Scalar<DataVector> neighbors_neighbor_face_normal_magnitude{
                 neighbors_neighbor_face_mesh.number_of_grid_points()};
-            magnitude(make_not_null(&neighbors_neighbor_face_normal_magnitude),
-                      neighbors_neighbor_face_normal);
+            if constexpr (std::is_same_v<typename System::inv_metric_tag,
+                                         void>) {
+              magnitude(
+                  make_not_null(&neighbors_neighbor_face_normal_magnitude),
+                  neighbors_neighbor_face_normal);
+            } else {
+              const auto neighbors_neighbor_face_inertial_coords =
+                  neighbors_neighbor_element_map(interface_logical_coordinates(
+                      neighbors_neighbor_face_mesh,
+                      direction_from_neighbors_neighbor));
+              magnitude(
+                  make_not_null(&neighbors_neighbor_face_normal_magnitude),
+                  neighbors_neighbor_face_normal,
+                  get<typename System::inv_metric_tag>(background.variables(
+                      neighbors_neighbor_face_inertial_coords,
+                      tmpl::list<typename System::inv_metric_tag>{})));
+            }
             neighbors_neighbor_face_normal_magnitudes.emplace(
                 neighbors_neighbor_mortar_id,
                 std::move(neighbors_neighbor_face_normal_magnitude));
@@ -335,7 +448,12 @@ struct InitializeSubdomain {
     ::Initialization::mutate_assign<simple_tags>(
         make_not_null(&box), std::move(overlap_meshes),
         std::move(overlap_extents), std::move(overlap_elements),
-        std::move(overlap_element_maps), std::move(overlap_inv_jacobians),
+        std::move(overlap_element_maps), std::move(overlap_inertial_coords),
+        std::move(overlap_inv_jacobians),
+        std::move(overlap_face_inertial_coords_internal),
+        std::move(overlap_face_inertial_coords_external),
+        std::move(overlap_face_background_fields_internal),
+        std::move(overlap_face_background_fields_external),
         std::move(overlap_face_normals_internal),
         std::move(overlap_face_normals_external),
         std::move(overlap_face_normal_magnitudes_internal),

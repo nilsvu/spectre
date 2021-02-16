@@ -202,7 +202,8 @@ struct Metavariables {
           system, linear_solver_iteration_id, vars_tag,
           operator_applied_to_vars_tag>,
       elliptic::dg::Actions::InitializeSubdomain<
-          volume_dim, typename schwarz_smoother::options_group>,
+          system, analytic_solution_tag,
+          typename schwarz_smoother::options_group>,
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           system, fixed_sources_tag>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
