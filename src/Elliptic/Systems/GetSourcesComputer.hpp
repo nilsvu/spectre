@@ -9,7 +9,7 @@ namespace elliptic {
 namespace detail {
 template <typename System, typename = std::void_t<>>
 struct sources_computer_linearized {
-  using type = void;
+  using type = typename System::sources_computer;
 };
 template <typename System>
 struct sources_computer_linearized<

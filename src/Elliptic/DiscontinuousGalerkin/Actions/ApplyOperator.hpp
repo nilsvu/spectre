@@ -11,6 +11,7 @@
 #include "DataStructures/FixedHashMap.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "Domain/FaceNormal.hpp"
+#include "Domain/InterfaceComputeTags.hpp"
 #include "Domain/InterfaceHelpers.hpp"
 #include "Domain/Structure/Element.hpp"
 #include "Domain/Structure/MaxNumberOfNeighbors.hpp"
@@ -380,9 +381,16 @@ template <
         typename System::auxiliary_fields, typename VarsTag::tags_list>>>
 using initialize_operator = tmpl::list<
     ::dg::Actions::InitializeInterfaces<
-        System, ::dg::Initialization::slice_tags_to_face<>,
+        System,
+        ::dg::Initialization::slice_tags_to_face<
+            // Possible optimization: Only the background fields in the
+            // System::fluxes_computer::argument_tags are needed on internal
+            // faces. On external faces (interior side) we may need additional
+            // background fields for boundary conditions.
+            ::Tags::Variables<typename System::background_fields>>,
         ::dg::Initialization::slice_tags_to_exterior<>,
-        ::dg::Initialization::face_compute_tags<>,
+        ::dg::Initialization::face_compute_tags<
+            domain::Tags::BoundaryCoordinates<System::volume_dim>>,
         ::dg::Initialization::exterior_compute_tags<>, false, false>,
     ::dg::Actions::InitializeMortars<
         detail::BoundaryScheme<System, TemporalIdTag, VarsTag,

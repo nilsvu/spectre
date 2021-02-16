@@ -87,7 +87,9 @@
  * implementation, i.e. face normals don't depend on the dynamic variables
  * (which may be discontinuous on element faces). This is the case for the
  * problems we are expecting to solve, because those will be on fixed background
- * metrics (e.g. a conformal metric for the XCTS system).
+ * metrics (e.g. a conformal metric for the XCTS system). Numerically, the face
+ * normals on either side of a mortar may nonetheless be different because the
+ * two faces adjacent to the mortar may resolve them at different resolutions.
  *
  * Also note that the numerical fluxes intentionally don't depend on the
  * auxiliary field values \f$v\f$. This property allows us to communicate data

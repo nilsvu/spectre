@@ -34,5 +34,4 @@ target_link_libraries(
   GeneralRelativity
   )
 
-add_subdirectory(Actions)
 add_subdirectory(BoundaryConditions)
