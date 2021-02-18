@@ -98,7 +98,7 @@ class Flatness : public AnalyticSolution<Registrars> {
       if constexpr (tmpl::list_contains_v<supported_tags_zero, tag>) {
         return make_with_value<typename tag::type>(x, 0.);
       } else if constexpr (tmpl::list_contains_v<supported_tags_one, tag>) {
-        return make_with_value<typename tag::type>(x, 0.);
+        return make_with_value<typename tag::type>(x, 1.);
       } else if constexpr (std::is_same_v<
                                tag, Tags::ConformalMetric<DataType, 3,
                                                           Frame::Inertial>>) {

@@ -55,12 +55,6 @@
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
 
-// TODO:
-// - [x] Init background fields, also on faces and on overlaps
-// - Compute primal fluxes (for linearized sources): Have DG operator write them
-//   into DataBox instead of discarding
-// - Use linearized sources computer when available and `Linearized` is true
-
 namespace SolveXcts::OptionTags {
 struct NonlinearSolverGroup {
   static std::string name() noexcept { return "NonlinearSolver"; }
@@ -78,7 +72,7 @@ struct LinearSolverGroup {
       "The iterative Krylov-subspace linear solver";
 };
 struct GmresGroup {
-  static std::string name() noexcept { return "GMRES"; }
+  static std::string name() noexcept { return "Gmres"; }
   static constexpr Options::String help = "Options for the GMRES linear solver";
   using group = LinearSolverGroup;
 };
@@ -97,8 +91,9 @@ struct MultigridGroup {
 /// \cond
 struct Metavariables {
   static constexpr size_t volume_dim = 3;
-  using system = Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianAndLapse,
-                                        Xcts::Geometry::FlatCartesian>;
+  using system =
+      Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift,
+                             Xcts::Geometry::FlatCartesian>;
 
   // List the possible backgrounds, i.e. the variable-independent part of the
   // equations that define the problem to solve (along with the boundary
@@ -120,6 +115,9 @@ struct Metavariables {
 
   // These are the fields we solve for
   using fields_tag = ::Tags::Variables<typename system::primal_fields>;
+  // These are the fluxes corresponding to the fields, i.e. essentially their
+  // first derivatives. These are background fields for the linearized sources.
+  using fluxes_tag = ::Tags::Variables<typename system::primal_fluxes>;
   // These are the fixed sources, i.e. the RHS of the equations
   using fixed_sources_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
   using operator_applied_to_fields_tag =
@@ -136,7 +134,7 @@ struct Metavariables {
   // the DG mass matrix.
   using linear_solver = LinearSolver::gmres::Gmres<
       Metavariables, typename nonlinear_solver::linear_solver_fields_tag,
-      SolveXcts::OptionTags::LinearSolverGroup, true,
+      SolveXcts::OptionTags::GmresGroup, true,
       typename nonlinear_solver::linear_solver_source_tag,
       LinearSolver::multigrid::Tags::IsFinestLevel>;
   using linear_solver_iteration_id =
@@ -153,7 +151,7 @@ struct Metavariables {
   // This data needs to be communicated on subdomain overlap regions
   using communicated_overlap_tags = tmpl::list<
       // For linearized sources
-      fields_tag, ::Tags::Variables<typename system::primal_fluxes>/*,
+      fields_tag, fluxes_tag/*,
       // For AH boundary conditions
       domain::Tags::Interface<
           domain::Tags::BoundaryDirectionsInterior<volume_dim>,
@@ -176,6 +174,11 @@ struct Metavariables {
   using operator_applied_to_correction_vars_tag =
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
                          correction_vars_tag>;
+  // The correction fluxes can be stored in an arbitrary tag. We don't need to
+  // access them anywhere, they're just a memory buffer for the linearized
+  // operator.
+  using correction_fluxes_tag =
+      db::add_tag_prefix<NonlinearSolver::Tags::Correction, fluxes_tag>;
 
   // Collect events and triggers
   // (public for use by the Charm++ registration code)
@@ -222,10 +225,10 @@ struct Metavariables {
           Xcts::Solutions::AnalyticSolution<analytic_solution_registrars>>,
       elliptic::dg::Actions::initialize_operator<
           system, nonlinear_solver_iteration_id, fields_tag,
-          operator_applied_to_fields_tag>,
+          operator_applied_to_fields_tag, fluxes_tag>,
       elliptic::dg::Actions::initialize_operator<
           system, linear_solver_iteration_id, correction_vars_tag,
-          operator_applied_to_correction_vars_tag>,
+          operator_applied_to_correction_vars_tag, correction_fluxes_tag>,
       elliptic::dg::Actions::InitializeSubdomain<
           system, background_tag, typename schwarz_smoother::options_group>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
@@ -237,7 +240,8 @@ struct Metavariables {
                           nonlinear_solver_iteration_id>,
       tmpl::conditional_t<Linearized, correction_vars_tag, fields_tag>,
       tmpl::conditional_t<Linearized, operator_applied_to_correction_vars_tag,
-                          operator_applied_to_fields_tag>>;
+                          operator_applied_to_fields_tag>,
+      tmpl::conditional_t<Linearized, correction_fluxes_tag, fluxes_tag>>;
 
   using register_actions =
       tmpl::list<observers::Actions::RegisterEventsWithObservers,
@@ -252,25 +256,29 @@ struct Metavariables {
                                         build_operator_actions<true>, Label>>;
 
   using solve_actions = tmpl::list<
+      // TODO: Only build nonlinear operator on finest grid
       build_operator_actions<false>, Actions::RunEventsAndTriggers,
       typename nonlinear_solver::template solve<
           build_operator_actions<false>,
           tmpl::list<
               LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
                   fields_tag, typename multigrid::options_group, void>,
+              LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
+                  fluxes_tag, typename multigrid::options_group, void>,
               LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
                   volume_dim, fields_tag, typename multigrid::options_group>,
+              LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
+                  volume_dim, fluxes_tag, typename multigrid::options_group>,
               LinearSolver::Schwarz::Actions::SendOverlapFields<
-                  communicated_overlap_tags, typename smoother::options_group,
-                  false>,
+                  communicated_overlap_tags,
+                  typename schwarz_smoother::options_group, false>,
               LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
                   volume_dim, communicated_overlap_tags,
-                  typename smoother::options_group>,
+                  typename schwarz_smoother::options_group>,
               typename linear_solver::template solve<
-                  tmpl::list<typename multigrid::template solve<
+                  typename multigrid::template solve<
                       smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
-                      smooth_actions<
-                          LinearSolver::multigrid::VcycleUpLabel>>>>>,
+                      smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>>>,
           tmpl::list<Actions::RunEventsAndTriggers>>,
       Parallel::Actions::TerminatePhase>;
 
@@ -322,7 +330,7 @@ static const std::vector<void (*)()> charm_init_node_funcs{
     &disable_openblas_multithreading,
     &domain::creators::register_derived_with_charm,
     &Parallel::register_derived_classes_with_charm<
-        metavariables::analytic_solution_tag::type::element_type>,
+        metavariables::background_tag::type::element_type>,
     &Parallel::register_derived_classes_with_charm<
         metavariables::initial_guess_tag::type::element_type>,
     &Parallel::register_derived_classes_with_charm<
