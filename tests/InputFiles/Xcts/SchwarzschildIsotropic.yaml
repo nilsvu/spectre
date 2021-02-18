@@ -18,8 +18,8 @@ DomainCreator:
   Shell:
     InnerRadius: 0.5
     OuterRadius: 10.
-    InitialRefinement: 1
-    InitialGridPoints: [5, 5]
+    InitialRefinement: 0
+    InitialGridPoints: [4, 4]
     UseEquiangularMap: False
     UseLogarithmicMap: True
     AspectRatio: 1.

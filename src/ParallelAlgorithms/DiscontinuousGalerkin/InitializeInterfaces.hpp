@@ -199,8 +199,7 @@ struct InitializeInterfaces {
 
   using compute_tags = tmpl::push_front<
    tmpl::append<face_tags<domain::Tags::InternalDirections<dim>>,
-                face_tags<domain::Tags::BoundaryDirectionsInterior<dim>>,
-                exterior_face_tags>,
+                face_tags<domain::Tags::BoundaryDirectionsInterior<dim>>>,
    domain::Tags::InternalDirectionsCompute<dim>,
    domain::Tags::BoundaryDirectionsInteriorCompute<dim>>;
 

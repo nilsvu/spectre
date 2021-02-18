@@ -292,7 +292,11 @@ struct SubdomainOperator
     db::apply<prepare_args_tags>(
         [this, &operand](const auto&... args) noexcept {
           elliptic::dg::prepare_mortar_data<System, true>(
+              make_not_null(&central_auxiliary_vars_),
               make_not_null(&central_primal_fluxes_),
+              make_not_null(&central_auxiliary_fluxes_),
+              make_not_null(&central_primal_vars_on_external_faces_),
+              make_not_null(&central_n_dot_primal_fluxes_on_external_faces_),
               make_not_null(&central_mortar_data_), operand.element_data,
               args...);
         },
@@ -412,7 +416,14 @@ struct SubdomainOperator
                                  args_tags_from_center>(
             [this, &overlap_id](const auto&... args) noexcept {
               elliptic::dg::prepare_mortar_data<System, true>(
+                  make_not_null(&neighbors_auxiliary_vars_[overlap_id]),
                   make_not_null(&neighbors_primal_fluxes_[overlap_id]),
+                  make_not_null(&neighbors_auxiliary_fluxes_[overlap_id]),
+                  make_not_null(
+                      &neighbors_primal_vars_on_external_faces_[overlap_id]),
+                  make_not_null(
+                      &neighbors_n_dot_primal_fluxes_on_external_faces_
+                          [overlap_id]),
                   make_not_null(&neighbors_mortar_data_[overlap_id]),
                   extended_operand_vars_[overlap_id], args...);
             },
@@ -585,16 +596,41 @@ struct SubdomainOperator
   }
 
  private:
+  Variables<typename System::auxiliary_fields> central_auxiliary_vars_{};
   Variables<typename System::primal_fluxes> central_primal_fluxes_{};
+  Variables<typename System::auxiliary_fluxes> central_auxiliary_fluxes_{};
   LinearSolver::Schwarz::OverlapMap<
-      Dim, Variables<typename System::primal_fluxes>>
+      Dim, Variables<typename System::auxiliary_fields>>
+      neighbors_auxiliary_vars_{};
+  LinearSolver::Schwarz::OverlapMap<Dim,
+                                    Variables<typename System::primal_fluxes>>
       neighbors_primal_fluxes_{};
+  LinearSolver::Schwarz::OverlapMap<
+      Dim, Variables<typename System::auxiliary_fluxes>>
+      neighbors_auxiliary_fluxes_{};
   LinearSolver::Schwarz::OverlapMap<Dim,
                                     Variables<typename System::primal_fields>>
       extended_operand_vars_{};
   LinearSolver::Schwarz::OverlapMap<Dim,
                                     Variables<typename System::primal_fields>>
       extended_results_{};
+  std::unordered_map<Direction<Dim>, Variables<typename System::primal_fields>>
+      central_primal_vars_on_external_faces_{};
+  std::unordered_map<
+      Direction<Dim>,
+      Variables<db::wrap_tags_in<::Tags::NormalDotFlux,
+                                 typename System::primal_fields>>>
+      central_n_dot_primal_fluxes_on_external_faces_{};
+  LinearSolver::Schwarz::OverlapMap<
+      Dim, std::unordered_map<Direction<Dim>,
+                              Variables<typename System::primal_fields>>>
+      neighbors_primal_vars_on_external_faces_{};
+  LinearSolver::Schwarz::OverlapMap<
+      Dim, std::unordered_map<
+               Direction<Dim>,
+               Variables<db::wrap_tags_in<::Tags::NormalDotFlux,
+                                          typename System::primal_fields>>>>
+      neighbors_n_dot_primal_fluxes_on_external_faces_{};
   ::dg::MortarMap<
       Dim, elliptic::dg::MortarData<size_t, typename System::primal_fields,
                                     typename System::primal_fluxes>>

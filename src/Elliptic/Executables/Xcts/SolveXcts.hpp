@@ -57,7 +57,7 @@
 #include "Utilities/TMPL.hpp"
 
 // TODO:
-// - [ ] Background fields on overlap interfaces
+// - [x] Background fields on overlap interfaces
 // - [ ] Make nonlinear operator buffer fields *and primal n_dot_fluxes* in
 //       the DataBox so the linearized boundary conditions can use them. Also
 //       buffer all other allocations, so the subdomain operator can keep them
