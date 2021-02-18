@@ -7,7 +7,7 @@
 
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Parallel/CharmPupable.hpp"
-#include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/AnalyticData.hpp"
 #include "Utilities/FakeVirtual.hpp"
 #include "Utilities/Registration.hpp"
 #include "Utilities/TMPL.hpp"
@@ -31,9 +31,9 @@ namespace Solutions {
  * `AnalyticSolution`.
  */
 template <typename Registrars>
-class AnalyticSolution : public ::AnalyticData<3, Registrars> {
+class AnalyticSolution : public Xcts::AnalyticData::AnalyticData<Registrars> {
  private:
-  using Base = ::AnalyticData<3, Registrars>;
+  using Base = Xcts::AnalyticData::AnalyticData<Registrars>;
 
  protected:
   /// \cond

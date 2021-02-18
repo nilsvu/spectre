@@ -46,6 +46,7 @@
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/AnalyticData.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Flatness.hpp"
@@ -54,6 +55,13 @@
 #include "Utilities/ErrorHandling/FloatingPointExceptions.hpp"
 #include "Utilities/Functional.hpp"
 #include "Utilities/TMPL.hpp"
+
+// TODO:
+// - [ ] Background fields on overlap interfaces
+// - [ ] Make nonlinear operator buffer fields *and primal n_dot_fluxes* in
+//       the DataBox so the linearized boundary conditions can use them. Also
+//       buffer all other allocations, so the subdomain operator can keep them
+//       and actions can release them.
 
 namespace SolveXcts::OptionTags {
 struct NonlinearSolverGroup {
@@ -93,7 +101,7 @@ struct Metavariables {
   static constexpr size_t volume_dim = 3;
   using system =
       Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift,
-                             Xcts::Geometry::FlatCartesian>;
+                             Xcts::Geometry::Curved>;
 
   // List the possible backgrounds, i.e. the variable-independent part of the
   // equations that define the problem to solve (along with the boundary
@@ -101,7 +109,7 @@ struct Metavariables {
   using analytic_solution_registrars =
       tmpl::list<Xcts::Solutions::Registrars::Schwarzschild>;
   using background_tag = elliptic::Tags::Background<
-      ::AnalyticData<3, analytic_solution_registrars>>;
+      Xcts::AnalyticData::AnalyticData<analytic_solution_registrars>>;
 
   // List the possible initial guesses
   using initial_guess_registrars =

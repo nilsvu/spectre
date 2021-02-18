@@ -95,10 +95,21 @@ void SchwarzschildVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     Tags::ConformalMetric<DataType, 3, Frame::Inertial> /*meta*/)
     const noexcept {
-  std::fill(conformal_metric->begin(), conformal_metric->end(), 0.);
   get<0, 0>(*conformal_metric) = 1.;
   get<1, 1>(*conformal_metric) = 1.;
   get<2, 2>(*conformal_metric) = 1.;
+  get<0, 1>(*conformal_metric) = 0.;
+  get<0, 2>(*conformal_metric) = 0.;
+  get<1, 2>(*conformal_metric) = 0.;
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::ijj<DataType, 3>*> deriv_conformal_metric,
+    const gsl::not_null<Cache*> /*cache*/,
+    ::Tags::deriv<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
+                  tmpl::size_t<3>, Frame::Inertial> /*meta*/) const noexcept {
+  std::fill(deriv_conformal_metric->begin(), deriv_conformal_metric->end(), 0.);
 }
 
 template <typename DataType>
