@@ -20,6 +20,7 @@ set(LIBS_TO_LINK
   ParallelNonlinearSolver
   ParallelSchwarz
   Xcts
+  XctsAnalyticData
   XctsSolutions
   Utilities
   )

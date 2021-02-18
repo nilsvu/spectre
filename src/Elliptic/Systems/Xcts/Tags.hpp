@@ -267,6 +267,11 @@ struct ConformalChristoffelContracted : db::SimpleTag {
   using type = tnsr::i<DataType, Dim, Frame>;
 };
 
+template <typename DataType, size_t Dim, typename Frame>
+struct ConformalRicciTensor : db::SimpleTag {
+  using type = tnsr::ii<DataType, Dim, Frame>;
+};
+
 /*!
  * \brief The Ricci scalar related to the conformal metric
  * \f$\bar{\gamma}_{ij}\f$

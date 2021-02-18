@@ -144,6 +144,8 @@ struct SchwarzschildVariables {
   using Cache = CachedTempBuffer<
       SchwarzschildVariables,
       Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
+      ::Tags::deriv<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
+                    tmpl::size_t<3>, Frame::Inertial>,
       gr::Tags::TraceExtrinsicCurvature<DataType>,
       ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>,
       ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
@@ -183,6 +185,11 @@ struct SchwarzschildVariables {
                   gsl::not_null<Cache*> cache,
                   Tags::ConformalMetric<DataType, 3, Frame::Inertial> /*meta*/)
       const noexcept;
+  void operator()(
+      gsl::not_null<tnsr::ijj<DataType, 3>*> deriv_conformal_metric,
+      gsl::not_null<Cache*> cache,
+      ::Tags::deriv<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
+                    tmpl::size_t<3>, Frame::Inertial> /*meta*/) const noexcept;
   void operator()(
       gsl::not_null<Scalar<DataType>*> trace_extrinsic_curvature,
       gsl::not_null<Cache*> cache,

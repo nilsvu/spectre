@@ -102,19 +102,37 @@ struct InitializeSubdomain {
           elliptic::dg::subdomain_operator::Tags::NeighborMortars<
               ::Tags::MortarSize<Dim - 1>, Dim>>>;
 
-  // Possible optimization: Only include the background fields that are strictly
+  // Only slice those background fields to internal boundaries that are
   // necessary for the DG operator, i.e. the background fields in the
-  // System::fluxes_computer::argument_tags on internal faces, and possibly
-  // additional background fields for boundary conditions.
+  // System::fluxes_computer::argument_tags
+  using fluxes_non_background_args =
+      tmpl::list_difference<typename System::fluxes_computer::argument_tags,
+                            typename System::background_fields>;
+  using background_fields_internal =
+      tmpl::list_difference<typename System::fluxes_computer::argument_tags,
+                            fluxes_non_background_args>;
+  // Slice all background fields to external boundaries for use in boundary
+  // conditions
+  using background_fields_external = typename System::background_fields;
   using background_tags = db::wrap_tags_in<
       overlaps_tag,
-      tmpl::list<::Tags::Variables<typename System::background_fields>,
-                 domain::Tags::Interface<
-                     domain::Tags::InternalDirections<Dim>,
-                     ::Tags::Variables<typename System::background_fields>>,
-                 domain::Tags::Interface<
-                     domain::Tags::BoundaryDirectionsInterior<Dim>,
-                     ::Tags::Variables<typename System::background_fields>>>>;
+      tmpl::append<
+          tmpl::conditional_t<
+              std::is_same_v<typename System::background_fields, tmpl::list<>>,
+              tmpl::list<>,
+              tmpl::list<
+                  ::Tags::Variables<typename System::background_fields>>>,
+          tmpl::transform<
+              background_fields_internal,
+              make_interface_tag<
+                  tmpl::_1, tmpl::pin<domain::Tags::InternalDirections<Dim>>,
+                  tmpl::pin<tmpl::list<>>>>,
+          tmpl::transform<
+              background_fields_external,
+              make_interface_tag<
+                  tmpl::_1,
+                  tmpl::pin<domain::Tags::BoundaryDirectionsInterior<Dim>>,
+                  tmpl::pin<tmpl::list<>>>>>>;
 
  public:
   using initialization_tags =
@@ -122,11 +140,7 @@ struct InitializeSubdomain {
                  domain::Tags::InitialRefinementLevels<Dim>>;
   using const_global_cache_tags =
       tmpl::list<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>;
-  using simple_tags = tmpl::append<
-      geometry_tags,
-      tmpl::conditional_t<
-          std::is_same_v<typename System::background_fields, tmpl::list<>>,
-          tmpl::list<>, background_tags>>;
+  using simple_tags = tmpl::append<geometry_tags, background_tags>;
   using compute_tags = tmpl::list<>;
 
   template <
@@ -225,16 +239,19 @@ struct InitializeSubdomain {
                          neighbor_element_map(neighbor_logical_coords))
                 .first->second;
         // Jacobian
-        overlap_inv_jacobians.emplace(
-            overlap_id,
-            neighbor_element_map.inv_jacobian(neighbor_logical_coords));
+        const auto& neighbor_inv_jacobian =
+            overlap_inv_jacobians
+                .emplace(overlap_id, neighbor_element_map.inv_jacobian(
+                                         neighbor_logical_coords))
+                .first->second;
         // Background fields
         if constexpr (not std::is_same_v<typename System::background_fields,
                                          tmpl::list<>>) {
           overlap_background_fields.emplace(
-              overlap_id, variables_from_tagged_tuple(background.variables(
-                              neighbor_inertial_coords,
-                              typename System::background_fields{})));
+              overlap_id,
+              background.variables(neighbor_inertial_coords, neighbor_mesh,
+                                   neighbor_inv_jacobian,
+                                   typename System::background_fields{}));
         }
         // Faces and mortars, internal and external
         std::unordered_map<Direction<Dim>, tnsr::I<DataVector, Dim>>
@@ -483,10 +500,43 @@ struct InitializeSubdomain {
         std::move(overlap_neighbor_mortar_sizes));
     if constexpr (not std::is_same_v<typename System::background_fields,
                                      tmpl::list<>>) {
-      ::Initialization::mutate_assign<background_tags>(
-          make_not_null(&box), std::move(overlap_background_fields),
-          std::move(overlap_face_background_fields_internal),
-          std::move(overlap_face_background_fields_external));
+      ::Initialization::mutate_assign<tmpl::list<
+          overlaps_tag<::Tags::Variables<typename System::background_fields>>>>(
+          make_not_null(&box), std::move(overlap_background_fields));
+      const auto mutate_assign_interface_background_tag =
+          [&box](auto tag_v, auto directions_tag_v,
+                 const auto& overlap_face_background_fields) noexcept {
+            using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
+            using directions_tag = std::decay_t<decltype(directions_tag_v)>;
+            overlaps<std::unordered_map<Direction<Dim>, typename tag::type>>
+                overlap_face_background_field{};
+            for (const auto& [local_overlap_id, local_overlap_data] :
+                 overlap_face_background_fields) {
+              for (const auto& [local_direction, local_vars] :
+                   local_overlap_data) {
+                overlap_face_background_field[local_overlap_id]
+                                             [local_direction] =
+                                                 get<tag>(local_vars);
+              }
+            }
+            ::Initialization::mutate_assign<tmpl::list<
+                overlaps_tag<domain::Tags::Interface<directions_tag, tag>>>>(
+                make_not_null(&box), std::move(overlap_face_background_field));
+          };
+      tmpl::for_each<background_fields_internal>(
+          [&mutate_assign_interface_background_tag,
+           &overlap_face_background_fields_internal](auto tag_v) noexcept {
+            mutate_assign_interface_background_tag(
+                tag_v, domain::Tags::InternalDirections<Dim>{},
+                overlap_face_background_fields_internal);
+          });
+      tmpl::for_each<background_fields_external>(
+          [&mutate_assign_interface_background_tag,
+           &overlap_face_background_fields_external](auto tag_v) noexcept {
+            mutate_assign_interface_background_tag(
+                tag_v, domain::Tags::BoundaryDirectionsInterior<Dim>{},
+                overlap_face_background_fields_external);
+          });
     }
     return {std::move(box)};
   }

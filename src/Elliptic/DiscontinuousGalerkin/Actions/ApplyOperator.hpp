@@ -399,7 +399,10 @@ using initialize_operator = tmpl::list<
                 // faces. On external faces (interior side) we may need
                 // additional background fields for boundary conditions.
                 ::Tags::Variables<typename System::background_fields>>>,
-        ::dg::Initialization::slice_tags_to_exterior<>,
+        ::dg::Initialization::slice_tags_to_exterior<
+            // These are not actually needed since we don't use exterior
+            // interfaces. Could remove the compute tags from the action.
+            ::Tags::Variables<typename System::background_fields>>,
         ::dg::Initialization::face_compute_tags<
             domain::Tags::BoundaryCoordinates<System::volume_dim>>,
         ::dg::Initialization::exterior_compute_tags<>, false, false>,
