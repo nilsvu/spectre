@@ -19,11 +19,6 @@
 
 namespace Xcts {
 
-/// \cond
-template <Equations EnabledEquations, Geometry ConformalGeometry>
-struct LinearizedFirstOrderSystem;
-/// \endcond
-
 /*!
  * \brief The Extended Conformal Thin Sandwich (XCTS) decomposition of the
  * Einstein constraint equations, formulated as a set of coupled first-order
@@ -235,8 +230,9 @@ struct FirstOrderSystem {
 
   // The tag of the operator to compute magnitudes on the manifold, e.g. to
   // normalize vectors on the faces of an element
-  using inv_metric_tag =
-      Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>;
+  using inv_metric_tag = tmpl::conditional_t<
+      ConformalGeometry == Geometry::FlatCartesian, void,
+      Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>>;
   template <typename Tag>
   using magnitude_tag =
       tmpl::conditional_t<ConformalGeometry == Geometry::FlatCartesian,

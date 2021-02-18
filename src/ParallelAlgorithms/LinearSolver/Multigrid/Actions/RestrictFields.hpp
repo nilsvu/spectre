@@ -44,6 +44,7 @@ struct DataFromChildrenInboxTag
 
 namespace Actions {
 
+// TODO: Support list of tags to restrict
 template <typename FieldsTag, typename OptionsGroup, typename FieldIsMassiveTag,
           typename ReceiveTag = FieldsTag>
 struct SendFieldsToCoarserGrid {
