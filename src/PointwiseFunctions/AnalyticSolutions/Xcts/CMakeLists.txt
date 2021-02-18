@@ -9,7 +9,6 @@ spectre_target_sources(
   ${LIBRARY}
   PRIVATE
   ConstantDensityStar.cpp
-  Flatness.cpp
   Schwarzschild.cpp
   )
 

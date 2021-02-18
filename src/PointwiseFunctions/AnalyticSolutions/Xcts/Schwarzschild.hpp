@@ -10,6 +10,7 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "Options/ParseOptions.hpp"
@@ -144,17 +145,30 @@ struct SchwarzschildVariables {
       SchwarzschildVariables,
       Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
       gr::Tags::TraceExtrinsicCurvature<DataType>,
+      ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>,
       ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
                     tmpl::size_t<3>, Frame::Inertial>,
       Tags::ConformalFactor<DataType>,
       ::Tags::deriv<Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
                     Frame::Inertial>,
+      ::Tags::Flux<Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
+                   Frame::Inertial>,
       Tags::LapseTimesConformalFactor<DataType>,
       ::Tags::deriv<Tags::LapseTimesConformalFactor<DataType>, tmpl::size_t<3>,
                     Frame::Inertial>,
+      ::Tags::Flux<Tags::LapseTimesConformalFactor<DataType>, tmpl::size_t<3>,
+                   Frame::Inertial>,
       Tags::ShiftBackground<DataType, 3, Frame::Inertial>,
       Tags::ShiftExcess<DataType, 3, Frame::Inertial>,
+      Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataType>,
       Tags::ShiftStrain<DataType, 3, Frame::Inertial>,
+      Tags::LongitudinalShiftExcess<DataType, 3, Frame::Inertial>,
+      Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<DataType>,
+      Tags::LongitudinalShiftMinusDtConformalMetricSquare<DataType>,
+      Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<DataType, 3,
+                                                              Frame::Inertial>,
+      ::Tags::div<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+          DataType, 3, Frame::Inertial>>,
       gr::Tags::EnergyDensity<DataType>, gr::Tags::StressTrace<DataType>,
       gr::Tags::MomentumDensity<3, Frame::Inertial, DataType>,
       ::Tags::FixedSource<Tags::ConformalFactor<DataType>>,
@@ -174,6 +188,11 @@ struct SchwarzschildVariables {
       gsl::not_null<Cache*> cache,
       gr::Tags::TraceExtrinsicCurvature<DataType> /*meta*/) const noexcept;
   void operator()(
+      gsl::not_null<Scalar<DataType>*> dt_trace_extrinsic_curvature,
+      gsl::not_null<Cache*> cache,
+      ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>> /*meta*/)
+      const noexcept;
+  void operator()(
       gsl::not_null<tnsr::i<DataType, 3>*> trace_extrinsic_curvature_gradient,
       gsl::not_null<Cache*> cache,
       ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
@@ -186,6 +205,10 @@ struct SchwarzschildVariables {
       gsl::not_null<Cache*> cache,
       ::Tags::deriv<Xcts::Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
                     Frame::Inertial> /*meta*/) const noexcept;
+  void operator()(gsl::not_null<tnsr::I<DataType, 3>*> conformal_factor_flux,
+                  gsl::not_null<Cache*> cache,
+                  ::Tags::Flux<Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
+                               Frame::Inertial> /*meta*/) const noexcept;
   void operator()(
       gsl::not_null<Scalar<DataType>*> lapse_times_conformal_factor,
       gsl::not_null<Cache*> cache,
@@ -196,6 +219,11 @@ struct SchwarzschildVariables {
       gsl::not_null<Cache*> cache,
       ::Tags::deriv<Tags::LapseTimesConformalFactor<DataType>, tmpl::size_t<3>,
                     Frame::Inertial> /*meta*/) const noexcept;
+  void operator()(
+      gsl::not_null<tnsr::I<DataType, 3>*> lapse_times_conformal_factor_flux,
+      gsl::not_null<Cache*> cache,
+      ::Tags::Flux<Tags::LapseTimesConformalFactor<DataType>, tmpl::size_t<3>,
+                   Frame::Inertial> /*meta*/) const noexcept;
   void operator()(gsl::not_null<tnsr::I<DataType, 3>*> shift_background,
                   gsl::not_null<Cache*> cache,
                   Tags::ShiftBackground<DataType, 3, Frame::Inertial> /*meta*/)
@@ -204,10 +232,43 @@ struct SchwarzschildVariables {
       gsl::not_null<tnsr::I<DataType, 3>*> shift_excess,
       gsl::not_null<Cache*> cache,
       Tags::ShiftExcess<DataType, 3, Frame::Inertial> /*meta*/) const noexcept;
+  void operator()(gsl::not_null<Scalar<DataType>*>
+                      shift_dot_deriv_extrinsic_curvature_trace,
+                  gsl::not_null<Cache*> cache,
+                  Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataType> /*meta*/)
+      const noexcept;
   void operator()(
       gsl::not_null<tnsr::ii<DataType, 3>*> shift_strain,
       gsl::not_null<Cache*> cache,
       Tags::ShiftStrain<DataType, 3, Frame::Inertial> /*meta*/) const noexcept;
+  void operator()(
+      gsl::not_null<tnsr::II<DataType, 3>*> longitudinal_shift_excess,
+      gsl::not_null<Cache*> cache,
+      Tags::LongitudinalShiftExcess<DataType, 3, Frame::Inertial> /*meta*/)
+      const noexcept;
+  void operator()(
+      gsl::not_null<Scalar<DataType>*>
+          longitudinal_shift_minus_dt_conformal_metric_over_lapse_square,
+      gsl::not_null<Cache*> cache,
+      Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<
+          DataType> /*meta*/) const noexcept;
+  void operator()(
+      gsl::not_null<Scalar<DataType>*>
+          longitudinal_shift_minus_dt_conformal_metric_square,
+      gsl::not_null<Cache*> cache,
+      Tags::LongitudinalShiftMinusDtConformalMetricSquare<DataType> /*meta*/)
+      const noexcept;
+  void operator()(gsl::not_null<tnsr::II<DataType, 3, Frame::Inertial>*>
+                      longitudinal_shift_background_minus_dt_conformal_metric,
+                  gsl::not_null<Cache*> cache,
+                  Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+                      DataType, 3, Frame::Inertial> /*meta*/) const noexcept;
+  void operator()(
+      gsl::not_null<tnsr::I<DataType, 3, Frame::Inertial>*>
+          div_longitudinal_shift_background_minus_dt_conformal_metric,
+      gsl::not_null<Cache*> cache,
+      ::Tags::div<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+          DataType, 3, Frame::Inertial>> /*meta*/) const noexcept;
   void operator()(gsl::not_null<Scalar<DataType>*> energy_density,
                   gsl::not_null<Cache*> cache,
                   gr::Tags::EnergyDensity<DataType> /*meta*/) const noexcept;

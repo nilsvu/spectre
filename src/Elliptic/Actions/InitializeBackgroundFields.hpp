@@ -27,14 +27,14 @@ struct TaggedTuple;
 }  // namespace tuples
 /// \endcond
 
-namespace Xcts::Actions {
+namespace elliptic::Actions {
 
 template <typename System, typename BackgroundTag>
 struct InitializeBackgroundFields {
  private:
-  using system = System;
+  static constexpr size_t Dim = System::volume_dim;
   using background_fields_tag =
-      ::Tags::Variables<typename system::background_fields>;
+      ::Tags::Variables<typename System::background_fields>;
 
  public:
   using simple_tags = tmpl::list<background_fields_tag>;
@@ -59,4 +59,4 @@ struct InitializeBackgroundFields {
   }
 };
 
-}  // namespace Xcts::Actions
+}  // namespace elliptic::Actions
