@@ -502,6 +502,8 @@ constexpr DataBox<tmpl::list<Tags...>>::DataBox(
 
   std::tuple<Args...> args_tuple(std::forward<Args>(args)...);
 
+  // Removing this call fixes the bug. See
+  // https://github.com/sxs-collaboration/spectre/issues/2524
   add_items_to_box(args_tuple, tmpl::list<AddMutableItemTags...>{},
                    std::make_index_sequence<sizeof...(AddMutableItemTags)>{},
                    tmpl::list<AddImmutableItemTags...>{});
