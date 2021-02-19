@@ -180,18 +180,6 @@ void KerrVariables<DataType>::operator()(
 
 template <typename DataType>
 void KerrVariables<DataType>::operator()(
-    const gsl::not_null<tnsr::i<DataType, 3>*>
-        trace_extrinsic_curvature_gradient,
-    const gsl::not_null<Cache*> /*cache*/,
-    ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>, tmpl::size_t<3>,
-                  Frame::Inertial> /*meta*/) const noexcept {
-  // TODO
-  std::fill(trace_extrinsic_curvature_gradient->begin(),
-            trace_extrinsic_curvature_gradient->end(), 0.);
-}
-
-template <typename DataType>
-void KerrVariables<DataType>::operator()(
     const gsl::not_null<Scalar<DataType>*> conformal_factor,
     const gsl::not_null<Cache*> /*cache*/,
     Tags::ConformalFactor<DataType> /*meta*/) const noexcept {
@@ -311,18 +299,10 @@ void KerrVariables<DataType>::operator()(
 
 template <typename DataType>
 void KerrVariables<DataType>::operator()(
-    const gsl::not_null<Scalar<DataType>*>
-        shift_dot_deriv_extrinsic_curvature_trace,
+    const gsl::not_null<tnsr::I<DataType, 3>*> shift,
     const gsl::not_null<Cache*> cache,
-    Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataType> /*meta*/)
-    const noexcept {
-  const auto& shift =
-      cache->get_var(Tags::ShiftExcess<DataType, 3, Frame::Inertial>{});
-  const auto& deriv_extrinsic_curvature_trace =
-      cache->get_var(::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
-                                   tmpl::size_t<3>, Frame::Inertial>{});
-  dot_product(shift_dot_deriv_extrinsic_curvature_trace, shift,
-              deriv_extrinsic_curvature_trace);
+    gr::Tags::Shift<3, Frame::Inertial, DataType> /*meta*/) const noexcept {
+  *shift = cache->get_var(Tags::ShiftExcess<DataType, 3, Frame::Inertial>{});
 }
 
 template <typename DataType>

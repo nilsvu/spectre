@@ -69,5 +69,36 @@ void DerivativeVariables::operator()(
   trace(conformal_ricci_scalar, conformal_ricci_tensor, inv_conformal_metric);
 }
 
+void DerivativeVariables::operator()(
+    const gsl::not_null<tnsr::i<DataVector, Dim>*>
+        deriv_extrinsic_curvature_trace,
+    const gsl::not_null<Cache*> /*cache*/,
+    ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
+                  tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const noexcept {
+  Variables<tmpl::list<gr::Tags::TraceExtrinsicCurvature<DataVector>>> vars{
+      mesh.number_of_grid_points()};
+  get<gr::Tags::TraceExtrinsicCurvature<DataVector>>(vars) =
+      extrinsic_curvature_trace;
+  const auto derivs = partial_derivatives<
+      tmpl::list<gr::Tags::TraceExtrinsicCurvature<DataVector>>>(vars, mesh,
+                                                                 inv_jacobian);
+  *deriv_extrinsic_curvature_trace =
+      get<::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
+                        tmpl::size_t<Dim>, Frame::Inertial>>(derivs);
+}
+
+void DerivativeVariables::operator()(
+    const gsl::not_null<Scalar<DataVector>*>
+        shift_dot_deriv_extrinsic_curvature_trace,
+    const gsl::not_null<Cache*> cache,
+    Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector> /*meta*/)
+    const noexcept {
+  const auto& deriv_extrinsic_curvature_trace = cache->get_var(
+      ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
+                    tmpl::size_t<3>, Frame::Inertial>{});
+  dot_product(shift_dot_deriv_extrinsic_curvature_trace, shift,
+              deriv_extrinsic_curvature_trace);
+}
+
 }  // namespace Xcts::AnalyticData::detail
 /// \endcond

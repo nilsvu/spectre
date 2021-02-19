@@ -227,13 +227,13 @@ struct Fluxes<Equations::HamiltonianLapseAndShift, Geometry::Curved> {
       const tnsr::II<DataVector, 3>& inv_conformal_metric,
       const Scalar<DataVector>& conformal_factor,
       const Scalar<DataVector>& lapse_times_conformal_factor,
-      const tnsr::I<DataVector, 3>& shift) noexcept {
+      const tnsr::I<DataVector, 3>& shift_excess) noexcept {
     Fluxes<Equations::HamiltonianAndLapse, Geometry::Curved>::apply(
         flux_for_conformal_factor_gradient,
         flux_for_lapse_times_conformal_factor_gradient, inv_conformal_metric,
         conformal_factor, lapse_times_conformal_factor);
     Elasticity::curved_auxiliary_fluxes(flux_for_shift_strain, conformal_metric,
-                                        shift);
+                                        shift_excess);
   }
 };
 /// \endcond

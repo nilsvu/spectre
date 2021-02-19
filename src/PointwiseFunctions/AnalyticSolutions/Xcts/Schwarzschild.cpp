@@ -197,17 +197,6 @@ void SchwarzschildVariables<DataType>::operator()(
 
 template <typename DataType>
 void SchwarzschildVariables<DataType>::operator()(
-    const gsl::not_null<tnsr::i<DataType, 3>*>
-        trace_extrinsic_curvature_gradient,
-    const gsl::not_null<Cache*> /*cache*/,
-    ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>, tmpl::size_t<3>,
-                  Frame::Inertial> /*meta*/) const noexcept {
-  std::fill(trace_extrinsic_curvature_gradient->begin(),
-            trace_extrinsic_curvature_gradient->end(), 0.);
-}
-
-template <typename DataType>
-void SchwarzschildVariables<DataType>::operator()(
     const gsl::not_null<Scalar<DataType>*> conformal_factor,
     const gsl::not_null<Cache*> /*cache*/,
     Tags::ConformalFactor<DataType> /*meta*/) const noexcept {
@@ -296,6 +285,14 @@ void SchwarzschildVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     Tags::ShiftExcess<DataType, 3, Frame::Inertial> /*meta*/) const noexcept {
   std::fill(shift_excess->begin(), shift_excess->end(), 0.);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::I<DataType, 3>*> shift,
+    const gsl::not_null<Cache*> /*cache*/,
+    gr::Tags::Shift<3, Frame::Inertial, DataType> /*meta*/) const noexcept {
+  std::fill(shift->begin(), shift->end(), 0.);
 }
 
 template <typename DataType>

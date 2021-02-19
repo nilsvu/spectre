@@ -154,8 +154,6 @@ struct SchwarzschildVariables {
       Tags::ConformalChristoffelContracted<DataType, 3, Frame::Inertial>,
       gr::Tags::TraceExtrinsicCurvature<DataType>,
       ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>,
-      ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
-                    tmpl::size_t<3>, Frame::Inertial>,
       Tags::ConformalFactor<DataType>,
       ::Tags::deriv<Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
                     Frame::Inertial>,
@@ -168,6 +166,7 @@ struct SchwarzschildVariables {
                    Frame::Inertial>,
       Tags::ShiftBackground<DataType, 3, Frame::Inertial>,
       Tags::ShiftExcess<DataType, 3, Frame::Inertial>,
+      gr::Tags::Shift<Dim, Frame::Inertial, DataType>,
       Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataType>,
       Tags::ShiftStrain<DataType, 3, Frame::Inertial>,
       Tags::LongitudinalShiftExcess<DataType, 3, Frame::Inertial>,
@@ -225,11 +224,6 @@ struct SchwarzschildVariables {
       gsl::not_null<Cache*> cache,
       ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>> /*meta*/)
       const noexcept;
-  void operator()(
-      gsl::not_null<tnsr::i<DataType, 3>*> trace_extrinsic_curvature_gradient,
-      gsl::not_null<Cache*> cache,
-      ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
-                    tmpl::size_t<3>, Frame::Inertial> /*meta*/) const noexcept;
   void operator()(gsl::not_null<Scalar<DataType>*> conformal_factor,
                   gsl::not_null<Cache*> cache,
                   Tags::ConformalFactor<DataType> /*meta*/) const noexcept;
@@ -265,6 +259,10 @@ struct SchwarzschildVariables {
       gsl::not_null<tnsr::I<DataType, 3>*> shift_excess,
       gsl::not_null<Cache*> cache,
       Tags::ShiftExcess<DataType, 3, Frame::Inertial> /*meta*/) const noexcept;
+  void operator()(
+      gsl::not_null<tnsr::I<DataType, 3>*> shift,
+      gsl::not_null<Cache*> cache,
+      gr::Tags::Shift<3, Frame::Inertial, DataType> /*meta*/) const noexcept;
   void operator()(gsl::not_null<Scalar<DataType>*>
                       shift_dot_deriv_extrinsic_curvature_trace,
                   gsl::not_null<Cache*> cache,

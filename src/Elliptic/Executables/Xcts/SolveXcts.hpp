@@ -42,6 +42,7 @@
 #include "ParallelAlgorithms/LinearSolver/Multigrid/ElementsAllocator.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Multigrid.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Actions/CommunicateOverlapFields.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/Actions/ResetSubdomainSolver.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
@@ -101,7 +102,7 @@ struct MultigridGroup {
 struct Metavariables {
   static constexpr size_t volume_dim = 3;
   using system =
-      Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianAndLapse,
+      Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift,
                              Xcts::Geometry::Curved>;
 
   // List the possible backgrounds, i.e. the variable-independent part of the
@@ -193,7 +194,10 @@ struct Metavariables {
   // Collect events and triggers
   // (public for use by the Charm++ registration code)
   using analytic_solution_fields = typename system::primal_fields;
-  using observe_fields = analytic_solution_fields;
+  using observe_fields =
+      tmpl::append<analytic_solution_fields, typename system::background_fields,
+                   db::wrap_tags_in<NonlinearSolver::Tags::Residual,
+                                    typename system::primal_fields>>;
   using events =
       tmpl::list<dg::Events::Registrars::ObserveFields<
                      volume_dim, nonlinear_solver_iteration_id, observe_fields,
@@ -267,10 +271,11 @@ struct Metavariables {
 
   using solve_actions = tmpl::list<
       // TODO: Only build nonlinear operator on finest grid
-      build_operator_actions<false>, Actions::RunEventsAndTriggers,
+      build_operator_actions<false>,
       typename nonlinear_solver::template solve<
           build_operator_actions<false>,
           tmpl::list<
+              Actions::RunEventsAndTriggers,
               LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
                   fields_tag, typename multigrid::options_group, void>,
               LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
@@ -285,12 +290,14 @@ struct Metavariables {
               LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
                   volume_dim, communicated_overlap_tags,
                   typename schwarz_smoother::options_group>,
+              LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
+                  typename schwarz_smoother::options_group>,
               typename linear_solver::template solve<
                   typename multigrid::template solve<
                       smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
-                      smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>>>,
-          tmpl::list<Actions::RunEventsAndTriggers>>,
-      Parallel::Actions::TerminatePhase>;
+                      smooth_actions<
+                          LinearSolver::multigrid::VcycleUpLabel>>>>>,
+      Actions::RunEventsAndTriggers, Parallel::Actions::TerminatePhase>;
 
   using dg_element_array = elliptic::DgElementArray<
       Metavariables,

@@ -52,6 +52,7 @@ class LinearSolver : public PUP::able {
   WRAPPED_PUPable_abstract(LinearSolver);  // NOLINT
   /// \endcond
 
+  using registrars = LinearSolverRegistrars;
   using creatable_classes = Registration::registrants<LinearSolverRegistrars>;
 
   virtual std::unique_ptr<LinearSolver<LinearSolverRegistrars>> get_clone()
@@ -99,7 +100,7 @@ Convergence::HasConverged LinearSolver<LinearSolverRegistrars>::solve(
     Args&&... args) const noexcept {
   return call_with_dynamic_type<Convergence::HasConverged, creatable_classes>(
       this, [&initial_guess_in_solution_out, &linear_operator, &source,
-             &args...](auto* const linear_solver) noexcept {
+             &args...](const auto* const linear_solver) noexcept {
         return linear_solver->solve(initial_guess_in_solution_out,
                                     linear_operator, source,
                                     std::forward<Args>(args)...);

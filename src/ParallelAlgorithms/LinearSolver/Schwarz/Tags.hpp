@@ -39,6 +39,20 @@ struct SubdomainSolver {
   static constexpr Options::String help = "The linear solver on subdomains";
 };
 
+template <typename OptionsGroup>
+struct EnableSubdomainSolverResets {
+  static std::string name() noexcept { return "EnableResets"; }
+  using type = bool;
+  using group = OptionsGroup;
+  static constexpr Options::String help =
+      "Enable or disable resets. This only has an effect in cases where the "
+      "operator changes, e.g. between nonlinear-solver iterations. Disabling "
+      "resets avoids expensive re-building of the operator, but comes at the "
+      "cost of less accurate preconditioning and thus potentially more "
+      "preconditioned iterations. Whether or not this helps convergence "
+      "overall is highly problem-dependent.";
+};
+
 }  // namespace OptionTags
 
 /// Tags related to the Schwarz solver
@@ -75,6 +89,15 @@ struct SubdomainSolver : SubdomainSolverBase<OptionsGroup>, db::SimpleTag {
   static type create_from_options(const type& value) noexcept {
     return deserialize<type>(serialize<type>(value).data());
   }
+};
+
+template <typename OptionsGroup>
+struct EnableSubdomainSolverResets : db::SimpleTag {
+  using type = bool;
+  static constexpr bool pass_metavariables = false;
+  using option_tags =
+      tmpl::list<OptionTags::EnableSubdomainSolverResets<OptionsGroup>>;
+  static bool create_from_options(const bool value) noexcept { return value; }
 };
 
 /*!

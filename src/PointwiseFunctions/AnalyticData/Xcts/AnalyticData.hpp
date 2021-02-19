@@ -33,7 +33,10 @@ struct DerivativeVariables {
                                                          Frame::Inertial>,
                     tmpl::size_t<Dim>, Frame::Inertial>,
       Tags::ConformalRicciTensor<DataVector, Dim, Frame::Inertial>,
-      Tags::ConformalRicciScalar<DataVector>>;
+      Tags::ConformalRicciScalar<DataVector>,
+      ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
+                    tmpl::size_t<Dim>, Frame::Inertial>,
+      Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector>>;
 
   const tnsr::I<DataVector, Dim>& x;
   const Mesh<Dim>& mesh;
@@ -41,6 +44,8 @@ struct DerivativeVariables {
       inv_jacobian;
   const tnsr::II<DataVector, Dim>& inv_conformal_metric;
   const tnsr::Ijj<DataVector, Dim>& conformal_christoffel_second_kind;
+  const Scalar<DataVector>& extrinsic_curvature_trace;
+  const tnsr::I<DataVector, Dim>& shift;
 
   void operator()(gsl::not_null<tnsr::iJkk<DataVector, Dim>*>
                       deriv_conformal_christoffel_second_kind,
@@ -58,6 +63,18 @@ struct DerivativeVariables {
       gsl::not_null<Scalar<DataVector>*> conformal_ricci_scalar,
       gsl::not_null<Cache*> cache,
       Tags::ConformalRicciScalar<DataVector> /*meta*/) const noexcept;
+  void operator()(
+      gsl::not_null<tnsr::i<DataVector, Dim>*> deriv_extrinsic_curvature_trace,
+      gsl::not_null<Cache*> cache,
+      ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
+                    tmpl::size_t<Dim>, Frame::Inertial> /*meta*/)
+      const noexcept;
+  void operator()(
+      gsl::not_null<Scalar<DataVector>*>
+          shift_dot_deriv_extrinsic_curvature_trace,
+      gsl::not_null<Cache*> cache,
+      Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector> /*meta*/)
+      const noexcept;
 };
 
 }  // namespace detail
@@ -123,7 +140,9 @@ class AnalyticData : public ::AnalyticData<3, Registrars> {
                  pointwise_tags,
                  Tags::InverseConformalMetric<DataVector, Dim, Frame::Inertial>,
                  Tags::ConformalChristoffelSecondKind<DataVector, Dim,
-                                                      Frame::Inertial>>>{});
+                                                      Frame::Inertial>,
+                 gr::Tags::TraceExtrinsicCurvature<DataVector>,
+                 gr::Tags::Shift<Dim, Frame::Inertial, DataVector>>>{});
       tmpl::for_each<pointwise_tags>(
           [&vars, &pointwise_vars](auto tag_v) noexcept {
             using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
@@ -137,7 +156,11 @@ class AnalyticData : public ::AnalyticData<3, Registrars> {
               get<Tags::InverseConformalMetric<
                   DataVector, Dim, Frame::Inertial>>(pointwise_vars),
               get<Tags::ConformalChristoffelSecondKind<
-                  DataVector, Dim, Frame::Inertial>>(pointwise_vars)}};
+                  DataVector, Dim, Frame::Inertial>>(pointwise_vars),
+              get<gr::Tags::TraceExtrinsicCurvature<DataVector>>(
+                  pointwise_vars),
+              get<gr::Tags::Shift<Dim, Frame::Inertial, DataVector>>(
+                  pointwise_vars)}};
       tmpl::for_each<derivative_tags>(
           [&vars, &derivative_vars_cache](auto tag_v) noexcept {
             using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;

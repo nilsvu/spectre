@@ -10,11 +10,21 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
+#include "Domain/CoordinateMaps/Affine.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.tpp"
+#include "Domain/CoordinateMaps/ProductMaps.hpp"
+#include "Domain/CoordinateMaps/ProductMaps.tpp"
+#include "Domain/LogicalCoordinates.hpp"
+#include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
 #include "Framework/CheckWithRandomValues.hpp"
 #include "Framework/SetupLocalPythonEnvironment.hpp"
 #include "Framework/TestCreation.hpp"
 #include "Framework/TestHelpers.hpp"
+#include "Helpers/PointwiseFunctions/AnalyticSolutions/FirstOrderEllipticSolutionsTestHelpers.hpp"
+#include "NumericalAlgorithms/Spectral/Mesh.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/AnalyticData.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Schwarzschild.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
@@ -36,8 +46,6 @@ using auxiliary_field_tags =
 using background_tags =
     tmpl::list<Xcts::Tags::ConformalMetric<DataVector, 3, Frame::Inertial>,
                gr::Tags::TraceExtrinsicCurvature<DataVector>,
-               ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
-                             tmpl::size_t<3>, Frame::Inertial>,
                Xcts::Tags::ShiftBackground<DataVector, 3, Frame::Inertial>>;
 using matter_source_tags =
     tmpl::list<gr::Tags::EnergyDensity<DataVector>,
@@ -108,7 +116,6 @@ void test_solution(const double mass,
       &SchwarzschildProxy::background_variables, solution, "Schwarzschild",
       {"conformal_spatial_metric_" + py_functions_suffix,
        "extrinsic_curvature_trace_" + py_functions_suffix,
-       "extrinsic_curvature_trace_gradient_" + py_functions_suffix,
        "shift_background"},
       {{{inner_radius, outer_radius}}}, std::make_tuple(mass), DataVector(5));
   pypp::check_with_random_values<1>(
@@ -120,6 +127,88 @@ void test_solution(const double mass,
       {"conformal_factor_fixed_source",
        "lapse_times_conformal_factor_fixed_source", "shift_fixed_source"},
       {{{inner_radius, outer_radius}}}, std::make_tuple(mass), DataVector(5));
+
+  {
+    INFO("Verify the solution solves the XCTS system");
+    const Mesh<3> mesh{12, Spectral::Basis::Legendre,
+                       Spectral::Quadrature::GaussLobatto};
+    using AffineMap = domain::CoordinateMaps::Affine;
+    using AffineMap3D =
+        domain::CoordinateMaps::ProductOf3Maps<AffineMap, AffineMap, AffineMap>;
+    const domain::CoordinateMap<Frame::Logical, Frame::Inertial, AffineMap3D>
+        coord_map{{{-1., 1., inner_radius, outer_radius},
+                   {-1., 1., inner_radius, outer_radius},
+                   {-1., 1., inner_radius, outer_radius}}};
+    const auto logical_coords = logical_coordinates(mesh);
+    const auto inertial_coords = coord_map(logical_coords);
+    const auto inv_jacobian = coord_map.inv_jacobian(logical_coords);
+    const auto get_items = [](const auto... args) {
+      return std::forward_as_tuple(args...);
+    };
+    {
+      INFO("Hamiltonian constraint only");
+      using system = Xcts::FirstOrderSystem<Xcts::Equations::Hamiltonian,
+                                            Xcts::Geometry::FlatCartesian>;
+      const auto& data = dynamic_cast<const Xcts::AnalyticData::AnalyticData<
+          tmpl::list<Registrars::Schwarzschild>>&>(solution);
+      const auto background_fields =
+          data.variables(inertial_coords, mesh, inv_jacobian, typename system::background_fields{});
+      FirstOrderEllipticSolutionsTestHelpers::verify_solution<system>(
+          solution, mesh, coord_map, 1.e-3,
+          apply<typename system::fluxes_computer::argument_tags>(
+              get_items, background_fields),
+          apply<typename system::sources_computer::argument_tags>(
+              get_items, background_fields));
+    }
+  //   {
+  //     INFO("Hamiltonian and lapse equations");
+  //     using system =
+  //         Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianAndLapse,
+  //                                Xcts::Geometry::Euclidean>;
+  //     FirstOrderEllipticSolutionsTestHelpers::verify_solution<system>(
+  //         solution, typename system::fluxes{}, mesh, coord_map, 1.e-3,
+  //         std::tuple<>{},
+  //         std::make_tuple(
+  //             get<gr::Tags::EnergyDensity<DataVector>>(matter_sources),
+  //             get<gr::Tags::StressTrace<DataVector>>(matter_sources),
+  //             get<gr::Tags::TraceExtrinsicCurvature<DataVector>>(
+  //                 background_fields),
+  //             get<::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataVector>>>(
+  //                 background_fields),
+  //             get<Xcts::Tags::LongitudinalShiftMinusDtConformalMetricSquare<
+  //                 DataVector>>(background_fields),
+  //             get<Xcts::Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector>>(
+  //                 background_fields)));
+  //   }
+  //   {
+  //     INFO("Full XCTS equations");
+  //     using system =
+  //         Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift,
+  //                                Xcts::Geometry::Euclidean>;
+  //     FirstOrderEllipticSolutionsTestHelpers::verify_solution<system>(
+  //         solution, typename system::fluxes{}, mesh, coord_map, 1.e-3,
+  //         std::tuple<>{},
+  //         std::make_tuple(
+  //             get<gr::Tags::EnergyDensity<DataVector>>(matter_sources),
+  //             get<gr::Tags::StressTrace<DataVector>>(matter_sources),
+  //             get<gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>>(
+  //                 matter_sources),
+  //             get<gr::Tags::TraceExtrinsicCurvature<DataVector>>(
+  //                 background_fields),
+  //             get<::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataVector>>>(
+  //                 background_fields),
+  //             get<::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
+  //                               tmpl::size_t<3>, Frame::Inertial>>(
+  //                 background_fields),
+  //             get<Xcts::Tags::ShiftBackground<DataVector, 3, Frame::Inertial>>(
+  //                 background_fields),
+  //             get<Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+  //                 DataVector, 3, Frame::Inertial>>(background_fields),
+  //             get<::Tags::div<
+  //                 Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+  //                     DataVector, 3, Frame::Inertial>>>(background_fields)));
+  //   }
+  }
 }
 
 }  // namespace
