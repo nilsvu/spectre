@@ -16,6 +16,9 @@
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "Options/ParseOptions.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/CommonVariables.hpp"
+#include "PointwiseFunctions/GeneralRelativity/Christoffel.hpp"
+#include "PointwiseFunctions/GeneralRelativity/IndexManipulation.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
@@ -105,11 +108,74 @@ void SchwarzschildVariables<DataType>::operator()(
 
 template <typename DataType>
 void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::II<DataType, 3>*> inv_conformal_metric,
+    const gsl::not_null<Cache*> /*cache*/,
+    Tags::InverseConformalMetric<DataType, 3, Frame::Inertial> /*meta*/)
+    const noexcept {
+  get<0, 0>(*inv_conformal_metric) = 1.;
+  get<1, 1>(*inv_conformal_metric) = 1.;
+  get<2, 2>(*inv_conformal_metric) = 1.;
+  get<0, 1>(*inv_conformal_metric) = 0.;
+  get<0, 2>(*inv_conformal_metric) = 0.;
+  get<1, 2>(*inv_conformal_metric) = 0.;
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
     const gsl::not_null<tnsr::ijj<DataType, 3>*> deriv_conformal_metric,
     const gsl::not_null<Cache*> /*cache*/,
     ::Tags::deriv<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
                   tmpl::size_t<3>, Frame::Inertial> /*meta*/) const noexcept {
   std::fill(deriv_conformal_metric->begin(), deriv_conformal_metric->end(), 0.);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::ijj<DataType, Dim>*>
+        conformal_christoffel_first_kind,
+    const gsl::not_null<Cache*> cache,
+    Tags::ConformalChristoffelFirstKind<
+        DataType, Dim, Frame::Inertial> /*meta*/) const noexcept {
+  const auto& deriv_conformal_metric = cache->get_var(
+      ::Tags::deriv<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
+                    tmpl::size_t<3>, Frame::Inertial>{});
+  gr::christoffel_first_kind(conformal_christoffel_first_kind,
+                             deriv_conformal_metric);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::Ijj<DataType, Dim>*>
+        conformal_christoffel_second_kind,
+    const gsl::not_null<Cache*> cache,
+    Tags::ConformalChristoffelSecondKind<
+        DataType, Dim, Frame::Inertial> /*meta*/) const noexcept {
+  const auto& conformal_christoffel_first_kind = cache->get_var(
+      Tags::ConformalChristoffelFirstKind<DataType, Dim, Frame::Inertial>{});
+  const auto& inv_conformal_metric = cache->get_var(
+      Tags::InverseConformalMetric<DataType, 3, Frame::Inertial>{});
+  raise_or_lower_first_index(conformal_christoffel_second_kind,
+                             conformal_christoffel_first_kind,
+                             inv_conformal_metric);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::i<DataType, Dim>*>
+        conformal_christoffel_contracted,
+    const gsl::not_null<Cache*> cache,
+    Tags::ConformalChristoffelContracted<
+        DataType, Dim, Frame::Inertial> /*meta*/) const noexcept {
+  const auto& conformal_christoffel_second_kind = cache->get_var(
+      Tags::ConformalChristoffelSecondKind<DataType, Dim, Frame::Inertial>{});
+  for (size_t i = 0; i < Dim; ++i) {
+    conformal_christoffel_contracted->get(i) =
+        conformal_christoffel_second_kind.get(0, i, 0);
+    for (size_t j = 1; j < Dim; ++j) {
+      conformal_christoffel_contracted->get(i) +=
+          conformal_christoffel_second_kind.get(j, i, j);
+    }
+  }
 }
 
 template <typename DataType>

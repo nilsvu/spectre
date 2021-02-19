@@ -10,7 +10,6 @@
 
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
-#include "DataStructures/Tensor/EagerMath/DeterminantAndInverse.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
@@ -27,58 +26,6 @@
 
 /// \cond
 namespace Xcts::AnalyticData::detail {
-
-void DerivedVariables::operator()(
-    const gsl::not_null<tnsr::II<DataVector, Dim>*> inv_conformal_metric,
-    const gsl::not_null<Cache*> /*cache*/,
-    Tags::InverseConformalMetric<DataVector, Dim, Frame::Inertial> /*meta*/)
-    const noexcept {
-  Scalar<DataVector> det_conformal_metric{conformal_metric.begin()->size()};
-  determinant_and_inverse(make_not_null(&det_conformal_metric),
-                          inv_conformal_metric, conformal_metric);
-}
-
-void DerivedVariables::operator()(
-    const gsl::not_null<tnsr::ijj<DataVector, Dim>*>
-        conformal_christoffel_first_kind,
-    const gsl::not_null<Cache*> /*cache*/,
-    Tags::ConformalChristoffelFirstKind<
-        DataVector, Dim, Frame::Inertial> /*meta*/) const noexcept {
-  gr::christoffel_first_kind(conformal_christoffel_first_kind,
-                             deriv_conformal_metric);
-}
-
-void DerivedVariables::operator()(
-    const gsl::not_null<tnsr::Ijj<DataVector, Dim>*>
-        conformal_christoffel_second_kind,
-    const gsl::not_null<Cache*> cache,
-    Tags::ConformalChristoffelSecondKind<
-        DataVector, Dim, Frame::Inertial> /*meta*/) const noexcept {
-  const auto& conformal_christoffel_first_kind = cache->get_var(
-      Tags::ConformalChristoffelFirstKind<DataVector, Dim, Frame::Inertial>{});
-  const auto& inv_conformal_metric = cache->get_var(
-      Tags::InverseConformalMetric<DataVector, Dim, Frame::Inertial>{});
-  raise_or_lower_first_index(conformal_christoffel_second_kind,
-                             conformal_christoffel_first_kind,
-                             inv_conformal_metric);
-}
-
-void DerivedVariables::operator()(
-    const gsl::not_null<tnsr::i<DataVector, Dim>*> conformal_christoffel_contracted,
-    const gsl::not_null<Cache*> cache,
-    Tags::ConformalChristoffelContracted<
-        DataVector, Dim, Frame::Inertial> /*meta*/) const noexcept {
-  const auto& conformal_christoffel_second_kind = cache->get_var(
-      Tags::ConformalChristoffelSecondKind<DataVector, Dim, Frame::Inertial>{});
-  for (size_t i = 0; i < Dim; ++i) {
-    conformal_christoffel_contracted->get(i) =
-        conformal_christoffel_second_kind.get(0, i, 0);
-    for (size_t j = 1; j < Dim; ++j) {
-      conformal_christoffel_contracted->get(i) +=
-          conformal_christoffel_second_kind.get(j, i, j);
-    }
-  }
-}
 
 void DerivativeVariables::operator()(
     const gsl::not_null<tnsr::iJkk<DataVector, Dim>*>

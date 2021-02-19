@@ -25,43 +25,6 @@ namespace AnalyticData {
 
 namespace detail {
 
-struct DerivedVariables {
-  static constexpr size_t Dim = 3;
-  using Cache = CachedTempBuffer<
-      DerivedVariables,
-      Tags::InverseConformalMetric<DataVector, Dim, Frame::Inertial>,
-      Tags::ConformalChristoffelFirstKind<DataVector, Dim, Frame::Inertial>,
-      Tags::ConformalChristoffelSecondKind<DataVector, Dim, Frame::Inertial>,
-      Tags::ConformalChristoffelContracted<DataVector, Dim, Frame::Inertial>>;
-
-  const tnsr::I<DataVector, Dim>& x;
-  const tnsr::ii<DataVector, Dim>& conformal_metric;
-  const tnsr::ijj<DataVector, Dim>& deriv_conformal_metric;
-
-  void operator()(
-      gsl::not_null<tnsr::II<DataVector, Dim>*> inv_conformal_metric,
-      gsl::not_null<Cache*> cache,
-      Tags::InverseConformalMetric<DataVector, Dim, Frame::Inertial> /*meta*/)
-      const noexcept;
-  void operator()(gsl::not_null<tnsr::ijj<DataVector, Dim>*>
-                      conformal_christoffel_first_kind,
-                  gsl::not_null<Cache*> cache,
-                  Tags::ConformalChristoffelFirstKind<DataVector, Dim,
-                                                      Frame::Inertial> /*meta*/)
-      const noexcept;
-  void operator()(
-      gsl::not_null<tnsr::Ijj<DataVector, Dim>*>
-          conformal_christoffel_second_kind,
-      gsl::not_null<Cache*> cache,
-      Tags::ConformalChristoffelSecondKind<
-          DataVector, Dim, Frame::Inertial> /*meta*/) const noexcept;
-  void operator()(
-      gsl::not_null<tnsr::i<DataVector, Dim>*> conformal_christoffel_contracted,
-      gsl::not_null<Cache*> cache,
-      Tags::ConformalChristoffelContracted<
-          DataVector, Dim, Frame::Inertial> /*meta*/) const noexcept;
-};
-
 struct DerivativeVariables {
   static constexpr size_t Dim = 3;
   using Cache = CachedTempBuffer<
@@ -126,49 +89,12 @@ class AnalyticData : public ::AnalyticData<3, Registrars> {
   Variables<tmpl::list<RequestedTags...>> variables(
       const tnsr::I<DataType, Dim>& x,
       tmpl::list<RequestedTags...> /*meta*/) const noexcept {
-    using DerivedVarsComputer = detail::DerivedVariables;
-    using original_tags =
-        tmpl::list_difference<tmpl::list<RequestedTags...>,
-                              typename DerivedVarsComputer::Cache::tags_list>;
-    using derived_tags =
-        tmpl::list_difference<tmpl::list<RequestedTags...>, original_tags>;
-    if constexpr (std::is_same_v<derived_tags, tmpl::list<>>) {
-      return variables_from_tagged_tuple(
-          this->original_variables(x, original_tags{}));
-    } else {
-      auto vars =
-          make_with_value<Variables<tmpl::list<RequestedTags...>>>(x, 0.);
-      // Retrieve original data from the derived class, including dependencies
-      // for the derived data
-      auto original_vars = this->original_variables(
-          x, tmpl::remove_duplicates<tmpl::push_back<
-                 original_tags,
-                 Tags::ConformalMetric<DataVector, Dim, Frame::Inertial>,
-                 ::Tags::deriv<
-                     Tags::ConformalMetric<DataVector, Dim, Frame::Inertial>,
-                     tmpl::size_t<Dim>, Frame::Inertial>>>{});
-      tmpl::for_each<original_tags>(
-          [&vars, &original_vars](auto tag_v) noexcept {
-            using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
-            get<tag>(vars) = get<tag>(original_vars);
-          });
-      // Fill in derived data
-      typename DerivedVarsComputer::Cache derived_vars_cache{
-          vars.number_of_grid_points(),
-          DerivedVarsComputer{
-              x,
-              get<Tags::ConformalMetric<DataVector, Dim, Frame::Inertial>>(
-                  original_vars),
-              get<::Tags::deriv<
-                  Tags::ConformalMetric<DataVector, Dim, Frame::Inertial>,
-                  tmpl::size_t<Dim>, Frame::Inertial>>(original_vars)}};
-      tmpl::for_each<derived_tags>(
-          [&vars, &derived_vars_cache](auto tag_v) noexcept {
-            using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
-            get<tag>(vars) = derived_vars_cache.get_var(tag{});
-          });
-      return vars;
-    }
+    return variables_from_tagged_tuple(
+        call_with_dynamic_type<tuples::TaggedTuple<RequestedTags...>,
+                               typename Base::creatable_classes>(
+            this, [&x](auto* const derived) noexcept {
+              return derived->variables(x, tmpl::list<RequestedTags...>{});
+            }));
   }
 
   template <typename... RequestedTags>
@@ -195,10 +121,9 @@ class AnalyticData : public ::AnalyticData<3, Registrars> {
       auto pointwise_vars = this->variables(
           x, tmpl::remove_duplicates<tmpl::push_back<
                  pointwise_tags,
-                 Tags::ConformalMetric<DataVector, Dim, Frame::Inertial>,
-                 ::Tags::deriv<
-                     Tags::ConformalMetric<DataVector, Dim, Frame::Inertial>,
-                     tmpl::size_t<Dim>, Frame::Inertial>>>{});
+                 Tags::InverseConformalMetric<DataVector, Dim, Frame::Inertial>,
+                 Tags::ConformalChristoffelSecondKind<DataVector, Dim,
+                                                      Frame::Inertial>>>{});
       tmpl::for_each<pointwise_tags>(
           [&vars, &pointwise_vars](auto tag_v) noexcept {
             using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
@@ -220,18 +145,6 @@ class AnalyticData : public ::AnalyticData<3, Registrars> {
           });
       return vars;
     }
-  }
-
- private:
-  template <typename DataType, typename... RequestedTags>
-  tuples::TaggedTuple<RequestedTags...> original_variables(
-      const tnsr::I<DataType, Dim>& x,
-      tmpl::list<RequestedTags...> /*meta*/) const noexcept {
-    return call_with_dynamic_type<tuples::TaggedTuple<RequestedTags...>,
-                                  typename Base::creatable_classes>(
-        this, [&x](auto* const derived) noexcept {
-          return derived->variables(x, tmpl::list<RequestedTags...>{});
-        });
   }
 };
 }  // namespace AnalyticData

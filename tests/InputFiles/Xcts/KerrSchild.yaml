@@ -4,19 +4,20 @@
 # Executable: SolveXcts
 # Check: parse;execute
 # ExpectedOutput:
-#   SchwarzschildIsotropicReductions.h5
-#   SchwarzschildIsotropicVolume0.h5
+#   KerrSchildReductions.h5
+#   KerrSchildVolume0.h5
 
 Background:
-  Schwarzschild:
+  Kerr:
     Mass: 1.
-    Coordinates: Isotropic
+    Spin: [0., 0., 0.]
+    Center: [0., 0., 0.]
 
 InitialGuess: Flatness
 
 DomainCreator:
   Shell:
-    InnerRadius: 0.5
+    InnerRadius: 2.
     OuterRadius: 10.
     InitialRefinement: 0
     InitialGridPoints: [4, 4]
@@ -30,12 +31,12 @@ DomainCreator:
         AnalyticSolution:
           ConformalFactor: Dirichlet
           LapseTimesConformalFactor: Dirichlet
-          ShiftExcess: Dirichlet
+          # ShiftExcess: Dirichlet
       OuterBoundary:
         AnalyticSolution:
           ConformalFactor: Dirichlet
           LapseTimesConformalFactor: Dirichlet
-          ShiftExcess: Dirichlet
+          # ShiftExcess: Dirichlet
 
 Discretization:
   DiscontinuousGalerkin:
@@ -43,19 +44,19 @@ Discretization:
     Massive: True
 
 Observers:
-  VolumeFileName: "SchwarzschildIsotropicVolume"
-  ReductionFileName: "SchwarzschildIsotropicReductions"
+  VolumeFileName: "KerrSchildVolume"
+  ReductionFileName: "KerrSchildReductions"
 
 NonlinearSolver:
   NewtonRaphson:
     ConvergenceCriteria:
-      MaxIterations: 20
+      MaxIterations: 5
       RelativeResidual: 1e-6
       AbsoluteResidual: 1e-12
     SufficientDecrease: 1.e-4
     MaxGlobalizationSteps: 40
     DampingFactor: 1.
-    Verbosity: Quiet
+    Verbosity: Verbose
 
 LinearSolver:
   Gmres:
@@ -86,5 +87,8 @@ EventsAndTriggers:
         SubfileName: ErrorNorms
     - ObserveFields:
         SubfileName: VolumeData
-        VariablesToObserve: [ConformalFactor, LapseTimesConformalFactor, ShiftExcess]
+        VariablesToObserve:
+          - ConformalFactor
+          - LapseTimesConformalFactor
+          # - ShiftExcess
         InterpolateToMesh: None

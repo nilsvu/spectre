@@ -50,6 +50,7 @@
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Flatness.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Xcts/Kerr.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Schwarzschild.hpp"
 #include "Utilities/Blas.hpp"
 #include "Utilities/ErrorHandling/FloatingPointExceptions.hpp"
@@ -100,14 +101,15 @@ struct MultigridGroup {
 struct Metavariables {
   static constexpr size_t volume_dim = 3;
   using system =
-      Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift,
+      Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianAndLapse,
                              Xcts::Geometry::Curved>;
 
   // List the possible backgrounds, i.e. the variable-independent part of the
   // equations that define the problem to solve (along with the boundary
   // conditions)
   using analytic_solution_registrars =
-      tmpl::list<Xcts::Solutions::Registrars::Schwarzschild>;
+      tmpl::list<Xcts::Solutions::Registrars::Schwarzschild,
+                 Xcts::Solutions::Registrars::Kerr>;
   using background_tag = elliptic::Tags::Background<
       Xcts::AnalyticData::AnalyticData<analytic_solution_registrars>>;
 
