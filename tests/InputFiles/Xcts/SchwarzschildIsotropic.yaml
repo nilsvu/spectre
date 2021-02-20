@@ -74,9 +74,8 @@ LinearSolver:
     MaxOverlap: 2
     Iterations: 3
     Verbosity: Quiet
-    SubdomainSolver:
-      ExplicitInverse:
-        EnableResets: True
+    SubdomainSolver: ExplicitInverse
+    EnableResets: True
 
 EventsAndTriggers:
   ? EveryNIterations:

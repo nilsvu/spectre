@@ -239,14 +239,25 @@ void add_momentum_sources_impl(
                           get(longitudinal_shift_square) * 7. / 32.;
   // Compute shift source
   // Begin with extrinsic curvature term
+  auto extrinsic_curvature_trace_gradient_term =
+      make_with_value<tnsr::I<DataVector, 3>>(
+          extrinsic_curvature_trace_gradient, 0.);
   if constexpr (ConformalGeometry == Geometry::FlatCartesian) {
-    get<0>(*momentum_constraint) = get<0>(extrinsic_curvature_trace_gradient);
-    get<1>(*momentum_constraint) = get<1>(extrinsic_curvature_trace_gradient);
-    get<2>(*momentum_constraint) = get<2>(extrinsic_curvature_trace_gradient);
+    get<0>(extrinsic_curvature_trace_gradient_term) =
+        get<0>(extrinsic_curvature_trace_gradient);
+    get<1>(extrinsic_curvature_trace_gradient_term) = get<1>(extrinsic_curvature_trace_gradient);
+    get<2>(extrinsic_curvature_trace_gradient_term) =
+        get<2>(extrinsic_curvature_trace_gradient);
   } else {
-    raise_or_lower_index(momentum_constraint,
-                         extrinsic_curvature_trace_gradient,
-                         inv_conformal_metric->get());
+    raise_or_lower_index(
+        make_not_null(&extrinsic_curvature_trace_gradient_term),
+        extrinsic_curvature_trace_gradient, inv_conformal_metric->get());
+  }
+  for (size_t i = 0; i < 3;++i) {
+    extrinsic_curvature_trace_gradient_term.get(i) *=
+        4. / 3. * get(lapse_times_conformal_factor) / get(conformal_factor);
+    momentum_constraint->get(i) +=
+        extrinsic_curvature_trace_gradient_term.get(i);
   }
   // Compute lapse deriv term to be contracted with longitudinal shift
   auto lapse_deriv_term =
@@ -268,9 +279,6 @@ void add_momentum_sources_impl(
                          conformal_metric->get());
   }
   for (size_t i = 0; i < 3; ++i) {
-    // Complete extrinsic curvature term
-    momentum_constraint->get(i) *=
-        4. / 3. * get(lapse_times_conformal_factor) / get(conformal_factor);
     // Add momentum density term
     momentum_constraint->get(i) +=
         16. * M_PI * get(lapse_times_conformal_factor) *
@@ -418,17 +426,29 @@ void add_linearized_momentum_sources_impl(
                           extrinsic_curvature_trace_gradient));
   // Compute shift source
   // Begin with extrinsic curvature term
+  auto extrinsic_curvature_trace_gradient_term =
+      make_with_value<tnsr::I<DataVector, 3>>(
+          extrinsic_curvature_trace_gradient, 0.);
   if constexpr (ConformalGeometry == Geometry::FlatCartesian) {
-    get<0>(*linearized_momentum_constraint) =
+    get<0>(extrinsic_curvature_trace_gradient_term) =
         get<0>(extrinsic_curvature_trace_gradient);
-    get<1>(*linearized_momentum_constraint) =
+    get<1>(extrinsic_curvature_trace_gradient_term) =
         get<1>(extrinsic_curvature_trace_gradient);
-    get<2>(*linearized_momentum_constraint) =
+    get<2>(extrinsic_curvature_trace_gradient_term) =
         get<2>(extrinsic_curvature_trace_gradient);
   } else {
-    raise_or_lower_index(linearized_momentum_constraint,
-                         extrinsic_curvature_trace_gradient,
-                         inv_conformal_metric->get());
+    raise_or_lower_index(
+        make_not_null(&extrinsic_curvature_trace_gradient_term),
+        extrinsic_curvature_trace_gradient, inv_conformal_metric->get());
+  }
+  for (size_t i = 0; i < 3;++i) {
+    extrinsic_curvature_trace_gradient_term.get(i) *=
+        4. / 3. *
+        (get(lapse_times_conformal_factor_correction) / get(conformal_factor) -
+         get(lapse_times_conformal_factor) / square(get(conformal_factor)) *
+             get(conformal_factor_correction));
+    linearized_momentum_constraint->get(i) +=
+        extrinsic_curvature_trace_gradient_term.get(i);
   }
   // Compute lapse deriv term to be contracted with longitudinal shift
   auto lapse_deriv_term =
@@ -471,12 +491,6 @@ void add_linearized_momentum_sources_impl(
                          lapse_deriv_correction_term, conformal_metric->get());
   }
   for (size_t i = 0; i < 3; ++i) {
-    // Complete extrinsic curvature term
-    linearized_momentum_constraint->get(i) *=
-        4. / 3. *
-        (get(lapse_times_conformal_factor_correction) / get(conformal_factor) -
-         get(lapse_times_conformal_factor) / square(get(conformal_factor)) *
-             get(conformal_factor_correction));
     // Add momentum density term
     linearized_momentum_constraint->get(i) +=
         16. * M_PI *
