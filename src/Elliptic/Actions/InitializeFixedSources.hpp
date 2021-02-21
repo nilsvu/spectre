@@ -76,8 +76,8 @@ struct InitializeFixedSources {
     // which (along with the boundary conditions) define the problem we want to
     // solve. We need only retrieve sources for the primal fields, since the
     // auxiliary fields will never be sourced.
-    auto fixed_sources = variables_from_tagged_tuple(background.variables(
-        inertial_coords, typename fixed_sources_tag::tags_list{}));
+    auto fixed_sources = background.variables(
+        inertial_coords, typename fixed_sources_tag::tags_list{});
 
     if (db::get<elliptic::dg::Tags::Massive>(box)) {
       const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);

@@ -16,6 +16,9 @@
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "Options/ParseOptions.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/CommonVariables.hpp"
+#include "PointwiseFunctions/GeneralRelativity/Christoffel.hpp"
+#include "PointwiseFunctions/GeneralRelativity/IndexManipulation.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
@@ -95,10 +98,84 @@ void SchwarzschildVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     Tags::ConformalMetric<DataType, 3, Frame::Inertial> /*meta*/)
     const noexcept {
-  std::fill(conformal_metric->begin(), conformal_metric->end(), 0.);
   get<0, 0>(*conformal_metric) = 1.;
   get<1, 1>(*conformal_metric) = 1.;
   get<2, 2>(*conformal_metric) = 1.;
+  get<0, 1>(*conformal_metric) = 0.;
+  get<0, 2>(*conformal_metric) = 0.;
+  get<1, 2>(*conformal_metric) = 0.;
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::II<DataType, 3>*> inv_conformal_metric,
+    const gsl::not_null<Cache*> /*cache*/,
+    Tags::InverseConformalMetric<DataType, 3, Frame::Inertial> /*meta*/)
+    const noexcept {
+  get<0, 0>(*inv_conformal_metric) = 1.;
+  get<1, 1>(*inv_conformal_metric) = 1.;
+  get<2, 2>(*inv_conformal_metric) = 1.;
+  get<0, 1>(*inv_conformal_metric) = 0.;
+  get<0, 2>(*inv_conformal_metric) = 0.;
+  get<1, 2>(*inv_conformal_metric) = 0.;
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::ijj<DataType, 3>*> deriv_conformal_metric,
+    const gsl::not_null<Cache*> /*cache*/,
+    ::Tags::deriv<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
+                  tmpl::size_t<3>, Frame::Inertial> /*meta*/) const noexcept {
+  std::fill(deriv_conformal_metric->begin(), deriv_conformal_metric->end(), 0.);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::ijj<DataType, Dim>*>
+        conformal_christoffel_first_kind,
+    const gsl::not_null<Cache*> cache,
+    Tags::ConformalChristoffelFirstKind<
+        DataType, Dim, Frame::Inertial> /*meta*/) const noexcept {
+  const auto& deriv_conformal_metric = cache->get_var(
+      ::Tags::deriv<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
+                    tmpl::size_t<3>, Frame::Inertial>{});
+  gr::christoffel_first_kind(conformal_christoffel_first_kind,
+                             deriv_conformal_metric);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::Ijj<DataType, Dim>*>
+        conformal_christoffel_second_kind,
+    const gsl::not_null<Cache*> cache,
+    Tags::ConformalChristoffelSecondKind<
+        DataType, Dim, Frame::Inertial> /*meta*/) const noexcept {
+  const auto& conformal_christoffel_first_kind = cache->get_var(
+      Tags::ConformalChristoffelFirstKind<DataType, Dim, Frame::Inertial>{});
+  const auto& inv_conformal_metric = cache->get_var(
+      Tags::InverseConformalMetric<DataType, 3, Frame::Inertial>{});
+  raise_or_lower_first_index(conformal_christoffel_second_kind,
+                             conformal_christoffel_first_kind,
+                             inv_conformal_metric);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::i<DataType, Dim>*>
+        conformal_christoffel_contracted,
+    const gsl::not_null<Cache*> cache,
+    Tags::ConformalChristoffelContracted<
+        DataType, Dim, Frame::Inertial> /*meta*/) const noexcept {
+  const auto& conformal_christoffel_second_kind = cache->get_var(
+      Tags::ConformalChristoffelSecondKind<DataType, Dim, Frame::Inertial>{});
+  for (size_t i = 0; i < Dim; ++i) {
+    conformal_christoffel_contracted->get(i) =
+        conformal_christoffel_second_kind.get(0, i, 0);
+    for (size_t j = 1; j < Dim; ++j) {
+      conformal_christoffel_contracted->get(i) +=
+          conformal_christoffel_second_kind.get(j, i, j);
+    }
+  }
 }
 
 template <typename DataType>
@@ -111,13 +188,11 @@ void SchwarzschildVariables<DataType>::operator()(
 
 template <typename DataType>
 void SchwarzschildVariables<DataType>::operator()(
-    const gsl::not_null<tnsr::i<DataType, 3>*>
-        trace_extrinsic_curvature_gradient,
+    const gsl::not_null<Scalar<DataType>*> dt_trace_extrinsic_curvature,
     const gsl::not_null<Cache*> /*cache*/,
-    ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>, tmpl::size_t<3>,
-                  Frame::Inertial> /*meta*/) const noexcept {
-  std::fill(trace_extrinsic_curvature_gradient->begin(),
-            trace_extrinsic_curvature_gradient->end(), 0.);
+    ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>> /*meta*/)
+    const noexcept {
+  get(*dt_trace_extrinsic_curvature) = 0.;
 }
 
 template <typename DataType>
@@ -138,6 +213,20 @@ void SchwarzschildVariables<DataType>::operator()(
   get<0>(*conformal_factor_gradient) = isotropic_prefactor * get<0>(x);
   get<1>(*conformal_factor_gradient) = isotropic_prefactor * get<1>(x);
   get<2>(*conformal_factor_gradient) = isotropic_prefactor * get<2>(x);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::I<DataType, 3>*> conformal_factor_flux,
+    const gsl::not_null<Cache*> cache,
+    ::Tags::Flux<Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
+                 Frame::Inertial> /*meta*/) const noexcept {
+  const auto& conformal_factor_gradient =
+      cache->get_var(::Tags::deriv<Tags::ConformalFactor<DataType>,
+                                   tmpl::size_t<3>, Frame::Inertial>{});
+  get<0>(*conformal_factor_flux) = get<0>(conformal_factor_gradient);
+  get<1>(*conformal_factor_flux) = get<1>(conformal_factor_gradient);
+  get<2>(*conformal_factor_flux) = get<2>(conformal_factor_gradient);
 }
 
 template <typename DataType>
@@ -165,6 +254,24 @@ void SchwarzschildVariables<DataType>::operator()(
 
 template <typename DataType>
 void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::I<DataType, 3>*>
+        lapse_times_conformal_factor_flux,
+    const gsl::not_null<Cache*> cache,
+    ::Tags::Flux<Tags::LapseTimesConformalFactor<DataType>, tmpl::size_t<3>,
+                 Frame::Inertial> /*meta*/) const noexcept {
+  const auto& lapse_times_conformal_factor_gradient =
+      cache->get_var(::Tags::deriv<Tags::LapseTimesConformalFactor<DataType>,
+                                   tmpl::size_t<3>, Frame::Inertial>{});
+  get<0>(*lapse_times_conformal_factor_flux) =
+      get<0>(lapse_times_conformal_factor_gradient);
+  get<1>(*lapse_times_conformal_factor_flux) =
+      get<1>(lapse_times_conformal_factor_gradient);
+  get<2>(*lapse_times_conformal_factor_flux) =
+      get<2>(lapse_times_conformal_factor_gradient);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
     const gsl::not_null<tnsr::I<DataType, 3>*> shift_background,
     const gsl::not_null<Cache*> /*cache*/,
     Tags::ShiftBackground<DataType, 3, Frame::Inertial> /*meta*/)
@@ -182,10 +289,78 @@ void SchwarzschildVariables<DataType>::operator()(
 
 template <typename DataType>
 void SchwarzschildVariables<DataType>::operator()(
-    const gsl::not_null<tnsr::ii<DataType, 3>*> shift_strain,
+    const gsl::not_null<tnsr::I<DataType, 3>*> shift,
     const gsl::not_null<Cache*> /*cache*/,
-    Tags::ShiftStrain<DataType, 3, Frame::Inertial> /*meta*/) const noexcept {
-  std::fill(shift_strain->begin(), shift_strain->end(), 0.);
+    gr::Tags::Shift<3, Frame::Inertial, DataType> /*meta*/) const noexcept {
+  std::fill(shift->begin(), shift->end(), 0.);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<Scalar<DataType>*>
+        shift_dot_deriv_extrinsic_curvature_trace,
+    const gsl::not_null<Cache*> /*cache*/,
+    Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataType> /*meta*/)
+    const noexcept {
+  std::fill(shift_dot_deriv_extrinsic_curvature_trace->begin(),
+            shift_dot_deriv_extrinsic_curvature_trace->end(), 0.);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::II<DataType, 3>*> longitudinal_shift_excess,
+    const gsl::not_null<Cache*> /*cache*/,
+    Tags::LongitudinalShiftExcess<DataType, 3, Frame::Inertial> /*meta*/)
+    const noexcept {
+  std::fill(longitudinal_shift_excess->begin(),
+            longitudinal_shift_excess->end(), 0.);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<Scalar<DataType>*>
+        longitudinal_shift_minus_dt_conformal_metric_over_lapse_square,
+    const gsl::not_null<Cache*> /*cache*/,
+    Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<
+        DataType> /*meta*/) const noexcept {
+  std::fill(
+      longitudinal_shift_minus_dt_conformal_metric_over_lapse_square->begin(),
+      longitudinal_shift_minus_dt_conformal_metric_over_lapse_square->end(),
+      0.);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<Scalar<DataType>*>
+        longitudinal_shift_minus_dt_conformal_metric_square,
+    const gsl::not_null<Cache*> /*cache*/,
+    Tags::LongitudinalShiftMinusDtConformalMetricSquare<DataType> /*meta*/)
+    const noexcept {
+  std::fill(longitudinal_shift_minus_dt_conformal_metric_square->begin(),
+            longitudinal_shift_minus_dt_conformal_metric_square->end(), 0.);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::II<DataType, 3, Frame::Inertial>*>
+        longitudinal_shift_background_minus_dt_conformal_metric,
+    const gsl::not_null<Cache*> /*cache*/,
+    Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+        DataType, 3, Frame::Inertial> /*meta*/) const noexcept {
+  std::fill(longitudinal_shift_background_minus_dt_conformal_metric->begin(),
+            longitudinal_shift_background_minus_dt_conformal_metric->end(), 0.);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::I<DataType, 3, Frame::Inertial>*>
+        div_longitudinal_shift_background_minus_dt_conformal_metric,
+    const gsl::not_null<Cache*> /*cache*/,
+    ::Tags::div<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+        DataType, 3, Frame::Inertial>> /*meta*/) const noexcept {
+  std::fill(
+      div_longitudinal_shift_background_minus_dt_conformal_metric->begin(),
+      div_longitudinal_shift_background_minus_dt_conformal_metric->end(), 0.);
 }
 
 template <typename DataType>

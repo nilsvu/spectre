@@ -1,37 +1,32 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-set(LIBRARY Xcts)
+set(LIBRARY XctsAnalyticData)
 
 add_spectre_library(${LIBRARY})
 
 spectre_target_sources(
   ${LIBRARY}
   PRIVATE
-  Equations.cpp
+  AnalyticData.cpp
   )
 
 spectre_target_headers(
   ${LIBRARY}
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
-  Equations.hpp
-  FirstOrderSystem.hpp
-  Geometry.hpp
-  Tags.hpp
+  AnalyticData.hpp
   )
 
 target_link_libraries(
   ${LIBRARY}
   PUBLIC
   DataStructures
-  Elasticity
-  ErrorHandling
-  GeneralRelativity
   LinearOperators
-  Poisson
+  Options
+  Parallel
+  Spectral
   Utilities
-  XctsPointwiseFunctions
+  PRIVATE
+  GeneralRelativity
   )
-
-add_subdirectory(BoundaryConditions)

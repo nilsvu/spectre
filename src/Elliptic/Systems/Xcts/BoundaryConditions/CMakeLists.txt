@@ -1,37 +1,33 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-set(LIBRARY Xcts)
+set(LIBRARY XctsBoundaryConditions)
 
 add_spectre_library(${LIBRARY})
 
 spectre_target_sources(
   ${LIBRARY}
   PRIVATE
-  Equations.cpp
+  ApparentHorizon.cpp
+  Flatness.cpp
   )
 
 spectre_target_headers(
   ${LIBRARY}
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
-  Equations.hpp
-  FirstOrderSystem.hpp
-  Geometry.hpp
-  Tags.hpp
+  ApparentHorizon.hpp
+  Flatness.hpp
   )
 
 target_link_libraries(
   ${LIBRARY}
   PUBLIC
   DataStructures
-  Elasticity
-  ErrorHandling
-  GeneralRelativity
-  LinearOperators
-  Poisson
+  Options
   Utilities
-  XctsPointwiseFunctions
+  INTERFACE
+  Domain
+  Elliptic
+  Parallel
   )
-
-add_subdirectory(BoundaryConditions)
