@@ -447,6 +447,7 @@ class Variables<tmpl::list<Tags...>> {
 template <>
 class Variables<tmpl::list<>> {
  public:
+  using tags_list = tmpl::list<>;
   Variables() noexcept = default;
   explicit Variables(const size_t /*number_of_grid_points*/) noexcept {};
   static constexpr size_t size() noexcept { return 0; }
@@ -811,6 +812,26 @@ void swap(Variables<tmpl::list<TagsLhs...>>& lhs,
   Variables<tmpl::list<TagsLhs...>> temp{std::move(lhs)};
   lhs = std::move(rhs);
   rhs = std::move(temp);
+}
+
+namespace detail {
+
+template <typename F, typename TagsList, typename... ApplyTags>
+constexpr decltype(auto) apply_impl(F&& f, const Variables<TagsList>& t,
+                                    tmpl::list<ApplyTags...> /* meta */) {
+  return std::forward<F>(f)(get<ApplyTags>(t)...);
+}
+
+}  // namespace detail
+
+template <typename ApplyTags, typename F, typename TagsList>
+constexpr decltype(auto) apply(F&& f, const Variables<TagsList>& t) {
+  return detail::apply_impl(std::forward<F>(f), t, ApplyTags{});
+}
+
+template <typename F, typename TagsList>
+constexpr decltype(auto) apply(F&& f, const Variables<TagsList>& t) {
+  return detail::apply_impl(std::forward<F>(f), t, TagsList{});
 }
 
 /// \ingroup DataStructuresGroup
