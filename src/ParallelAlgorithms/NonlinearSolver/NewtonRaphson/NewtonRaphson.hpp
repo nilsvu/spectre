@@ -69,7 +69,8 @@ namespace newton_raphson {
  */
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup,
           typename SourceTag =
-              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>>
+              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>,
+          typename ArraySectionIdTag = void>
 struct NewtonRaphson {
   using fields_tag = FieldsTag;
   using options_group = OptionsGroup;
@@ -93,18 +94,23 @@ struct NewtonRaphson {
       tmpl::list<NonlinearSolver::observe_detail::reduction_data>>;
 
   template <typename ApplyNonlinearOperator, typename SolveLinearization,
+            typename PrepareSolveActions = tmpl::list<>,
             typename CompleteStepActions = tmpl::list<>,
             typename Label = OptionsGroup>
   using solve = tmpl::list<
-      detail::PrepareSolve<FieldsTag, OptionsGroup, Label>,
-      detail::ReceiveInitialHasConverged<FieldsTag, OptionsGroup, Label>,
-      detail::PrepareStep<FieldsTag, OptionsGroup, Label>, SolveLinearization,
-      detail::PerformStep<FieldsTag, OptionsGroup, Label>,
+      detail::PrepareSolve<FieldsTag, OptionsGroup, Label, ArraySectionIdTag>,
+      PrepareSolveActions,
+      detail::ReceiveInitialHasConverged<FieldsTag, OptionsGroup, Label,
+                                         ArraySectionIdTag>,
+      detail::PrepareStep<FieldsTag, OptionsGroup, Label, ArraySectionIdTag>,
+      SolveLinearization,
+      detail::PerformStep<FieldsTag, OptionsGroup, Label, ArraySectionIdTag>,
       ApplyNonlinearOperator,
       detail::ContributeToResidualMagnitudeReduction<FieldsTag, OptionsGroup,
-                                                     Label>,
-      detail::Globalize<FieldsTag, OptionsGroup, Label>, CompleteStepActions,
-      detail::CompleteStep<FieldsTag, OptionsGroup, Label>>;
+                                                     Label, ArraySectionIdTag>,
+      detail::Globalize<FieldsTag, OptionsGroup, Label, ArraySectionIdTag>,
+      CompleteStepActions,
+      detail::CompleteStep<FieldsTag, OptionsGroup, Label, ArraySectionIdTag>>;
 };
 
 }  // namespace newton_raphson
