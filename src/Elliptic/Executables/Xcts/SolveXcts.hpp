@@ -162,8 +162,8 @@ struct Metavariables {
   // This data needs to be communicated on subdomain overlap regions
   using communicated_overlap_tags = tmpl::list<
       // For linearized sources
-      fields_tag, fluxes_tag/*,
-      // For AH boundary conditions
+      fields_tag, fluxes_tag,
+      // For boundary conditions
       domain::Tags::Interface<
           domain::Tags::BoundaryDirectionsInterior<volume_dim>,
           Xcts::Tags::ConformalFactor<DataVector>>,
@@ -172,8 +172,8 @@ struct Metavariables {
           Xcts::Tags::LapseTimesConformalFactor<DataVector>>,
       domain::Tags::Interface<
           domain::Tags::BoundaryDirectionsInterior<volume_dim>,
-          ::Tags::NormalDotFlux<Xcts::Tags::ShiftExcess<DataVector, volume_dim,
-                                                        Frame::Inertial>>>*/>;
+          ::Tags::NormalDotFlux<
+              Xcts::Tags::ShiftExcess<DataVector, volume_dim, Frame::Inertial>>>>;
   using schwarz_smoother = LinearSolver::Schwarz::Schwarz<
       typename multigrid::smooth_fields_tag,
       SolveXcts::OptionTags::SchwarzSmootherGroup, subdomain_operator,
@@ -275,11 +275,11 @@ struct Metavariables {
       typename nonlinear_solver::template solve<
           build_operator_actions<false>,
           tmpl::list<
-              Actions::RunEventsAndTriggers,
               LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
                   fields_tag, typename multigrid::options_group, void>,
               LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
                   fluxes_tag, typename multigrid::options_group, void>,
+              // TODO: restrict fields and n_dot_fluxes on external faces
               LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
                   volume_dim, fields_tag, typename multigrid::options_group>,
               LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
@@ -295,9 +295,9 @@ struct Metavariables {
               typename linear_solver::template solve<
                   typename multigrid::template solve<
                       smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
-                      smooth_actions<
-                          LinearSolver::multigrid::VcycleUpLabel>>>>>,
-      Actions::RunEventsAndTriggers, Parallel::Actions::TerminatePhase>;
+                      smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>>>,
+          Actions::RunEventsAndTriggers, Actions::RunEventsAndTriggers>,
+      Parallel::Actions::TerminatePhase>;
 
   using dg_element_array = elliptic::DgElementArray<
       Metavariables,

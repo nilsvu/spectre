@@ -30,7 +30,7 @@ DomainCreator:
       InnerBoundary:
         AnalyticSolution:
           ConformalFactor: Dirichlet
-          LapseTimesConformalFactor: Dirichlet
+          LapseTimesConformalFactor: Neumann
           ShiftExcess: Dirichlet
       OuterBoundary:
         AnalyticSolution:
@@ -76,7 +76,7 @@ LinearSolver:
     Iterations: 3
     Verbosity: Silent
     SubdomainSolver: ExplicitInverse
-    EnableResets: True
+    EnableResets: False
 
 EventsAndTriggers:
   ? EveryNIterations:
@@ -86,5 +86,8 @@ EventsAndTriggers:
         SubfileName: ErrorNorms
     - ObserveFields:
         SubfileName: VolumeData
-        VariablesToObserve: [ConformalFactor,LapseTimesConformalFactor,ShiftExcess,NonlinearResidual(ConformalFactor),NonlinearResidual(LapseTimesConformalFactor),NonlinearResidual(ShiftExcess),EnergyDensity,TraceExtrinsicCurvature,Conformal(InverseSpatialMetric),ConformalRicciScalar,ConformalChristoffelContracted,StressTrace,dt(TraceExtrinsicCurvature),MomentumDensity,deriv(TraceExtrinsicCurvature),ShiftBackground,LongitudinalShiftBackgroundMinusDtConformalMetric,div(LongitudinalShiftBackgroundMinusDtConformalMetric),Conformal(SpatialMetric),ConformalChristoffelFirstKind,ConformalChristoffelSecondKind]
+        VariablesToObserve:
+          - ConformalFactor
+          - LapseTimesConformalFactor
+          - ShiftExcess
         InterpolateToMesh: None

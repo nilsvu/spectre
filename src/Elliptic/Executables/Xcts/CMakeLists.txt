@@ -21,6 +21,7 @@ set(LIBS_TO_LINK
   ParallelSchwarz
   Xcts
   XctsAnalyticData
+  XctsBoundaryConditions
   XctsSolutions
   Utilities
   )

@@ -249,13 +249,6 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
           primal_fluxes,
       const gsl::not_null<Variables<tmpl::list<AuxiliaryFluxesVars...>>*>
           auxiliary_fluxes,
-      const gsl::not_null<std::unordered_map<
-          Direction<Dim>, Variables<tmpl::list<PrimalMortarVars...>>>*>
-          primal_vars_on_external_faces,
-      const gsl::not_null<std::unordered_map<
-          Direction<Dim>,
-          Variables<tmpl::list<::Tags::NormalDotFlux<PrimalMortarVars>...>>>*>
-          n_dot_primal_fluxes_on_external_faces,
       const gsl::not_null<::dg::MortarMap<
           Dim, MortarData<TemporalId, tmpl::list<PrimalMortarVars...>,
                           tmpl::list<PrimalMortarFluxes...>>>*>
@@ -501,26 +494,12 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         // use this data imposed by the nonlinear boundary conditions as
         // background, instead of the current value of the dynamic variables on
         // the faces.
-        auto& dirichlet_vars = (*primal_vars_on_external_faces)[direction];
-        data_on_slice(make_not_null(&dirichlet_vars), primal_vars,
-                      mesh.extents(), direction.dimension(), slice_index);
+        auto dirichlet_vars = data_on_slice(primal_vars, mesh.extents(),
+                                            direction.dimension(), slice_index);
         apply_boundary_condition(
-            direction, make_not_null(&get<PrimalMortarVars>(dirichlet_vars))...,
+            direction, make_not_null(&get<PrimalVars>(dirichlet_vars))...,
             make_not_null(&get<::Tags::NormalDotFlux<PrimalMortarVars>>(
                 boundary_data.field_data))...);
-        // Just copy the Neumann-type boundary data over to the memory buffer
-        // for now. This is unnecessary overhead if the calling code just
-        // discards the buffer, so we only do this for the nonlinear operator
-        // where the linearized boundary conditions actually need this data.
-        if constexpr (not Linearized) {
-          auto& neumann_vars =
-              (*n_dot_primal_fluxes_on_external_faces)[direction];
-          neumann_vars.initialize(face_num_points);
-          expand_pack(
-              (get<::Tags::NormalDotFlux<PrimalMortarVars>>(neumann_vars) =
-                   get<::Tags::NormalDotFlux<PrimalMortarVars>>(
-                       boundary_data.field_data))...);
-        }
 
         // The n.F_u (Neumann-type conditions) are done, but we have to compute
         // the n.F_v (Dirichlet-type conditions) from the Dirichlet fields. We
@@ -531,7 +510,7 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
               FluxesComputer::apply(make_not_null(&get<AuxiliaryFluxesVars>(
                                         aux_fluxes_on_face))...,
                                     expanded_fluxes_args_on_face...,
-                                    get<PrimalMortarVars>(dirichlet_vars)...);
+                                    get<PrimalVars>(dirichlet_vars)...);
             },
             fluxes_args_on_face);
         EXPAND_PACK_LEFT_TO_RIGHT(normal_dot_flux(
@@ -884,12 +863,6 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
     Variables<tmpl::list<AuxiliaryFields...>> aux_vars_buffer{num_points};
     Variables<tmpl::list<PrimalFluxes...>> primal_fluxes_buffer{num_points};
     Variables<tmpl::list<AuxiliaryFluxes...>> aux_fluxes_buffer{num_points};
-    std::unordered_map<Direction<Dim>, Variables<tmpl::list<PrimalFields...>>>
-        primal_vars_on_external_faces_buffer{};
-    std::unordered_map<
-        Direction<Dim>,
-        Variables<tmpl::list<::Tags::NormalDotFlux<PrimalFields...>>>>
-        primal_n_dot_fluxes_on_external_faces_buffer{};
     Variables<tmpl::list<FixedSourcesTags...>> operator_applied_to_zero_vars{
         num_points};
     // Set up data on mortars. We only need them at external boundaries.
@@ -900,13 +873,11 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
     // Apply the operator to the zero variables, skipping internal boundaries
     prepare_mortar_data<true>(
         make_not_null(&aux_vars_buffer), make_not_null(&primal_fluxes_buffer),
-        make_not_null(&aux_fluxes_buffer),
-        make_not_null(&primal_vars_on_external_faces_buffer),
-        make_not_null(&primal_n_dot_fluxes_on_external_faces_buffer),
-        make_not_null(&all_mortar_data), zero_primal_vars, element, mesh,
-        inv_jacobian, {}, external_face_normals, {},
-        external_face_normal_magnitudes, all_mortar_meshes, all_mortar_sizes,
-        temporal_id, apply_boundary_condition, fluxes_args, sources_args,
+        make_not_null(&aux_fluxes_buffer), make_not_null(&all_mortar_data),
+        zero_primal_vars, element, mesh, inv_jacobian, {},
+        external_face_normals, {}, external_face_normal_magnitudes,
+        all_mortar_meshes, all_mortar_sizes, temporal_id,
+        apply_boundary_condition, fluxes_args, sources_args,
         fluxes_args_on_internal_faces, fluxes_args_on_external_faces);
     apply_operator<true>(make_not_null(&operator_applied_to_zero_vars),
                          make_not_null(&all_mortar_data), zero_primal_vars,

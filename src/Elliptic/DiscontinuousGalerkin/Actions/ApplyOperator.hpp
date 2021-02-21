@@ -110,12 +110,6 @@ struct PrepareAndSendMortarData<System, Linearized, TemporalIdTag, VarsTag,
                                 tmpl::list<SourcesArgsTags...>> {
  private:
   static constexpr size_t Dim = System::volume_dim;
-  using primal_vars_on_external_faces_tag =
-      domain::Tags::Interface<domain::Tags::BoundaryDirectionsInterior<Dim>,
-                              VarsTag>;
-  using primal_n_dot_fluxes_on_external_faces_tag = domain::Tags::Interface<
-      domain::Tags::BoundaryDirectionsInterior<Dim>,
-      db::add_tag_prefix<::Tags::NormalDotFlux, VarsTag>>;
   using all_mortar_data_tag = ::Tags::Mortars<
       elliptic::dg::Tags::MortarData<typename TemporalIdTag::type,
                                      typename VarsTag::tags_list,
@@ -131,16 +125,8 @@ struct PrepareAndSendMortarData<System, Linearized, TemporalIdTag, VarsTag,
   // don't actually need to initialize them, because the `TemporalIdTag` and the
   // `VarsTag` will be set by other actions before applying the operator and the
   // remaining tags hold output of the operator.
-  using simple_tags =
-      tmpl::append<tmpl::list<TemporalIdTag, VarsTag, OperatorAppliedToVarsTag,
-                              PrimalFluxesTag>,
-                   // This data on external face is only needed for linearized
-                   // boundary conditions, so we store it only for the nonlinear
-                   // operator
-                   tmpl::conditional_t<
-                       Linearized, tmpl::list<>,
-                       tmpl::list<primal_vars_on_external_faces_tag,
-                                  primal_n_dot_fluxes_on_external_faces_tag>>>;
+  using simple_tags = tmpl::list<TemporalIdTag, VarsTag,
+                                 OperatorAppliedToVarsTag, PrimalFluxesTag>;
   using compute_tags = tmpl::list<>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -197,28 +183,6 @@ struct PrepareAndSendMortarData<System, Linearized, TemporalIdTag, VarsTag,
           primal_fluxes = local_primal_fluxes;
           all_mortar_data = local_all_mortar_data;
         });
-    typename primal_vars_on_external_faces_tag::type*
-        primal_vars_on_external_faces{nullptr};
-    typename primal_n_dot_fluxes_on_external_faces_tag::type*
-        primal_n_dot_fluxes_on_external_faces{nullptr};
-    if constexpr (Linearized) {
-      primal_vars_on_external_faces =
-          new typename primal_vars_on_external_faces_tag::type;
-      primal_n_dot_fluxes_on_external_faces =
-          new typename primal_n_dot_fluxes_on_external_faces_tag::type;
-    } else {
-      db::mutate<primal_vars_on_external_faces_tag,
-                 primal_n_dot_fluxes_on_external_faces_tag>(
-          make_not_null(&box),
-          [&primal_vars_on_external_faces,
-           &primal_n_dot_fluxes_on_external_faces](
-              const auto local_primal_vars_on_external_faces,
-              const auto local_primal_n_dot_fluxes_on_external_faces) {
-            primal_vars_on_external_faces = local_primal_vars_on_external_faces;
-            primal_n_dot_fluxes_on_external_faces =
-                local_primal_n_dot_fluxes_on_external_faces;
-          });
-    }
 
     // Prepare mortar data
     //
@@ -232,8 +196,6 @@ struct PrepareAndSendMortarData<System, Linearized, TemporalIdTag, VarsTag,
     elliptic::dg::prepare_mortar_data<System, Linearized>(
         make_not_null(&auxiliary_vars_buffer), make_not_null(primal_fluxes),
         make_not_null(&auxiliary_fluxes_buffer),
-        make_not_null(primal_vars_on_external_faces),
-        make_not_null(primal_n_dot_fluxes_on_external_faces),
         make_not_null(all_mortar_data), db::get<VarsTag>(box), element,
         db::get<domain::Tags::Mesh<Dim>>(box),
         db::get<domain::Tags::InverseJacobian<Dim, Frame::Logical,
@@ -276,17 +238,6 @@ struct PrepareAndSendMortarData<System, Linearized, TemporalIdTag, VarsTag,
     db::mutate<PrimalFluxesTag>(
         make_not_null(&box),
         [](const auto local_primal_fluxes) { (void)local_primal_fluxes; });
-    if constexpr (Linearized) {
-      delete primal_vars_on_external_faces;
-      delete primal_n_dot_fluxes_on_external_faces;
-    } else {
-      db::mutate<primal_vars_on_external_faces_tag,
-                 primal_n_dot_fluxes_on_external_faces_tag>(
-          make_not_null(&box), [](const auto local_a, const auto local_b) {
-            (void)local_a;
-            (void)local_b;
-          });
-    }
 
     // Send mortar data to neighbors
     auto& receiver_proxy =
@@ -457,13 +408,13 @@ using initialize_operator = tmpl::list<
                 // System::fluxes_computer::argument_tags are needed on internal
                 // faces. On external faces (interior side) we may need
                 // additional background fields for boundary conditions.
-                ::Tags::Variables<typename System::background_fields>>>,
-        ::dg::Initialization::slice_tags_to_exterior<
-            // These are not actually needed since we don't use exterior
-            // interfaces. Could remove the compute tags from the action.
-            ::Tags::Variables<typename System::background_fields>>,
+                ::Tags::Variables<typename System::background_fields>, VarsTag,
+                PrimalFluxesTag>>,
+        ::dg::Initialization::slice_tags_to_exterior<>,
         ::dg::Initialization::face_compute_tags<
-            domain::Tags::BoundaryCoordinates<System::volume_dim>>,
+            domain::Tags::BoundaryCoordinates<System::volume_dim>,
+            ::Tags::NormalDotFluxCompute2<VarsTag, PrimalFluxesTag,
+                                          System::volume_dim, Frame::Inertial>>,
         ::dg::Initialization::exterior_compute_tags<>, false, false>,
     ::dg::Actions::InitializeMortars<
         detail::BoundaryScheme<System, TemporalIdTag, VarsTag,

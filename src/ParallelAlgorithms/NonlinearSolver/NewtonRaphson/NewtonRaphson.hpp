@@ -94,10 +94,12 @@ struct NewtonRaphson {
       tmpl::list<NonlinearSolver::observe_detail::reduction_data>>;
 
   template <typename ApplyNonlinearOperator, typename SolveLinearization,
+            typename PrepareSolveActions = tmpl::list<>,
             typename CompleteStepActions = tmpl::list<>,
             typename Label = OptionsGroup>
   using solve = tmpl::list<
       detail::PrepareSolve<FieldsTag, OptionsGroup, Label, ArraySectionIdTag>,
+      PrepareSolveActions,
       detail::ReceiveInitialHasConverged<FieldsTag, OptionsGroup, Label,
                                          ArraySectionIdTag>,
       detail::PrepareStep<FieldsTag, OptionsGroup, Label, ArraySectionIdTag>,
