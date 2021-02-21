@@ -198,11 +198,10 @@ struct InitializeInterfaces {
                           tmpl::list<>>;
 
   using compute_tags = tmpl::push_front<
-   tmpl::append<face_tags<domain::Tags::InternalDirections<dim>>,
-                face_tags<domain::Tags::BoundaryDirectionsInterior<dim>>,
-                exterior_face_tags>,
-   domain::Tags::InternalDirectionsCompute<dim>,
-   domain::Tags::BoundaryDirectionsInteriorCompute<dim>>;
+      tmpl::append<face_tags<domain::Tags::InternalDirections<dim>>,
+                   face_tags<domain::Tags::BoundaryDirectionsInterior<dim>>>,
+      domain::Tags::InternalDirectionsCompute<dim>,
+      domain::Tags::BoundaryDirectionsInteriorCompute<dim>>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
