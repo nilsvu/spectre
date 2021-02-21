@@ -27,21 +27,23 @@
  *
  * Returns Variables class sliced to a hypersurface.
  */
-template <std::size_t VolumeDim, typename TagsList>
-void data_on_slice(const gsl::not_null<Variables<TagsList>*> interface_vars,
-                   const Variables<TagsList>& vars,
-                   const Index<VolumeDim>& element_extents,
-                   const size_t sliced_dim, const size_t fixed_index) noexcept {
+template <std::size_t VolumeDim, typename SliceTagsList,
+          typename VolumeTagsList>
+void data_on_slice(
+    const gsl::not_null<Variables<SliceTagsList>*> interface_vars,
+    const Variables<VolumeTagsList>& vars,
+    const Index<VolumeDim>& element_extents, const size_t sliced_dim,
+    const size_t fixed_index) noexcept {
   const size_t interface_grid_points =
       element_extents.slice_away(sliced_dim).product();
   const size_t volume_grid_points = vars.number_of_grid_points();
   constexpr const size_t number_of_independent_components =
-      Variables<TagsList>::number_of_independent_components;
+      Variables<VolumeTagsList>::number_of_independent_components;
 
   if (interface_vars->number_of_grid_points() != interface_grid_points) {
-    *interface_vars = Variables<TagsList>(interface_grid_points);
+    *interface_vars = Variables<SliceTagsList>(interface_grid_points);
   }
-  using value_type = typename Variables<TagsList>::value_type;
+  using value_type = typename Variables<VolumeTagsList>::value_type;
   const value_type* vars_data = vars.data();
   value_type* interface_vars_data = interface_vars->data();
   for (SliceIterator si(element_extents, sliced_dim, fixed_index); si; ++si) {
