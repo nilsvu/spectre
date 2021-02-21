@@ -38,9 +38,11 @@
 namespace NonlinearSolver::newton_raphson::detail {
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup>
 struct ResidualMonitor;
-template <typename FieldsTag, typename OptionsGroup, typename Label>
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
 struct PrepareStep;
-template <typename FieldsTag, typename OptionsGroup, typename Label>
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
 struct Globalize;
 }  // namespace NonlinearSolver::newton_raphson::detail
 /// \endcond
@@ -105,7 +107,8 @@ struct InitializeElement {
 // Reset to the initial state of the algorithm. To determine the initial
 // residual magnitude and to check if the algorithm has already converged, we
 // perform a global reduction to the `ResidualMonitor`.
-template <typename FieldsTag, typename OptionsGroup, typename Label>
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
 struct PrepareSolve {
  private:
   using fields_tag = FieldsTag;
@@ -119,7 +122,7 @@ struct PrepareSolve {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&> apply(
+  static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       Parallel::GlobalCache<Metavariables>& cache,
@@ -130,6 +133,23 @@ struct PrepareSolve {
       Parallel::printf(
           "%s " + Options::name<OptionsGroup>() + ": Prepare solve\n",
           array_index);
+    }
+
+    // Skip the solve entirely on elements that are not part of the section
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        db::mutate<Convergence::Tags::IterationId<OptionsGroup>>(
+            make_not_null(&box),
+            [](const gsl::not_null<size_t*> iteration_id) noexcept {
+              *iteration_id = 1;
+            });
+        // TODO: Handle immediate convergence
+        constexpr size_t prepare_step_index =
+            tmpl::index_of<ActionList,
+                           PrepareStep<FieldsTag, OptionsGroup, Label,
+                                       ArraySectionIdTag>>::value;
+        return {std::move(box), false, prepare_step_index + 1};
+      }
     }
 
     db::mutate<Convergence::Tags::IterationId<OptionsGroup>>(
@@ -144,21 +164,38 @@ struct PrepareSolve {
         LinearSolver::inner_product(residual, residual);
     ResidualReductionData reduction_data{0, 0, local_residual_magnitude_square,
                                          1.};
-    Parallel::contribute_to_reduction<
-        CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>>(
-        std::move(reduction_data),
-        Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
-        Parallel::get_parallel_component<
-            ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+    if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+      Parallel::contribute_to_reduction<
+          CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>>(
+          std::move(reduction_data),
+          Parallel::get_parallel_component<ParallelComponent>(
+              cache)[array_index],
+          Parallel::get_parallel_component<
+              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+    } else {
+      Parallel::contribute_to_reduction<
+          CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>,
+          ParallelComponent, ArraySectionIdTag>(
+          std::move(reduction_data),
+          Parallel::get_parallel_component<ParallelComponent>(
+              cache)[array_index],
+          Parallel::get_parallel_component<
+              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache),
+          *get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box),
+          get<ArraySectionIdTag>(box));
+    }
 
-    return {std::move(box)};
+    constexpr size_t this_action_index =
+        tmpl::index_of<ActionList, PrepareSolve>::value;
+    return {std::move(box), false, this_action_index + 1};
   }
 };
 
 // Wait for the broadcast from the `ResidualMonitor` to complete the preparation
 // for the solve. We skip the solve altogether if the algorithm has already
 // converged.
-template <typename FieldsTag, typename OptionsGroup, typename Label>
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
 struct ReceiveInitialHasConverged {
   using inbox_tags = tmpl::list<Tags::GlobalizationResult<OptionsGroup>>;
 
@@ -201,8 +238,8 @@ struct ReceiveInitialHasConverged {
 
     // Skip steps entirely if the solve has already converged
     constexpr size_t complete_step_index =
-        tmpl::index_of<ActionList,
-                       Globalize<FieldsTag, OptionsGroup, Label>>::value +
+        tmpl::index_of<ActionList, Globalize<FieldsTag, OptionsGroup, Label,
+                                             ArraySectionIdTag>>::value +
         1;
     constexpr size_t this_action_index =
         tmpl::index_of<ActionList, ReceiveInitialHasConverged>::value;
@@ -225,7 +262,8 @@ struct ReceiveInitialHasConverged {
 //
 // The algorithm jumps back to this action from `CompleteStep` to continue
 // iterating the nonlinear solve.
-template <typename FieldsTag, typename OptionsGroup, typename Label>
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
 struct PrepareStep {
  private:
   using fields_tag = FieldsTag;
@@ -299,7 +337,8 @@ struct PrepareStep {
 // The `Globalize` action will jump back here in case the step turned out to not
 // decrease the residual sufficiently. It will have adjusted the step length, so
 // we can just try again with a step of that length.
-template <typename FieldsTag, typename OptionsGroup, typename Label>
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
 struct PerformStep {
  private:
   using fields_tag = FieldsTag;
@@ -315,7 +354,7 @@ struct PerformStep {
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
             typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&> apply(
+  static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
@@ -331,6 +370,16 @@ struct PerformStep {
           db::get<NonlinearSolver::Tags::StepLength<OptionsGroup>>(box));
     }
 
+    // Skip the solve entirely on elements that are not part of the section
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        constexpr size_t globalize_index =
+            tmpl::index_of<ActionList, Globalize<FieldsTag, OptionsGroup, Label,
+                                                 ArraySectionIdTag>>::value;
+        return {std::move(box), false, globalize_index};
+      }
+    }
+
     // Apply the correction that the linear solve has determined to attempt
     // improving the nonlinear solution
     db::mutate<fields_tag>(
@@ -343,7 +392,9 @@ struct PerformStep {
         db::get<NonlinearSolver::Tags::StepLength<OptionsGroup>>(box),
         db::get<globalization_fields_tag>(box));
 
-    return {std::move(box)};
+    constexpr size_t this_action_index =
+        tmpl::index_of<ActionList, PerformStep>::value;
+    return {std::move(box), false, this_action_index + 1};
   }
 };
 
@@ -352,7 +403,8 @@ struct PerformStep {
 // tag, so at this point we need to check if the step has sufficiently reduced
 // the residual. We perform a global reduction to the `ResidualMonitor` for this
 // purpose.
-template <typename FieldsTag, typename OptionsGroup, typename Label>
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
 struct ContributeToResidualMagnitudeReduction {
  private:
   using fields_tag = FieldsTag;
@@ -378,12 +430,26 @@ struct ContributeToResidualMagnitudeReduction {
             Convergence::Tags::IterationId<OptionsGroup>>>(box),
         local_residual_magnitude_square,
         db::get<NonlinearSolver::Tags::StepLength<OptionsGroup>>(box)};
-    Parallel::contribute_to_reduction<
-        CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>>(
-        std::move(reduction_data),
-        Parallel::get_parallel_component<ParallelComponent>(cache)[array_index],
-        Parallel::get_parallel_component<
-            ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+    if constexpr (std::is_same_v<ArraySectionIdTag, void>) {
+      Parallel::contribute_to_reduction<
+          CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>>(
+          std::move(reduction_data),
+          Parallel::get_parallel_component<ParallelComponent>(
+              cache)[array_index],
+          Parallel::get_parallel_component<
+              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache));
+    } else {
+      Parallel::contribute_to_reduction<
+          CheckResidualMagnitude<FieldsTag, OptionsGroup, ParallelComponent>,
+          ParallelComponent, ArraySectionIdTag>(
+          std::move(reduction_data),
+          Parallel::get_parallel_component<ParallelComponent>(
+              cache)[array_index],
+          Parallel::get_parallel_component<
+              ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>(cache),
+          *get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box),
+          get<ArraySectionIdTag>(box));
+    }
     return {std::move(box)};
   }
 };
@@ -393,7 +459,8 @@ struct ContributeToResidualMagnitudeReduction {
 // to `CompleteStep`. If it hasn't, the `ResidualMonitor` has also sent the new
 // step length along, so we mutate it in the DataBox and jump back to
 // `PerformStep` to try again with the updated step length.
-template <typename FieldsTag, typename OptionsGroup, typename Label>
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
 struct Globalize {
   using const_global_cache_tags =
       tmpl::list<logging::Tags::Verbosity<OptionsGroup>>;
@@ -406,8 +473,20 @@ struct Globalize {
                        const Parallel::GlobalCache<Metavariables>& /*cache*/,
                        const ArrayIndex& /*array_index*/) noexcept {
     const auto& inbox = get<Tags::GlobalizationResult<OptionsGroup>>(inboxes);
-    return inbox.find(db::get<Convergence::Tags::IterationId<OptionsGroup>>(
-               box)) != inbox.end();
+    const auto received_data =
+        inbox.find(db::get<Convergence::Tags::IterationId<OptionsGroup>>(box));
+    if (received_data == inbox.end()) {
+      return false;
+    }
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        const bool globalization_is_complete =
+            std::holds_alternative<Convergence::HasConverged>(
+                received_data->second);
+        return globalization_is_complete;
+      }
+    }
+    return true;
   }
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -423,6 +502,35 @@ struct Globalize {
         tuples::get<Tags::GlobalizationResult<OptionsGroup>>(inboxes)
             .extract(db::get<Convergence::Tags::IterationId<OptionsGroup>>(box))
             .mapped());
+
+    // Skip the solve entirely on elements that are not part of the section
+    constexpr size_t this_action_index =
+        tmpl::index_of<ActionList, Globalize>::value;
+    constexpr size_t prepare_step_index =
+        tmpl::index_of<ActionList, PrepareStep<FieldsTag, OptionsGroup, Label,
+                                               ArraySectionIdTag>>::value;
+    if constexpr (not std::is_same_v<ArraySectionIdTag, void>) {
+      if (not db::get<Parallel::Tags::SectionBase<ArraySectionIdTag>>(box)) {
+        auto& has_converged =
+            get<Convergence::HasConverged>(globalization_result);
+
+        db::mutate<Convergence::Tags::HasConverged<OptionsGroup>,
+                   Convergence::Tags::IterationId<OptionsGroup>>(
+            make_not_null(&box),
+            [&has_converged](
+                const gsl::not_null<Convergence::HasConverged*>
+                    local_has_converged,
+                const gsl::not_null<size_t*> local_iteration_id) noexcept {
+              *local_has_converged = std::move(has_converged);
+              ++(*local_iteration_id);
+            });
+
+        return {std::move(box), false,
+                get<Convergence::Tags::HasConverged<OptionsGroup>>(box)
+                    ? (this_action_index + 2)
+                    : (prepare_step_index + 1)};
+      }
+    }
 
     if (std::holds_alternative<double>(globalization_result)) {
       if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
@@ -449,8 +557,8 @@ struct Globalize {
       // Continue globalization by taking a step with the updated step length
       // and checking the residual again
       constexpr size_t perform_step_index =
-          tmpl::index_of<ActionList,
-                         PerformStep<FieldsTag, OptionsGroup, Label>>::value;
+          tmpl::index_of<ActionList, PerformStep<FieldsTag, OptionsGroup, Label,
+                                                 ArraySectionIdTag>>::value;
       return {std::move(box), false, perform_step_index};
     }
 
@@ -464,8 +572,6 @@ struct Globalize {
           *local_has_converged = std::move(has_converged);
         });
 
-    constexpr size_t this_action_index =
-        tmpl::index_of<ActionList, Globalize>::value;
     return {std::move(box), false, this_action_index + 1};
   }
 };
@@ -474,7 +580,8 @@ struct Globalize {
 // converged, or complete the solve and proceed with the action list if it has
 // converged. This is a separate action because the user has the opportunity to
 // insert actions before the step completes, for example to do observations.
-template <typename FieldsTag, typename OptionsGroup, typename Label>
+template <typename FieldsTag, typename OptionsGroup, typename Label,
+          typename ArraySectionIdTag>
 struct CompleteStep {
   using const_global_cache_tags =
       tmpl::list<logging::Tags::Verbosity<OptionsGroup>>;
@@ -498,8 +605,8 @@ struct CompleteStep {
 
     // Repeat steps until the solve has converged
     constexpr size_t prepare_step_index =
-        tmpl::index_of<ActionList,
-                       PrepareStep<FieldsTag, OptionsGroup, Label>>::value;
+        tmpl::index_of<ActionList, PrepareStep<FieldsTag, OptionsGroup, Label,
+                                               ArraySectionIdTag>>::value;
     constexpr size_t this_action_index =
         tmpl::index_of<ActionList, CompleteStep>::value;
     return {std::move(box), false,
