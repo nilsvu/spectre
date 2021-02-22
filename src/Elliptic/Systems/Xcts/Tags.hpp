@@ -43,15 +43,14 @@
  * \cite BaumgarteShapiro, in particular Box 3.3 which is largely mirrored here.
  * We solve the XCTS equations for the conformal factor \f$\psi\f$, the product
  * of lapse times conformal factor \f$\alpha\psi\f$ and the shift vector
- * \f$\beta\f$. The remaining quantities in the equations, i.e. the conformal
- * metric \f$\bar{\gamma}_{ij}\f$, the extrinsic curvature \f$K\f$, their
- * respective time derivatives \f$\bar{u}_{ij}\f$ and \f$\partial_t K\f$, the
- * energy density \f$\rho\f$, the stress-energy trace \f$S\f$ and the momentum
- * density \f$S^i\f$, are freely specifyable fields that define the physical
- * scenario at hand. Of particular importance is the conformal metric, which
- * serves as the background geometry for these equations by defining the
- * covariant derivative \f$\bar{D}\f$, the Ricci scalar \f$\bar{R}\f$ and the
- * longitudinal operator
+ * \f$\beta^j\f$. The remaining quantities in the equations, i.e. the conformal
+ * metric \f$\bar{\gamma}_{ij}\f$, the trace of the extrinsic curvature \f$K\f$,
+ * their respective time derivatives \f$\bar{u}_{ij}\f$ and \f$\partial_t K\f$,
+ * the energy density \f$\rho\f$, the stress-energy trace \f$S\f$ and the
+ * momentum density \f$S^i\f$, are freely specifyable fields that define the
+ * physical scenario at hand. Of particular importance is the conformal metric,
+ * which defines the background geometry, the covariant derivative
+ * \f$\bar{D}\f$, the Ricci scalar \f$\bar{R}\f$ and the longitudinal operator
  *
  * \f{begin}
  * \left(\bar{L}\beta\right)^{ij} = \bar{D}^i\beta^j + \bar{D}^j\beta^i
@@ -60,7 +59,14 @@
  * \f}
  *
  * Note that the XCTS equations are essentially two Poisson equations and one
- * Elasticity equation with nonlinear sources on a curved geometry.
+ * Elasticity equation with nonlinear sources on a curved geometry. In this
+ * analogy, the longitudinal operator plays the role of the elastic constitutive
+ * relation that connects the symmetric "shift strain"
+ * \f$\bar{D}_{(i}\beta_{j)}\f$ with the "stress" \f$(\bar{L}\beta)^{ij}\f$ of
+ * which we take the divergence in the momentum constrain. This particular
+ * constitutive relation is equivalent to an isotropic and homogeneous material
+ * with bulk modulus \f$K=0\f$ and shear modulus \f$\mu=1\f$ (see
+ * `Elasticity::ConstitutiveRelations::IsotropicHomogeneous`).
  *
  * Once the XCTS equations are solved we can construct the spatial metric and
  * extrinsic curvature as
@@ -186,6 +192,14 @@ struct ShiftStrain : db::SimpleTag {
   using type = tnsr::ii<DataType, Dim, Frame>;
 };
 
+/*!
+ * \brief The conformal longitudinal operator applied to the shift excess
+ * \f$(\bar{L}\beta^\mathrm{excess})^{ij}\f$
+ *
+ * This quantity can be used as the "flux" for the momentum constraint in
+ * formulations of the XCTS equations, because the principal part of the
+ * momentum constraint is essentially the divergence of this quantity.
+ */
 template <typename DataType, size_t Dim, typename Frame>
 struct LongitudinalShiftExcess : db::SimpleTag {
   using type = tnsr::II<DataType, Dim, Frame>;
@@ -232,8 +246,8 @@ struct LongitudinalShiftMinusDtConformalMetricOverLapseSquare : db::SimpleTag {
 };
 
 /*!
- * \brief The shift vector contracted with the extrinsic curvature trace
- * gradient: \f$\beta^i\partial_i K\f$
+ * \brief The shift vector contracted with the gradient of the trace of the
+ * extrinsic curvature: \f$\beta^i\partial_i K\f$
  */
 template <typename DataType>
 struct ShiftDotDerivExtrinsicCurvatureTrace : db::SimpleTag {

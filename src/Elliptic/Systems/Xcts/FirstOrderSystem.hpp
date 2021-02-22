@@ -26,8 +26,14 @@ namespace Xcts {
  * auxiliary variables the conformal factor gradient \f$v_i=\partial_i\psi\f$,
  * the symmetric shift strain \f$B_{ij}=\bar{D}_{(i}\beta_{j)}\f$ and the
  * gradient of the lapse times the conformal factor
- * \f$w_i=\partial_i\left(\alpha\psi\right)\f$. When we then cast the equations
- * in first-order flux-form
+ * \f$w_i=\partial_i\left(\alpha\psi\right)\f$. Note that \f$B_{ij}\f$ is the
+ * symmetrized covariant gradient of the shift vector field and analogous to the
+ * "strain" in an elasticity equation (see `Elasticity::FirstOrderSystem` and
+ * `Xcts::Tags::ShiftStrain` for details). From the strain we can compute the
+ * longitudinal operator by essentially removing its trace (see
+ * `Xcts::longitudinal_operator`).
+ *
+ * When we cast the equations in first-order flux-form
  *
  * \f[
  * -\partial_i F^i_A + S_A = f_A(x)
@@ -80,11 +86,14 @@ namespace Xcts {
  *
  * Note that the symbol \f$\beta\f$ in the equations above means
  * \f$\beta_\mathrm{excess}\f$. The full shift is \f$\beta_\mathrm{excess} +
- * \beta_\mathrm{background}\f$. Also note that the background shift is
- * degenerate with \f$\bar{u}\f$ so we treat the quantity
- * \f$\left(\bar{L}\beta_\mathrm{background}\right)^{ij} - \bar{u}^{ij}\f$
- * as a single background field. The covariant divergence of this quantity
- * w.r.t. the conformal metric is also a background field.
+ * \beta_\mathrm{background}\f$. See `Xcts::Tags::ShiftBackground` and
+ * `Xcts::Tags::ShiftExcess` for details on this split. Also note that the
+ * background shift is degenerate with \f$\bar{u}\f$ so we treat the quantity
+ * \f$\left(\bar{L}\beta_\mathrm{background}\right)^{ij} - \bar{u}^{ij}\f$ as a
+ * single background field (see
+ * `Xcts::Tags::LongitudinalShiftBackgroundMinusDtConformalMetric`). The
+ * covariant divergence of this quantity w.r.t. the conformal metric is also a
+ * background field.
  *
  * \par Solving a subset of equations:
  * This system allows you to select a subset of `Xcts::Equations` so you don't

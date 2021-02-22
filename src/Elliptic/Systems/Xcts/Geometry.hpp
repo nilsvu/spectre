@@ -15,4 +15,4 @@ enum class Geometry {
   /// non-vanishing Christoffel symbols must be taken into account.
   Curved
 };
-}  // namespace Poisson
+}  // namespace Xcts
