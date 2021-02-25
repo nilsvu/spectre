@@ -51,4 +51,17 @@ target_link_libraries(
   SystemUtilities
   )
 
+add_library(InfoAtLink OBJECT InfoAtLink.cpp)
+target_link_libraries(
+  InfoAtLink
+  PRIVATE
+  Boost::boost
+  )
+set_target_properties(
+  InfoAtLink
+  PROPERTIES
+  CXX_COMPILER_LAUNCHER
+  ${CMAKE_CURRENT_SOURCE_DIR}/print_args.py
+  )
+
 add_subdirectory(Python)
