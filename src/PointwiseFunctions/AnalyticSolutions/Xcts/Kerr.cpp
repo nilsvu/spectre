@@ -184,7 +184,8 @@ void KerrVariables<DataType>::operator()(
     const gsl::not_null<Cache*> /*cache*/,
     Tags::ConformalFactor<DataType> /*meta*/) const noexcept {
   // TODO: try adjusting this
-  get(*conformal_factor) = 1.;
+  const DataType r = get(magnitude(x));
+  get(*conformal_factor) = 1. + 0. / r;
 }
 
 template <typename DataType>
@@ -194,8 +195,12 @@ void KerrVariables<DataType>::operator()(
     ::Tags::deriv<Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
                   Frame::Inertial> /*meta*/) const noexcept {
   // TODO: This needs adjustment when changing Psi
-  std::fill(conformal_factor_gradient->begin(),
-            conformal_factor_gradient->end(), 0.);
+//   std::fill(conformal_factor_gradient->begin(),
+//             conformal_factor_gradient->end(), 0.);
+  const DataType r = get(magnitude(x));
+  get<0>(*conformal_factor_gradient) = -0. * get<0>(x) / cube(r);
+  get<1>(*conformal_factor_gradient) = -0. * get<1>(x) / cube(r);
+  get<2>(*conformal_factor_gradient) = -0. * get<2>(x) / cube(r);
 }
 
 template <typename DataType>

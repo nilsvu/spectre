@@ -4,32 +4,28 @@
 # Executable: SolveElasticity2D
 # Check: parse;execute
 # ExpectedOutput:
-#   ElasticBentBeam2DReductions.h5
-#   ElasticBentBeam2DVolume0.h5
+#   CoupledPoisson2DReductions.h5
+#   CoupledPoisson2DVolume0.h5
 
 Background:
-  BentBeam:
-    Length: 2.
-    Height: 1.
-    BendingMoment: 1.
-    Material:
-      # Iron
-      BulkModulus: 79.36507936507935
-      ShearModulus: 38.75968992248062
+  CoupledPoisson:
+    PoissonSolutions:
+      - ProductOfSinusoids:
+          WaveNumbers: [3.141592653589793, 3.141592653589793]
+      - ProductOfSinusoids:
+          WaveNumbers: [9.42477796076938, 3.141592653589793]
 
 InitialGuess:
   Zero:
 
 DomainCreator:
   Rectangle:
-    LowerBound: [-1., -0.5]
-    UpperBound: [1., 0.5]
-    InitialRefinement: [1, 0]
-    InitialGridPoints: [3, 3]
+    LowerBound: [0., -0.5]
+    UpperBound: [0.5, 1.5]
+    InitialRefinement: [1, 1]
+    InitialGridPoints: [8, 6]
     TimeDependence: None
-    BoundaryCondition:
-      AnalyticSolution:
-        Displacement: Dirichlet
+    BoundaryCondition: CoupledPoissonTest
 
 Discretization:
   DiscontinuousGalerkin:
@@ -37,28 +33,28 @@ Discretization:
     Massive: True
 
 Observers:
-  VolumeFileName: "ElasticBentBeam2DVolume"
-  ReductionFileName: "ElasticBentBeam2DReductions"
+  VolumeFileName: "CoupledPoisson2DVolume"
+  ReductionFileName: "CoupledPoisson2DReductions"
 
 LinearSolver:
   GMRES:
     ConvergenceCriteria:
-      MaxIterations: 1
+      MaxIterations: 10
       RelativeResidual: 1.e-8
       AbsoluteResidual: 1.e-14
-    Verbosity: Verbose
+    Verbosity: Quiet
 
   SchwarzSmoother:
     Iterations: 3
     MaxOverlap: 2
-    Verbosity: Quiet
+    Verbosity: Silent
     SubdomainSolver:
       ExplicitInverse:
 
   Multigrid:
     Iterations: 1
     CoarsestGridPoints: 12
-    Verbosity: Quiet
+    Verbosity: Silent
 
 EventsAndTriggers:
   ? EveryNIterations:

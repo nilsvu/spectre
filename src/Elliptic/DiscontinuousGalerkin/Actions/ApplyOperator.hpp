@@ -401,7 +401,7 @@ using initialize_operator = tmpl::list<
         System,
         tmpl::conditional_t<
             std::is_same_v<typename System::background_fields, tmpl::list<>>,
-            tmpl::list<>,
+            tmpl::list<VarsTag, PrimalFluxesTag>,
             ::dg::Initialization::slice_tags_to_face<
                 // Possible optimization: Only the background fields in the
                 // System::fluxes_computer::argument_tags are needed on internal

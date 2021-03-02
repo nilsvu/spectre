@@ -32,14 +32,41 @@ add_spectre_executable(
 
   # The following lines list the source files with tests in them to be
   # compiled into the executable.
-  ../DataStructures/Test_DataVector.cpp
+  ../Elliptic/DiscontinuousGalerkin/Test_DgOperator.cpp
+  # ../Elliptic/Systems/Xcts/BoundaryConditions/Test_ApparentHorizon.cpp
+  # ../PointwiseFunctions/AnalyticSolutions/Xcts/Test_Kerr.cpp
   )
 
 # Modify which libraries to link for your test case.
 target_link_libraries(
   ${EXECUTABLE}
   PRIVATE
+  # DataStructures
+  # Domain
+  # DomainStructure
+  # XctsBoundaryConditions
+  # XctsSolutions
+  # Elliptic
+  # Utilities
   DataStructures
+  AnalyticSolutions
+  DataStructures
+  DiscontinuousGalerkin
+  Domain
+  DomainCreators
+  DomainStructure
+  Elliptic
+  EllipticDg
+  ErrorHandling
+  Parallel
+  ParallelDg
+  Poisson
+  PoissonSolutions
+  Spectral
+  Utilities
+  Xcts
+  XctsBoundaryConditions
+  XctsSolutions
   )
 
 # Core required libraries

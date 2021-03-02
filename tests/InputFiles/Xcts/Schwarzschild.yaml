@@ -4,8 +4,8 @@
 # Executable: SolveXcts
 # Check: parse;execute
 # ExpectedOutput:
-#   SchwarzschildIsotropicReductions.h5
-#   SchwarzschildIsotropicVolume0.h5
+#   SchwarzschildReductions.h5
+#   SchwarzschildVolume0.h5
 
 Background:
   Schwarzschild:
@@ -26,6 +26,8 @@ DomainCreator:
     WhichWedges: All
     RadialBlockLayers: 1
     BoundaryConditions:
+      # InnerBoundary: ApparentHorizon
+      # OuterBoundary: Flatness
       InnerBoundary:
         AnalyticSolution:
           ConformalFactor: Dirichlet
@@ -43,8 +45,8 @@ Discretization:
     Massive: True
 
 Observers:
-  VolumeFileName: "SchwarzschildIsotropicVolume"
-  ReductionFileName: "SchwarzschildIsotropicReductions"
+  VolumeFileName: "SchwarzschildVolume"
+  ReductionFileName: "SchwarzschildReductions"
 
 NonlinearSolver:
   NewtonRaphson:
@@ -68,12 +70,12 @@ LinearSolver:
   Multigrid:
     Iterations: 1
     CoarsestGridPoints: 12
-    Verbosity: Quiet
+    Verbosity: Silent
 
   SchwarzSmoother:
     MaxOverlap: 2
     Iterations: 3
-    Verbosity: Quiet
+    Verbosity: Silent
     SubdomainSolver: ExplicitInverse
     SkipResets: True
 

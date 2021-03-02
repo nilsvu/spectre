@@ -28,14 +28,14 @@
 
 # Replace these paths with the path to your build directory and to the
 # directory where you want the output to appear, i.e. the run directory
-export SPECTRE_BUILD_DIR=/work/nfischer/spectre/build_2020-11-02
+export SPECTRE_BUILD_DIR=/work/nfischer/spectre/build_2021-02-22
 export SPECTRE_RUN_DIR=${PWD}
 
 # Choose the executable and input file to run
 # To use an input file in the current directory, set
 # SPECTRE_INPUT_FILE to `${PWD}/InputFileName.yaml` or just `InputFileName.yaml`
-export SPECTRE_EXECUTABLE=SolveElasticMirror
-export SPECTRE_INPUT_FILE=Mirror.yaml
+export SPECTRE_EXECUTABLE=SolveXcts
+export SPECTRE_INPUT_FILE=Schwarzschild.yaml
 
 # --- You probably don't need to edit anything below this line ---
 
@@ -46,11 +46,12 @@ cp ${SPECTRE_INPUT_FILE} ${SPECTRE_RUN_DIR}/
 
 # Set up the environment
 export MODULEPATH="/home/SPACK2019/share/spack/modules/linux-centos7-haswell:$MODULEPATH"
+export MODULEPATH="/home/SPACK2021/share/spack/modules/linux-centos7-haswell:$MODULEPATH"
 export MODULEPATH="/home/nfischer/spack/share/spack/modules/linux-centos7-haswell:$MODULEPATH"
 module purge
-module load gcc-9.2.0-gcc-9.2.0-fjz3awm
-module load llvm-10.0.1-gcc-9.2.0-j22quug
-source /home/nfischer/spack/var/spack/environments/spectre_2020-11-02/loads
+module load gcc-10.2.0-gcc-10.2.0-vaerku7
+module load llvm-11.0.1-gcc-10.2.0-twtxwft
+source /home/nfischer/spack/var/spack/environments/spectre_2021-02-22/loads
 
 # Set permissions for files created with this script
 umask 0022

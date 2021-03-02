@@ -1,7 +1,7 @@
 // Distributed under the MIT License.
 // See LICENSE.txt for details.
 
-#include "PointwiseFunctions/AnalyticSolutions/Xcts/Schwarzschild.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/AnalyticData.hpp"
 
 #include <algorithm>
 #include <ostream>

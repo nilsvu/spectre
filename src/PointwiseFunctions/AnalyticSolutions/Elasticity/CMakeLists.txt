@@ -31,6 +31,7 @@ target_link_libraries(
   ErrorHandling
   Options
   Parallel
+  PoissonSolutions
   Utilities
   PRIVATE
   ElasticityPointwiseFunctions

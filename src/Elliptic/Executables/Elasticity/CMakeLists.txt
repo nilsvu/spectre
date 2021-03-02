@@ -8,7 +8,6 @@ set(LIBS_TO_LINK
   DiscontinuousGalerkin
   DomainCreators
   Elasticity
-  ElasticityActions
   ElasticityAnalyticData
   ElasticityPointwiseFunctions
   ElasticitySolutions
@@ -21,6 +20,7 @@ set(LIBS_TO_LINK
   Options
   Parallel
   ParallelLinearSolver
+  ParallelSchwarz
   ParallelMultigrid
   Utilities
   )

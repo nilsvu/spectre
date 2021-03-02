@@ -195,7 +195,8 @@ struct Metavariables {
   // (public for use by the Charm++ registration code)
   using analytic_solution_fields = typename system::primal_fields;
   using observe_fields =
-      tmpl::append<analytic_solution_fields, typename system::background_fields,
+      tmpl::append<analytic_solution_fields, typename system::primal_fluxes,
+                   typename system::background_fields,
                    db::wrap_tags_in<NonlinearSolver::Tags::Residual,
                                     typename system::primal_fields>>;
   using events =
@@ -229,14 +230,14 @@ struct Metavariables {
       typename linear_solver::initialize_element,
       typename multigrid::initialize_element,
       typename schwarz_smoother::initialize_element,
-      elliptic::Actions::InitializeFields<system, initial_guess_tag>,
-      elliptic::Actions::InitializeFixedSources<system, background_tag>,
-      elliptic::Actions::InitializeBackgroundFields<system, background_tag>,
       elliptic::Actions::InitializeOptionalAnalyticSolution<
           background_tag,
           tmpl::append<typename system::primal_fields,
                        typename system::primal_fluxes>,
           Xcts::Solutions::AnalyticSolution<analytic_solution_registrars>>,
+      elliptic::Actions::InitializeFields<system, initial_guess_tag>,
+      elliptic::Actions::InitializeFixedSources<system, background_tag>,
+      elliptic::Actions::InitializeBackgroundFields<system, background_tag>,
       elliptic::dg::Actions::initialize_operator<
           system, nonlinear_solver_iteration_id, fields_tag,
           operator_applied_to_fields_tag, fluxes_tag>,
@@ -279,7 +280,6 @@ struct Metavariables {
                   fields_tag, typename multigrid::options_group, void>,
               LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
                   fluxes_tag, typename multigrid::options_group, void>,
-              // TODO: restrict fields and n_dot_fluxes on external faces
               LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
                   volume_dim, fields_tag, typename multigrid::options_group>,
               LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<

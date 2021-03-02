@@ -17,7 +17,24 @@
 #include "ParallelAlgorithms/Initialization/MutateAssign.hpp"
 #include "Utilities/TMPL.hpp"
 
+#include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "Parallel/Printf.hpp"
+
 namespace elliptic::Actions {
+
+namespace detail::Tags {
+struct AnalyticShiftFactor : db::SimpleTag {
+  using type = double;
+  static constexpr Options::String help =
+      "Multiply the initial analytic shift by this factor";
+  using option_tags = tmpl::list<AnalyticShiftFactor>;
+  static constexpr bool pass_metavariables = false;
+  static double create_from_options(const double value) noexcept {
+    return value;
+  }
+};
+}  // namespace detail::Tags
 
 /*!
  * \brief Initialize the dynamic fields of the elliptic system, i.e. those we
@@ -47,6 +64,7 @@ struct InitializeFields {
  public:
   using simple_tags = tmpl::list<fields_tag>;
   using compute_tags = tmpl::list<>;
+  using const_global_cache_tags = tmpl::list<detail::Tags::AnalyticShiftFactor>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
             size_t Dim, typename ActionList, typename ParallelComponent>
@@ -63,6 +81,19 @@ struct InitializeFields {
         inertial_coords, typename fields_tag::tags_list{}));
     Initialization::mutate_assign<simple_tags>(make_not_null(&box),
                                                std::move(initial_fields));
+    db::mutate<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>(
+        make_not_null(&box),
+        [](const auto shift_excess, const auto& solution,
+           const double analytic_shift_factor) {
+          *shift_excess = get<::Tags::Analytic<
+              Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>>(
+              *solution);
+          for (size_t i = 0; i < 3; ++i) {
+            shift_excess->get(i) *= analytic_shift_factor;
+          }
+        },
+        db::get<::Tags::AnalyticSolutionsBase>(box),
+        db::get<detail::Tags::AnalyticShiftFactor>(box));
     return {std::move(box)};
   }
 };

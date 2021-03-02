@@ -66,6 +66,8 @@ enum class SchwarzschildCoordinates {
    * \f$\bar{r}=\frac{M}{2}\f$ due to the radial transformation from \f$r=2M\f$.
    */
   Isotropic,
+  PainleveGullstrand,
+  KerrSchildIsotropic,
 };
 
 std::ostream& operator<<(std::ostream& os,
@@ -143,8 +145,22 @@ bool operator!=(const SchwarzschildImpl& lhs,
 template <typename DataType>
 struct SchwarzschildVariables {
   static constexpr size_t Dim = 3;
+
+  struct IsotropicRadius {
+    using type = Scalar<DataType>;
+  };
+
+  struct ArealRadius {
+    using type = Scalar<DataType>;
+  };
+
+  struct DerivIsotropicRadiusFromAreal {
+    using type = Scalar<DataType>;
+  };
+
   using Cache = CachedTempBuffer<
-      SchwarzschildVariables,
+      SchwarzschildVariables, IsotropicRadius, ArealRadius,
+      DerivIsotropicRadiusFromAreal,
       Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
       Tags::InverseConformalMetric<DataType, 3, Frame::Inertial>,
       ::Tags::deriv<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
@@ -159,7 +175,7 @@ struct SchwarzschildVariables {
                     Frame::Inertial>,
       ::Tags::Flux<Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
                    Frame::Inertial>,
-      Tags::LapseTimesConformalFactor<DataType>,
+      gr::Tags::Lapse<DataType>, Tags::LapseTimesConformalFactor<DataType>,
       ::Tags::deriv<Tags::LapseTimesConformalFactor<DataType>, tmpl::size_t<3>,
                     Frame::Inertial>,
       ::Tags::Flux<Tags::LapseTimesConformalFactor<DataType>, tmpl::size_t<3>,
@@ -167,7 +183,6 @@ struct SchwarzschildVariables {
       Tags::ShiftBackground<DataType, 3, Frame::Inertial>,
       Tags::ShiftExcess<DataType, 3, Frame::Inertial>,
       gr::Tags::Shift<Dim, Frame::Inertial, DataType>,
-      Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataType>,
       Tags::ShiftStrain<DataType, 3, Frame::Inertial>,
       Tags::LongitudinalShiftExcess<DataType, 3, Frame::Inertial>,
       Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<DataType>,
@@ -186,6 +201,16 @@ struct SchwarzschildVariables {
   double mass;
   SchwarzschildCoordinates coordinate_system;
 
+  void operator()(gsl::not_null<Scalar<DataType>*> isotropic_radius,
+                  gsl::not_null<Cache*> cache,
+                  IsotropicRadius /*meta*/) const noexcept;
+  void operator()(gsl::not_null<Scalar<DataType>*> areal_radius,
+                  gsl::not_null<Cache*> cache,
+                  ArealRadius /*meta*/) const noexcept;
+  void operator()(
+      gsl::not_null<Scalar<DataType>*> deriv_isotropic_radius_from_areal,
+      gsl::not_null<Cache*> cache,
+      DerivIsotropicRadiusFromAreal /*meta*/) const noexcept;
   void operator()(gsl::not_null<tnsr::ii<DataType, 3>*> conformal_metric,
                   gsl::not_null<Cache*> cache,
                   Tags::ConformalMetric<DataType, 3, Frame::Inertial> /*meta*/)
@@ -236,6 +261,9 @@ struct SchwarzschildVariables {
                   gsl::not_null<Cache*> cache,
                   ::Tags::Flux<Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
                                Frame::Inertial> /*meta*/) const noexcept;
+  void operator()(gsl::not_null<Scalar<DataType>*> lapse,
+                  gsl::not_null<Cache*> cache,
+                  gr::Tags::Lapse<DataType> /*meta*/) const noexcept;
   void operator()(
       gsl::not_null<Scalar<DataType>*> lapse_times_conformal_factor,
       gsl::not_null<Cache*> cache,
@@ -262,11 +290,6 @@ struct SchwarzschildVariables {
   void operator()(
       gsl::not_null<tnsr::I<DataType, 3>*> shift, gsl::not_null<Cache*> cache,
       gr::Tags::Shift<3, Frame::Inertial, DataType> /*meta*/) const noexcept;
-  void operator()(gsl::not_null<Scalar<DataType>*>
-                      shift_dot_deriv_extrinsic_curvature_trace,
-                  gsl::not_null<Cache*> cache,
-                  Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataType> /*meta*/)
-      const noexcept;
   void operator()(
       gsl::not_null<tnsr::ii<DataType, 3>*> shift_strain,
       gsl::not_null<Cache*> cache,

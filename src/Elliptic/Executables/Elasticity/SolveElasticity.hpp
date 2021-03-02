@@ -51,6 +51,7 @@
 #include "PointwiseFunctions/AnalyticData/Elasticity/AnalyticData.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/BentBeam.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Elasticity/CoupledPoisson.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/HalfSpaceMirror.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/Zero.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
@@ -99,10 +100,14 @@ struct Metavariables {
                           tmpl::list<>>,
       tmpl::conditional_t<Dim == 3,
                           Elasticity::Solutions::Registrars::HalfSpaceMirror,
-                          tmpl::list<>>>>;
+                          tmpl::list<>>,
+      Elasticity::Solutions::Registrars::CoupledPoisson<Dim>>>;
   using background_registrars = analytic_solution_registrars;
   using background_tag = elliptic::Tags::Background<
       Elasticity::AnalyticData::AnalyticData<Dim, background_registrars>>;
+  using coupled_poisson_for_registration =
+      typename Elasticity::Solutions::CoupledPoisson<
+          Dim, background_registrars>::PoissonSolutionType;
 
   // List the possible initial guesses
   using initial_guess_registrars =
@@ -302,6 +307,8 @@ static const std::vector<void (*)()> charm_init_node_funcs{
     &domain::creators::register_derived_with_charm,
     &Parallel::register_derived_classes_with_charm<
         metavariables::background_tag::type::element_type>,
+    &Parallel::register_derived_classes_with_charm<
+        metavariables::coupled_poisson_for_registration>,
     &Parallel::register_derived_classes_with_charm<
         metavariables::initial_guess_tag::type::element_type>,
     &Parallel::register_derived_classes_with_charm<

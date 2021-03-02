@@ -1,26 +1,27 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-set(LIBRARY "Test_Xcts")
+set(LIBRARY "Test_XctsBoundaryConditions")
 
 set(LIBRARY_SOURCES
-  Test_Equations.cpp
-  Test_Tags.cpp
+  Test_ApparentHorizon.cpp
   )
 
 add_test_library(
   ${LIBRARY}
-  "Elliptic/Systems/Xcts/"
+  "Elliptic/Systems/Xcts/BoundaryConditions/"
   "${LIBRARY_SOURCES}"
-  "DataStructuresHelpers;Xcts"
+  ""
   )
 
 target_link_libraries(
   ${LIBRARY}
   PRIVATE
   DataStructures
+  Domain
+  DomainStructure
+  XctsBoundaryConditions
+  XctsSolutions
+  Elliptic
   Utilities
-  Xcts
   )
-
-add_subdirectory(BoundaryConditions)

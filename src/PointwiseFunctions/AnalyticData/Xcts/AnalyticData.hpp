@@ -103,19 +103,18 @@ class AnalyticData : public ::AnalyticData<3, Registrars> {
   /// \endcond
 
   template <typename DataType, typename... RequestedTags>
-  Variables<tmpl::list<RequestedTags...>> variables(
+  tuples::TaggedTuple<RequestedTags...> variables(
       const tnsr::I<DataType, Dim>& x,
       tmpl::list<RequestedTags...> /*meta*/) const noexcept {
-    return variables_from_tagged_tuple(
-        call_with_dynamic_type<tuples::TaggedTuple<RequestedTags...>,
-                               typename Base::creatable_classes>(
-            this, [&x](auto* const derived) noexcept {
-              return derived->variables(x, tmpl::list<RequestedTags...>{});
-            }));
+    return call_with_dynamic_type<tuples::TaggedTuple<RequestedTags...>,
+                                  typename Base::creatable_classes>(
+        this, [&x](auto* const derived) noexcept {
+          return derived->variables(x, tmpl::list<RequestedTags...>{});
+        });
   }
 
   template <typename... RequestedTags>
-  Variables<tmpl::list<RequestedTags...>> variables(
+  tuples::TaggedTuple<RequestedTags...> variables(
       const tnsr::I<DataVector, Dim>& x, const Mesh<Dim>& mesh,
       const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
           inv_jacobian,
@@ -132,7 +131,7 @@ class AnalyticData : public ::AnalyticData<3, Registrars> {
       return this->variables(x, pointwise_tags{});
     } else {
       const size_t num_points = mesh.number_of_grid_points();
-      Variables<tmpl::list<RequestedTags...>> vars{num_points};
+      tuples::TaggedTuple<RequestedTags...> vars{};
       // Retrieve pointwise data from the derived class, including dependencies
       // for the derived data
       auto pointwise_vars = this->variables(

@@ -11,6 +11,7 @@
 #include "DataStructures/VariablesTag.hpp"
 #include "Elliptic/BoundaryConditions/AnalyticSolution.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
+#include "Elliptic/Systems/Elasticity/BoundaryConditions/CoupledPoissonTest.hpp"
 #include "Elliptic/Systems/Elasticity/BoundaryConditions/LaserBeam.hpp"
 #include "Elliptic/Systems/Elasticity/BoundaryConditions/Zero.hpp"
 #include "Elliptic/Systems/Elasticity/Equations.hpp"
@@ -73,6 +74,7 @@ struct FirstOrderSystem {
 
   // The variable-independent fields
   using background_fields = tmpl::list<>;
+  using inv_metric_tag = void;
 
   // The system equations formulated as fluxes and sources
   using fluxes_computer = Fluxes<Dim>;
@@ -82,13 +84,19 @@ struct FirstOrderSystem {
   // factory-created from this base class.
   using boundary_conditions_base =
       elliptic::BoundaryConditions::BoundaryCondition<
-          Dim, tmpl::list<elliptic::BoundaryConditions::Registrars::
-                              AnalyticSolution<FirstOrderSystem>,
-                          BoundaryConditions::Registrars::Zero<
-                              Dim, elliptic::BoundaryConditionType::Dirichlet>,
-                          BoundaryConditions::Registrars::Zero<
-                              Dim, elliptic::BoundaryConditionType::Neumann>,
-                          BoundaryConditions::Registrars::LaserBeam>>;
+          Dim, tmpl::append<
+                   tmpl::list<
+                       elliptic::BoundaryConditions::Registrars::
+                           AnalyticSolution<FirstOrderSystem>,
+                       BoundaryConditions::Registrars::Zero<
+                           Dim, elliptic::BoundaryConditionType::Dirichlet>,
+                       BoundaryConditions::Registrars::Zero<
+                           Dim, elliptic::BoundaryConditionType::Neumann>,
+                       BoundaryConditions::Registrars::CoupledPoissonTest<Dim>>,
+                   tmpl::conditional_t<
+                       Dim == 3,
+                       tmpl::list<BoundaryConditions::Registrars::LaserBeam>,
+                       tmpl::list<>>>>;
 
   // The tag of the operator to compute magnitudes on the manifold, e.g. to
   // normalize vectors on the faces of an element

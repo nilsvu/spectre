@@ -20,6 +20,8 @@
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
 
+#include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+
 /// \cond
 class DataVector;
 /// \endcond
@@ -41,6 +43,8 @@ struct ApparentHorizonImpl {
   ~ApparentHorizonImpl() noexcept = default;
 
   using argument_tags = tmpl::flatten<tmpl::list<
+      ::Tags::AnalyticSolutionsBase, domain::Tags::Mesh<3>,
+      domain::Tags::Direction<3>,
       ::Tags::Normalized<
           domain::Tags::UnnormalizedFaceNormal<3, Frame::Inertial>>,
       domain::Tags::Coordinates<3, Frame::Inertial>,
@@ -54,7 +58,9 @@ struct ApparentHorizonImpl {
                                      Tags::ConformalChristoffelSecondKind<
                                          DataVector, 3, Frame::Inertial>>,
                           tmpl::list<>>>>;
-  using volume_tags = tmpl::list<>;
+  using volume_tags =
+      tmpl::list<::Tags::AnalyticSolutionsBase, domain::Tags::Mesh<3>>;
+//   using volume_tags = tmpl::list<>;
 
   void apply(
       const gsl::not_null<Scalar<DataVector>*> conformal_factor,
@@ -81,6 +87,19 @@ struct ApparentHorizonImpl {
           n_dot_lapse_times_conformal_factor_gradient,
       const gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess,
+      const std::optional<std::reference_wrapper<const Variables<tmpl::list<
+          ::Tags::Analytic<Tags::ConformalFactor<DataVector>>,
+          ::Tags::Analytic<Tags::LapseTimesConformalFactor<DataVector>>,
+          ::Tags::Analytic<Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>,
+          ::Tags::Analytic<::Tags::Flux<Tags::ConformalFactor<DataVector>,
+                                        tmpl::size_t<3>, Frame::Inertial>>,
+          ::Tags::Analytic<
+              ::Tags::Flux<Tags::LapseTimesConformalFactor<DataVector>,
+                           tmpl::size_t<3>, Frame::Inertial>>,
+          ::Tags::Analytic<
+              Tags::LongitudinalShiftExcess<DataVector, 3, Frame::Inertial>>>>>>
+          analytic_solutions,
+      const Mesh<3>& mesh, const Direction<3>& direction,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::I<DataVector, 3>& x,
       const Scalar<DataVector>& extrinsic_curvature_trace,

@@ -79,6 +79,9 @@ struct InitializeSubdomain {
               domain::Tags::BoundaryDirectionsInterior<Dim>,
               domain::Tags::Coordinates<Dim, Frame::Inertial>>,
           domain::Tags::Interface<
+              domain::Tags::BoundaryDirectionsInterior<Dim>,
+              domain::Tags::Direction<Dim>>,
+          domain::Tags::Interface<
               domain::Tags::InternalDirections<Dim>,
               ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
           domain::Tags::Interface<
@@ -176,6 +179,8 @@ struct InitializeSubdomain {
         overlap_face_inertial_coords_internal{};
     overlaps<std::unordered_map<Direction<Dim>, tnsr::I<DataVector, Dim>>>
         overlap_face_inertial_coords_external{};
+    overlaps<std::unordered_map<Direction<Dim>, Direction<Dim>>>
+        overlap_directions_external{};
     overlaps<std::unordered_map<Direction<Dim>,
                                 Variables<typename System::background_fields>>>
         overlap_face_background_fields_internal{};
@@ -249,9 +254,9 @@ struct InitializeSubdomain {
                                          tmpl::list<>>) {
           overlap_background_fields.emplace(
               overlap_id,
-              background.variables(neighbor_inertial_coords, neighbor_mesh,
+              variables_from_tagged_tuple(background.variables(neighbor_inertial_coords, neighbor_mesh,
                                    neighbor_inv_jacobian,
-                                   typename System::background_fields{}));
+                                   typename System::background_fields{})));
         }
         // Faces and mortars, internal and external
         std::unordered_map<Direction<Dim>, tnsr::I<DataVector, Dim>>
@@ -369,6 +374,8 @@ struct InitializeSubdomain {
         }
         for (const auto& neighbor_direction : neighbor.external_boundaries()) {
           setup_face(neighbor_direction, true);
+          overlap_directions_external[overlap_id].emplace(neighbor_direction,
+                                                          neighbor_direction);
           const auto neighbor_mortar_id = std::make_pair(
               neighbor_direction, ElementId<Dim>::external_boundary_id());
           neighbor_mortar_meshes.emplace(
@@ -489,6 +496,7 @@ struct InitializeSubdomain {
         std::move(overlap_inv_jacobians),
         std::move(overlap_face_inertial_coords_internal),
         std::move(overlap_face_inertial_coords_external),
+        std::move(overlap_directions_external),
         std::move(overlap_face_normals_internal),
         std::move(overlap_face_normals_external),
         std::move(overlap_face_normal_magnitudes_internal),
