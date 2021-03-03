@@ -1,0 +1,68 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveElasticity2D
+# Check: parse;execute
+# ExpectedOutput:
+#   CoupledPoisson2DReductions.h5
+#   CoupledPoisson2DVolume0.h5
+
+Background:
+  CoupledPoisson:
+    PoissonSolutions:
+      - ProductOfSinusoids:
+          WaveNumbers: [3.141592653589793, 3.141592653589793]
+      - ProductOfSinusoids:
+          WaveNumbers: [9.42477796076938, 3.141592653589793]
+
+InitialGuess:
+  Zero:
+
+DomainCreator:
+  Rectangle:
+    LowerBound: [0., -0.5]
+    UpperBound: [0.5, 1.5]
+    InitialRefinement: [1, 1]
+    InitialGridPoints: [8, 6]
+    TimeDependence: None
+    BoundaryCondition: CoupledPoissonTest
+
+Discretization:
+  DiscontinuousGalerkin:
+    PenaltyParameter: 1.
+    Massive: True
+
+Observers:
+  VolumeFileName: "CoupledPoisson2DVolume"
+  ReductionFileName: "CoupledPoisson2DReductions"
+
+LinearSolver:
+  GMRES:
+    ConvergenceCriteria:
+      MaxIterations: 10
+      RelativeResidual: 1.e-8
+      AbsoluteResidual: 1.e-14
+    Verbosity: Quiet
+
+  SchwarzSmoother:
+    Iterations: 3
+    MaxOverlap: 2
+    Verbosity: Silent
+    SubdomainSolver:
+      ExplicitInverse:
+
+  Multigrid:
+    Iterations: 1
+    CoarsestGridPoints: 12
+    Verbosity: Silent
+
+EventsAndTriggers:
+  ? EveryNIterations:
+      N: 1
+      Offset: 0
+  : - ObserveErrorNorms:
+        SubfileName: ErrorNorms
+    - ObserveFields:
+        SubfileName: VolumeData
+        VariablesToObserve: [Displacement, Strain, PotentialEnergyDensity]
+        InterpolateToMesh: None
