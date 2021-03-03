@@ -7,6 +7,7 @@
 #include <cmath>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <pup.h>
 #include <string>
 #include <unordered_map>
@@ -14,7 +15,6 @@
 
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Domain/Block.hpp"  // IWYU pragma: keep
-#include "Domain/BoundaryConditions/None.hpp"
 #include "Domain/BoundaryConditions/Periodic.hpp"
 #include "Domain/CoordinateMaps/Affine.hpp"
 #include "Domain/CoordinateMaps/CoordinateMap.hpp"
@@ -63,7 +63,8 @@ BinaryCompactObject::BinaryCompactObject(
         addition_to_object_B_radial_refinement_level,
     std::unique_ptr<domain::creators::time_dependence::TimeDependence<3>>
         time_dependence,
-    std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
+    std::optional<
+        std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>>
         inner_boundary_condition,
     std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
         outer_boundary_condition,
@@ -97,7 +98,9 @@ BinaryCompactObject::BinaryCompactObject(
       addition_to_object_B_radial_refinement_level_(
           addition_to_object_B_radial_refinement_level),  // NOLINT
       time_dependence_(std::move(time_dependence)),
-      inner_boundary_condition_(std::move(inner_boundary_condition)),
+      inner_boundary_condition_(inner_boundary_condition.has_value()
+                                    ? std::move(*inner_boundary_condition)
+                                    : nullptr),
       outer_boundary_condition_(std::move(outer_boundary_condition)) {
   // Determination of parameters for domain construction:
   translation_ = 0.5 * (xcoord_object_B_ + xcoord_object_A_);
@@ -154,11 +157,9 @@ BinaryCompactObject::BinaryCompactObject(
         "of Layer 1 enveloping Object B requires excising the interior of "
         "Object B");
   }
-  using domain::BoundaryConditions::is_none;
   if (outer_boundary_condition_ != nullptr and
       ((not excise_interior_A_ and not excise_interior_B_) and
-       (inner_boundary_condition_ == nullptr or
-        not is_none(inner_boundary_condition_)))) {
+       inner_boundary_condition.has_value())) {
     PARSE_ERROR(context,
                 "Inner boundary condition must be None if ExciseInteriorA and "
                 "ExciseInteriorB are both false");

@@ -9,6 +9,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <pup.h>
 #include <string>
 #include <tuple>
@@ -188,10 +189,8 @@ void test_connectivity() {
               nullptr,
               with_boundary_conditions
                   ? (excise_interiorA or excise_interiorB
-                         ? create_inner_boundary_condition()
-                         : std::make_unique<
-                               TestHelpers::domain::BoundaryConditions::
-                                   TestNoneBoundaryCondition<3>>())
+                         ? std::make_optional(create_inner_boundary_condition())
+                         : std::nullopt)
                   : nullptr,
               with_boundary_conditions ? create_outer_boundary_condition()
                                        : nullptr};
@@ -239,10 +238,8 @@ void test_connectivity() {
                     addition_to_outer_layer_radial_refinement_level, false, 0,
                     false, 0, nullptr,
                     excise_interiorA or excise_interiorB
-                        ? create_inner_boundary_condition()
-                        : std::make_unique<
-                              TestHelpers::domain::BoundaryConditions::
-                                  TestNoneBoundaryCondition<3>>(),
+                        ? std::make_optional(create_inner_boundary_condition())
+                        : std::nullopt,
                     std::make_unique<TestHelpers::domain::BoundaryConditions::
                                          TestPeriodicBoundaryCondition<3>>(),
                     Options::Context{false, {}, 1, 1}),
@@ -277,10 +274,8 @@ void test_connectivity() {
                     addition_to_outer_layer_radial_refinement_level, false, 0,
                     false, 0, nullptr,
                     excise_interiorA or excise_interiorB
-                        ? create_inner_boundary_condition()
-                        : std::make_unique<
-                              TestHelpers::domain::BoundaryConditions::
-                                  TestNoneBoundaryCondition<3>>(),
+                        ? std::make_optional(create_inner_boundary_condition())
+                        : std::nullopt,
                     nullptr, Options::Context{false, {}, 1, 1}),
                 Catch::Matchers::Contains(
                     "Must specify either both inner and outer boundary "
@@ -339,7 +334,7 @@ std::string create_option_string(const bool excise_A, const bool excise_B,
                                         ? "      TestBoundaryCondition:\n"
                                           "        Direction: lower-zeta\n"
                                           "        BlockId: 50\n"
-                                        : "      None:\n"} +
+                                        : "      None\n"} +
                         "    OuterBoundary:\n"
                         "      TestBoundaryCondition:\n"
                         "        Direction: upper-zeta\n"

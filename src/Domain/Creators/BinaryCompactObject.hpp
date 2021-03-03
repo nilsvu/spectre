@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -16,6 +17,7 @@
 #include "Domain/Creators/DomainCreator.hpp"
 #include "Domain/Creators/TimeDependence/TimeDependence.hpp"
 #include "Domain/Domain.hpp"
+#include "Options/Auto.hpp"
 #include "Options/Options.hpp"
 #include "Utilities/ErrorHandling/Assert.hpp"
 #include "Utilities/TMPL.hpp"
@@ -273,8 +275,10 @@ class BinaryCompactObject : public DomainCreator<3> {
   struct InnerBoundaryCondition {
     static std::string name() noexcept { return "InnerBoundary"; }
     static constexpr Options::String help =
-        "Options for the inner boundary conditions.";
-    using type = std::unique_ptr<BoundaryConditionsBase>;
+        "Options for the inner boundary conditions. Must be None if neither "
+        "sphere is excised.";
+    using type = Options::Auto<std::unique_ptr<BoundaryConditionsBase>,
+                               Options::AutoLabel::None>;
     using group = BoundaryConditions;
   };
 
@@ -365,7 +369,8 @@ class BinaryCompactObject : public DomainCreator<3> {
           addition_to_object_B_radial_refinement_level = 0,
       std::unique_ptr<domain::creators::time_dependence::TimeDependence<3>>
           time_dependence = nullptr,
-      std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
+      std::optional<
+          std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>>
           inner_boundary_condition = nullptr,
       std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
           outer_boundary_condition = nullptr,
