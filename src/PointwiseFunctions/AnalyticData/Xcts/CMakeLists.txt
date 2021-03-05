@@ -1,39 +1,32 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-set(LIBRARY XctsSolutions)
+set(LIBRARY XctsAnalyticData)
 
 add_spectre_library(${LIBRARY})
 
 spectre_target_sources(
   ${LIBRARY}
   PRIVATE
-  ConstantDensityStar.cpp
-  Kerr.cpp
-  Schwarzschild.cpp
+  AnalyticData.cpp
   )
 
 spectre_target_headers(
   ${LIBRARY}
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
-  AnalyticSolution.hpp
-  ConstantDensityStar.hpp
-  Flatness.hpp
-  Kerr.hpp
-  Schwarzschild.hpp
+  AnalyticData.hpp
   )
 
 target_link_libraries(
   ${LIBRARY}
   PUBLIC
   DataStructures
-  ErrorHandling
-  GeneralRelativity
-  GeneralRelativitySolutions
+  LinearOperators
   Options
   Parallel
+  Spectral
   Utilities
-  Xcts
-  XctsAnalyticData
+  PRIVATE
+  GeneralRelativity
   )
