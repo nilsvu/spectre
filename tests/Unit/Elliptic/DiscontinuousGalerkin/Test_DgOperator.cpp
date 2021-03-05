@@ -10,19 +10,29 @@
 #include <vector>
 
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
+#include "DataStructures/Tensor/EagerMath/Norms.hpp"
 #include "Domain/Creators/Brick.hpp"
 #include "Domain/Creators/Interval.hpp"
 #include "Domain/Creators/Rectangle.hpp"
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
+#include "Domain/Creators/Shell.hpp"
 #include "Domain/FaceNormal.hpp"
+#include "Domain/InterfaceComputeTags.hpp"
 #include "Domain/LogicalCoordinates.hpp"
 #include "Domain/Structure/InitialElementIds.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
+#include "Elliptic/Actions/InitializeBackgroundFields.hpp"
+#include "Elliptic/Actions/InitializeFixedSources.hpp"
+#include "Elliptic/BoundaryConditions/AnalyticSolution.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/ApplyOperator.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
+#include "Elliptic/Systems/Xcts/BoundaryConditions/ApparentHorizon.hpp"
+#include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
 #include "Framework/ActionTesting.hpp"
+#include "Framework/CheckWithRandomValues.hpp"
 #include "Framework/TestHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NormalDotFlux.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Parallel/Actions/Goto.hpp"
@@ -31,9 +41,11 @@
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
 #include "ParallelAlgorithms/Actions/SetData.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
+#include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Xcts/Kerr.hpp"
 #include "Utilities/Literals.hpp"
 
 namespace {
@@ -63,6 +75,18 @@ struct TemporalIdTag : db::SimpleTag {
   using type = size_t;
 };
 
+template <typename Tag>
+struct ErrorTag : db::PrefixTag, db::SimpleTag {
+  using tag = Tag;
+  using type = double;
+};
+
+template <typename Tag>
+struct ConvergenceTag : db::PrefixTag, db::SimpleTag {
+  using tag = Tag;
+  using type = std::vector<double>;
+};
+
 struct IncrementTemporalId {
   template <typename DbTags, typename... InboxTags, typename Metavariables,
             typename ArrayIndex, typename ActionList,
@@ -82,6 +106,7 @@ struct IncrementTemporalId {
 
 // Label to indicate the start of the apply-operator actions
 struct ApplyOperatorStart {};
+struct ApplyNonlinearOperatorStart {};
 
 template <typename System, bool Linearized, typename Metavariables>
 struct ElementArray {
@@ -93,10 +118,13 @@ struct ElementArray {
 
   // Wrap fields in a prefix to make sure this works
   using primal_vars = db::wrap_tags_in<Var, typename System::primal_fields>;
-  using primal_fluxes_vars =
-      db::wrap_tags_in<Var, typename System::primal_fluxes>;
+  using primal_fluxes = db::wrap_tags_in<Var, typename System::primal_fluxes>;
+  using fields_tag = ::Tags::Variables<typename System::primal_fields>;
+  using fluxes_tag = ::Tags::Variables<typename System::primal_fluxes>;
   using vars_tag = ::Tags::Variables<primal_vars>;
-  using primal_fluxes_vars_tag = ::Tags::Variables<primal_fluxes_vars>;
+  using primal_fluxes_tag = ::Tags::Variables<primal_fluxes>;
+  using operator_applied_to_fields_tag = ::Tags::Variables<
+      db::wrap_tags_in<DgOperatorAppliedTo, typename System::primal_fields>>;
   using operator_applied_to_vars_tag =
       ::Tags::Variables<db::wrap_tags_in<DgOperatorAppliedTo, primal_vars>>;
   // Don't wrap the fixed sources in the `Var` prefix because typically we want
@@ -109,27 +137,60 @@ struct ElementArray {
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Initialization,
           tmpl::list<
-              ActionTesting::InitializeDataBox<tmpl::list<
-                  domain::Tags::InitialRefinementLevels<Dim>,
-                  domain::Tags::InitialExtents<Dim>, fixed_sources_tag>>,
+              ActionTesting::InitializeDataBox<
+                  tmpl::list<domain::Tags::InitialRefinementLevels<Dim>,
+                             domain::Tags::InitialExtents<Dim>>>,
               ::Actions::SetupDataBox, ::dg::Actions::InitializeDomain<Dim>,
               ::elliptic::Actions::InitializeAnalyticSolution<
                   ::Tags::AnalyticSolution<
                       typename metavariables::analytic_solution>,
                   tmpl::append<typename System::primal_fields,
                                typename System::primal_fluxes>>,
+              ::elliptic::Actions::InitializeFixedSources<
+                  System, ::Tags::AnalyticSolution<
+                              typename metavariables::analytic_solution>>,
+              tmpl::conditional_t<
+                  std::is_same_v<typename System::background_fields,
+                                 tmpl::list<>>,
+                  tmpl::list<>,
+                  ::elliptic::Actions::InitializeBackgroundFields<
+                      System, ::Tags::AnalyticSolution<
+                                  typename metavariables::analytic_solution>>>,
               ::elliptic::dg::Actions::initialize_operator<System>,
-              ::Initialization::Actions::RemoveOptionsAndTerminatePhase>>,
+              tmpl::conditional_t<
+                  Linearized, tmpl::list<>,
+                  ::Initialization::Actions::AddComputeTags<tmpl::list<
+                      // For boundary conditions
+                      domain::Tags::Slice<
+                          domain::Tags::BoundaryDirectionsInterior<Dim>,
+                          fields_tag>,
+                      domain::Tags::Slice<
+                          domain::Tags::BoundaryDirectionsInterior<Dim>,
+                          fluxes_tag>,
+                      domain::Tags::InterfaceCompute<
+                          domain::Tags::BoundaryDirectionsInterior<Dim>,
+                          ::Tags::NormalDotFluxCompute2<
+                              fields_tag, fluxes_tag, Dim, Frame::Inertial>>>>>,
+              Parallel::Actions::TerminatePhase>>,
       Parallel::PhaseActions<
           typename Metavariables::Phase, Metavariables::Phase::Testing,
-          tmpl::list<::elliptic::dg::Actions::
-                         ImposeInhomogeneousBoundaryConditionsOnSource<
-                             System, fixed_sources_tag>,
-                     ::Actions::Label<ApplyOperatorStart>,
-                     ::elliptic::dg::Actions::apply_operator<
-                         System, Linearized, TemporalIdTag, vars_tag,
-                         primal_fluxes_vars_tag, operator_applied_to_vars_tag>,
-                     IncrementTemporalId, Parallel::Actions::TerminatePhase>>>;
+          tmpl::list<
+              ::elliptic::dg::Actions::
+                  ImposeInhomogeneousBoundaryConditionsOnSource<
+                      System, fixed_sources_tag>,
+              ::Actions::Label<ApplyOperatorStart>,
+              ::elliptic::dg::Actions::apply_operator<
+                  System, true, TemporalIdTag, vars_tag, primal_fluxes_tag,
+                  operator_applied_to_vars_tag>,
+              IncrementTemporalId, Parallel::Actions::TerminatePhase,
+              tmpl::conditional_t<
+                  Linearized, tmpl::list<>,
+                  tmpl::list<::Actions::Label<ApplyNonlinearOperatorStart>,
+                             ::elliptic::dg::Actions::apply_operator<
+                                 System, false, TemporalIdTag, fields_tag,
+                                 fluxes_tag, operator_applied_to_fields_tag>,
+                             IncrementTemporalId,
+                             Parallel::Actions::TerminatePhase>>>>>;
 };
 
 template <typename System, bool Linearized, typename AnalyticSolution>
@@ -147,28 +208,33 @@ template <
     size_t Dim = System::volume_dim,
     typename Metavars = Metavariables<System, Linearized, AnalyticSolution>,
     typename ElementArray = typename Metavars::element_array>
-void test_dg_operator(
+auto test_dg_operator(
     const DomainCreator<Dim>& domain_creator, const double penalty_parameter,
-    const AnalyticSolution& analytic_solution,
+    AnalyticSolution analytic_solution_ptr,
     // NOLINTNEXTLINE(google-runtime-references)
     Approx& analytic_solution_approx,
     const std::vector<std::tuple<
         std::unordered_map<ElementId<Dim>,
                            typename ElementArray::vars_tag::type>,
         std::unordered_map<ElementId<Dim>,
-                           typename ElementArray::primal_fluxes_vars_tag::type>,
+                           typename ElementArray::primal_fluxes_tag::type>,
         std::unordered_map<
             ElementId<Dim>,
             typename ElementArray::operator_applied_to_vars_tag::type>>>&
         tests_data) {
   using element_array = ElementArray;
   using vars_tag = typename element_array::vars_tag;
-  using primal_fluxes_vars_tag = typename element_array::primal_fluxes_vars_tag;
+  using primal_fluxes_tag = typename element_array::primal_fluxes_tag;
+  using fields_tag = typename element_array::fields_tag;
+  using fluxes_tag = typename element_array::fluxes_tag;
   using operator_applied_to_vars_tag =
       typename element_array::operator_applied_to_vars_tag;
+  using operator_applied_to_fields_tag =
+      typename element_array::operator_applied_to_fields_tag;
   using fixed_sources_tag = typename element_array::fixed_sources_tag;
+  using Fields = typename fields_tag::type;
   using Vars = typename vars_tag::type;
-  using PrimalFluxesVars = typename primal_fluxes_vars_tag::type;
+  using PrimalFluxesVars = typename primal_fluxes_tag::type;
   using OperatorAppliedToVars = typename operator_applied_to_vars_tag::type;
   using FixedSources = typename fixed_sources_tag::type;
 
@@ -190,7 +256,8 @@ void test_dg_operator(
                           ::elliptic::dg::Tags::PenaltyParameter,
                           ::elliptic::dg::Tags::Massive,
                           ::Tags::AnalyticSolution<AnalyticSolution>>{
-          std::move(domain), penalty_parameter, false, analytic_solution}};
+          std::move(domain), penalty_parameter, false,
+          std::move(analytic_solution_ptr)}};
 
   // DataBox shortcuts
   const auto get_tag = [&runner](
@@ -210,24 +277,18 @@ void test_dg_operator(
   // Initialize all elements in the domain
   for (const auto& element_id : all_element_ids) {
     ActionTesting::emplace_component_and_initialize<element_array>(
-        &runner, element_id,
-        {initial_ref_levs, initial_extents, FixedSources{}});
+        &runner, element_id, {initial_ref_levs, initial_extents});
     while (
         not ActionTesting::get_terminate<element_array>(runner, element_id)) {
       ActionTesting::next_action<element_array>(make_not_null(&runner),
                                                 element_id);
     }
     set_tag(TemporalIdTag{}, 0_st, element_id);
-    const auto& mesh = get_tag(domain::Tags::Mesh<Dim>{}, element_id);
-    const size_t num_points = mesh.number_of_grid_points();
-    const auto& inertial_coords =
-        get_tag(domain::Tags::Coordinates<Dim, Frame::Inertial>{}, element_id);
-    FixedSources fixed_sources{num_points, 0.};
-    fixed_sources.assign_subset(
-        variables_from_tagged_tuple(analytic_solution.variables(
-            inertial_coords, typename fixed_sources_tag::tags_list{})));
-    set_tag(fixed_sources_tag{}, std::move(fixed_sources), element_id);
   }
+  const auto& analytic_solution =
+      get<::Tags::AnalyticSolution<AnalyticSolution>>(
+          ActionTesting::cache<element_array>(runner,
+                                              *all_element_ids.begin()));
   ActionTesting::set_phase(make_not_null(&runner), Metavars::Phase::Testing);
 
   if constexpr (Linearized) {
@@ -242,64 +303,115 @@ void test_dg_operator(
 
   const auto apply_operator_and_check_result =
       [&runner, &all_element_ids, &get_tag, &set_tag](
+          auto local_linearized_v,
           const std::unordered_map<ElementId<Dim>, Vars>& all_vars,
           const std::unordered_map<ElementId<Dim>, PrimalFluxesVars>&
-              all_expected_primal_fluxes_vars,
+              all_expected_primal_fluxes,
           const std::unordered_map<ElementId<Dim>, OperatorAppliedToVars>&
               all_expected_operator_applied_to_vars,
           Approx& custom_approx = approx) {
-        // Set variables data on central element and on its neighbors
-        for (const auto& element_id : all_element_ids) {
-          const auto vars = all_vars.find(element_id);
-          if (vars == all_vars.end()) {
-            const size_t num_points =
-                get_tag(domain::Tags::Mesh<Dim>{}, element_id)
-                    .number_of_grid_points();
-            set_tag(vars_tag{}, Vars{num_points, 0.}, element_id);
-          } else {
-            set_tag(vars_tag{}, vars->second, element_id);
+        static constexpr bool local_linearized =
+            std::decay_t<decltype(local_linearized_v)>::value;
+        using local_vars_tag =
+            tmpl::conditional_t<local_linearized, vars_tag, fields_tag>;
+        using local_fluxes_tag =
+            tmpl::conditional_t<local_linearized, primal_fluxes_tag,
+                                fluxes_tag>;
+        using local_operator_applied_to_vars_tag =
+            tmpl::conditional_t<local_linearized, operator_applied_to_vars_tag,
+                                operator_applied_to_fields_tag>;
+        using LocalVars = tmpl::conditional_t<local_linearized, Vars, Fields>;
+        {
+          INFO("Set variables data on central element and on its neighbors");
+          for (const auto& element_id : all_element_ids) {
+            CAPTURE(element_id);
+            const auto vars = all_vars.find(element_id);
+            if (vars == all_vars.end()) {
+              const size_t num_points =
+                  get_tag(domain::Tags::Mesh<Dim>{}, element_id)
+                      .number_of_grid_points();
+              set_tag(local_vars_tag{}, LocalVars{num_points, 0.}, element_id);
+            } else {
+              set_tag(local_vars_tag{}, LocalVars(vars->second), element_id);
+            }
           }
         }
 
         // Apply DG operator
-        // 1. Prepare elements and send data
-        for (const auto& element_id : all_element_ids) {
-          runner.template force_next_action_to_be<
-              element_array, ::Actions::Label<ApplyOperatorStart>>(element_id);
-          runner.template mock_distributed_objects<element_array>()
-              .at(element_id)
-              .set_terminate(false);
-          while (ActionTesting::is_ready<element_array>(runner, element_id) and
-                 not ActionTesting::get_terminate<element_array>(runner,
-                                                                 element_id)) {
-            ActionTesting::next_action<element_array>(make_not_null(&runner),
-                                                      element_id);
+        {
+          INFO("1. Prepare elements and send data");
+          for (const auto& element_id : all_element_ids) {
+            CAPTURE(element_id);
+            runner.template force_next_action_to_be<
+                element_array, ::Actions::Label<tmpl::conditional_t<
+                                   local_linearized, ApplyOperatorStart,
+                                   ApplyNonlinearOperatorStart>>>(element_id);
+            runner.template mock_distributed_objects<element_array>()
+                .at(element_id)
+                .set_terminate(false);
+            while (
+                ActionTesting::is_ready<element_array>(runner, element_id) and
+                not ActionTesting::get_terminate<element_array>(runner,
+                                                                element_id)) {
+              const size_t next_action_index =
+                  ActionTesting::get_next_action_index<element_array>(
+                      runner, element_id);
+              CAPTURE(next_action_index);
+              ActionTesting::next_action<element_array>(make_not_null(&runner),
+                                                        element_id);
+            }
           }
         }
-        // 2. Receive data and apply operator
-        for (const auto& element_id : all_element_ids) {
-          while (not ActionTesting::get_terminate<element_array>(runner,
-                                                                 element_id)) {
-            ActionTesting::next_action<element_array>(make_not_null(&runner),
-                                                      element_id);
+        {
+          INFO("2. Receive data and apply operator");
+          for (const auto& element_id : all_element_ids) {
+            CAPTURE(element_id);
+            while (not ActionTesting::get_terminate<element_array>(
+                runner, element_id)) {
+              const size_t next_action_index =
+                  ActionTesting::get_next_action_index<element_array>(
+                      runner, element_id);
+              CAPTURE(next_action_index);
+              ActionTesting::next_action<element_array>(make_not_null(&runner),
+                                                        element_id);
+            }
           }
         }
 
         // Check result
+        std::unordered_map<
+            ElementId<Dim>,
+            tuples::tagged_tuple_from_typelist<db::wrap_tags_in<
+                ErrorTag,
+                tmpl::append<
+                    typename local_fluxes_tag::tags_list,
+                    typename local_operator_applied_to_vars_tag::tags_list>>>>
+            discretization_errors{};
         {
           INFO("Auxiliary variables");
-          for (const auto& [element_id, expected_primal_fluxes_vars] :
-               all_expected_primal_fluxes_vars) {
+          for (const auto& [element_id, expected_primal_fluxes] :
+               all_expected_primal_fluxes) {
             CAPTURE(element_id);
             const auto& inertial_coords = get_tag(
                 domain::Tags::Coordinates<Dim, Frame::Inertial>{}, element_id);
             CAPTURE(inertial_coords);
-            const auto& vars = get_tag(vars_tag{}, element_id);
+            const auto& vars = get_tag(local_vars_tag{}, element_id);
             CAPTURE(vars);
-            const auto& primal_fluxes_vars =
-                get_tag(primal_fluxes_vars_tag{}, element_id);
-            CHECK_VARIABLES_CUSTOM_APPROX(
-                primal_fluxes_vars, expected_primal_fluxes_vars, custom_approx);
+            const auto& primal_fluxes = get_tag(local_fluxes_tag{}, element_id);
+            // CHECK_VARIABLES_CUSTOM_APPROX(
+            //     primal_fluxes,
+            //     typename local_fluxes_tag::type(expected_primal_fluxes),
+            //     custom_approx);
+            typename local_fluxes_tag::type discretization_error_pointwise =
+                primal_fluxes - expected_primal_fluxes;
+            const auto& local_element_id = element_id;
+            tmpl::for_each<typename local_fluxes_tag::tags_list>(
+                [&local_element_id, &discretization_error_pointwise,
+                 &discretization_errors](auto tag_v) {
+                  using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
+                  get<ErrorTag<tag>>(discretization_errors[local_element_id]) =
+                      l2_norm(get<tag>(discretization_error_pointwise));
+                });
           }
         }
         {
@@ -310,17 +422,34 @@ void test_dg_operator(
             const auto& inertial_coords = get_tag(
                 domain::Tags::Coordinates<Dim, Frame::Inertial>{}, element_id);
             CAPTURE(inertial_coords);
-            const auto& vars = get_tag(vars_tag{}, element_id);
+            const auto& vars = get_tag(local_vars_tag{}, element_id);
             CAPTURE(vars);
-            const auto& operator_applied_to_vars =
-                get_tag(operator_applied_to_vars_tag{}, element_id);
-            CHECK_VARIABLES_CUSTOM_APPROX(operator_applied_to_vars,
-                                          expected_operator_applied_to_vars,
-                                          custom_approx);
+            const auto operator_applied_to_vars =
+                get_tag(local_operator_applied_to_vars_tag{}, element_id);
+            // CHECK_VARIABLES_CUSTOM_APPROX(
+            //     operator_applied_to_vars,
+            //     typename local_operator_applied_to_vars_tag::type(
+            //         expected_operator_applied_to_vars),
+            //     custom_approx);
+            typename local_operator_applied_to_vars_tag::type
+                discretization_error_pointwise =
+                    operator_applied_to_vars -
+                    expected_operator_applied_to_vars;
+            const auto& local_element_id = element_id;
+            tmpl::for_each<
+                typename local_operator_applied_to_vars_tag::tags_list>(
+                [&local_element_id, &discretization_error_pointwise,
+                 &discretization_errors](auto tag_v) {
+                  using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
+                  get<ErrorTag<tag>>(discretization_errors[local_element_id]) =
+                      l2_norm(get<tag>(discretization_error_pointwise));
+                });
           }
         }
+        return discretization_errors;
       };
-  {
+
+  if constexpr (Linearized) {
     INFO("Test that A(0) = 0");
     std::unordered_map<ElementId<Dim>, PrimalFluxesVars>
         all_zero_primal_fluxes{};
@@ -333,7 +462,8 @@ void test_dg_operator(
       all_zero_operator_vars[element_id] =
           OperatorAppliedToVars{num_points, 0.};
     }
-    apply_operator_and_check_result({}, all_zero_primal_fluxes,
+    apply_operator_and_check_result(std::bool_constant<Linearized>{}, {},
+                                    all_zero_primal_fluxes,
                                     all_zero_operator_vars);
   }
   {
@@ -355,14 +485,110 @@ void test_dg_operator(
       analytic_fixed_source_with_inhom_bc[element_id] =
           get_tag(fixed_sources_tag{}, element_id);
     }
-    apply_operator_and_check_result(
-        analytic_primal_vars, analytic_primal_fluxes,
-        analytic_fixed_source_with_inhom_bc, analytic_solution_approx);
+    return apply_operator_and_check_result(
+        std::bool_constant<Linearized>{}, analytic_primal_vars,
+        analytic_primal_fluxes, analytic_fixed_source_with_inhom_bc,
+        analytic_solution_approx);
   }
   {
     INFO("Test A(x) = b with custom x and b")
     for (const auto& test_data : tests_data) {
-      std::apply(apply_operator_and_check_result, test_data);
+      std::apply(
+          [&apply_operator_and_check_result](const auto&... args) {
+            apply_operator_and_check_result(std::bool_constant<Linearized>{},
+                                            args...);
+          },
+          test_data);
+    }
+  }
+  if constexpr (not Linearized) {
+    INFO("Test linearization: dA(u_2 - u_1) ~= A(u_2) - A(u_1)");
+    MAKE_GENERATOR(generator);
+    std::vector<double> correction_magnitudes{1.e-1, 1.e-2, 1.e-3, 1.e-4,
+                                              1.e-5, 1.e-6, 1.e-7, 1.e-8};
+    std::unordered_map<ElementId<Dim>,
+                       tuples::tagged_tuple_from_typelist<db::wrap_tags_in<
+                           ConvergenceTag, typename System::primal_fields>>>
+        linearization_convergences{};
+    std::uniform_real_distribution<> dist_pos(0.5, 2.);
+    std::uniform_real_distribution<> dist_uniform(-0.5, 0.5);
+    for (const double correction_magnitude : correction_magnitudes) {
+      std::uniform_real_distribution<> dist_eps(-correction_magnitude / 2.,
+                                                correction_magnitude / 2.);
+      std::unordered_map<ElementId<Dim>, Vars> all_primal_vars{};
+      std::unordered_map<ElementId<Dim>, Vars> all_primal_vars_correction{};
+      std::unordered_map<ElementId<Dim>, Vars> all_primal_vars_corrected{};
+      std::unordered_map<ElementId<Dim>, OperatorAppliedToVars>
+          all_operator_vars{};
+      std::unordered_map<ElementId<Dim>, OperatorAppliedToVars>
+          all_operator_vars_correction{};
+      std::unordered_map<ElementId<Dim>, OperatorAppliedToVars>
+          all_operator_vars_corrected{};
+      for (const auto& element_id : all_element_ids) {
+        const size_t num_points = get_tag(domain::Tags::Mesh<Dim>{}, element_id)
+                                      .number_of_grid_points();
+        all_primal_vars[element_id] = make_with_random_values<Vars>(
+            make_not_null(&generator), make_not_null(&dist_pos), num_points);
+        get<Var<Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>>(
+            all_primal_vars[element_id]) =
+            make_with_random_values<tnsr::I<DataVector, 3>>(
+                make_not_null(&generator), make_not_null(&dist_uniform),
+                num_points);
+        all_primal_vars_correction[element_id] = make_with_random_values<Vars>(
+            make_not_null(&generator), make_not_null(&dist_eps), num_points);
+        all_primal_vars_corrected[element_id] =
+            all_primal_vars[element_id] +
+            all_primal_vars_correction[element_id];
+      }
+      // A(u_2)
+      apply_operator_and_check_result(std::false_type{},
+                                      all_primal_vars_corrected, {}, {});
+      for (const auto& element_id : all_element_ids) {
+        all_operator_vars_corrected[element_id] =
+            get_tag(operator_applied_to_fields_tag{}, element_id);
+      }
+      // A(u_1): Apply right before linearized operator so the nonlinear fields
+      // and fluxes are in the DataBox. They are used as background for the
+      // linearized operator.
+      apply_operator_and_check_result(std::false_type{}, all_primal_vars, {},
+                                      {});
+      for (const auto& element_id : all_element_ids) {
+        all_operator_vars[element_id] =
+            get_tag(operator_applied_to_fields_tag{}, element_id);
+      }
+      apply_operator_and_check_result(std::true_type{},
+                                      all_primal_vars_correction, {}, {});
+      for (const auto& element_id : all_element_ids) {
+        const auto& operator_vars_correction =
+            get_tag(operator_applied_to_vars_tag{}, element_id);
+        OperatorAppliedToVars linearization_error_pointwise =
+            operator_vars_correction - all_operator_vars_corrected[element_id] +
+            all_operator_vars[element_id];
+        linearization_error_pointwise /= correction_magnitude;
+        tmpl::for_each<typename System::primal_fields>(
+            [&element_id, &linearization_convergences,
+             &linearization_error_pointwise](auto tag_v) {
+              using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
+              const double linearization_error =
+                  l2_norm(get<DgOperatorAppliedTo<Var<tag>>>(
+                      linearization_error_pointwise));
+              auto& linearization_convergence = get<ConvergenceTag<tag>>(
+                  linearization_convergences[element_id]);
+              linearization_convergence.push_back(linearization_error);
+            });
+      }
+    }  // correction magnitudes
+    for (const auto& element_id : all_element_ids) {
+      CAPTURE(element_id);
+      tmpl::for_each<typename System::primal_fields>(
+          [&element_id, &linearization_convergences](auto tag_v) {
+            using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
+            CAPTURE(db::tag_name<tag>());
+            const auto& linearization_convergence = get<ConvergenceTag<tag>>(
+                linearization_convergences[element_id]);
+            CAPTURE(linearization_convergence);
+            // CHECK(false);
+          });
     }
   }
 }
@@ -632,6 +858,92 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.Operator", "[Unit][Elliptic]") {
            {neighbor_id_zeta, std::move(vars_rnd_neighbor_zeta)}},
           {},
           {{self_id, std::move(expected_operator_vars_rnd)}}}});
+  }
+  {
+    INFO("XCTS Kerr solution");
+    using system =
+        Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift,
+                               Xcts::Geometry::Curved>;
+    using solution_registrars = tmpl::list<Xcts::Solutions::Registrars::Kerr>;
+    using Solution = Xcts::AnalyticData::AnalyticData<solution_registrars>;
+    Parallel::register_derived_classes_with_charm<Solution>();
+    using boundary_condition_registrars =
+        typename system::boundary_conditions_base::registrars;
+    using AnalyticSolutionBoundaryCondition =
+        typename elliptic::BoundaryConditions::Registrars::AnalyticSolution<
+            system>::template f<boundary_condition_registrars>;
+    using ApparentHorizonBoundaryCondition =
+        Xcts::BoundaryConditions::ApparentHorizon<
+            Xcts::Geometry::Curved, boundary_condition_registrars>;
+    Parallel::register_derived_classes_with_charm<
+        typename system::boundary_conditions_base>();
+    std::unordered_map<
+        ElementId<3>,
+        tuples::tagged_tuple_from_typelist<db::wrap_tags_in<
+            ConvergenceTag,
+            tmpl::append<typename system::primal_fluxes,
+                         db::wrap_tags_in<DgOperatorAppliedTo,
+                                          typename system::primal_fields>>>>>
+        discretization_convergences{};
+    for (size_t p = 3; p < 13; ++p) {
+      std::unique_ptr<Solution> analytic_solution =
+          std::make_unique<Xcts::Solutions::Kerr<solution_registrars>>(
+              1., std::array<double, 3>{{0., 0., 0.}},
+              std::array<double, 3>{{0., 0., 0.}});
+      Approx analytic_solution_approx =
+          Approx::custom().epsilon(1.e-2).scale(1.);
+      const domain::creators::Shell domain_creator{
+          2.,
+          10.,
+          0,
+          {{p, p}},
+          true,
+          1.,
+          true,
+          ShellWedges::All,
+          1,
+          // Will fail for lapse because the condition is inconsistent with the
+          // solution
+          std::make_unique<ApparentHorizonBoundaryCondition>(),
+          std::make_unique<AnalyticSolutionBoundaryCondition>(
+              elliptic::BoundaryConditionType::Dirichlet,
+              elliptic::BoundaryConditionType::Dirichlet,
+              elliptic::BoundaryConditionType::Dirichlet)};
+      const auto discretization_errors = test_dg_operator<system, false>(
+          domain_creator, penalty_parameter, std::move(analytic_solution),
+          analytic_solution_approx, {});
+      for (const auto& it : discretization_errors) {
+        const auto& local_element_id = it.first;
+        tmpl::for_each<
+            tmpl::append<typename system::primal_fluxes,
+                         db::wrap_tags_in<DgOperatorAppliedTo,
+                                          typename system::primal_fields>>>(
+            [&local_element_id, &discretization_errors,
+             &discretization_convergences](auto tag_v) {
+              using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
+              get<ConvergenceTag<tag>>(
+                  discretization_convergences[local_element_id])
+                  .push_back(get<ErrorTag<tag>>(
+                      discretization_errors.at(local_element_id)));
+            });
+      }
+    }
+    // Print discretization convergence
+    for (const auto& it : discretization_convergences) {
+      const auto& element_id = it.first;
+      const auto& discretization_convergence_i = it.second;
+      CAPTURE(element_id);
+      tmpl::for_each<typename std::decay_t<decltype(
+          discretization_convergence_i)>::tags_list>(
+          [&discretization_convergence_i](auto tag_v) {
+            using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
+            CAPTURE(db::tag_name<tag>());
+            const auto& discretization_convergence =
+                get<tag>(discretization_convergence_i);
+            CAPTURE(discretization_convergence);
+            CHECK(false);
+          });
+    }
   }
 
   // The following are tests for smaller units of functionality
