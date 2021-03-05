@@ -187,17 +187,6 @@ using ReceiveResidualFromFinerGrid = Actions::ReceiveFieldsFromFinerGrid<
     Dim, db::add_tag_prefix<LinearSolver::Tags::Residual, FieldsTag>,
     OptionsGroup, SourceTag>;
 
-template <typename OptionsGroup>
-struct PreSmoothingLogFormatter {
-  static std::string apply(const size_t iteration_id, const size_t mg_level,
-                           const bool is_coarsest_level) noexcept {
-    return "'" + Options::name<OptionsGroup>() + "' iteration " +
-           get_output(iteration_id + 1) +
-           (is_coarsest_level ? " bottom-smoothing " : " pre-smoothing ") +
-           "done on multigrid-level " + get_output(mg_level) + ".";
-  }
-};
-
 template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
 struct PreparePreSmoothing {
  private:
@@ -268,31 +257,11 @@ struct SkipPostsmoothingAtBottom {
   static std::tuple<db::DataBox<DbTagsList>&&, bool, size_t> apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      Parallel::GlobalCache<Metavariables>& cache,
-      const ElementId<Dim>& element_id, const ActionList /*meta*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
+      const ElementId<Dim>& /*element_id*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     const bool is_coarsest_level =
         not get<Tags::ParentElementId<Dim>>(box).has_value();
-
-    // Do some logging
-    // if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
-    //              ::Verbosity::Verbose)) {
-    //   Parallel::contribute_to_reduction<
-    //       logging::Actions::Log<PreSmoothingLogFormatter<OptionsGroup>>,
-    //       ParallelComponent, Tags::MultigridLevel>(
-    //       Parallel::ReductionData<
-    //           Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-    //           Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-    //           Parallel::ReductionDatum<bool, funcl::AssertEqual<>>>{
-    //           get<Convergence::Tags::IterationId<OptionsGroup>>(box),
-    //           get<Tags::MultigridLevel>(box), is_coarsest_level},
-    //       Parallel::get_parallel_component<ParallelComponent>(
-    //           cache)[element_id],
-    //       Parallel::get_parallel_component<logging::Logger<Metavariables>>(
-    //           cache),
-    //       *get<Parallel::Tags::SectionBase<Tags::MultigridLevel>>(box),
-    //       get<Tags::MultigridLevel>(box));
-    // }
 
     // Record pre-smoothing result for debugging
     db::mutate<db::add_tag_prefix<Tags::PreSmoothingResult, fields_tag>>(
@@ -323,17 +292,6 @@ struct CorrectionInboxTag
   using type = std::map<temporal_id, typename FieldsTag::type>;
 };
 
-template <typename OptionsGroup>
-struct PostSmoothingLogFormatter {
-  static std::string apply(const size_t iteration_id,
-                           const size_t mg_level) noexcept {
-    return "'" + Options::name<OptionsGroup>() + "' iteration " +
-           get_output(iteration_id + 1) +
-           " post-smoothing done on multigrid-level " + get_output(mg_level) +
-           ".";
-  }
-};
-
 template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
 struct SendCorrectionToFinerGrid {
  private:
@@ -348,28 +306,6 @@ struct SendCorrectionToFinerGrid {
       Parallel::GlobalCache<Metavariables>& cache,
       const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    const bool is_coarsest_level =
-        not get<Tags::ParentElementId<Dim>>(box).has_value();
-
-    // if (not is_coarsest_level and
-    //     UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(cache) >=
-    //              ::Verbosity::Verbose)) {
-    //   Parallel::contribute_to_reduction<
-    //       logging::Actions::Log<PostSmoothingLogFormatter<OptionsGroup>>,
-    //       ParallelComponent, Tags::MultigridLevel>(
-    //       Parallel::ReductionData<
-    //           Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>,
-    //           Parallel::ReductionDatum<size_t, funcl::AssertEqual<>>>{
-    //           get<Convergence::Tags::IterationId<OptionsGroup>>(box),
-    //           get<Tags::MultigridLevel>(box)},
-    //       Parallel::get_parallel_component<ParallelComponent>(
-    //           cache)[element_id],
-    //       Parallel::get_parallel_component<logging::Logger<Metavariables>>(
-    //           cache),
-    //       *get<Parallel::Tags::SectionBase<Tags::MultigridLevel>>(box),
-    //       get<Tags::MultigridLevel>(box));
-    // }
-
     const auto& child_ids = get<Tags::ChildElementIds<Dim>>(box);
     db::mutate<db::add_tag_prefix<Tags::PostSmoothingResult, fields_tag>>(
         make_not_null(&box),
