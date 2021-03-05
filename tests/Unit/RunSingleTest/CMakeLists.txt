@@ -32,7 +32,7 @@ add_spectre_executable(
 
   # The following lines list the source files with tests in them to be
   # compiled into the executable.
-  ../Elliptic/DiscontinuousGalerkin/SubdomainOperator/Test_SubdomainOperator.cpp
+  ../Elliptic/DiscontinuousGalerkin/Test_DgOperator.cpp
   )
 
 # Modify which libraries to link for your test case.
@@ -40,25 +40,23 @@ target_link_libraries(
   ${EXECUTABLE}
   PRIVATE
   AnalyticSolutions
-  ConstitutiveRelations
   DataStructures
   DiscontinuousGalerkin
   Domain
   DomainCreators
   DomainStructure
-  Elasticity
-  ElasticityBoundaryConditions
   Elliptic
   EllipticDg
-  EllipticDgSubdomainOperator
   ErrorHandling
   Parallel
   ParallelDg
-  ParallelSchwarz
   Poisson
   PoissonSolutions
   Spectral
   Utilities
+  Xcts
+  XctsBoundaryConditions
+  XctsSolutions
   )
 
 # Core required libraries
