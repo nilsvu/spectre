@@ -80,6 +80,7 @@ struct InitializeFixedSources {
         inertial_coords, typename fixed_sources_tag::type::tags_list{}));
 
     if (db::get<elliptic::dg::Tags::Massive>(box)) {
+      const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
       const auto& det_inv_jacobian = db::get<
           domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>>(box);
       fixed_sources /= get(det_inv_jacobian);
