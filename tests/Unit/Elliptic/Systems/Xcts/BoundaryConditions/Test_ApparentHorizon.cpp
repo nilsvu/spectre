@@ -21,6 +21,8 @@
 #include "Framework/SetupLocalPythonEnvironment.hpp"
 #include "Framework/TestCreation.hpp"
 #include "Framework/TestHelpers.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/NormalDotFlux.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Xcts/Kerr.hpp"
 #include "Utilities/TMPL.hpp"
 
 namespace Xcts::BoundaryConditions {
@@ -98,7 +100,7 @@ void apply_boundary_condition_impl(
               typename ApparentHorizon<ConformalGeometry>::volume_tags>>>>>(
       std::unordered_map<Direction<3>, std::decay_t<decltype(args)>>{
           {direction, std::move(args)}}...);
-  elliptic::apply_boundary_condition<Linearized>(
+  elliptic::apply_boundary_condition<Linearized, void>(
       boundary_condition, box, direction, make_not_null(&conformal_factor),
       make_not_null(&lapse_times_conformal_factor), shift_excess,
       n_dot_conformal_factor_gradient,
@@ -318,6 +320,119 @@ SPECTRE_TEST_CASE("Unit.Xcts.BoundaryConditions.ApparentHorizon",
           {0.5, 2.},
           {-1., 1.}}},
         DataVector{3});
+  }
+  {
+    INFO("Consistency with Kerr solution");
+    // TODO: Add a spin
+    const Solutions::Kerr<> solution{1., {{0., 0., 0.}}, {{0., 0., 0.}}};
+    const ApparentHorizon<Xcts::Geometry::Curved> kerr_horizon{{{0., 0., 0.}}};
+    const double horizon_coord_radius = 2.;
+    const DataVector used_for_size{2};
+    // Choose an arbitrary set of points on the horizon surface
+    MAKE_GENERATOR(generator, 3636894815);
+    std::uniform_real_distribution<> dist_phi(0., 2. * M_PI);
+    std::uniform_real_distribution<> dist_theta(0., M_PI);
+    auto phi = make_with_random_values<DataVector>(
+        make_not_null(&generator), make_not_null(&dist_phi), used_for_size);
+    CAPTURE(phi);
+    auto theta = make_with_random_values<DataVector>(
+        make_not_null(&generator), make_not_null(&dist_theta), used_for_size);
+    CAPTURE(theta);
+    tnsr::I<DataVector, 3> x{used_for_size.size()};
+    get<0>(x) = horizon_coord_radius * cos(phi) * sin(theta);
+    get<1>(x) = horizon_coord_radius * sin(phi) * sin(theta);
+    get<2>(x) = horizon_coord_radius * cos(theta);
+    // Get background fields from the solution
+    const auto background_fields = solution.variables(
+        x,
+        tmpl::list<Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>,
+                   Tags::ConformalChristoffelSecondKind<DataVector, 3,
+                                                        Frame::Inertial>,
+                   gr::Tags::TraceExtrinsicCurvature<DataVector>,
+                   Tags::ShiftBackground<DataVector, 3, Frame::Inertial>,
+                   Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+                       DataVector, 3, Frame::Inertial>>{});
+    const auto& inv_conformal_metric =
+        get<Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>>(
+            background_fields);
+    // Set up the face normal on the horizon surface. It points _into_ the
+    // horizon because the computational domain fills the space outside of it
+    // and the normal always points away from the computational domain. Since
+    // the surface is a coordinate sphere the normalized face normal is just n_i
+    // = -x^i / sqrt(gamma^ij x^i x^j)
+    auto face_normal = make_spherical_face_normal(x, inv_conformal_metric);
+    // Retrieve the expected surface vars and fluxes from the solution
+    const auto surface_vars_expected =
+        variables_from_tagged_tuple(solution.variables(
+            x,
+            tmpl::list<Tags::ConformalFactor<DataVector>,
+                       Tags::LapseTimesConformalFactor<DataVector>,
+                       Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>{}));
+    const auto surface_fluxes_expected =
+        variables_from_tagged_tuple(solution.variables(
+            x,
+            tmpl::list<::Tags::Flux<Tags::ConformalFactor<DataVector>,
+                                    tmpl::size_t<3>, Frame::Inertial>,
+                       ::Tags::Flux<Tags::LapseTimesConformalFactor<DataVector>,
+                                    tmpl::size_t<3>, Frame::Inertial>,
+                       Tags::LongitudinalShiftExcess<DataVector, 3,
+                                                     Frame::Inertial>>{}));
+    Variables<tmpl::list<
+        ::Tags::NormalDotFlux<Tags::ConformalFactor<DataVector>>,
+        ::Tags::NormalDotFlux<Tags::LapseTimesConformalFactor<DataVector>>,
+        ::Tags::NormalDotFlux<
+            Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>>>
+        n_dot_surface_fluxes_expected{used_for_size.size()};
+    normal_dot_flux(make_not_null(&n_dot_surface_fluxes_expected), face_normal,
+                    surface_fluxes_expected);
+    // Apply the boundary conditions, passing garbage for the data that the
+    // boundary conditions are expected to fill
+    auto surface_vars = surface_vars_expected;
+    auto n_dot_surface_fluxes = n_dot_surface_fluxes_expected;
+    get(get<::Tags::NormalDotFlux<Tags::ConformalFactor<DataVector>>>(
+        n_dot_surface_fluxes)) = std::numeric_limits<double>::signaling_NaN();
+    get(get<::Tags::NormalDotFlux<Tags::LapseTimesConformalFactor<DataVector>>>(
+        n_dot_surface_fluxes)) = std::numeric_limits<double>::signaling_NaN();
+    get<0>(get<Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>(
+        surface_vars)) = std::numeric_limits<double>::signaling_NaN();
+    get<1>(get<Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>(
+        surface_vars)) = std::numeric_limits<double>::signaling_NaN();
+    get<2>(get<Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>(
+        surface_vars)) = std::numeric_limits<double>::signaling_NaN();
+    kerr_horizon.apply(
+        make_not_null(&get<Tags::ConformalFactor<DataVector>>(surface_vars)),
+        make_not_null(
+            &get<Tags::LapseTimesConformalFactor<DataVector>>(surface_vars)),
+        make_not_null(&get<Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>(
+            surface_vars)),
+        make_not_null(
+            &get<::Tags::NormalDotFlux<Tags::ConformalFactor<DataVector>>>(
+                n_dot_surface_fluxes)),
+        make_not_null(&get<::Tags::NormalDotFlux<
+                          Tags::LapseTimesConformalFactor<DataVector>>>(
+            n_dot_surface_fluxes)),
+        make_not_null(&get<::Tags::NormalDotFlux<
+                          Tags::ShiftExcess<DataVector, 3, Frame::Inertial>>>(
+            n_dot_surface_fluxes)),
+        face_normal, x,
+        get<gr::Tags::TraceExtrinsicCurvature<DataVector>>(background_fields),
+        get<Tags::ShiftBackground<DataVector, 3, Frame::Inertial>>(
+            background_fields),
+        get<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+            DataVector, 3, Frame::Inertial>>(background_fields),
+        get<Tags::InverseConformalMetric<DataVector, 3, Frame::Inertial>>(
+            background_fields),
+        get<Tags::ConformalChristoffelSecondKind<DataVector, 3,
+                                                 Frame::Inertial>>(
+            background_fields));
+    // Check the result. The lapse condition isn't consistent with the solution
+    // so we ignore it
+    get<::Tags::NormalDotFlux<Tags::LapseTimesConformalFactor<DataVector>>>(
+        n_dot_surface_fluxes) =
+        get<::Tags::NormalDotFlux<Tags::LapseTimesConformalFactor<DataVector>>>(
+            n_dot_surface_fluxes_expected);
+    CHECK_VARIABLES_APPROX(surface_vars, surface_vars_expected);
+    CHECK_VARIABLES_APPROX(n_dot_surface_fluxes, n_dot_surface_fluxes_expected);
   }
 }
 
