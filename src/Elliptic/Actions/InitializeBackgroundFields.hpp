@@ -68,8 +68,13 @@ struct InitializeBackgroundFields {
     const auto& background = db::get<BackgroundTag>(box);
     const auto& inertial_coords =
         get<domain::Tags::Coordinates<Dim, Frame::Inertial>>(box);
-    auto background_fields = variables_from_tagged_tuple(background.variables(
-        inertial_coords, typename background_fields_tag::tags_list{}));
+    const auto& mesh = get<domain::Tags::Mesh<Dim>>(box);
+    const auto& inv_jacobian = get<
+        domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>>(
+        box);
+    auto background_fields = variables_from_tagged_tuple(
+        background.variables(inertial_coords, mesh, inv_jacobian,
+                             typename background_fields_tag::tags_list{}));
     ::Initialization::mutate_assign<simple_tags>(make_not_null(&box),
                                                  std::move(background_fields));
     return {std::move(box)};
