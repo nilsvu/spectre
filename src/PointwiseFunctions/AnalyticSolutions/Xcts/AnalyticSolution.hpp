@@ -7,7 +7,7 @@
 
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Parallel/CharmPupable.hpp"
-#include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/AnalyticData.hpp"
 #include "Utilities/FakeVirtual.hpp"
 #include "Utilities/Registration.hpp"
 #include "Utilities/TMPL.hpp"
@@ -31,9 +31,9 @@ namespace Solutions {
  * `AnalyticSolution`.
  */
 template <typename Registrars>
-class AnalyticSolution : public ::AnalyticData<3, Registrars> {
+class AnalyticSolution : public Xcts::AnalyticData::AnalyticData<Registrars> {
  private:
-  using Base = ::AnalyticData<3, Registrars>;
+  using Base = Xcts::AnalyticData::AnalyticData<Registrars>;
 
  protected:
   /// \cond
@@ -62,7 +62,8 @@ class AnalyticSolution : public ::AnalyticData<3, Registrars> {
     return call_with_dynamic_type<
         tuples::TaggedTuple<RequestedTags...>,
         tmpl::filter<creatable_classes,
-                     std::is_base_of<AnalyticSolution<Registrars>, tmpl::_1>>>(
+                     std::is_base_of<tmpl::pin<AnalyticSolution<Registrars>>,
+                                     tmpl::_1>>>(
         this, [&x](auto* const derived) noexcept {
           return derived->variables(x, tmpl::list<RequestedTags...>{});
         });
