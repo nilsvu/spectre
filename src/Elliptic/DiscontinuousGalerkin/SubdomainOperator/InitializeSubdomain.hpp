@@ -248,9 +248,10 @@ struct InitializeSubdomain {
                                          tmpl::list<>>) {
           overlap_background_fields.emplace(
               overlap_id,
-              db::get<BackgroundTag>(box).variables(
+              variables_from_tagged_tuple(db::get<BackgroundTag>(box).variables(
                   neighbor_inertial_coords, neighbor_mesh,
-                  neighbor_inv_jacobian, typename System::background_fields{}));
+                  neighbor_inv_jacobian,
+                  typename System::background_fields{})));
         }
         // Faces and mortars, internal and external
         std::unordered_map<Direction<Dim>, tnsr::I<DataVector, Dim>>
