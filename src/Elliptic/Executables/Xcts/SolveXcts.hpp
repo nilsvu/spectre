@@ -48,6 +48,7 @@
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/AnalyticData.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/Binary.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Flatness.hpp"
@@ -104,13 +105,16 @@ struct Metavariables {
   using analytic_solution_registrars =
       tmpl::list<Xcts::Solutions::Registrars::Schwarzschild,
                  Xcts::Solutions::Registrars::Kerr>;
-  using background_tag = elliptic::Tags::Background<
-      Xcts::AnalyticData::AnalyticData<analytic_solution_registrars>>;
+  using analytic_data_registrars = tmpl::list<
+      Xcts::AnalyticData::Registrars::Binary<analytic_solution_registrars>>;
+  using background_tag =
+      elliptic::Tags::Background<Xcts::AnalyticData::AnalyticData<tmpl::append<
+          analytic_solution_registrars, analytic_data_registrars>>>;
 
   // List the possible initial guesses
   using initial_guess_registrars =
       tmpl::append<tmpl::list<Xcts::Solutions::Registrars::Flatness>,
-                   analytic_solution_registrars>;
+                   analytic_solution_registrars, analytic_data_registrars>;
   using initial_guess_tag = elliptic::Tags::InitialGuess<
       ::AnalyticData<volume_dim, initial_guess_registrars>>;
 
@@ -349,6 +353,9 @@ static const std::vector<void (*)()> charm_init_node_funcs{
         metavariables::background_tag::type::element_type>,
     &Parallel::register_derived_classes_with_charm<
         metavariables::initial_guess_tag::type::element_type>,
+    &Parallel::register_derived_classes_with_charm<
+        Xcts::Solutions::AnalyticSolution<
+            typename metavariables::analytic_solution_registrars>>,
     &Parallel::register_derived_classes_with_charm<
         metavariables::system::boundary_conditions_base>,
     &Parallel::register_derived_classes_with_charm<

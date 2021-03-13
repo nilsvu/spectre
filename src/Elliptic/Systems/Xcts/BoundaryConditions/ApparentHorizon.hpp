@@ -14,6 +14,7 @@
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
 #include "Elliptic/Systems/Xcts/Geometry.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "Options/Auto.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
@@ -33,12 +34,45 @@ struct ApparentHorizonImpl {
       "Impose the boundary is a quasi-equilibrium apparent horizon. The "
       "boundary must be a coordinate-sphere.";
 
+  struct Center {
+    using type = std::array<double, 3>;
+    static constexpr Options::String help =
+        "The center of the coordinate sphere representing the apparent-horizon "
+        "surface";
+  };
   struct Spin {
     using type = std::array<double, 3>;
     static constexpr Options::String help = "The spin parameter on the surface";
   };
+  struct Mass {
+    using type = Options::Auto<double>;
+    static constexpr Options::String help =
+        "Mass of a corresponding Kerr solution. When you provide a mass, the "
+        "corresponding Kerr solution's expansion at the excision boundary is "
+        "used instead of zero (negative-expansion boundary conditions, not "
+        "implemented yet). Also, the corresponding Kerr solution's lapse at "
+        "the excision boundary is imposed as a Dirichlet condition on the "
+        "lapse, instead of a zero von-Neumann boundary condition.";
+  };
+  struct NormalDotConformalFactorGradient {
+    using type = Options::Auto<double>;
+    static constexpr Options::String help =
+        "Clamp n.grad(psi) to a particular value. Set to 'Auto' to use the "
+        "apparent-horizon condition. This option can help to achieve an "
+        "approximate solution before solving for the highly non-linear "
+        "apparent-horizon condition.";
+  };
+  struct ConformalFactor {
+    using type = Options::Auto<double>;
+    static constexpr Options::String help =
+        "Clamp the conformal factor to a particular value. Set to 'Auto' to "
+        "use the apparent-horizon condition. This option can help to achieve "
+        "an approximate solution before solving for the highly non-linear "
+        "apparent-horizon condition.";
+  };
 
-  using options = tmpl::list<Spin>;
+  using options = tmpl::list<Center, Spin, Mass,
+                             NormalDotConformalFactorGradient, ConformalFactor>;
 
   ApparentHorizonImpl() = default;
   ApparentHorizonImpl(const ApparentHorizonImpl&) noexcept = default;
@@ -47,9 +81,18 @@ struct ApparentHorizonImpl {
   ApparentHorizonImpl& operator=(ApparentHorizonImpl&&) noexcept = default;
   ~ApparentHorizonImpl() noexcept = default;
 
-  ApparentHorizonImpl(const std::array<double, 3>& spin) noexcept;
+  ApparentHorizonImpl(
+      std::array<double, 3> center, std::array<double, 3> spin,
+      std::optional<double> mass,
+      std::optional<double> custom_n_dot_conformal_factor_gradient,
+      std::optional<double> custom_conformal_factor) noexcept;
 
+  const std::array<double, 3>& center() const noexcept;
   const std::array<double, 3>& spin() const noexcept;
+  const std::optional<double>& mass() const noexcept;
+  const std::optional<double>& custom_n_dot_conformal_factor_gradient()
+      const noexcept;
+  const std::optional<double>& custom_conformal_factor() const noexcept;
 
   using argument_tags = tmpl::flatten<tmpl::list<
       ::Tags::Normalized<
@@ -165,7 +208,11 @@ struct ApparentHorizonImpl {
   void pup(PUP::er& p) noexcept;
 
  private:
-  std::array<double, 3> spin_;
+  std::array<double, 3> center_{};
+  std::array<double, 3> spin_{};
+  std::optional<double> mass_{};
+  std::optional<double> custom_n_dot_conformal_factor_gradient_{};
+  std::optional<double> custom_conformal_factor_{};
 };
 
 template <Xcts::Geometry ConformalGeometry>

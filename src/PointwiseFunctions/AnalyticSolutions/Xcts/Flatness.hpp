@@ -67,7 +67,13 @@ class Flatness : public AnalyticSolution<Registrars> {
       const tnsr::I<DataType, 3, Frame::Inertial>& x,
       tmpl::list<RequestedTags...> /*meta*/) const noexcept {
     using supported_tags_zero = tmpl::list<
+        ::Tags::deriv<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
+                      tmpl::size_t<3>, Frame::Inertial>,
+        Tags::ConformalChristoffelFirstKind<DataType, 3, Frame::Inertial>,
+        Tags::ConformalChristoffelSecondKind<DataType, 3, Frame::Inertial>,
+        Tags::ConformalChristoffelContracted<DataType, 3, Frame::Inertial>,
         gr::Tags::TraceExtrinsicCurvature<DataType>,
+        ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataType>>,
         ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataType>,
                       tmpl::size_t<3>, Frame::Inertial>,
         ::Tags::deriv<Tags::ConformalFactor<DataType>, tmpl::size_t<3>,
@@ -87,10 +93,13 @@ class Flatness : public AnalyticSolution<Registrars> {
                    Tags::LapseTimesConformalFactor<DataType>>;
     using supported_tags = tmpl::append<
         supported_tags_zero, supported_tags_one,
-        tmpl::list<Tags::ConformalMetric<DataType, 3, Frame::Inertial>>>;
-    static_assert(tmpl::size<tmpl::list_difference<tmpl::list<RequestedTags...>,
-                                                   supported_tags>>::value == 0,
-                  "The requested tag is not supported");
+        tmpl::list<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
+                   Tags::InverseConformalMetric<DataType, 3, Frame::Inertial>>>;
+    static_assert(
+        std::is_same_v<
+            tmpl::list_difference<tmpl::list<RequestedTags...>, supported_tags>,
+            tmpl::list<>>,
+        "Not all requested tags are supported");
     const auto make_value = [&x](auto tag_v) noexcept {
       using tag = std::decay_t<decltype(tag_v)>;
       if constexpr (tmpl::list_contains_v<supported_tags_zero, tag>) {
@@ -100,6 +109,14 @@ class Flatness : public AnalyticSolution<Registrars> {
       } else if constexpr (std::is_same_v<
                                tag, Tags::ConformalMetric<DataType, 3,
                                                           Frame::Inertial>>) {
+        auto flat_metric = make_with_value<typename tag::type>(x, 0.);
+        get<0, 0>(flat_metric) = 1.;
+        get<1, 1>(flat_metric) = 1.;
+        get<2, 2>(flat_metric) = 1.;
+        return flat_metric;
+      } else if constexpr (std::is_same_v<tag,
+                                          Tags::InverseConformalMetric<
+                                              DataType, 3, Frame::Inertial>>) {
         auto flat_metric = make_with_value<typename tag::type>(x, 0.);
         get<0, 0>(flat_metric) = 1.;
         get<1, 1>(flat_metric) = 1.;

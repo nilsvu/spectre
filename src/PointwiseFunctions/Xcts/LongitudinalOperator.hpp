@@ -9,6 +9,37 @@
 #include "Utilities/Gsl.hpp"
 
 namespace Xcts {
+
+template <typename DataType>
+void shift_strain(const gsl::not_null<tnsr::ii<DataType, 3>*> result,
+                  const tnsr::iJ<DataType, 3>& deriv_shift,
+                  const tnsr::ii<DataType, 3>& metric,
+                  const tnsr::ijj<DataType, 3>& deriv_metric,
+                  const tnsr::ijj<DataType, 3>& christoffel_first_kind,
+                  const tnsr::I<DataType, 3>& shift) noexcept {
+  auto deriv_shift_lowered =
+      make_with_value<tnsr::ij<DataType, 3>>(deriv_shift, 0.);
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      for (size_t k = 0; k < 3; ++k) {
+        deriv_shift_lowered.get(i, j) +=
+            metric.get(j, k) * deriv_shift.get(i, k) +
+            shift.get(k) * deriv_metric.get(i, j, k);
+      }
+    }
+  }
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      result->get(i, j) =
+          0.5 * (deriv_shift_lowered.get(i, j) + deriv_shift_lowered.get(j, i));
+      for (size_t k = 0; k < 3; ++k) {
+        result->get(i, j) -=
+            christoffel_first_kind.get(k, i, j) * shift.get(k);
+      }
+    }
+  }
+}
+
 /*!
  * \brief The longitudinal operator, or vector gradient, \f$(L\beta)^{ij}\f$
  *

@@ -288,6 +288,12 @@ void KerrVariables<DataType>::operator()(
     Tags::ShiftBackground<DataType, 3, Frame::Inertial> /*meta*/)
     const noexcept {
   std::fill(shift_background->begin(), shift_background->end(), 0.);
+  // *shift_background =
+  //     get<gr::Tags::Shift<3, Frame::Inertial, DataType>>(kerr_schild.variables(
+  //         x, 0., tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DataType>>{}));
+  // for (size_t i = 0; i < 3; ++i) {
+  //   shift_background->get(i) *= 0.2;
+  // }
 }
 
 template <typename DataType>
@@ -298,6 +304,9 @@ void KerrVariables<DataType>::operator()(
   *shift_excess =
       get<gr::Tags::Shift<3, Frame::Inertial, DataType>>(kerr_schild.variables(
           x, 0., tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DataType>>{}));
+  // for (size_t i = 0; i < 3; ++i) {
+  //   shift_excess->get(i) *= 0.8;
+  // }
 }
 
 template <typename DataType>
@@ -305,7 +314,12 @@ void KerrVariables<DataType>::operator()(
     const gsl::not_null<tnsr::I<DataType, 3>*> shift,
     const gsl::not_null<Cache*> cache,
     gr::Tags::Shift<3, Frame::Inertial, DataType> /*meta*/) const noexcept {
+  const auto& shift_background =
+      cache->get_var(Tags::ShiftBackground<DataType, 3, Frame::Inertial>{});
   *shift = cache->get_var(Tags::ShiftExcess<DataType, 3, Frame::Inertial>{});
+  for (size_t i = 0; i < 3; ++i) {
+    shift->get(i) += shift_background.get(i);
+  }
 }
 
 template <typename DataType>
@@ -322,6 +336,12 @@ void KerrVariables<DataType>::operator()(
   const auto& deriv_shift =
       get<::Tags::deriv<gr::Tags::Shift<3, Frame::Inertial, DataType>,
                         tmpl::size_t<3>, Frame::Inertial>>(vars);
+  // for (size_t i = 0; i < shift.size(); ++i) {
+  //   shift[i] *= 0.8;
+  // }
+  // for (size_t i = 0; i < deriv_shift.size(); ++i) {
+  //   deriv_shift[i] *= 0.8;
+  // }
   const auto& conformal_metric = cache->get_var(
       Xcts::Tags::ConformalMetric<DataType, 3, Frame::Inertial>{});
   const auto& deriv_conformal_metric = cache->get_var(
@@ -329,26 +349,9 @@ void KerrVariables<DataType>::operator()(
                     tmpl::size_t<3>, Frame::Inertial>{});
   const auto& conformal_christoffel_first_kind = cache->get_var(
       Tags::ConformalChristoffelFirstKind<DataType, 3, Frame::Inertial>{});
-  auto deriv_shift_lowered = make_with_value<tnsr::ij<DataType, 3>>(x, 0.);
-  for (size_t i = 0; i < 3; ++i) {
-    for (size_t j = 0; j < 3; ++j) {
-      for (size_t k = 0; k < 3; ++k) {
-        deriv_shift_lowered.get(i, j) +=
-            conformal_metric.get(j, k) * deriv_shift.get(i, k) +
-            shift.get(k) * deriv_conformal_metric.get(i, j, k);
-      }
-    }
-  }
-  for (size_t i = 0; i < 3; ++i) {
-    for (size_t j = 0; j <= i; ++j) {
-      shift_strain->get(i, j) =
-          0.5 * (deriv_shift_lowered.get(i, j) + deriv_shift_lowered.get(j, i));
-      for (size_t k = 0; k < 3; ++k) {
-        shift_strain->get(i, j) -=
-            conformal_christoffel_first_kind.get(k, i, j) * shift.get(k);
-      }
-    }
-  }
+  Xcts::shift_strain(shift_strain, deriv_shift, conformal_metric,
+                     deriv_conformal_metric, conformal_christoffel_first_kind,
+                     shift);
 }
 
 template <typename DataType>
@@ -360,6 +363,55 @@ void KerrVariables<DataType>::operator()(
         DataType, 3, Frame::Inertial> /*meta*/) const noexcept {
   std::fill(longitudinal_shift_background_minus_dt_conformal_metric->begin(),
             longitudinal_shift_background_minus_dt_conformal_metric->end(), 0.);
+  // const auto vars = kerr_schild.variables(
+  //     x, 0.,
+  //     tmpl::list<gr::Tags::Shift<3, Frame::Inertial, DataType>,
+  //                ::Tags::deriv<gr::Tags::Shift<3, Frame::Inertial, DataType>,
+  //                              tmpl::size_t<3>, Frame::Inertial>>{});
+  // auto shift = get<gr::Tags::Shift<3, Frame::Inertial, DataType>>(vars);
+  // auto deriv_shift =
+  //     get<::Tags::deriv<gr::Tags::Shift<3, Frame::Inertial, DataType>,
+  //                       tmpl::size_t<3>, Frame::Inertial>>(vars);
+  // for (size_t i = 0; i < shift.size(); ++i) {
+  //   shift[i] *= 0.2;
+  // }
+  // for (size_t i = 0; i < deriv_shift.size(); ++i) {
+  //   deriv_shift[i] *= 0.2;
+  // }
+  // const auto& conformal_metric = cache->get_var(
+  //     Xcts::Tags::ConformalMetric<DataType, 3, Frame::Inertial>{});
+  // const auto& deriv_conformal_metric = cache->get_var(
+  //     ::Tags::deriv<Xcts::Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
+  //                   tmpl::size_t<3>, Frame::Inertial>{});
+  // const auto& conformal_christoffel_first_kind = cache->get_var(
+  //     Tags::ConformalChristoffelFirstKind<DataType, 3, Frame::Inertial>{});
+  // auto deriv_shift_lowered = make_with_value<tnsr::ij<DataType, 3>>(x, 0.);
+  // for (size_t i = 0; i < 3; ++i) {
+  //   for (size_t j = 0; j < 3; ++j) {
+  //     for (size_t k = 0; k < 3; ++k) {
+  //       deriv_shift_lowered.get(i, j) +=
+  //           conformal_metric.get(j, k) * deriv_shift.get(i, k) +
+  //           shift.get(k) * deriv_conformal_metric.get(i, j, k);
+  //     }
+  //   }
+  // }
+  // auto shift_strain = make_with_value<tnsr::ii<DataType, 3>>(x, 0.);
+  // for (size_t i = 0; i < 3; ++i) {
+  //   for (size_t j = 0; j <= i; ++j) {
+  //     shift_strain.get(i, j) =
+  //         0.5 * (deriv_shift_lowered.get(i, j) + deriv_shift_lowered.get(j, i));
+  //     for (size_t k = 0; k < 3; ++k) {
+  //       shift_strain.get(i, j) -=
+  //           conformal_christoffel_first_kind.get(k, i, j) * shift.get(k);
+  //     }
+  //   }
+  // }
+
+  // const auto& inv_conformal_metric = cache->get_var(
+  //     Tags::InverseConformalMetric<DataType, 3, Frame::Inertial>{});
+  // Xcts::longitudinal_operator(
+  //     longitudinal_shift_background_minus_dt_conformal_metric, shift_strain,
+  //     inv_conformal_metric);
 }
 
 template <typename DataType>
@@ -383,8 +435,14 @@ void KerrVariables<DataType>::operator()(
     const gsl::not_null<Cache*> cache,
     Tags::LongitudinalShiftMinusDtConformalMetricSquare<DataType> /*meta*/)
     const noexcept {
-  const auto& longitudinal_shift = cache->get_var(
+  auto longitudinal_shift = cache->get_var(
       Tags::LongitudinalShiftExcess<DataType, 3, Frame::Inertial>{});
+  const auto& longitudinal_shift_background =
+      cache->get_var(Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+                     DataType, 3, Frame::Inertial>{});
+  for (size_t i = 0; i < longitudinal_shift.size(); ++i) {
+    longitudinal_shift[i] += longitudinal_shift_background[i];
+  }
   const auto& conformal_metric =
       cache->get_var(Tags::ConformalMetric<DataType, 3, Frame::Inertial>{});
   Xcts::detail::fully_contract(

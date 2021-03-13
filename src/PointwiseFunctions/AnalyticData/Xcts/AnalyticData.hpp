@@ -10,6 +10,7 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "Parallel/CharmPupable.hpp"
@@ -36,16 +37,18 @@ struct DerivativeVariables {
       Tags::ConformalRicciScalar<DataVector>,
       ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
                     tmpl::size_t<Dim>, Frame::Inertial>,
-      Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector>>;
+    //   Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector>,
+      ::Tags::div<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+          DataVector, 3, Frame::Inertial>>>;
 
-  const tnsr::I<DataVector, Dim>& x;
   const Mesh<Dim>& mesh;
   const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
       inv_jacobian;
   const tnsr::II<DataVector, Dim>& inv_conformal_metric;
   const tnsr::Ijj<DataVector, Dim>& conformal_christoffel_second_kind;
   const Scalar<DataVector>& extrinsic_curvature_trace;
-  const tnsr::I<DataVector, Dim>& shift;
+//   const tnsr::I<DataVector, Dim>& shift;
+  const tnsr::II<DataVector, Dim>& longitudinal_shift_background;
 
   void operator()(gsl::not_null<tnsr::iJkk<DataVector, Dim>*>
                       deriv_conformal_christoffel_second_kind,
@@ -69,12 +72,17 @@ struct DerivativeVariables {
       ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
                     tmpl::size_t<Dim>, Frame::Inertial> /*meta*/)
       const noexcept;
+//   void operator()(
+//       gsl::not_null<Scalar<DataVector>*>
+//           shift_dot_deriv_extrinsic_curvature_trace,
+//       gsl::not_null<Cache*> cache,
+//       Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector> /*meta*/)
+//       const noexcept;
   void operator()(
-      gsl::not_null<Scalar<DataVector>*>
-          shift_dot_deriv_extrinsic_curvature_trace,
+      gsl::not_null<tnsr::I<DataVector, Dim>*> div_longitudinal_shift_background,
       gsl::not_null<Cache*> cache,
-      Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector> /*meta*/)
-      const noexcept;
+      ::Tags::div<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+          DataVector, 3, Frame::Inertial>> /*meta*/) const noexcept;
 };
 
 }  // namespace detail
@@ -141,7 +149,9 @@ class AnalyticData : public ::AnalyticData<3, Registrars> {
                  Tags::ConformalChristoffelSecondKind<DataVector, Dim,
                                                       Frame::Inertial>,
                  gr::Tags::TraceExtrinsicCurvature<DataVector>,
-                 gr::Tags::Shift<Dim, Frame::Inertial, DataVector>>>{});
+                //  gr::Tags::Shift<Dim, Frame::Inertial, DataVector>,
+                 Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+                     DataVector, 3, Frame::Inertial>>>{});
       tmpl::for_each<pointwise_tags>(
           [&vars, &pointwise_vars](auto tag_v) noexcept {
             using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;
@@ -151,15 +161,17 @@ class AnalyticData : public ::AnalyticData<3, Registrars> {
       typename DerivativeVarsComputer::Cache derivative_vars_cache{
           num_points,
           DerivativeVarsComputer{
-              x, mesh, inv_jacobian,
+              mesh, inv_jacobian,
               get<Tags::InverseConformalMetric<
                   DataVector, Dim, Frame::Inertial>>(pointwise_vars),
               get<Tags::ConformalChristoffelSecondKind<
                   DataVector, Dim, Frame::Inertial>>(pointwise_vars),
               get<gr::Tags::TraceExtrinsicCurvature<DataVector>>(
                   pointwise_vars),
-              get<gr::Tags::Shift<Dim, Frame::Inertial, DataVector>>(
-                  pointwise_vars)}};
+              //   get<gr::Tags::Shift<Dim, Frame::Inertial, DataVector>>(
+              //       pointwise_vars),
+              get<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+                  DataVector, 3, Frame::Inertial>>(pointwise_vars)}};
       tmpl::for_each<derivative_tags>(
           [&vars, &derivative_vars_cache](auto tag_v) noexcept {
             using tag = tmpl::type_from<std::decay_t<decltype(tag_v)>>;

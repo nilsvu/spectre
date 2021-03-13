@@ -52,19 +52,19 @@ void test_solution(const double mass, const std::array<double, 3> spin,
     CHECK(solution.dimensionless_spin() == spin);
     CHECK(solution.center() == center);
   }
-  // {
-  //   INFO("Semantics");
-  //   test_serialization(solution);
-  //   test_copy_semantics(solution);
-  //   auto move_solution = solution;
-  //   test_move_semantics(std::move(move_solution), solution);
-  // }
+  {
+    INFO("Semantics");
+    test_serialization(solution);
+    test_copy_semantics(solution);
+    auto move_solution = solution;
+    test_move_semantics(std::move(move_solution), solution);
+  }
   {
     INFO("Verify the solution solves the XCTS system");
     const Mesh<3> mesh{12, Spectral::Basis::Legendre,
                        Spectral::Quadrature::GaussLobatto};
-    const double inner_radius = 2.;
-    const double outer_radius = 6.;
+    const double inner_radius = 0.86;
+    const double outer_radius = 2.;
     using AffineMap = domain::CoordinateMaps::Affine;
     using AffineMap3D =
         domain::CoordinateMaps::ProductOf3Maps<AffineMap, AffineMap, AffineMap>;
@@ -82,34 +82,46 @@ void test_solution(const double mass, const std::array<double, 3> spin,
         dynamic_cast<const Xcts::AnalyticData::AnalyticData<
             tmpl::list<Xcts::Solutions::Registrars::Kerr>>&>(*created);
     {
-      INFO("Hamiltonian equation");
-      using system = Xcts::FirstOrderSystem<Xcts::Equations::Hamiltonian,
-                                            Xcts::Geometry::Curved>;
-      const auto background_fields =
-          analytic_data.variables(inertial_coords, mesh, inv_jacobian,
-                                  typename system::background_fields{});
-      FirstOrderEllipticSolutionsTestHelpers::verify_solution<system>(
-          solution, mesh, coord_map, 1.e-7,
-          tuples::apply<typename system::fluxes_computer::argument_tags>(
-              get_items, background_fields),
-          tuples::apply<typename system::sources_computer::argument_tags>(
-              get_items, background_fields));
+      tnsr::I<DataVector, 3> x_inner{size_t{1}};
+      get<0>(x_inner) = inner_radius;
+      get<1>(x_inner) = 0.;
+      get<2>(x_inner) = 0.;
+      const auto lapse = get<Tags::LapseTimesConformalFactor<DataVector>>(
+          analytic_data.variables(
+              x_inner,
+              tmpl::list<Tags::LapseTimesConformalFactor<DataVector>>{}));
+      CAPTURE(lapse);
+      CHECK(false);
     }
-    {
-      INFO("Hamiltonian and lapse equations");
-      using system =
-          Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianAndLapse,
-                                 Xcts::Geometry::Curved>;
-      const auto background_fields =
-          analytic_data.variables(inertial_coords, mesh, inv_jacobian,
-                                  typename system::background_fields{});
-      FirstOrderEllipticSolutionsTestHelpers::verify_solution<system>(
-          solution, mesh, coord_map, 1.e-7,
-          tuples::apply<typename system::fluxes_computer::argument_tags>(
-              get_items, background_fields),
-          tuples::apply<typename system::sources_computer::argument_tags>(
-              get_items, background_fields));
-    }
+    // {
+    //   INFO("Hamiltonian equation");
+    //   using system = Xcts::FirstOrderSystem<Xcts::Equations::Hamiltonian,
+    //                                         Xcts::Geometry::Curved>;
+    //   const auto background_fields =
+    //       analytic_data.variables(inertial_coords, mesh, inv_jacobian,
+    //                               typename system::background_fields{});
+    //   FirstOrderEllipticSolutionsTestHelpers::verify_solution<system>(
+    //       solution, mesh, coord_map, 1.e-7,
+    //       tuples::apply<typename system::fluxes_computer::argument_tags>(
+    //           get_items, background_fields),
+    //       tuples::apply<typename system::sources_computer::argument_tags>(
+    //           get_items, background_fields));
+    // }
+    // {
+    //   INFO("Hamiltonian and lapse equations");
+    //   using system =
+    //       Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianAndLapse,
+    //                              Xcts::Geometry::Curved>;
+    //   const auto background_fields =
+    //       analytic_data.variables(inertial_coords, mesh, inv_jacobian,
+    //                               typename system::background_fields{});
+    //   FirstOrderEllipticSolutionsTestHelpers::verify_solution<system>(
+    //       solution, mesh, coord_map, 1.e-7,
+    //       tuples::apply<typename system::fluxes_computer::argument_tags>(
+    //           get_items, background_fields),
+    //       tuples::apply<typename system::sources_computer::argument_tags>(
+    //           get_items, background_fields));
+    // }
     {
       INFO("Full XCTS equations");
       using system =
@@ -134,10 +146,10 @@ SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Xcts.Kerr",
                   "[PointwiseFunctions][Unit]") {
   pypp::SetupLocalPythonEnvironment local_python_env{
       "PointwiseFunctions/AnalyticSolutions/Xcts"};
-  test_solution(1., {{0.2, 0.1, 0.3}}, {{0., 0., 0.}},
+  test_solution(0.43, {{0., 0., 0.}}, {{0., 0., 0.}},
                 "Kerr:\n"
-                "  Mass: 1.\n"
-                "  Spin: [0.2, 0.1, 0.3]\n"
+                "  Mass: 0.43\n"
+                "  Spin: [0., 0., 0.]\n"
                 "  Center: [0., 0., 0.]");
 }
 

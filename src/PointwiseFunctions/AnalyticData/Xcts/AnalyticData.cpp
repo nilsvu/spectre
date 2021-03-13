@@ -13,6 +13,8 @@
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
+#include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.tpp"
 #include "Options/ParseOptions.hpp"
@@ -87,17 +89,35 @@ void DerivativeVariables::operator()(
                         tmpl::size_t<Dim>, Frame::Inertial>>(derivs);
 }
 
+// void DerivativeVariables::operator()(
+//     const gsl::not_null<Scalar<DataVector>*>
+//         shift_dot_deriv_extrinsic_curvature_trace,
+//     const gsl::not_null<Cache*> cache,
+//     Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector> /*meta*/)
+//     const noexcept {
+//   const auto& deriv_extrinsic_curvature_trace = cache->get_var(
+//       ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
+//                     tmpl::size_t<3>, Frame::Inertial>{});
+//   dot_product(shift_dot_deriv_extrinsic_curvature_trace, shift,
+//               deriv_extrinsic_curvature_trace);
+// }
+
 void DerivativeVariables::operator()(
-    const gsl::not_null<Scalar<DataVector>*>
-        shift_dot_deriv_extrinsic_curvature_trace,
-    const gsl::not_null<Cache*> cache,
-    Tags::ShiftDotDerivExtrinsicCurvatureTrace<DataVector> /*meta*/)
-    const noexcept {
-  const auto& deriv_extrinsic_curvature_trace = cache->get_var(
-      ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
-                    tmpl::size_t<3>, Frame::Inertial>{});
-  dot_product(shift_dot_deriv_extrinsic_curvature_trace, shift,
-              deriv_extrinsic_curvature_trace);
+    const gsl::not_null<tnsr::I<DataVector, Dim>*>
+        div_longitudinal_shift_background,
+    const gsl::not_null<Cache*> /*cache*/,
+    ::Tags::div<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+        DataVector, Dim, Frame::Inertial>> /*meta*/) const noexcept {
+  Variables<tmpl::list<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+      DataVector, 3, Frame::Inertial>>>
+      vars{mesh.number_of_grid_points()};
+  get<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<DataVector, 3,
+                                                              Frame::Inertial>>(
+      vars) = longitudinal_shift_background;
+  const auto divs = divergence(vars, mesh, inv_jacobian);
+  *div_longitudinal_shift_background =
+      get<::Tags::div<Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<
+          DataVector, 3, Frame::Inertial>>>(divs);
 }
 
 }  // namespace Xcts::AnalyticData::detail

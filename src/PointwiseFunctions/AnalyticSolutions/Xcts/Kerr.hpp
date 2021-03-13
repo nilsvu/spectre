@@ -246,6 +246,11 @@ class Kerr : public AnalyticSolution<Registrars>,
                                        VarsComputer{x, *this}};
     return {cache.get_var(RequestedTags{})...};
   }
+
+  void pup(PUP::er& p) noexcept override {
+    gr::Solutions::KerrSchild::pup(p);
+    AnalyticSolution<Registrars>::pup(p);
+  }
 };
 
 /// \cond
