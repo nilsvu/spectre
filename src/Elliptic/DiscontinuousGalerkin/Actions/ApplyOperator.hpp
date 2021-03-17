@@ -40,6 +40,8 @@
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
+#include "Parallel/Printf.hpp"
+
 namespace elliptic::dg::Actions {
 // The individual actions in this namespace are not exposed publicly because
 // they don't work on their own. Instead, the public interface (defined below)
@@ -416,7 +418,7 @@ struct ReceiveMortarDataAndApplyOperator<
   static std::tuple<db::DataBox<DbTags>&&> apply(
       db::DataBox<DbTags>& box, tuples::TaggedTuple<InboxTags...>& inboxes,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ArrayIndex& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     const auto& temporal_id = get<TemporalIdTag>(box);
 
@@ -463,6 +465,14 @@ struct ReceiveMortarDataAndApplyOperator<
         db::get<elliptic::dg::Tags::Massive>(box), temporal_id,
         std::forward_as_tuple(db::get<SourcesArgsTags>(box)...));
 
+    {
+      double norm = 0.;
+      for (size_t i = 0; i < get<OperatorAppliedToFieldsTag>(box).size(); ++i) {
+        norm += square(get<OperatorAppliedToFieldsTag>(box).data()[i]);
+      }
+      norm = sqrt(norm);
+      Parallel::printf("%s Ax: %e\n", element_id, norm);
+    }
     return {std::move(box)};
   }
 };
@@ -578,6 +588,15 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource<
               boundary_condition, box, direction, fields_and_fluxes...);
         };
 
+    {
+      double norm = 0.;
+      for (size_t i = 0; i < get<FixedSourcesTag>(box).size(); ++i) {
+        norm += square(get<FixedSourcesTag>(box).data()[i]);
+      }
+      norm = sqrt(norm);
+      Parallel::printf("%s source without bc: %e\n", element_id, norm);
+    }
+
     // Can't `db::get` the arguments for the boundary conditions within
     // `db::mutate`, so we retrieve the pointers to the memory buffers in
     // advance.
@@ -624,6 +643,15 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource<
     db::mutate<FixedSourcesTag>(
         make_not_null(&box),
         [](const auto local_fixed_sources) { (void)local_fixed_sources; });
+
+    {
+      double norm = 0.;
+      for (size_t i = 0; i < get<FixedSourcesTag>(box).size(); ++i) {
+        norm += square(get<FixedSourcesTag>(box).data()[i]);
+      }
+      norm = sqrt(norm);
+      Parallel::printf("%s source with bc: %e\n", element_id, norm);
+    }
     return {std::move(box)};
   }
 };

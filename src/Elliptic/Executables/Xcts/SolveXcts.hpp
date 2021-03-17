@@ -232,7 +232,8 @@ struct Metavariables {
       elliptic::Actions::InitializeBackgroundFields<system, background_tag>,
       elliptic::Actions::InitializeOptionalAnalyticSolution<
           background_tag, analytic_solution_fields,
-          Xcts::Solutions::AnalyticSolution<analytic_solution_registrars>>,
+          Xcts::Solutions::AnalyticSolution<tmpl::append<
+              analytic_solution_registrars, analytic_data_registrars>>>,
       elliptic::dg::Actions::initialize_operator<system>,
       elliptic::dg::Actions::InitializeSubdomain<
           system, background_tag, typename schwarz_smoother::options_group>,

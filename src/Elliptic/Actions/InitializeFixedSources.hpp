@@ -20,6 +20,10 @@
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
+#include "Parallel/Printf.hpp"
+#include "Utilities/EqualWithinRoundoff.hpp"
+#include "Utilities/ErrorHandling/Error.hpp"
+
 /// \cond
 namespace Parallel {
 template <typename Metavariables>
@@ -67,7 +71,7 @@ struct InitializeFixedSources {
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ElementId<Dim>& /*array_index*/, const ActionList /*meta*/,
+      const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     const auto& inertial_coords =
         get<domain::Tags::Coordinates<Dim, Frame::Inertial>>(box);
@@ -76,8 +80,18 @@ struct InitializeFixedSources {
     // Retrieve the fixed-sources of the elliptic system from the background,
     // which (along with the boundary conditions) define the problem we want to
     // solve.
-    auto fixed_sources = variables_from_tagged_tuple(background.variables(
+    using Vars = Variables<typename fixed_sources_tag::type::tags_list>;
+    Vars fixed_sources = variables_from_tagged_tuple(background.variables(
         inertial_coords, typename fixed_sources_tag::type::tags_list{}));
+
+    {
+      double norm = 0.;
+      for (size_t i = 0; i < fixed_sources.size(); ++i) {
+        norm += square(fixed_sources.data()[i]);
+      }
+      norm = sqrt(norm);
+      Parallel::printf("%s fixed_sources: %e\n", element_id, norm);
+    }
 
     if (db::get<elliptic::dg::Tags::Massive>(box)) {
       const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
@@ -92,8 +106,37 @@ struct InitializeFixedSources {
         gsl::at(mass_matrices, d) =
             Spectral::mass_matrix(mesh.slice_through(d));
       }
-      fixed_sources =
-          apply_matrices(mass_matrices, fixed_sources, mesh.extents());
+      const Vars orig = fixed_sources;
+      apply_matrices(make_not_null(&fixed_sources), mass_matrices, orig,
+                     mesh.extents());
+      {
+        double norm1 = 0.;
+        for (size_t i = 0; i < fixed_sources.size(); ++i) {
+          norm1 += square(fixed_sources.data()[i]);
+        }
+        norm1 = sqrt(norm1);
+        for (size_t i = 0; i < 100; ++i) {
+          Vars test = orig;
+          apply_matrices(make_not_null(&test), mass_matrices, orig, mesh.extents());
+          double norm2 = 0.;
+          for (size_t j = 0; j < test.size(); ++j) {
+            norm2 += square(test.data()[j]);
+          }
+          norm2 = sqrt(norm2);
+          if (not equal_within_roundoff(norm1, norm2)) {
+            ERROR("unequal("+std::to_string(i)+"): " + std::to_string(norm1) + " and " + std::to_string(norm2));
+          }
+        }
+      }
+    }
+
+    {
+      double norm = 0.;
+      for (size_t i = 0; i < fixed_sources.size(); ++i) {
+        norm += square(fixed_sources.data()[i]);
+      }
+      norm = sqrt(norm);
+      Parallel::printf("%s massive: %e\n", element_id, norm);
     }
 
     ::Initialization::mutate_assign<simple_tags>(make_not_null(&box),

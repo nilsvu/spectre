@@ -57,6 +57,9 @@
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
+#include "DataStructures/Tensor/EagerMath/Norms.hpp"
+#include "Parallel/Printf.hpp"
+
 namespace LinearSolver::Schwarz::detail {
 
 using reduction_data = Parallel::ReductionData<
@@ -318,6 +321,15 @@ struct SolveSubdomain {
     const auto& subdomain_residual =
         db::get<SubdomainDataBufferTag<SubdomainData, OptionsGroup>>(box);
 
+    {
+      double norm = 0.;
+      for (size_t i = 0; i < subdomain_residual.element_data.size(); ++i) {
+        norm += square(subdomain_residual.element_data.data()[i]);
+      }
+      norm = sqrt(norm);
+      Parallel::printf("%s subdomain_residual: %e\n", element_id, norm);
+    }
+
     // Allocate workspace memory for repeatedly applying the subdomain operator
     SubdomainOperator subdomain_operator{};
 
@@ -341,6 +353,15 @@ struct SolveSubdomain {
         apply_subdomain_operator, subdomain_residual);
     // Re-naming the solution buffer for the code below
     auto& subdomain_solution = subdomain_solve_initial_guess_in_solution_out;
+
+    {
+      double norm = 0.;
+      for (size_t i = 0; i < subdomain_solution.element_data.size(); ++i) {
+        norm += square(subdomain_solution.element_data.data()[i]);
+      }
+      norm = sqrt(norm);
+      Parallel::printf("%s subdomain_solution: %g\n", element_id, norm);
+    }
 
     // Do some logging and observing
     if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
@@ -501,6 +522,16 @@ struct ReceiveOverlapSolution {
         db::get<Tags::IntrudingExtents<Dim, OptionsGroup>>(box),
         db::get<domain::Tags::Interface<domain::Tags::InternalDirections<Dim>,
                                         Tags::Weight<OptionsGroup>>>(box));
+
+    {
+      double norm = 0.;
+      for (size_t i = 0; i < db::get<fields_tag>(box).size();
+           ++i) {
+        norm += square(db::get<fields_tag>(box).data()[i]);
+      }
+      norm = sqrt(norm);
+      Parallel::printf("%s weighted solution: %e\n", element_id, norm);
+    }
     return {std::move(box)};
   }
 };

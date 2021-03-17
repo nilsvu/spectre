@@ -37,6 +37,8 @@
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
+#include "Parallel/Printf.hpp"
+
 /*!
  * \brief Functionality related to discontinuous Galerkin discretizations of
  * elliptic equations
@@ -664,6 +666,23 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
     }
 #endif  // SPECTRE_DEBUG
 
+    // {
+    //   double norm = 0.;
+    //   for (size_t i = 0; i < primal_vars.size(); ++i) {
+    //     norm += square(primal_vars.data()[i]);
+    //   }
+    //   norm = sqrt(norm);
+    //   Parallel::printf("- a: %e\n", norm);
+    // }
+    // {
+    //   double norm = 0.;
+    //   for (size_t i = 0; i < primal_fluxes.size(); ++i) {
+    //     norm += square(primal_fluxes.data()[i]);
+    //   }
+    //   norm = sqrt(norm);
+    //   Parallel::printf("- b: %e\n", norm);
+    // }
+
     // Add boundary corrections to the auxiliary variables _before_ computing
     // the second derivative. This is called the "flux" formulation. It is
     // equivalent to discretizing the system in first-order form, i.e. treating
@@ -738,6 +757,15 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
                         direction.dimension(), slice_index);
     }  // apply auxiliary boundary corrections on all mortars
 
+    // {
+    //   double norm = 0.;
+    //   for (size_t i = 0; i < primal_fluxes_corrected.size(); ++i) {
+    //     norm += square(primal_fluxes_corrected.data()[i]);
+    //   }
+    //   norm = sqrt(norm);
+    //   Parallel::printf("- c: %e\n", norm);
+    // }
+
     // Compute the primal equation, i.e. the actual DG operator, by taking the
     // second derivative: -div(F_u(v)) + S_u = f(x)
     divergence(operator_applied_to_vars, primal_fluxes_corrected, mesh,
@@ -755,6 +783,15 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
               get<PrimalFluxesVars>(primal_fluxes)...);
         },
         sources_args);
+
+    // {
+    //   double norm = 0.;
+    //   for (size_t i = 0; i < operator_applied_to_vars->size(); ++i) {
+    //     norm += square(operator_applied_to_vars->data()[i]);
+    //   }
+    //   norm = sqrt(norm);
+    //   Parallel::printf("- d: %e\n", norm);
+    // }
 
     // Add boundary corrections to primal equation
     for (auto& [mortar_id, mortar_data] : *all_mortar_data) {
@@ -819,6 +856,15 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
       add_slice_to_data(operator_applied_to_vars, primal_boundary_corrections,
                         mesh.extents(), direction.dimension(), slice_index);
     }  // loop over all mortars
+
+    // {
+    //   double norm = 0.;
+    //   for (size_t i = 0; i < operator_applied_to_vars->size(); ++i) {
+    //     norm += square(operator_applied_to_vars->data()[i]);
+    //   }
+    //   norm = sqrt(norm);
+    //   Parallel::printf("- z: %e\n", norm);
+    // }
 
     // Apply mass matrix
     if (massive) {
