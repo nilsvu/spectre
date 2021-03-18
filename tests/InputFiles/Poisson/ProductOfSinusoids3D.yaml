@@ -24,7 +24,7 @@ DomainCreator:
   Brick:
     LowerBound: [-0.5, 0., 0.]
     UpperBound: [1., 0.5, 1.]
-    InitialRefinement: [1, 0, 0]
+    InitialRefinement: [1, 1, 1]
     InitialGridPoints: [4, 3, 5]
     TimeDependence: None
     BoundaryCondition:
@@ -45,20 +45,18 @@ LinearSolver:
     MaxIterations: 1
     AbsoluteResidual: 1.e-6
     RelativeResidual: 1.e-6
-  Verbosity: Verbose
+  Verbosity: Debug
 
   SchwarzSmoother:
     Iterations: 3
     MaxOverlap: 2
-    Verbosity: Quiet
-    SubdomainSolver:
-      ExplicitInverse:
-        EnableResets: True
+    Verbosity: Debug
+    SubdomainSolver: ExplicitInverse
 
   Multigrid:
     Iterations: 1
     CoarsestGridPoints: 12
-    Verbosity: Verbose
+    Verbosity: Debug
 
 EventsAndTriggers:
   ? EveryNIterations:
