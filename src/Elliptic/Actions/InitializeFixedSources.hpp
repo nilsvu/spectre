@@ -106,28 +106,33 @@ struct InitializeFixedSources {
         gsl::at(mass_matrices, d) =
             Spectral::mass_matrix(mesh.slice_through(d));
       }
-      const Vars orig = fixed_sources;
-      apply_matrices(make_not_null(&fixed_sources), mass_matrices, orig,
-                     mesh.extents());
-      {
-        double norm1 = 0.;
-        for (size_t i = 0; i < fixed_sources.size(); ++i) {
-          norm1 += square(fixed_sources.data()[i]);
+      const Vars operand = fixed_sources;
+      const auto l2_norm = [](const auto& vars) {
+        double norm = 0.;
+        for (size_t i = 0; i < vars.size(); ++i) {
+          norm += square(vars.data()[i]);
         }
-        norm1 = sqrt(norm1);
-        for (size_t i = 0; i < 100; ++i) {
-          Vars test = orig;
-          apply_matrices(make_not_null(&test), mass_matrices, orig, mesh.extents());
-          double norm2 = 0.;
-          for (size_t j = 0; j < test.size(); ++j) {
-            norm2 += square(test.data()[j]);
-          }
-          norm2 = sqrt(norm2);
-          if (not equal_within_roundoff(norm1, norm2)) {
-            ERROR("unequal("+std::to_string(i)+"): " + std::to_string(norm1) + " and " + std::to_string(norm2));
-          }
+        return sqrt(norm);
+      };
+
+      // -----------------------------
+      // (1) Apply matrices to operand
+      apply_matrices(make_not_null(&fixed_sources), mass_matrices, operand,
+                     mesh.extents());
+      const double norm1 = l2_norm(fixed_sources);
+      // (2) Apply again repeatedly and check the result remains the same - it
+      // doesn't when run on multiple threads.
+      for (size_t i = 0; i < 100; ++i) {
+        Vars test = operand;
+        apply_matrices(make_not_null(&test), mass_matrices, operand,
+                       mesh.extents());
+        const double norm2 = l2_norm(test);
+        if (not equal_within_roundoff(norm1, norm2)) {
+          ERROR("unequal(" + std::to_string(i) + "): " + std::to_string(norm1) +
+                " and " + std::to_string(norm2));
         }
       }
+      // -----------------------------
     }
 
     {
