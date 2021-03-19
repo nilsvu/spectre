@@ -7,18 +7,18 @@
 #   ExportCoordinates3DVolume0.h5
 
 DomainCreator:
-  Brick:
-    LowerBound: [-0.5, -0.5, -0.5]
-    UpperBound: [0.5, 0.5, 0.5]
-    IsPeriodicIn: [false, false, false]
-    InitialRefinement: [0, 0, 0]
-    InitialGridPoints: [3, 3, 3]
-    TimeDependence:
-      UniformTranslation:
-        InitialTime: 0.0
-        InitialExpirationDeltaT: 5.0
-        Velocity: [0.5, 0.0, 0.0]
-        FunctionOfTimeNames: ["TranslationX", "TranslationY", "TranslationZ"]
+  Cylinder:
+    InnerRadius: 0.08
+    OuterRadius: 10
+    LowerBound: 0
+    UpperBound: 0.3
+    IsPeriodicInZ: False
+    InitialRefinement: 0
+    InitialGridPoints: [5, 5, 6]
+    UseEquiangularMap: True
+    RadialPartitioning: [0.6, 1.2]
+    HeightPartitioning: []
+    UseLogarithmicMap: True
 
 SpatialDiscretization:
   DiscontinuousGalerkin:
@@ -32,9 +32,7 @@ Evolution:
       Order: 1
 
 EventsAndTriggers:
-  ? TimeCompares:
-      Comparison: GreaterThanOrEqualTo
-      Value: 1.0
+  ? Always:
   : - Completion
 
 Observers:

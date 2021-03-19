@@ -222,7 +222,8 @@ auto cyl_wedge_coordinate_maps(
     double inner_radius, double outer_radius, double lower_bound,
     double upper_bound, bool use_equiangular_map,
     const std::vector<double>& radial_partitioning = {},
-    const std::vector<double>& height_partitioning = {}) noexcept
+    const std::vector<double>& height_partitioning = {},
+    bool use_logarithmic_map = false) noexcept
     -> std::vector<std::unique_ptr<
         domain::CoordinateMapBase<Frame::Logical, TargetFrame, 3>>>;
 

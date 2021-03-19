@@ -31,7 +31,7 @@ Cylinder::Cylinder(double inner_radius, double outer_radius, double lower_bound,
                    bool use_equiangular_map,
                    std::vector<double> radial_partitioning,
                    std::vector<double> height_partitioning,
-                   const Options::Context& context)
+                   bool use_logarithmic_map, const Options::Context& context)
     : inner_radius_(inner_radius),
       outer_radius_(outer_radius),
       lower_bound_(lower_bound),
@@ -41,7 +41,8 @@ Cylinder::Cylinder(double inner_radius, double outer_radius, double lower_bound,
       initial_number_of_grid_points_(initial_number_of_grid_points),
       use_equiangular_map_(use_equiangular_map),
       radial_partitioning_(std::move(radial_partitioning)),
-      height_partitioning_(std::move(height_partitioning)) {
+      height_partitioning_(std::move(height_partitioning)),
+      use_logarithmic_map_(use_logarithmic_map) {
   if (inner_radius_ > outer_radius_) {
     PARSE_ERROR(context,
                 "Inner radius must be smaller than outer radius, but inner "
@@ -112,11 +113,12 @@ Cylinder::Cylinder(
     size_t initial_refinement,
     std::array<size_t, 3> initial_number_of_grid_points,
     bool use_equiangular_map, std::vector<double> radial_partitioning,
-    std::vector<double> height_partitioning, const Options::Context& context)
+    std::vector<double> height_partitioning, bool use_logarithmic_map,
+    const Options::Context& context)
     : Cylinder(inner_radius, outer_radius, lower_bound, upper_bound, false,
                initial_refinement, initial_number_of_grid_points,
                use_equiangular_map, std::move(radial_partitioning),
-               std::move(height_partitioning), context) {
+               std::move(height_partitioning), use_logarithmic_map, context) {
   lower_boundary_condition_ = std::move(lower_boundary_condition);
   upper_boundary_condition_ = std::move(upper_boundary_condition);
   mantle_boundary_condition_ = std::move(mantle_boundary_condition);
@@ -230,7 +232,8 @@ Domain<3> Cylinder::create_domain() const noexcept {
   return Domain<3>{
       cyl_wedge_coordinate_maps<Frame::Inertial>(
           inner_radius_, outer_radius_, lower_bound_, upper_bound_,
-          use_equiangular_map_, radial_partitioning_, height_partitioning_),
+          use_equiangular_map_, radial_partitioning_, height_partitioning_,
+          use_logarithmic_map_),
       corners_for_cylindrical_layered_domains(number_of_shells,
                                               number_of_discs),
       pairs_of_faces, std::move(boundary_conditions_all_blocks)};

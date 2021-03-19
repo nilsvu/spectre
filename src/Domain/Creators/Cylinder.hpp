@@ -123,6 +123,14 @@ class Cylinder : public DomainCreator<3> {
         "between LowerBound and UpperBound."};
   };
 
+  struct UseLogarithmicMap {
+    using type = bool;
+    static constexpr Options::String help = {
+        "Space grid points logarithmically in radial direction in the outer "
+        "spherical shell. Note that the cylinder only has an outer spherical "
+        "shell if 'RadialPartitioning' has at least one entry."};
+  };
+
   struct BoundaryConditions {
     static constexpr Options::String help =
         "Options for the boundary conditions";
@@ -176,7 +184,7 @@ class Cylinder : public DomainCreator<3> {
                       typename Metavariables::system>>>,
           tmpl::list<IsPeriodicInZ>>,
       tmpl::list<InitialRefinement, InitialGridPoints, UseEquiangularMap,
-                 RadialPartitioning, HeightPartitioning>>;
+                 RadialPartitioning, HeightPartitioning, UseLogarithmicMap>>;
 
   static constexpr Options::String help{
       "Creates a right circular Cylinder with a square prism surrounded by \n"
@@ -203,6 +211,7 @@ class Cylinder : public DomainCreator<3> {
            bool use_equiangular_map,
            std::vector<double> radial_partitioning = {},
            std::vector<double> height_partitioning = {},
+           bool use_logarithmic_map = false,
            const Options::Context& context = {});
 
   Cylinder(double inner_radius, double outer_radius, double lower_bound,
@@ -218,6 +227,7 @@ class Cylinder : public DomainCreator<3> {
            bool use_equiangular_map,
            std::vector<double> radial_partitioning = {},
            std::vector<double> height_partitioning = {},
+           bool use_logarithmic_map = false,
            const Options::Context& context = {});
 
   Cylinder() = default;
@@ -245,6 +255,7 @@ class Cylinder : public DomainCreator<3> {
   bool use_equiangular_map_{false};
   std::vector<double> radial_partitioning_{};
   std::vector<double> height_partitioning_{};
+  bool use_logarithmic_map_{false};
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
       lower_boundary_condition_{};
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
