@@ -7,11 +7,14 @@ if(NOT BREATHE_ROOT)
   set(BREATHE_ROOT $ENV{BREATHE_ROOT})
 endif()
 
+find_package(Python REQUIRED)
+get_filename_component(PYTHON_BIN_DIR "${Python_EXECUTABLE}" DIRECTORY)
+
 # Look for an executable called breathe-apidoc
 find_program(
   BREATHE_APIDOC_EXECUTABLE
   NAMES breathe-apidoc
-  PATHS ${BREATHE_ROOT}
+  PATHS ${BREATHE_ROOT} ${PYTHON_BIN_DIR}
   DOC "Path to breathe-apidoc executable")
 
 execute_process(COMMAND "${BREATHE_APIDOC_EXECUTABLE}" "--version"

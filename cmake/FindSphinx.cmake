@@ -7,11 +7,14 @@ if(NOT SPHINX_ROOT)
   set(SPHINX_ROOT $ENV{SPHINX_ROOT})
 endif()
 
+find_package(Python REQUIRED)
+get_filename_component(PYTHON_BIN_DIR "${Python_EXECUTABLE}" DIRECTORY)
+
 # Look for an executable called sphinx-build or sphinx-build2
 find_program(
   SPHINX_EXECUTABLE
   NAMES sphinx-build sphinx-build2
-  PATHS ${SPHINX_ROOT}
+  PATHS ${SPHINX_ROOT} ${PYTHON_BIN_DIR}
   DOC "Path to sphinx-build or sphinx-build2 executable")
 
 execute_process(COMMAND "${SPHINX_EXECUTABLE}" "--version"
