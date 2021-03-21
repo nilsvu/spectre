@@ -154,7 +154,11 @@ EXPAND_ONLY_PREDEF     = YES
 
 SEARCH_INCLUDES        = YES
 
+# Override these macros. Note that the SKIP_FUNCTION_MACROS option (defaults
+# to YES) automatically ignores macros like SPECTRE_ALWAYS_INLINE, but works
+# only when the macro is written alone in a line.
 PREDEFINED             = SPECTRE_ALWAYS_INLINE= \
+                         BLAZE_ALWAYS_INLINE= \
                          OVERLOADER_CONSTEXPR= \
                          SPECTRE_DOXYGEN_INVOKED
 
