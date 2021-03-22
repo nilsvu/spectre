@@ -550,7 +550,6 @@ SPECTRE_TEST_CASE("Unit.Utilities.TaggedTuple.equivalence",
   CHECK(NotNoExceptCompare{1} != NotNoExceptCompare{0});
   CHECK_FALSE(NotNoExceptCompare{1} != NotNoExceptCompare{1});
 
-#if __cplusplus >= 201402L
   {
     constexpr tuples::TaggedTuple<relational_tags::Int0, relational_tags::Int1,
                                   relational_tags::Int2>
@@ -586,7 +585,6 @@ SPECTRE_TEST_CASE("Unit.Utilities.TaggedTuple.equivalence",
     static_assert(noexcept(t0 == t2),
                   "Failed testing Unit.Utilities.TaggedTuple.relational");
   }
-#endif
 }
 
 struct lex_time_compared {
@@ -722,7 +720,6 @@ SPECTRE_TEST_CASE("Unit.Utilities.TaggedTuple.relational",
     CHECK(t0 <= t2);
     CHECK(global_time_mock == 28);
   }
-#if __cplusplus >= 201402L
   {
     // Check constexpr lexicographical comparison
     constexpr tuples::TaggedTuple<
@@ -745,7 +742,6 @@ SPECTRE_TEST_CASE("Unit.Utilities.TaggedTuple.relational",
     static_assert(t0 >= t2, "Failed testing relational operators");
     static_assert(t0 >= t3, "Failed testing relational operators");
   }
-#endif
 }
 
 static_assert(
