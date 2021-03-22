@@ -97,6 +97,7 @@ bool operator!=(const Irregular<Dim>& lhs, const Irregular<Dim>& rhs) noexcept {
   return not(lhs == rhs);
 }
 
+/// \cond
 template class Irregular<1>;
 template class Irregular<2>;
 template class Irregular<3>;
@@ -106,5 +107,6 @@ template bool operator!=(const Irregular<2>& lhs,
                          const Irregular<2>& rhs) noexcept;
 template bool operator!=(const Irregular<3>& lhs,
                          const Irregular<3>& rhs) noexcept;
+/// \endcond
 
 }  // namespace intrp

@@ -20,6 +20,7 @@
 
 namespace domain::creators {
 
+/// \cond
 using ::operator<<;
 template <size_t VolumeDim>
 std::ostream& operator<<(
@@ -29,6 +30,7 @@ std::ostream& operator<<(
       "RefinementRegion stream operator is only for option parsing and "
       "should never be called.");
 }
+/// \endcond
 
 template <size_t VolumeDim>
 AlignedLattice<VolumeDim>::AlignedLattice(
@@ -236,6 +238,7 @@ AlignedLattice<VolumeDim>::initial_refinement_levels() const noexcept {
                                   refined_refinement_);
 }
 
+/// \cond
 template class AlignedLattice<1>;
 template class AlignedLattice<2>;
 template class AlignedLattice<3>;
@@ -245,4 +248,5 @@ template std::ostream& operator<<(
     std::ostream& /*s*/, const RefinementRegion<2>& /*unused*/) noexcept;
 template std::ostream& operator<<(
     std::ostream& /*s*/, const RefinementRegion<3>& /*unused*/) noexcept;
+/// \endcond
 }  // namespace domain::creators

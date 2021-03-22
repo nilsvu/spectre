@@ -28,6 +28,7 @@
 
 #include "Utilities/Requires.hpp"
 
+/// \cond
 namespace tt {
 template <typename S, typename T, typename>
 struct is_streamable;
@@ -80,3 +81,4 @@ std::ostream& operator<<(std::ostream& os, const std::pair<T, U>& t) noexcept;
 
 template <typename T>
 std::ostream& operator<<(std::ostream& os, const std::optional<T>& t) noexcept;
+/// \endcond
