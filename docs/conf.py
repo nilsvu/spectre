@@ -35,8 +35,8 @@ author = 'SXS Collaboration'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc', 'sphinx.ext.mathjax', 'sphinxcontrib.bibtex',
-    'breathe'
+    'sphinx.ext.autodoc', 'sphinx.ext.mathjax',
+    'breathe', 'exhale'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -63,7 +63,7 @@ html_theme = 'sphinx_rtd_theme'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = []
 
 # Configure Breathe for parsing and including C++ documentation.
 breathe_projects = {'SpECTRE': '@CMAKE_BINARY_DIR@/docs/xml'}
@@ -74,19 +74,19 @@ breathe_default_project = "SpECTRE"
 # failing when dealing with function overloads. To enable you must
 # add `'exhale'` to the extensions.
 #
-# exhale_args = {
-#     # These arguments are required
-#     "containmentFolder": "./api",
-#     "rootFileName": "library_root.rst",
-#     "rootFileTitle": "Library API",
-#     "doxygenStripFromPath": "..",
-#     # Suggested optional arguments
-#     "createTreeView": True,
-#     # TIP: if using the sphinx-bootstrap-theme, you need
-#     # "treeViewIsBootstrap": True,
-#     "exhaleExecutesDoxygen": False
-#     # "exhaleDoxygenStdin": "INPUT = ../include"
-# }
+exhale_args = {
+    # These arguments are required
+    "containmentFolder": "./api",
+    "rootFileName": "library_root.rst",
+    "rootFileTitle": "Library API",
+    "doxygenStripFromPath": "..",
+    # Suggested optional arguments
+    "createTreeView": True,
+    # TIP: if using the sphinx-bootstrap-theme, you need
+    # "treeViewIsBootstrap": True,
+    "exhaleExecutesDoxygen": False
+    # "exhaleDoxygenStdin": "INPUT = ../include"
+}
 
 # # a simple label style which uses the bibtex keys for labels
 # class NumberedLabelStyle(BaseLabelStyle):

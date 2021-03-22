@@ -8,6 +8,8 @@
 #include "Utilities/Requires.hpp"
 #include "Utilities/TypeTraits.hpp"
 
+/// \cond
+
 // @{
 /*!
  * \ingroup DataStructuresGroup
@@ -578,3 +580,4 @@ struct MakeWithSize<SpinWeighted<SpinWeightedType, Spin>> {
   }
 };
 }  // namespace MakeWithValueImpls
+/// \endcond

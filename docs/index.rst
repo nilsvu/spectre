@@ -38,24 +38,10 @@ Welcome to SpECTRE's documentation!
    data-canonical-src="https://codecov.io/gh/sxs-collaboration/spectre/branch/develop/graph/badge.svg"
    style="max-width:100%;"></a>
 
-.. doxygengroup:: ActionsGroup
-   :members:
+.. toctree::
+   :maxdepth: 2
 
-.. doxygengroup:: ConstantExpressionsGroup
-   :members:
-
-.. doxygengroup:: DataBoxGroup
-   :members:
-
-.. doxygengroup:: DataStructuresGroup
-   :members:
-
-.. doxygengroup:: EvolutionSystemsGroup
-   :members:
-
-.. doxygengroup:: UtilitiesGroup
-   :members:
-
+   api/library_root
 
 Indices and tables
 ==================

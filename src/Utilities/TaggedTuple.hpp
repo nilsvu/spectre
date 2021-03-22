@@ -581,6 +581,7 @@ constexpr bool tuple_equal_impl(
 }
 }  // namespace tuples_detail
 
+/// \cond
 template <class... LTags, class... RTags,
           typename std::enable_if<sizeof...(LTags) == sizeof...(RTags)>::type* =
               nullptr>
@@ -683,6 +684,7 @@ void swap(TaggedTuple<Tags...>& lhs, TaggedTuple<Tags...>& rhs) noexcept(
         tuples_detail::TaggedTupleLeaf<Tags>>::value...>::value) {
   lhs.swap(rhs);
 }
+/// \endcond
 
 namespace TaggedTuple_detail {
 template <typename T>

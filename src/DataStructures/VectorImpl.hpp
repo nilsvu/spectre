@@ -639,6 +639,7 @@ template <typename T>
 constexpr bool is_derived_of_vector_impl_v =
     is_derived_of_vector_impl<T>::value;
 
+/// \cond
 // impose strict equality for derived classes of VectorImpl; note that this
 // overrides intended behavior in blaze for comparison operators to use
 // approximate equality in favor of equality between containers being
@@ -740,3 +741,4 @@ void make_const_view(const gsl::not_null<const VectorType*> view,
               + offset,                                                // NOLINT
           extent);
 }
+/// \endcond

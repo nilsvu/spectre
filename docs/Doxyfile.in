@@ -89,8 +89,7 @@ INPUT = @SPECTRE_DOXYGEN_GROUPS@ \
 # Add tutorials directory
 INPUT += @PROJECT_SOURCE_DIR@/docs
 
-FILE_PATTERNS          = *.cpp \
-                         *.hpp \
+FILE_PATTERNS          = *.hpp \
                          *.md
 
 RECURSIVE              = YES
