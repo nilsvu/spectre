@@ -54,7 +54,7 @@ struct make_overlap_tag {
 
 /// Wrap the `Tag` in `Tags::NeighborMortars`
 template <typename Tag, typename Dim>
-struct make_neighbor_mortars_tag {
+struct make_neighbor_mortars_tag_impl {
   using type = Tags::NeighborMortars<Tag, Dim::value>;
 };
 
@@ -166,7 +166,7 @@ struct SubdomainOperator
   // data is stored in the central element's DataBox in `Tags::NeighborMortars`
   // maps
   using make_neighbor_mortars_tag =
-      make_neighbor_mortars_tag<tmpl::_1, tmpl::pin<tmpl::size_t<Dim>>>;
+      make_neighbor_mortars_tag_impl<tmpl::_1, tmpl::pin<tmpl::size_t<Dim>>>;
 
  public:
   template <typename ResultTags, typename OperandTags, typename DbTagsList>
