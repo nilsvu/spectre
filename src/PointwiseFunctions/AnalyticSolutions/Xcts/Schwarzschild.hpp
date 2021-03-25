@@ -67,6 +67,8 @@ enum class SchwarzschildCoordinates {
    * \f$\bar{r}=\frac{M}{2}\f$ due to the radial transformation from \f$r=2M\f$.
    */
   Isotropic,
+  PainleveGullstrand,
+  KerrSchildIsotropic,
 };
 
 std::ostream& operator<<(std::ostream& os,
@@ -141,6 +143,21 @@ bool operator==(const SchwarzschildImpl& lhs,
 bool operator!=(const SchwarzschildImpl& lhs,
                 const SchwarzschildImpl& rhs) noexcept;
 
+namespace IntermediateTags {
+template <typename DataType>
+struct IsotropicRadius {
+  using type = Scalar<DataType>;
+};
+template <typename DataType>
+struct ArealRadius {
+  using type = Scalar<DataType>;
+};
+template <typename DataType>
+struct DerivIsotropicRadiusFromAreal {
+  using type = Scalar<DataType>;
+};
+}  // namespace IntermediateTags
+
 template <typename DataType>
 struct SchwarzschildVariables;
 
@@ -148,7 +165,9 @@ template <typename DataType>
 using SchwarzschildVariablesCache = cached_temp_buffer_from_typelist<
     SchwarzschildVariables<DataType>,
     tmpl::push_front<
-        common_tags<DataType>,
+        common_tags<DataType>, IntermediateTags::IsotropicRadius<DataType>,
+        IntermediateTags::ArealRadius<DataType>,
+        IntermediateTags::DerivIsotropicRadiusFromAreal<DataType>,
         Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
         Tags::InverseConformalMetric<DataType, 3, Frame::Inertial>,
         ::Tags::deriv<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
@@ -181,6 +200,19 @@ struct SchwarzschildVariables
   double mass;
   SchwarzschildCoordinates coordinate_system;
 
+  void operator()(
+      gsl::not_null<Scalar<DataType>*> isotropic_radius,
+      gsl::not_null<Cache*> cache,
+      IntermediateTags::IsotropicRadius<DataType> /*meta*/) const noexcept;
+  void operator()(
+      gsl::not_null<Scalar<DataType>*> areal_radius,
+      gsl::not_null<Cache*> cache,
+      IntermediateTags::ArealRadius<DataType> /*meta*/) const noexcept;
+  void operator()(
+      gsl::not_null<Scalar<DataType>*> deriv_isotropic_radius_from_areal,
+      gsl::not_null<Cache*> cache,
+      IntermediateTags::DerivIsotropicRadiusFromAreal<DataType> /*meta*/)
+      const noexcept;
   void operator()(gsl::not_null<tnsr::ii<DataType, 3>*> conformal_metric,
                   gsl::not_null<Cache*> cache,
                   Tags::ConformalMetric<DataType, 3, Frame::Inertial> /*meta*/)
