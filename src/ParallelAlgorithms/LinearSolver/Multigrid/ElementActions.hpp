@@ -29,6 +29,7 @@
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/ErrorHandling/Assert.hpp"
+#include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/GetOutput.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -77,6 +78,14 @@ struct InitializeElement {
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    // Validate options
+    if (get<Convergence::Tags::Iterations<OptionsGroup>>(box) == 0 and
+        get<Tags::MaxLevels<OptionsGroup>>(box) != 0) {
+      ERROR(
+          "You disabled multigrid by requesting it runs no iterations. Also "
+          "set 'MaxLevels' to zero to avoid creating unused multigrid levels.");
+    }
+
     const bool is_coarsest_grid =
         get<domain::Tags::InitialRefinementLevels<Dim>>(box) ==
             get<Tags::ParentRefinementLevels<Dim>>(box) and

@@ -26,6 +26,16 @@ struct CoarsestGridPoints : db::SimpleTag {
   using group = OptionsGroup;
 };
 
+template <typename OptionsGroup>
+struct MaxLevels : db::SimpleTag {
+  using type = Options::Auto<size_t>;
+  static constexpr Options::String help =
+      "Maximum number of levels in the multigrid hierarchy. Excludes the "
+      "finest level, i.e. set to '0' to disable multigrids. Set to 'Auto' to "
+      "coarsen all the way up to single-element blocks.";
+  using group = OptionsGroup;
+};
+
 }  // namespace OptionTags
 
 namespace Tags {
@@ -53,6 +63,14 @@ struct CoarsestGridPoints : db::SimpleTag {
   using type = size_t;
   static constexpr bool pass_metavariables = false;
   using option_tags = tmpl::list<OptionTags::CoarsestGridPoints<OptionsGroup>>;
+  static type create_from_options(const type value) noexcept { return value; };
+};
+
+template <typename OptionsGroup>
+struct MaxLevels : db::SimpleTag {
+  using type = std::optional<size_t>;
+  static constexpr bool pass_metavariables = false;
+  using option_tags = tmpl::list<OptionTags::MaxLevels<OptionsGroup>>;
   static type create_from_options(const type value) noexcept { return value; };
 };
 
