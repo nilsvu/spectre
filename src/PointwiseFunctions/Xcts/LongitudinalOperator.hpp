@@ -9,6 +9,15 @@
 #include "Utilities/Gsl.hpp"
 
 namespace Xcts {
+
+template <typename DataType>
+void shift_strain(gsl::not_null<tnsr::ii<DataType, 3>*> result,
+                  const tnsr::iJ<DataType, 3>& deriv_shift,
+                  const tnsr::ii<DataType, 3>& metric,
+                  const tnsr::ijj<DataType, 3>& deriv_metric,
+                  const tnsr::ijj<DataType, 3>& christoffel_first_kind,
+                  const tnsr::I<DataType, 3>& shift) noexcept;
+
 /*!
  * \brief The longitudinal operator, or vector gradient, \f$(L\beta)^{ij}\f$
  *
