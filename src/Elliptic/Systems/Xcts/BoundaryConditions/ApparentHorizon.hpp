@@ -52,8 +52,25 @@ struct ApparentHorizonImpl {
         "imposed as a Dirichlet condition on the lapse, instead of a zero "
         "von-Neumann boundary condition.";
   };
+  struct NormalDotConformalFactorGradient {
+    using type = Options::Auto<double>;
+    static constexpr Options::String help =
+        "Clamp n.grad(psi) to a particular value. Set to 'Auto' to use the "
+        "apparent-horizon condition. This option can help to achieve an "
+        "approximate solution before solving for the highly non-linear "
+        "apparent-horizon condition.";
+  };
+  struct ConformalFactor {
+    using type = Options::Auto<double>;
+    static constexpr Options::String help =
+        "Clamp the conformal factor to a particular value. Set to 'Auto' to "
+        "use the apparent-horizon condition. This option can help to achieve "
+        "an approximate solution before solving for the highly non-linear "
+        "apparent-horizon condition.";
+  };
 
-  using options = tmpl::list<Center, Spin, Mass>;
+  using options = tmpl::list<Center, Spin, Mass,
+                             NormalDotConformalFactorGradient, ConformalFactor>;
 
   ApparentHorizonImpl() = default;
   ApparentHorizonImpl(const ApparentHorizonImpl&) noexcept = default;
@@ -62,12 +79,18 @@ struct ApparentHorizonImpl {
   ApparentHorizonImpl& operator=(ApparentHorizonImpl&&) noexcept = default;
   ~ApparentHorizonImpl() noexcept = default;
 
-  ApparentHorizonImpl(std::array<double, 3> center, std::array<double, 3> spin,
-                      std::optional<double> mass) noexcept;
+  ApparentHorizonImpl(
+      std::array<double, 3> center, std::array<double, 3> spin,
+      std::optional<double> mass,
+      std::optional<double> custom_n_dot_conformal_factor_gradient,
+      std::optional<double> custom_conformal_factor) noexcept;
 
   const std::array<double, 3>& center() const noexcept;
   const std::array<double, 3>& spin() const noexcept;
   const std::optional<double>& mass() const noexcept;
+  const std::optional<double>& custom_n_dot_conformal_factor_gradient()
+      const noexcept;
+  const std::optional<double>& custom_conformal_factor() const noexcept;
 
   using argument_tags = tmpl::flatten<tmpl::list<
       ::Tags::Normalized<
@@ -186,6 +209,8 @@ struct ApparentHorizonImpl {
   std::array<double, 3> center_{};
   std::array<double, 3> spin_{};
   std::optional<double> mass_{};
+  std::optional<double> custom_n_dot_conformal_factor_gradient_{};
+  std::optional<double> custom_conformal_factor_{};
 };
 
 template <Xcts::Geometry ConformalGeometry>
