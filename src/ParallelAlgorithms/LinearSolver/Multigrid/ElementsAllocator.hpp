@@ -33,7 +33,8 @@ struct ElementsAllocator {
                  Tags::MultigridLevel, Tags::IsFinestLevel,
                  Parallel::Tags::Section<Tags::MultigridLevel, ElementArray>,
                  Parallel::Tags::Section<Tags::IsFinestLevel, ElementArray>,
-                 Tags::CoarsestGridPoints<OptionsGroup>>;
+                 Tags::CoarsestGridPoints<OptionsGroup>,
+                 Tags::MaxLevels<OptionsGroup>>;
 
   template <typename ElementArray, typename Metavariables,
             typename... InitializationTags>
@@ -59,17 +60,21 @@ struct ElementsAllocator {
     auto& parent_extents = get<Tags::ParentExtents<Dim>>(initialization_items);
     auto& multigrid_level = get<Tags::MultigridLevel>(initialization_items);
     auto& is_finest_level = get<Tags::IsFinestLevel>(initialization_items);
+    const auto& max_levels =
+        get<Tags::MaxLevels<OptionsGroup>>(initialization_items);
     do {
       // Store the grid as base before coarsening it
       base_refinement_levels = initial_refinement_levels;
       initial_refinement_levels = parent_refinement_levels;
       initial_extents = parent_extents;
       // Construct coarsened (parent) grid
-      std::tie(parent_refinement_levels, parent_extents) =
-          LinearSolver::multigrid::coarsen(
-              initial_refinement_levels, initial_extents,
-              get<Tags::CoarsestGridPoints<OptionsGroup>>(
-                  initialization_items));
+      if (not max_levels.has_value() or multigrid_level < *max_levels) {
+        std::tie(parent_refinement_levels, parent_extents) =
+            LinearSolver::multigrid::coarsen(
+                initial_refinement_levels, initial_extents,
+                get<Tags::CoarsestGridPoints<OptionsGroup>>(
+                    initialization_items));
+      }
       // Create element IDs for all elements on this level
       std::vector<ElementId<Dim>> all_element_ids{};
       for (const auto& block : domain.blocks()) {
