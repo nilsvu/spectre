@@ -51,14 +51,24 @@ std::ostream& operator<<(std::ostream& os, ChildSize mortar_size) noexcept;
  * \f$\Omega_c\f$ the restriction operator \f$R\f$ satisfies the condition:
  *
  * \f{equation}
- * \int_{\Omega_c} R(u_f) u_c \mathrm{d}x =
- * \int_{\Omega_f} u_f I(u_c) \mathrm{d}x
- * \f}
+ * \int_{\Omega_c} R(u_f) u_c \mathrm{d}\xi =
+ * \int_{\Omega_f} u_f I(u_c) J\mathrm{d}\xi \f}
  *
  * where \f$I\f$ denotes the interpolation operator from the coarse to the fine
- * mesh. When we choose a set of basis functions \f$\phi_k(x)\f$ on the coarse
- * mesh and another on the fine mesh, we can express the restriction operator in
- * terms of mass matrices \f$M_{ij}=\int_e \phi_i(x) \phi_k(x) \mathrm{d}x\f$:
+ * mesh and \f$J=\frac{\partial \xi_\mathrm{coarse}}{\partial
+ * \xi_\mathrm{fine}}\f$ is the Jacobian from the coarse to the fine logical
+ * coordinates, i.e. just 1 for a full-sized child mesh and 2 for a half-sized
+ * child mesh. Note that this "logical" projection operation introduces an
+ * aliasing error on curved meshes since we don't include the (possibly
+ * time-dependent and curved) Jacobian to inertial coordinates. Also note that,
+ * for the same reason, the projection is only mass-conservative on curved
+ * meshes if you project the product of the function and the Jacobian from
+ * logical to inertial coordinates, as opposed to the function alone.
+ *
+ * When we choose a set of basis functions \f$\phi_k(\xi)\f$ on the coarse mesh
+ * and another on the fine mesh, we can express the restriction operator in
+ * terms of mass matrices \f$M_{ij}=\int_e \phi_i(\xi) \phi_k(\xi)
+ * J\mathrm{d}\xi\f$:
  *
  * \f{equation}
  * \quad R = M_c^{-1} I^T M_f
