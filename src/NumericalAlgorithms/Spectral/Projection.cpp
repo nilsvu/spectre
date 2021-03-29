@@ -34,9 +34,22 @@ std::ostream& operator<<(std::ostream& os, ChildSize mortar_size) noexcept {
   }
 }
 
+std::ostream& operator<<(std::ostream& os, ProjectionType projection_type) noexcept {
+  switch (projection_type) {
+    case ProjectionType::Function:
+      return os << "Function";
+    case ProjectionType::MassiveFunction:
+      return os << "MassiveFunction";
+    default:
+      ERROR(
+          "Invalid ProjectionType. Expected one of: 'Function', "
+          "'MassiveFunction'");
+  }
+}
+
 const Matrix& projection_matrix_child_to_parent(
-    const Mesh<1>& child_mesh, const Mesh<1>& parent_mesh,
-    const ChildSize size) noexcept {
+    const Mesh<1>& child_mesh, const Mesh<1>& parent_mesh, const ChildSize size,
+    ProjectionType projection_type) noexcept {
   ASSERT(parent_mesh.basis(0) == Basis::Legendre and
              child_mesh.basis(0) == Basis::Legendre,
          "Projections only implemented on Legendre basis");
@@ -57,10 +70,12 @@ const Matrix& projection_matrix_child_to_parent(
           CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>,
           CacheEnumeration<Quadrature, Quadrature::Gauss,
                            Quadrature::GaussLobatto>,
-          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>>(
+          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>,
+          CacheEnumeration<ProjectionType, ProjectionType::Function,
+                           ProjectionType::MassiveFunction>>(
           [](const Quadrature quadrature_element, const size_t extents_element,
-             const Quadrature quadrature_mortar,
-             const size_t extents_mortar) noexcept {
+             const Quadrature quadrature_mortar, const size_t extents_mortar,
+             const ProjectionType local_type) noexcept -> Matrix {
             if (extents_element > extents_mortar) {
               return Matrix{};
             }
@@ -68,6 +83,10 @@ const Matrix& projection_matrix_child_to_parent(
                                        quadrature_element);
             const Mesh<1> mesh_mortar(extents_mortar, Basis::Legendre,
                                       quadrature_mortar);
+            if (local_type == ProjectionType::MassiveFunction) {
+              return blaze::trans(projection_matrix_parent_to_child(
+                  mesh_element, mesh_mortar, ChildSize::Full));
+            }
 
             // The projection in spectral space is just a truncation
             // of the modes.
@@ -88,7 +107,8 @@ const Matrix& projection_matrix_child_to_parent(
             return projection;
           });
       return cache(parent_mesh.quadrature(0), parent_mesh.extents(0),
-                   child_mesh.quadrature(0), child_mesh.extents(0));
+                   child_mesh.quadrature(0), child_mesh.extents(0),
+                   projection_type);
     }
 
     case ChildSize::UpperHalf: {
@@ -98,10 +118,12 @@ const Matrix& projection_matrix_child_to_parent(
           CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>,
           CacheEnumeration<Quadrature, Quadrature::Gauss,
                            Quadrature::GaussLobatto>,
-          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>>([](
-          const Quadrature quadrature_element, const size_t extents_element,
-          const Quadrature quadrature_mortar,
-          const size_t extents_mortar) noexcept {
+          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>,
+          CacheEnumeration<ProjectionType, ProjectionType::Function,
+                           ProjectionType::MassiveFunction>>(
+          [](const Quadrature quadrature_element, const size_t extents_element,
+             const Quadrature quadrature_mortar, const size_t extents_mortar,
+             const ProjectionType local_type) noexcept -> Matrix {
         if (extents_element > extents_mortar) {
           return Matrix{};
         }
@@ -109,6 +131,10 @@ const Matrix& projection_matrix_child_to_parent(
                                    quadrature_element);
         const Mesh<1> mesh_mortar(extents_mortar, Basis::Legendre,
                                   quadrature_mortar);
+        if (local_type == ProjectionType::MassiveFunction) {
+          return blaze::trans(projection_matrix_parent_to_child(
+              mesh_element, mesh_mortar, ChildSize::UpperHalf));
+        }
 
         // The transformation from the small interval to the large
         // interval in spectral space.  This is a rearranged
@@ -168,7 +194,8 @@ const Matrix& projection_matrix_child_to_parent(
         return projection;
       });
       return cache(parent_mesh.quadrature(0), parent_mesh.extents(0),
-                   child_mesh.quadrature(0), child_mesh.extents(0));
+                   child_mesh.quadrature(0), child_mesh.extents(0),
+                   projection_type);
     }
 
     case ChildSize::LowerHalf: {
@@ -178,17 +205,23 @@ const Matrix& projection_matrix_child_to_parent(
           CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>,
           CacheEnumeration<Quadrature, Quadrature::Gauss,
                            Quadrature::GaussLobatto>,
-          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>>([](
-          const Quadrature quadrature_element, const size_t extents_element,
-          const Quadrature quadrature_mortar,
-          const size_t extents_mortar) noexcept {
+          CacheRange<2_st, maximum_number_of_points<Basis::Legendre> + 1>,
+          CacheEnumeration<ProjectionType, ProjectionType::Function,
+                           ProjectionType::MassiveFunction>>(
+          [](const Quadrature quadrature_element, const size_t extents_element,
+             const Quadrature quadrature_mortar, const size_t extents_mortar,
+             const ProjectionType local_type) noexcept -> Matrix {
         if (extents_element > extents_mortar) {
           return Matrix{};
         }
         const Mesh<1> mesh_element(extents_element, Basis::Legendre,
-                                   quadrature_element);
+                                    quadrature_element);
         const Mesh<1> mesh_mortar(extents_mortar, Basis::Legendre,
                                   quadrature_mortar);
+        if (local_type == ProjectionType::MassiveFunction) {
+          return blaze::trans(projection_matrix_parent_to_child(
+              mesh_element, mesh_mortar, ChildSize::LowerHalf));
+        }
 
         // The lower-half matrices are generated from the upper-half
         // matrices using symmetry.
@@ -206,7 +239,8 @@ const Matrix& projection_matrix_child_to_parent(
         return projection_lower_half;
       });
       return cache(parent_mesh.quadrature(0), parent_mesh.extents(0),
-                   child_mesh.quadrature(0), child_mesh.extents(0));
+                   child_mesh.quadrature(0), child_mesh.extents(0),
+                   projection_type);
     }
 
     default:

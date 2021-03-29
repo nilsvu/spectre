@@ -22,6 +22,15 @@ using MortarSize = ChildSize;
 
 std::ostream& operator<<(std::ostream& os, ChildSize mortar_size) noexcept;
 
+/// Project a function \f$u\f$ over the computational grid, or a "massive"
+/// quantity \f$M u\f$.
+///
+/// \see projection_matrix_child_to_parent
+enum class ProjectionType { Function, MassiveFunction };
+
+std::ostream& operator<<(std::ostream& os,
+                         ProjectionType projection_type) noexcept;
+
 /*!
  * \brief The projection matrix from a child element to its parent.
  *
@@ -50,10 +59,44 @@ std::ostream& operator<<(std::ostream& os, ChildSize mortar_size) noexcept;
  * T_{jk} = \frac{2 j + 1}{2} 2^j \sum_{n=0}^{j-k} \binom{j}{k+n}
  * \binom{(j + k + n - 1)/2}{j} \frac{(k + n)!^2}{(2 k + n + 1)! n!}
  * \f}
+ *
+ * The projections implemented here are \f$L^2\f$ projections, or "Galerkin"
+ * projections. They are defined such that the projection from a parent to one
+ * of its children ("prolongation") is an (exact) interpolation, and the
+ * projection from a child to its parent ("restriction") is its inverse.
+ * Specifically, for every function \f$u_f\f$ on the "fine" child-mesh \f$e_f\f$
+ * and every function \f$u_c\f$ on the "coarse" parent-mesh \$e_c\f$ the
+ * restriction operator \f$R\f$ satisfies the condition:
+ *
+ * \f{equation}
+ * \int_{e_c} R(u_f) u_c \mathrm{d}x = \int_{e_f} u_f I(u_c) \mathrm{d}x
+ * \f}
+ *
+ * where \f$I\f$ denotes the interpolation operator from the coarse to the fine
+ * mesh. When we choose a set of basis functions \f$\phi_k(x)\f$ on the coarse
+ * mesh and another on the fine mesh, we can express the restriction operator in
+ * terms of mass matrices \f$M_{ij}=\int_e \phi_i(x) \phi_k(x) \mathrm{d}x\f$:
+ *
+ * \f{equation}
+ * \quad R = M_c^{-1} I^T M_f
+ * \text{.}
+ * \f}
+ *
+ * The restriction operation is an \f$L^2\f$ projection in the sense that
+ * \f$R(u_f)=u_c\f$ minimizes the quantity \f$||u_c-u_f||^2\f$. It also has an
+ * interpretation of constructing a coarse-mesh representation of the fine-mesh
+ * function \f$u_f\f$ by "averaging" over its modes in a mass-conservative way.
+ *
+ * In many cases we project fine-mesh functions \f$u_f\f$, but sometimes we
+ * instead project massive quantities \f$(u_f, \phi)=M_f u_f\f$. In those cases
+ * the restriction operation simplifies to a mere transpose of the
+ * coarse-to-fine interpolation matrix \f$I\f$. Set the argument `type` to
+ * `ProjectionType::MassiveFunction` to obtain the restriction operator for
+ * massive quantities.
  */
-const Matrix& projection_matrix_child_to_parent(const Mesh<1>& child_mesh,
-                                                const Mesh<1>& parent_mesh,
-                                                ChildSize size) noexcept;
+const Matrix& projection_matrix_child_to_parent(
+    const Mesh<1>& child_mesh, const Mesh<1>& parent_mesh, ChildSize size,
+    ProjectionType projection_type = ProjectionType::Function) noexcept;
 
 /// The projection matrix from a parent element to one of its children.
 ///
