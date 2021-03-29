@@ -45,9 +45,9 @@ std::ostream& operator<<(std::ostream& os, ChildSize mortar_size) noexcept;
  * The projections implemented here are \f$L^2\f$ projections, or "Galerkin"
  * projections. They are defined such that the projection from a parent to one
  * of its children ("prolongation") is an (exact) interpolation, and the
- * projection from a child to its parent ("restriction") is its inverse.
+ * projection from a child to its parent ("restriction") is its adjoint.
  * Specifically, for every function \f$u_f\f$ on the "fine" child-mesh \f$e_f\f$
- * and every function \f$u_c\f$ on the "coarse" parent-mesh \$e_c\f$ the
+ * and every function \f$u_c\f$ on the "coarse" parent-mesh \f$e_c\f$ the
  * restriction operator \f$R\f$ satisfies the condition:
  *
  * \f{equation}
