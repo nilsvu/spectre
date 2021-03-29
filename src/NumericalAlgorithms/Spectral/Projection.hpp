@@ -14,7 +14,7 @@ class Mesh;
 
 namespace Spectral {
 
-/// The portion of an element covered by a child element.
+/// The portion of a mesh covered by a child mesh.
 enum class ChildSize { Full, UpperHalf, LowerHalf };
 
 /// The portion of an element covered by a mortar.
@@ -23,12 +23,12 @@ using MortarSize = ChildSize;
 std::ostream& operator<<(std::ostream& os, ChildSize mortar_size) noexcept;
 
 /*!
- * \brief The projection matrix from a child element to its parent.
+ * \brief The projection matrix from a child mesh to its parent.
  *
  * The projection matrices returned by this function (and by
  * projection_matrix_parent_to_child()) define orthogonal projection operators
- * between the spaces of functions on a parent element and its children. These
- * projections are usually the correct way to transfer data between elements in
+ * between the spaces of functions on a parent mesh and its children. These
+ * projections are usually the correct way to transfer data between meshes in
  * a mesh-refinement hierarchy, as well as between an element face and its
  * adjacent mortars.
  *
@@ -82,7 +82,7 @@ const Matrix& projection_matrix_child_to_parent(const Mesh<1>& child_mesh,
                                                 const Mesh<1>& parent_mesh,
                                                 ChildSize size) noexcept;
 
-/// The projection matrix from a parent element to one of its children.
+/// The projection matrix from a parent mesh to one of its children.
 ///
 /// \see projection_matrix_child_to_parent()
 const Matrix& projection_matrix_parent_to_child(const Mesh<1>& parent_mesh,
