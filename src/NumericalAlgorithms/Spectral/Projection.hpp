@@ -46,12 +46,13 @@ std::ostream& operator<<(std::ostream& os, ChildSize mortar_size) noexcept;
  * projections. They are defined such that the projection from a parent to one
  * of its children ("prolongation") is an (exact) interpolation, and the
  * projection from a child to its parent ("restriction") is its adjoint.
- * Specifically, for every function \f$u_f\f$ on the "fine" child-mesh \f$e_f\f$
- * and every function \f$u_c\f$ on the "coarse" parent-mesh \f$e_c\f$ the
- * restriction operator \f$R\f$ satisfies the condition:
+ * Specifically, for every function \f$u_f\f$ on the "fine" child-mesh
+ * \f$\Omega_f\f$ and every function \f$u_c\f$ on the "coarse" parent-mesh
+ * \f$\Omega_c\f$ the restriction operator \f$R\f$ satisfies the condition:
  *
  * \f{equation}
- * \int_{e_c} R(u_f) u_c \mathrm{d}x = \int_{e_f} u_f I(u_c) \mathrm{d}x
+ * \int_{\Omega_c} R(u_f) u_c \mathrm{d}x =
+ * \int_{\Omega_f} u_f I(u_c) \mathrm{d}x
  * \f}
  *
  * where \f$I\f$ denotes the interpolation operator from the coarse to the fine
