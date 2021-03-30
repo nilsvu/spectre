@@ -65,6 +65,14 @@ std::ostream& operator<<(std::ostream& os, ChildSize mortar_size) noexcept;
  * \text{.}
  * \f}
  *
+ * Note that in this implementation we compute the restriction operator by
+ * essentially truncating modes, making use of Vandermonde matrices (see
+ * `Spectral::modal_to_nodal_matrix`). This is equivalent to the expression
+ * above because \f$M=(\hat{\mathcal{V}} \hat{\mathcal{V}}^T)^{-1}\f$, where
+ * \f$\hat{\mathcal{V}}\f$ is the normalized Vandermonde matrix. This means the
+ * projection operation does _not_ employ a diagonal mass-matrix approximation,
+ * as we do e.g. in `dg::lift_flux`.
+ *
  * The restriction operation is an \f$L^2\f$ projection in the sense that
  * \f$R(u_f)=u_c\f$ minimizes the quantity \f$||u_c-u_f||^2\f$. It also has an
  * interpretation of constructing a coarse-mesh representation of the fine-mesh
