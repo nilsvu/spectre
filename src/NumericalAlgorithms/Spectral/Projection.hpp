@@ -59,7 +59,7 @@ std::ostream& operator<<(std::ostream& os, ChildSize mortar_size) noexcept;
  * \xi_\mathrm{fine}}\f$ is the Jacobian from the coarse to the fine logical
  * coordinates, i.e. just 1 for a full-sized child mesh and 2 for a half-sized
  * child mesh. Note that this "logical" projection operation introduces an
- * aliasing error on curved meshes since we don't include the (possibly
+ * aliasing error on curved meshes since it doesn't include the (possibly
  * time-dependent and curved) Jacobian to inertial coordinates. Also note that,
  * for the same reason, the projection is only mass-conservative on curved
  * meshes if you project the product of the function and the Jacobian from

@@ -37,6 +37,91 @@ void test_mortar_size() {
 }
 }  // namespace
 
+SPECTRE_TEST_CASE("Unit.Numerical.Spectral.Projection.SanityChecks",
+                  "[NumericalAlgorithms][Spectral][Unit]") {
+  const Mesh<1> parent_mesh{3, Spectral::Basis::Legendre,
+                            Spectral::Quadrature::GaussLobatto};
+  CAPTURE(parent_mesh);
+  const auto child_logical_coords_in_parent =
+      [](const DataVector& child_logical_coords,
+         const Spectral::ChildSize child_size) -> DataVector {
+    switch (child_size) {
+      case Spectral::ChildSize::Full:
+        return child_logical_coords;
+      case Spectral::ChildSize::LowerHalf:
+        return child_logical_coords * 0.5 - 0.5;
+      case Spectral::ChildSize::UpperHalf:
+        return child_logical_coords * 0.5 + 0.5;
+    }
+  };
+  for (size_t child_num_points = parent_mesh.extents(0);
+       child_num_points <
+       Spectral::maximum_number_of_points<Spectral::Basis::Legendre>;
+       ++child_num_points) {
+    const Mesh<1> child_mesh{child_num_points, Spectral::Basis::Legendre,
+                             Spectral::Quadrature::GaussLobatto};
+    CAPTURE(child_mesh);
+    for (const auto& child_size :
+         {Spectral::ChildSize::Full, Spectral::ChildSize::LowerHalf,
+          Spectral::ChildSize::UpperHalf}) {
+      CAPTURE(child_size);
+      const auto& restriction_matrix =
+          Spectral::projection_matrix_child_to_parent(child_mesh, parent_mesh,
+                                                      child_size);
+      const auto& prolongation_matrix =
+          Spectral::projection_matrix_parent_to_child(parent_mesh, child_mesh,
+                                                      child_size);
+      const auto interpolation_matrix = Spectral::interpolation_matrix(
+          parent_mesh,
+          child_logical_coords_in_parent(
+              Spectral::collocation_points(child_mesh), child_size));
+      {
+        INFO("Prolongation is interpolation");
+        CHECK_MATRIX_APPROX(prolongation_matrix, interpolation_matrix);
+      }
+      {
+        INFO("Restriction is M_parent^-1 * I^T * M_child");
+        const double child_length =
+            child_size == Spectral::ChildSize::Full ? 1. : 0.5;
+        CHECK_MATRIX_APPROX(restriction_matrix,
+                            child_length *
+                                inv(Spectral::mass_matrix(parent_mesh)) *
+                                trans(interpolation_matrix) *
+                                Spectral::mass_matrix(child_mesh));
+      }
+      {
+        INFO("Restriction and prolongation are adjoint");
+        const Matrix identity = blaze::IdentityMatrix<double>{3};
+        if (child_size == Spectral::ChildSize::Full) {
+          CHECK_MATRIX_APPROX(restriction_matrix * prolongation_matrix,
+                              identity);
+        } else {
+          const auto other_half = child_size == Spectral::ChildSize::UpperHalf
+                                      ? Spectral::ChildSize::LowerHalf
+                                      : Spectral::ChildSize::UpperHalf;
+          for (size_t sibling_num_points = parent_mesh.extents(0);
+               sibling_num_points <
+               Spectral::maximum_number_of_points<Spectral::Basis::Legendre>;
+               ++sibling_num_points) {
+            const Mesh<1> sibling_mesh{5, Spectral::Basis::Legendre,
+                                       Spectral::Quadrature::GaussLobatto};
+            const auto& sibling_restriction_matrix =
+                Spectral::projection_matrix_child_to_parent(
+                    sibling_mesh, parent_mesh, other_half);
+            const auto& sibling_prolongation_matrix =
+                Spectral::projection_matrix_parent_to_child(
+                    parent_mesh, sibling_mesh, other_half);
+            CHECK_MATRIX_APPROX(
+                restriction_matrix * prolongation_matrix +
+                    sibling_restriction_matrix * sibling_prolongation_matrix,
+                identity);
+          }  // for sibling_num_points
+        }
+      }
+    }  // for child_size
+  }    // for child_num_points
+}
+
 SPECTRE_TEST_CASE("Unit.Numerical.Spectral.Projection.p.mortar_to_element",
                   "[NumericalAlgorithms][Spectral][Unit]") {
   test_mortar_size();
