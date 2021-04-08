@@ -936,12 +936,13 @@ std::vector<std::array<size_t, 8>> corners_for_biradially_layered_domains(
 template <typename TargetFrame>
 std::vector<
     std::unique_ptr<domain::CoordinateMapBase<Frame::Logical, TargetFrame, 3>>>
-cyl_wedge_coordinate_maps(
-    const double inner_radius, const double outer_radius,
-    const double lower_bound, const double upper_bound,
-    const bool use_equiangular_map,
-    const std::vector<double>& radial_partitioning,
-    const std::vector<double>& height_partitioning) noexcept {
+cyl_wedge_coordinate_maps(const double inner_radius, const double outer_radius,
+                          const double lower_bound, const double upper_bound,
+                          const bool use_equiangular_map,
+                          const std::vector<double>& radial_partitioning,
+                          const std::vector<double>& height_partitioning,
+                          const domain::CoordinateMaps::Distribution
+                              outer_radial_distribution) noexcept {
   using Affine = domain::CoordinateMaps::Affine;
   using Affine3D =
       domain::CoordinateMaps::ProductOf3Maps<Affine, Affine, Affine>;
@@ -953,11 +954,18 @@ cyl_wedge_coordinate_maps(
   std::vector<std::unique_ptr<
       domain::CoordinateMapBase<Frame::Logical, TargetFrame, 3>>>
       cylinder_mapping;
+  ASSERT(
+      outer_radial_distribution ==
+              domain::CoordinateMaps::Distribution::Linear or
+          not radial_partitioning.empty(),
+      "To use a radial distribution other than 'Linear' in the outer shell the "
+      "'radial_partitioning' must have at least one entry.");
   double inner_circularity{};
   double temp_inner_radius{};
   double temp_outer_radius{};
   double temp_lower_bound = lower_bound;
   double temp_upper_bound{};
+  const auto use_both_halves = Wedge2D::WedgeHalves::Both;
   for (size_t layer = 0; layer < 1 + height_partitioning.size(); layer++) {
     temp_inner_radius = inner_radius;
     if (layer != height_partitioning.size()) {
@@ -990,33 +998,41 @@ cyl_wedge_coordinate_maps(
       } else {
         temp_outer_radius = outer_radius;
       }
+      const auto radial_distribution_this_shell =
+          (shell == radial_partitioning.size() and shell > 0)
+              ? outer_radial_distribution
+              : domain::CoordinateMaps::Distribution::Linear;
       cylinder_mapping.emplace_back(domain::make_coordinate_map_base<
                                     Frame::Logical, TargetFrame>(Wedge3DPrism{
           Wedge2D{temp_inner_radius, temp_outer_radius, inner_circularity, 1.0,
                   OrientationMap<2>{std::array<Direction<2>, 2>{
                       {Direction<2>::upper_xi(), Direction<2>::upper_eta()}}},
-                  use_equiangular_map},
+                  use_equiangular_map, use_both_halves,
+                  radial_distribution_this_shell},
           Affine{-1.0, 1.0, temp_lower_bound, temp_upper_bound}}));
       cylinder_mapping.emplace_back(domain::make_coordinate_map_base<
                                     Frame::Logical, TargetFrame>(Wedge3DPrism{
           Wedge2D{temp_inner_radius, temp_outer_radius, inner_circularity, 1.0,
                   OrientationMap<2>{std::array<Direction<2>, 2>{
                       {Direction<2>::lower_eta(), Direction<2>::upper_xi()}}},
-                  use_equiangular_map},
+                  use_equiangular_map, use_both_halves,
+                  radial_distribution_this_shell},
           Affine{-1.0, 1.0, temp_lower_bound, temp_upper_bound}}));
       cylinder_mapping.emplace_back(domain::make_coordinate_map_base<
                                     Frame::Logical, TargetFrame>(Wedge3DPrism{
           Wedge2D{temp_inner_radius, temp_outer_radius, inner_circularity, 1.0,
                   OrientationMap<2>{std::array<Direction<2>, 2>{
                       {Direction<2>::lower_xi(), Direction<2>::lower_eta()}}},
-                  use_equiangular_map},
+                  use_equiangular_map, use_both_halves,
+                  radial_distribution_this_shell},
           Affine{-1.0, 1.0, temp_lower_bound, temp_upper_bound}}));
       cylinder_mapping.emplace_back(domain::make_coordinate_map_base<
                                     Frame::Logical, TargetFrame>(Wedge3DPrism{
           Wedge2D{temp_inner_radius, temp_outer_radius, inner_circularity, 1.0,
                   OrientationMap<2>{std::array<Direction<2>, 2>{
                       {Direction<2>::upper_eta(), Direction<2>::lower_xi()}}},
-                  use_equiangular_map},
+                  use_equiangular_map, use_both_halves,
+                  radial_distribution_this_shell},
           Affine{-1.0, 1.0, temp_lower_bound, temp_upper_bound}}));
       inner_circularity = 1.;
       if (shell != radial_partitioning.size()) {
@@ -1368,7 +1384,8 @@ cyl_wedge_coordinate_maps(
     const double lower_bound, const double upper_bound,
     const bool use_equiangular_map,
     const std::vector<double>& radial_partitioning,
-    const std::vector<double>& height_partitioning) noexcept;
+    const std::vector<double>& height_partitioning,
+    domain::CoordinateMaps::Distribution outer_radial_distribution) noexcept;
 template std::vector<
     std::unique_ptr<domain::CoordinateMapBase<Frame::Logical, Frame::Grid, 3>>>
 cyl_wedge_coordinate_maps(
@@ -1376,7 +1393,8 @@ cyl_wedge_coordinate_maps(
     const double lower_bound, const double upper_bound,
     const bool use_equiangular_map,
     const std::vector<double>& radial_partitioning,
-    const std::vector<double>& height_partitioning) noexcept;
+    const std::vector<double>& height_partitioning,
+    domain::CoordinateMaps::Distribution outer_radial_distribution) noexcept;
 // Explicit instantiations
 /// \cond
 using Affine2d =

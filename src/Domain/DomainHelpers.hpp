@@ -16,6 +16,7 @@
 #include "DataStructures/Index.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Domain/BoundaryConditions/BoundaryCondition.hpp"
+#include "Domain/CoordinateMaps/Distribution.hpp"
 #include "Domain/Structure/Direction.hpp"
 #include "Domain/Structure/Side.hpp"
 #include "Utilities/ConstantExpressions.hpp"
@@ -217,12 +218,20 @@ std::vector<std::array<size_t, 8>> corners_for_biradially_layered_domains(
 /// specifies the z-boundaries, splitting the cylinder into stacked
 /// 3-dimensional disks. The circularity of the shell wedges changes from 0 to 1
 /// within the innermost sub-shell.
+///
+/// Set the `outer_radial_distribution` to select the radial distribution of
+/// grid points in the outermost spherical shell. To select a distribution other
+/// than `domain::CoordinateMaps::Distribution::Linear`, the
+/// `radial_partitioning` must have at least one entry so the outer shell has
+/// constant circularity.
 template <typename TargetFrame>
 auto cyl_wedge_coordinate_maps(
     double inner_radius, double outer_radius, double lower_bound,
     double upper_bound, bool use_equiangular_map,
     const std::vector<double>& radial_partitioning = {},
-    const std::vector<double>& height_partitioning = {}) noexcept
+    const std::vector<double>& height_partitioning = {},
+    domain::CoordinateMaps::Distribution outer_radial_distribution =
+        domain::CoordinateMaps::Distribution::Linear) noexcept
     -> std::vector<std::unique_ptr<
         domain::CoordinateMapBase<Frame::Logical, TargetFrame, 3>>>;
 

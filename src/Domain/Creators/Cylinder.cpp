@@ -33,7 +33,9 @@ Cylinder::Cylinder(
     const typename InitialRefinement::type& initial_refinement,
     const typename InitialRefinement::type& initial_number_of_grid_points,
     const bool use_equiangular_map, std::vector<double> radial_partitioning,
-    std::vector<double> height_partitioning, const Options::Context& context)
+    std::vector<double> height_partitioning,
+    const domain::CoordinateMaps::Distribution outer_radial_distribution,
+    const Options::Context& context)
     : inner_radius_(inner_radius),
       outer_radius_(outer_radius),
       lower_bound_(lower_bound),
@@ -41,7 +43,8 @@ Cylinder::Cylinder(
       is_periodic_in_z_(is_periodic_in_z),
       use_equiangular_map_(use_equiangular_map),
       radial_partitioning_(std::move(radial_partitioning)),
-      height_partitioning_(std::move(height_partitioning)) {
+      height_partitioning_(std::move(height_partitioning)),
+      outer_radial_distribution_(outer_radial_distribution) {
   if (inner_radius_ > outer_radius_) {
     PARSE_ERROR(context,
                 "Inner radius must be smaller than outer radius, but inner "
@@ -97,6 +100,14 @@ Cylinder::Cylinder(
           "Last height partition must be smaller than upper bound, but is: " +
               std::to_string(upper_bound_));
     }
+  }
+  if (outer_radial_distribution !=
+          domain::CoordinateMaps::Distribution::Linear and
+      radial_partitioning_.empty()) {
+    PARSE_ERROR(context,
+                "'OuterRadialDistribution' must be 'Linear' for a single "
+                "shell. Add an entry to 'RadialPartitioning' if you want to "
+                "select a radial distribution in the outer spherical shell.");
   }
 
   // Create block names and groups
@@ -163,11 +174,14 @@ Cylinder::Cylinder(
     const typename InitialRefinement::type& initial_refinement,
     const typename InitialRefinement::type& initial_number_of_grid_points,
     const bool use_equiangular_map, std::vector<double> radial_partitioning,
-    std::vector<double> height_partitioning, const Options::Context& context)
+    std::vector<double> height_partitioning,
+    const domain::CoordinateMaps::Distribution outer_radial_distribution,
+    const Options::Context& context)
     : Cylinder(inner_radius, outer_radius, lower_bound, upper_bound, false,
                initial_refinement, initial_number_of_grid_points,
                use_equiangular_map, std::move(radial_partitioning),
-               std::move(height_partitioning), context) {
+               std::move(height_partitioning), outer_radial_distribution,
+               context) {
   lower_boundary_condition_ = std::move(lower_boundary_condition);
   upper_boundary_condition_ = std::move(upper_boundary_condition);
   mantle_boundary_condition_ = std::move(mantle_boundary_condition);
@@ -278,13 +292,13 @@ Domain<3> Cylinder::create_domain() const noexcept {
     }
   }
 
-  return Domain<3>{
-      cyl_wedge_coordinate_maps<Frame::Inertial>(
-          inner_radius_, outer_radius_, lower_bound_, upper_bound_,
-          use_equiangular_map_, radial_partitioning_, height_partitioning_),
-      corners_for_cylindrical_layered_domains(number_of_shells,
-                                              number_of_discs),
-      pairs_of_faces, std::move(boundary_conditions_all_blocks)};
+  return Domain<3>{cyl_wedge_coordinate_maps<Frame::Inertial>(
+                       inner_radius_, outer_radius_, lower_bound_, upper_bound_,
+                       use_equiangular_map_, radial_partitioning_,
+                       height_partitioning_, outer_radial_distribution_),
+                   corners_for_cylindrical_layered_domains(number_of_shells,
+                                                           number_of_discs),
+                   pairs_of_faces, std::move(boundary_conditions_all_blocks)};
 }
 
 std::vector<std::array<size_t, 3>> Cylinder::initial_extents() const noexcept {

@@ -11,6 +11,7 @@
 
 #include "Domain/BoundaryConditions/BoundaryCondition.hpp"
 #include "Domain/BoundaryConditions/GetBoundaryConditionsBase.hpp"
+#include "Domain/CoordinateMaps/Distribution.hpp"
 #include "Domain/Creators/DomainCreator.hpp"  // IWYU pragma: keep
 #include "Domain/Domain.hpp"
 #include "Options/Options.hpp"
@@ -137,6 +138,14 @@ class Cylinder : public DomainCreator<3> {
         "between LowerBound and UpperBound."};
   };
 
+  struct OuterRadialDistribution {
+    using type = domain::CoordinateMaps::Distribution;
+    static constexpr Options::String help = {
+        "Select the radial distribution of grid points in the outermost "
+        "spherical shell. The 'RadialPartitioning' must have at least one "
+        "entry if you select a distribution other than 'Linear'."};
+  };
+
   struct BoundaryConditions {
     static constexpr Options::String help =
         "Options for the boundary conditions";
@@ -190,7 +199,8 @@ class Cylinder : public DomainCreator<3> {
                       typename Metavariables::system>>>,
           tmpl::list<IsPeriodicInZ>>,
       tmpl::list<InitialRefinement, InitialGridPoints, UseEquiangularMap,
-                 RadialPartitioning, HeightPartitioning>>;
+                 RadialPartitioning, HeightPartitioning,
+                 OuterRadialDistribution>>;
 
   static constexpr Options::String help{
       "Creates a right circular Cylinder with a square prism surrounded by \n"
@@ -221,6 +231,8 @@ class Cylinder : public DomainCreator<3> {
       const typename InitialRefinement::type& initial_number_of_grid_points,
       bool use_equiangular_map, std::vector<double> radial_partitioning = {},
       std::vector<double> height_partitioning = {},
+      domain::CoordinateMaps::Distribution outer_radial_distribution =
+          domain::CoordinateMaps::Distribution::Linear,
       const Options::Context& context = {});
 
   Cylinder(
@@ -236,6 +248,8 @@ class Cylinder : public DomainCreator<3> {
       const typename InitialRefinement::type& initial_number_of_grid_points,
       bool use_equiangular_map, std::vector<double> radial_partitioning = {},
       std::vector<double> height_partitioning = {},
+      domain::CoordinateMaps::Distribution outer_radial_distribution =
+          domain::CoordinateMaps::Distribution::Linear,
       const Options::Context& context = {});
 
   Cylinder() = default;
@@ -263,6 +277,8 @@ class Cylinder : public DomainCreator<3> {
   bool use_equiangular_map_{false};
   std::vector<double> radial_partitioning_{};
   std::vector<double> height_partitioning_{};
+  domain::CoordinateMaps::Distribution outer_radial_distribution_{
+      domain::CoordinateMaps::Distribution::Linear};
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
       lower_boundary_condition_{};
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
