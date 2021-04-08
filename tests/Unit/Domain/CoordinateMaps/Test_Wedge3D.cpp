@@ -8,6 +8,7 @@
 #include <optional>
 #include <random>
 
+#include "Domain/CoordinateMaps/Distribution.hpp"
 #include "Domain/CoordinateMaps/Wedge.hpp"
 #include "Domain/Structure/OrientationMap.hpp"
 #include "Framework/TestHelpers.hpp"
@@ -45,13 +46,20 @@ void test_wedge3d_all_directions() {
       CAPTURE(orientation);
       for (const auto& with_equiangular_map : {true, false}) {
         CAPTURE(with_equiangular_map);
-        for (const auto& with_logarithmic_map : {true, false}) {
-          CAPTURE(with_logarithmic_map);
-          const Wedge3D wedge_map(inner_radius, outer_radius,
-                                  with_logarithmic_map ? 1.0 : inner_sphericity,
-                                  with_logarithmic_map ? 1.0 : outer_sphericity,
-                                  orientation, with_equiangular_map, halves,
-                                  with_logarithmic_map);
+        for (const auto radial_distribution :
+             {CoordinateMaps::Distribution::Linear,
+              CoordinateMaps::Distribution::Logarithmic,
+              CoordinateMaps::Distribution::Inverse}) {
+          CAPTURE(radial_distribution);
+          const Wedge3D wedge_map(
+              inner_radius, outer_radius,
+              radial_distribution == CoordinateMaps::Distribution::Linear
+                  ? inner_sphericity
+                  : 1.0,
+              radial_distribution == CoordinateMaps::Distribution::Linear
+                  ? outer_sphericity
+                  : 1.0,
+              orientation, with_equiangular_map, halves, radial_distribution);
           test_suite_for_map_on_unit_cube(wedge_map);
         }
       }
