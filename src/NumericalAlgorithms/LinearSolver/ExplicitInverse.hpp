@@ -13,6 +13,7 @@
 #include "NumericalAlgorithms/LinearSolver/LinearSolver.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
+#include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TypeTraits/CreateIsCallable.hpp"
@@ -75,7 +76,14 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
   using Base = LinearSolver<LinearSolverRegistrars>;
 
  public:
-  using options = tmpl::list<>;
+  struct AssertSymmetric {
+    using type = bool;
+    static constexpr Options::String help =
+        "Assert the linear operator is symmetric. Useful to ensure other "
+        "linear solvers that require symmetry, such as Conjugate Gradients, "
+        "are well-formed.";
+  };
+  using options = tmpl::list<AssertSymmetric>;
   static constexpr Options::String help =
       "Build a matrix representation of the linear operator and invert it "
       "directly. This means that the first solve has a large initialization "
@@ -87,6 +95,9 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
   ExplicitInverse(ExplicitInverse&& /*rhs*/) = default;
   ExplicitInverse& operator=(ExplicitInverse&& /*rhs*/) = default;
   ~ExplicitInverse() = default;
+
+  explicit ExplicitInverse(const bool assert_symmetric) noexcept
+      : assert_symmetric_(assert_symmetric) {}
 
   /// \cond
   explicit ExplicitInverse(CkMigrateMessage* m) noexcept : Base(m) {}
@@ -116,9 +127,7 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
 
   /// Flags the operator to require re-initialization. No memory is released.
   /// Call this function to rebuild the solver when the operator changed.
-  void reset() noexcept override {
-    size_ = std::numeric_limits<size_t>::max();
-  }
+  void reset() noexcept override { size_ = std::numeric_limits<size_t>::max(); }
 
   /// Size of the operator. The stored matrix will have `size^2` entries.
   size_t size() const noexcept { return size_; }
@@ -131,6 +140,7 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) noexcept override {
+    p | assert_symmetric_;
     p | size_;
     p | inverse_;
     if (p.isUnpacking() and size_ != std::numeric_limits<size_t>::max()) {
@@ -144,6 +154,8 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
   }
 
  private:
+  bool assert_symmetric_{false};
+
   // Caches for successive solves of the same operator
   mutable size_t size_ = std::numeric_limits<size_t>::max();
   mutable DenseMatrix<double, blaze::columnMajor> inverse_{};
@@ -194,6 +206,11 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
       std::copy(result_iterator_begin, result_iterator_end,
                 column(operator_matrix, i).begin());
       ++i;
+    }
+    if (assert_symmetric_) {
+      if (not blaze::isSymmetric(operator_matrix)) {
+        ERROR_NO_TRACE("The operator matrix is not symmetric.");
+      }
     }
     // Directly invert the matrix
     try {
