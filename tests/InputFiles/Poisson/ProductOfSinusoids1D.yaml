@@ -55,7 +55,9 @@ LinearSolver:
     Iterations: 3
     MaxOverlap: 2
     Verbosity: Quiet
-    SubdomainSolver: ExplicitInverse
+    SubdomainSolver:
+      ExplicitInverse:
+        AssertSymmetric: True
 
   Multigrid:
     Iterations: 1
