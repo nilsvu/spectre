@@ -199,17 +199,25 @@ struct WeakFluxDifferentiationMatrixGenerator {
 template <Basis BasisType, Quadrature QuadratureType>
 struct MassMatrixGenerator {
   Matrix operator()(const size_t num_points) const noexcept {
-    auto normalized_vandermonde_matrix =
-        Spectral::modal_to_nodal_matrix<BasisType, QuadratureType>(num_points);
-    for (size_t j = 0; j < num_points; j++) {
-      const double normalization =
-          sqrt(compute_basis_function_normalization_square<BasisType>(j));
-      for (size_t i = 0; i < num_points; i++) {
-        normalized_vandermonde_matrix(i, j) /= normalization;
-      }
+    // auto normalized_vandermonde_matrix =
+    //     Spectral::modal_to_nodal_matrix<BasisType, QuadratureType>(
+    // num_points);
+    // for (size_t j = 0; j < num_points; j++) {
+    //   const double normalization =
+    //       sqrt(compute_basis_function_normalization_square<BasisType>(j));
+    //   for (size_t i = 0; i < num_points; i++) {
+    //     normalized_vandermonde_matrix(i, j) /= normalization;
+    //   }
+    // }
+    // return inv(normalized_vandermonde_matrix *
+    //            trans(normalized_vandermonde_matrix));
+    Matrix diag_mass_matrix{num_points, num_points, 0.};
+    const auto& weights =
+        Spectral::quadrature_weights<BasisType, QuadratureType>(num_points);
+    for (size_t i = 0; i < num_points;++i) {
+      diag_mass_matrix(i, i) = weights[i];
     }
-    return inv(normalized_vandermonde_matrix *
-               trans(normalized_vandermonde_matrix));
+    return diag_mass_matrix;
   }
 };
 
