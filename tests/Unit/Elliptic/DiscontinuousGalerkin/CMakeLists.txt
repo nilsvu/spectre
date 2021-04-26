@@ -25,11 +25,15 @@ target_link_libraries(
   ${LIBRARY}
   PRIVATE
   AnalyticSolutions
+  ConstitutiveRelations
   DataStructures
   DiscontinuousGalerkin
   Domain
   DomainCreators
   DomainStructure
+  Elasticity
+  ElasticityBoundaryConditions
+  ElasticitySolutions
   Elliptic
   EllipticDg
   ErrorHandling

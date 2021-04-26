@@ -4,6 +4,7 @@
 #include "Framework/TestingFramework.hpp"
 
 #include <cstddef>
+#include <memory>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -19,6 +20,7 @@
 #include "Domain/Structure/InitialElementIds.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/ApplyOperator.hpp"
+#include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "Framework/ActionTesting.hpp"
 #include "Framework/TestHelpers.hpp"
@@ -33,9 +35,15 @@
 #include "ParallelAlgorithms/Actions/SetData.hpp"
 #include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/Elasticity/BentBeam.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Poisson/ProductOfSinusoids.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
+#include "PointwiseFunctions/Elasticity/ConstitutiveRelations/ConstitutiveRelation.hpp"
+#include "PointwiseFunctions/Elasticity/ConstitutiveRelations/IsotropicHomogeneous.hpp"
+#include "PointwiseFunctions/Elasticity/ConstitutiveRelations/Tags.hpp"
 #include "Utilities/Literals.hpp"
+#include "Utilities/TMPL.hpp"
+#include "Utilities/TaggedTuple.hpp"
 
 namespace {
 
@@ -133,20 +141,23 @@ struct ElementArray {
                      IncrementTemporalId, Parallel::Actions::TerminatePhase>>>;
 };
 
-template <typename System, bool Linearized, typename AnalyticSolution>
+template <typename System, bool Linearized, typename AnalyticSolution,
+          typename GlobalCacheTags>
 struct Metavariables {
   using analytic_solution = AnalyticSolution;
   using element_array = ElementArray<System, Linearized, Metavariables>;
   using component_list = tmpl::list<element_array>;
   using const_global_cache_tags =
-      tmpl::list<::Tags::AnalyticSolution<AnalyticSolution>>;
+      tmpl::push_front<GlobalCacheTags,
+                       ::Tags::AnalyticSolution<AnalyticSolution>>;
   enum class Phase { Initialization, Testing, Exit };
 };
 
 template <
     typename System, bool Linearized, typename AnalyticSolution,
-    size_t Dim = System::volume_dim,
-    typename Metavars = Metavariables<System, Linearized, AnalyticSolution>,
+    typename... GlobalCacheTags, size_t Dim = System::volume_dim,
+    typename Metavars = Metavariables<System, Linearized, AnalyticSolution,
+                                      tmpl::list<GlobalCacheTags...>>,
     typename ElementArray = typename Metavars::element_array>
 void test_dg_operator(
     const DomainCreator<Dim>& domain_creator, const double penalty_parameter,
@@ -163,7 +174,9 @@ void test_dg_operator(
         std::unordered_map<
             ElementId<Dim>,
             typename ElementArray::operator_applied_to_vars_tag::type>>>&
-        tests_data) {
+        tests_data,
+    tuples::TaggedTuple<GlobalCacheTags...> global_cache_items =
+        tuples::TaggedTuple<>{}) {
   using element_array = ElementArray;
   using vars_tag = typename element_array::vars_tag;
   using primal_fluxes_vars_tag = typename element_array::primal_fluxes_vars_tag;
@@ -188,11 +201,11 @@ void test_dg_operator(
     }
   }
 
-  ActionTesting::MockRuntimeSystem<Metavars> runner{
-      tuples::TaggedTuple<domain::Tags::Domain<Dim>,
-                          ::elliptic::dg::Tags::PenaltyParameter,
-                          ::Tags::AnalyticSolution<AnalyticSolution>>{
-          std::move(domain), penalty_parameter, analytic_solution}};
+  ActionTesting::MockRuntimeSystem<Metavars> runner{tuples::TaggedTuple<
+      domain::Tags::Domain<Dim>, ::elliptic::dg::Tags::PenaltyParameter,
+      ::Tags::AnalyticSolution<AnalyticSolution>, GlobalCacheTags...>{
+      std::move(domain), penalty_parameter, analytic_solution,
+      std::move(get<GlobalCacheTags>(global_cache_items))...}};
 
   // DataBox shortcuts
   const auto get_tag = [&runner](
@@ -738,6 +751,41 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.Operator", "[Unit][Elliptic]") {
           domain_creator, penalty_parameter, analytic_solution,
           analytic_solution_aux_approx, analytic_solution_operator_approx, {});
     }
+  }
+  {
+    INFO("2D elasticity system");
+    Parallel::register_derived_classes_with_charm<
+        Elasticity::ConstitutiveRelations::ConstitutiveRelation<2>>();
+    using system = Elasticity::FirstOrderSystem<2>;
+    Elasticity::Solutions::BentBeam<> analytic_solution{
+        2., 1., 1., {79.36507936507935, 38.75968992248062}};
+    using boundary_condition_registrars =
+        typename system::boundary_conditions_base::registrars;
+    using AnalyticSolutionBoundaryCondition =
+        typename elliptic::BoundaryConditions::Registrars::AnalyticSolution<
+            system>::template f<boundary_condition_registrars>;
+    Parallel::register_derived_classes_with_charm<
+        typename system::boundary_conditions_base>();
+    const domain::creators::Rectangle domain_creator{
+        {{-1., -0.5}},
+        {{1., 0.5}},
+        {{1, 1}},
+        {{3, 3}},
+        std::make_unique<AnalyticSolutionBoundaryCondition>(
+            elliptic::BoundaryConditionType::Dirichlet),
+        nullptr};
+    Approx analytic_solution_aux_approx =
+        Approx::custom().epsilon(1.e-10).scale(1.);
+    Approx analytic_solution_operator_approx =
+        Approx::custom().epsilon(1.e-10).scale(1. * penalty_parameter *
+                                               square(3));
+    test_dg_operator<system, true>(
+        domain_creator, penalty_parameter, analytic_solution,
+        analytic_solution_aux_approx, analytic_solution_operator_approx, {},
+        tuples::TaggedTuple<Elasticity::Tags::ConstitutiveRelation<2>>{
+            std::make_unique<
+                Elasticity::ConstitutiveRelations::IsotropicHomogeneous<2>>(
+                analytic_solution.constitutive_relation())});
   }
 
   // The following are tests for smaller units of functionality
