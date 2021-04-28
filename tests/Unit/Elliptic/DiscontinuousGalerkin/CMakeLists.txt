@@ -1,8 +1,6 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-add_subdirectory(NumericalFluxes)
-
 set(LIBRARY "Test_EllipticDG")
 
 set(LIBRARY_SOURCES
@@ -40,3 +38,6 @@ target_link_libraries(
   Spectral
   Utilities
   )
+
+add_subdirectory(NumericalFluxes)
+add_subdirectory(SubdomainOperator)
