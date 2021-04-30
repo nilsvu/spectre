@@ -6,6 +6,9 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "Domain/BoundaryConditions/BoundaryCondition.hpp"
@@ -151,6 +154,10 @@ class Sphere : public DomainCreator<3> {
   std::vector<std::array<size_t, 3>> initial_refinement_levels() const
       noexcept override;
 
+  std::vector<std::string> block_names() const noexcept override;
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+  block_groups() const noexcept override;
+
  private:
   typename InnerRadius::type inner_radius_{};
   typename OuterRadius::type outer_radius_{};
@@ -159,6 +166,9 @@ class Sphere : public DomainCreator<3> {
   typename UseEquiangularMap::type use_equiangular_map_ = false;
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
       boundary_condition_;
+  std::vector<std::string> block_names_{};
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+      block_groups_{};
 };
 }  // namespace creators
 }  // namespace domain
