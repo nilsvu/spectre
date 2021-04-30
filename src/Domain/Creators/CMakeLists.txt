@@ -14,7 +14,6 @@ spectre_target_sources(
   Cylinder.cpp
   CylindricalBinaryCompactObject.cpp
   Disk.cpp
-  ExpandOverBlocks.cpp
   FrustalCloak.cpp
   Interval.cpp
   Rectangle.cpp
