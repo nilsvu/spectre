@@ -11,6 +11,7 @@
 #include <string>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "Domain/BoundaryConditions/BoundaryCondition.hpp"
@@ -702,6 +703,10 @@ class BinaryCompactObject : public DomainCreator<3> {
       std::string,
       std::unique_ptr<domain::FunctionsOfTime::FunctionOfTime>> override;
 
+  std::vector<std::string> block_names() const noexcept override;
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+  block_groups() const noexcept override;
+
  private:
   void check_for_parse_errors(const Options::Context& context) const;
   void initialize_calculated_member_variables() noexcept;
@@ -742,6 +747,10 @@ class BinaryCompactObject : public DomainCreator<3> {
   std::array<double, 2> initial_size_map_velocities_;
   std::array<double, 2> initial_size_map_accelerations_;
   std::array<std::string, 2> size_map_function_of_time_names_;
+
+  std::vector<std::string> block_names_{};
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+      block_groups_{};
 };
 }  // namespace creators
 }  // namespace domain

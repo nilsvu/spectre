@@ -701,4 +701,13 @@ BinaryCompactObject::functions_of_time() const noexcept {
 
   return result;
 }
+
+std::vector<std::string> BinaryCompactObject::block_names() const noexcept {
+  return block_names_;
+}
+
+std::unordered_map<std::string, std::unordered_set<std::string>>
+BinaryCompactObject::block_groups() const noexcept {
+  return block_groups_;
+}
 }  // namespace domain::creators

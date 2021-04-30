@@ -8,6 +8,9 @@
 #include <iosfwd>
 #include <limits>
 #include <memory>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "DataStructures/Index.hpp"
@@ -185,21 +188,21 @@ class AlignedLattice : public DomainCreator<VolumeDim> {
       "will trigger an error, as periodic boundary\n"
       "conditions for this domain with holes is not supported."};
 
-  AlignedLattice(typename BlockBounds::type block_bounds,
-                 typename InitialLevels::type initial_refinement_levels,
-                 typename InitialGridPoints::type initial_number_of_grid_points,
-                 typename RefinedLevels::type refined_refinement,
-                 typename RefinedGridPoints::type refined_grid_points,
-                 typename BlocksToExclude::type blocks_to_exclude,
-                 typename IsPeriodicIn::type is_periodic_in,
+  AlignedLattice(std::array<std::vector<double>, VolumeDim> block_bounds,
+                 std::array<size_t, VolumeDim> initial_refinement_levels,
+                 std::array<size_t, VolumeDim> initial_number_of_grid_points,
+                 std::vector<RefinementRegion<VolumeDim>> refined_refinement,
+                 std::vector<RefinementRegion<VolumeDim>> refined_grid_points,
+                 std::vector<std::array<size_t, VolumeDim>> blocks_to_exclude,
+                 std::array<bool, VolumeDim> is_periodic_in,
                  const Options::Context& context = {});
 
-  AlignedLattice(typename BlockBounds::type block_bounds,
-                 typename InitialLevels::type initial_refinement_levels,
-                 typename InitialGridPoints::type initial_number_of_grid_points,
-                 typename RefinedLevels::type refined_refinement,
-                 typename RefinedGridPoints::type refined_grid_points,
-                 typename BlocksToExclude::type blocks_to_exclude,
+  AlignedLattice(std::array<std::vector<double>, VolumeDim> block_bounds,
+                 std::array<size_t, VolumeDim> initial_refinement_levels,
+                 std::array<size_t, VolumeDim> initial_number_of_grid_points,
+                 std::vector<RefinementRegion<VolumeDim>> refined_refinement,
+                 std::vector<RefinementRegion<VolumeDim>> refined_grid_points,
+                 std::vector<std::array<size_t, VolumeDim>> blocks_to_exclude,
                  std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
                      boundary_condition = nullptr,
                  const Options::Context& context = {});
@@ -219,6 +222,10 @@ class AlignedLattice : public DomainCreator<VolumeDim> {
   std::vector<std::array<size_t, VolumeDim>> initial_refinement_levels() const
       noexcept override;
 
+  std::vector<std::string> block_names() const noexcept override;
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+  block_groups() const noexcept override;
+
  private:
   typename BlockBounds::type block_bounds_{
       make_array<VolumeDim, std::vector<double>>({})};
@@ -233,6 +240,9 @@ class AlignedLattice : public DomainCreator<VolumeDim> {
   Index<VolumeDim> number_of_blocks_by_dim_{};
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
       boundary_condition_{};
+  std::vector<std::string> block_names_{};
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+      block_groups_{};
 };
 }  // namespace creators
 }  // namespace domain

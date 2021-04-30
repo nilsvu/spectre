@@ -698,4 +698,14 @@ CylindricalBinaryCompactObject::functions_of_time() const noexcept {
   }
 }
 
+std::vector<std::string> CylindricalBinaryCompactObject::block_names()
+    const noexcept {
+  return block_names_;
+}
+
+std::unordered_map<std::string, std::unordered_set<std::string>>
+CylindricalBinaryCompactObject::block_groups() const noexcept {
+  return block_groups_;
+}
+
 }  // namespace domain::creators

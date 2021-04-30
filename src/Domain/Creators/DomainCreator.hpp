@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "Domain/FunctionsOfTime/FunctionOfTime.hpp"
@@ -40,6 +41,15 @@ class DomainCreator {
   virtual ~DomainCreator() = default;
 
   virtual Domain<VolumeDim> create_domain() const = 0;
+
+  /// A human-readable name for every block
+  virtual std::vector<std::string> block_names() const noexcept = 0;
+
+  /// Labels to refer to groups of blocks. The groups can overlap, and they
+  /// don't have to cover all blocks in the domain. The groups can be used to
+  /// refer to multiple blocks at once when specifying input-file options.
+  virtual std::unordered_map<std::string, std::unordered_set<std::string>>
+  block_groups() const noexcept = 0;
 
   /// Obtain the initial grid extents of the Element%s in each block.
   virtual std::vector<std::array<size_t, VolumeDim>> initial_extents() const
