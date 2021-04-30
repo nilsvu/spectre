@@ -28,6 +28,8 @@ Background:
 InitialGuess:
   Zero:
 
+Material: Auto
+
 DomainCreator:
   Cylinder:
     InnerRadius: 0.08
