@@ -6,6 +6,10 @@
 #include <array>
 #include <cstddef>
 #include <vector>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include "Domain/BoundaryConditions/BoundaryCondition.hpp"
 #include "Domain/BoundaryConditions/GetBoundaryConditionsBase.hpp"
@@ -203,6 +207,10 @@ class Shell : public DomainCreator<3> {
       std::string,
       std::unique_ptr<domain::FunctionsOfTime::FunctionOfTime>> override;
 
+  std::vector<std::string> block_names() const noexcept override;
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+  block_groups() const noexcept override;
+
  private:
   typename InnerRadius::type inner_radius_{};
   typename OuterRadius::type outer_radius_{};
@@ -219,6 +227,9 @@ class Shell : public DomainCreator<3> {
       inner_boundary_condition_;
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
       outer_boundary_condition_;
+  std::vector<std::string> block_names_{};
+  std::unordered_map<std::string, std::unordered_set<std::string>>
+      block_groups_{};
 };
 }  // namespace creators
 }  // namespace domain
