@@ -4,8 +4,11 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 
 #include "DataStructures/DataBox/Tag.hpp"
+#include "Options/Auto.hpp"
+#include "Options/Options.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/ConstitutiveRelation.hpp"
 
 namespace Elasticity {
@@ -20,23 +23,6 @@ template <size_t Dim>
 struct ConstitutiveRelation : db::SimpleTag {
   using type =
       std::unique_ptr<ConstitutiveRelations::ConstitutiveRelation<Dim>>;
-};
-
-/*!
- * \brief Reference the constitutive relation provided by the `ProviderTag`
- *
- * \see `Elasticity::Tags::ConstitutiveRelation`
- */
-template <size_t Dim, typename ProviderTag>
-struct ConstitutiveRelationReference : ConstitutiveRelation<Dim>,
-                                       db::ReferenceTag {
-  using base = ConstitutiveRelation<Dim>;
-  using argument_tags = tmpl::list<ProviderTag>;
-  template <typename Provider>
-  static const ConstitutiveRelations::ConstitutiveRelation<Dim>& get(
-      const Provider& provider) noexcept {
-    return provider.constitutive_relation();
-  }
 };
 
 }  // namespace Tags

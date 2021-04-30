@@ -15,6 +15,7 @@
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/InitializeSubdomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
+#include "Elliptic/Systems/Elasticity/Actions/InitializeConstitutiveRelation.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "Elliptic/Tags.hpp"
@@ -205,9 +206,10 @@ struct Metavariables {
       typename schwarz_smoother::initialize_element,
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       elliptic::Actions::InitializeFixedSources<system, background_tag>,
+      Elasticity::Actions::InitializeConstitutiveRelation<
+          Dim, background_tag,
+          Elasticity::Solutions::AnalyticSolution<Dim, background_registrars>>,
       Initialization::Actions::AddComputeTags<tmpl::list<
-          Elasticity::Tags::ConstitutiveRelationReference<volume_dim,
-                                                          background_tag>,
           Elasticity::Tags::StrainCompute<volume_dim>,
           Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>>>,
       elliptic::Actions::InitializeOptionalAnalyticSolution<
@@ -303,6 +305,9 @@ static const std::vector<void (*)()> charm_init_node_funcs{
     &domain::creators::register_derived_with_charm,
     &Parallel::register_derived_classes_with_charm<
         metavariables::background_tag::type::element_type>,
+    &Parallel::register_derived_classes_with_charm<
+        Elasticity::ConstitutiveRelations::ConstitutiveRelation<
+            metavariables::volume_dim>>,
     &Parallel::register_derived_classes_with_charm<
         metavariables::initial_guess_tag::type::element_type>,
     &Parallel::register_derived_classes_with_charm<
