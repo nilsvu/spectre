@@ -5,12 +5,13 @@
 
 #include <cstddef>
 #include <limits>
+#include <memory>
 #include <pup.h>
 
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
-#include "PointwiseFunctions/Elasticity/ConstitutiveRelations/ConstitutiveRelation.hpp"  // IWYU pragma: keep
+#include "PointwiseFunctions/Elasticity/ConstitutiveRelations/ConstitutiveRelation.hpp"
 #include "Utilities/TMPL.hpp"
 
 /// \cond
@@ -110,6 +111,8 @@ class CubicCrystal : public ConstitutiveRelation<3> {
   ~CubicCrystal() override = default;
 
   CubicCrystal(double c_11, double c_12, double c_44);
+
+  std::unique_ptr<ConstitutiveRelation<3>> get_clone() const override;
 
   /// The constitutive relation that characterizes the elastic properties of a
   /// material
