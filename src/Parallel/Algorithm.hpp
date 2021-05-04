@@ -251,6 +251,7 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>
     // Parallel::printf("Contributing to reduction #%d\n",
     //                  section_cookie.get_redNo());
     ContributeToReduction::apply(msg->data, msg->target_proxy, section_cookie);
+    delete msg;
   }
 
   /// \brief Explicitly call the action `Action`. If the returned DataBox type
