@@ -284,6 +284,7 @@ void contribute_to_reduction(
     using SectionProxy = typename SectionType::cproxy_section;
     // Retrieve the section cookie that keeps track of the reduction
     auto& section_cookie = section.cookie();
+    Parallel::printf("red on pe: %d\n",section_cookie.get_pe());
     // Ideally we would update the section cookie here using
     // `CkGetSectionInfo()`. However, that only works with CkMulticast messages
     // (see
