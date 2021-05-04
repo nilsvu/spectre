@@ -39,7 +39,7 @@ struct Section {
   using section_id_tag = SectionIdTag;
 
   Section(IdType id, cproxy_section proxy) noexcept
-      : id_(id), proxy_(std::move(proxy)) {}
+      : id_(id), proxy_(std::move(proxy)), cookie_(proxy_.ckGetSectionInfo()) {}
 
   Section() = default;
   Section(Section&& rhs) = default;
@@ -65,14 +65,7 @@ struct Section {
    * reductions see:
    * https://charm.readthedocs.io/en/latest/charm++/manual.html?#sections-subsets-of-a-chare-array-group
    */
-  CkSectionInfo& cookie() const noexcept {
-    // Can't create the cookie in the constructor, possibly because the section
-    // elements need to exist at this point. Therefore we create it lazily here.
-    if (not cookie_.has_value()) {
-      cookie_ = proxy_.ckGetSectionInfo();
-    }
-    return *cookie_;
-  }
+  CkSectionInfo& cookie() const noexcept { return cookie_; }
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) noexcept {
@@ -83,8 +76,8 @@ struct Section {
 
  private:
   IdType id_{};
-  mutable cproxy_section proxy_{};
-  mutable std::optional<CkSectionInfo> cookie_{};
+  cproxy_section proxy_{};
+  mutable CkSectionInfo cookie_{};
 };
 
 }  // namespace Parallel
