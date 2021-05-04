@@ -508,23 +508,30 @@ struct SubdomainOperator
             // we don't send mortar data and also don't expect to receive any.
             // Instead, we assume the data on it is zero and manufacture
             // appropriate remote boundary data.
+            const auto& neighbors_neighbor_mortar_mesh =
+                all_neighbors_neighbor_mortar_meshes.at(overlap_id)
+                    .at(neighbor_mortar_id);
+            auto zero_mortar_data = elliptic::dg::zero_boundary_data_on_mortar<
+                typename System::primal_fields, typename System::primal_fluxes>(
+                neighbors_neighbor_direction,
+                all_neighbors_neighbor_meshes.at(overlap_id)
+                    .at(neighbor_mortar_id),
+                all_neighbors_neighbor_face_normal_magnitudes.at(overlap_id)
+                    .at(neighbor_mortar_id),
+                neighbors_neighbor_mortar_mesh,
+                all_neighbors_neighbor_mortar_sizes.at(overlap_id)
+                    .at(neighbor_mortar_id));
+            // The data is zero, but auxiliary quantities such as the face
+            // normal magnitude may need re-orientation
+            if (not neighbor_orientation.is_aligned()) {
+              zero_mortar_data.orient_on_slice(
+                  neighbors_neighbor_mortar_mesh.extents(),
+                  neighbors_neighbor_direction.dimension(),
+                  neighbor_orientation.inverse_map());
+            }
             neighbors_mortar_data_.at(overlap_id)
                 .at(neighbor_mortar_id)
-                .remote_insert(
-                    temporal_id,
-                    elliptic::dg::zero_boundary_data_on_mortar<
-                        typename System::primal_fields,
-                        typename System::primal_fluxes>(
-                        neighbors_neighbor_direction,
-                        all_neighbors_neighbor_meshes.at(overlap_id)
-                            .at(neighbor_mortar_id),
-                        all_neighbors_neighbor_face_normal_magnitudes
-                            .at(overlap_id)
-                            .at(neighbor_mortar_id),
-                        all_neighbors_neighbor_mortar_meshes.at(overlap_id)
-                            .at(neighbor_mortar_id),
-                        all_neighbors_neighbor_mortar_sizes.at(overlap_id)
-                            .at(neighbor_mortar_id)));
+                .remote_insert(temporal_id, std::move(zero_mortar_data));
           }
         }  // loop over neighbor's mortars
       }    // loop over neighbors
