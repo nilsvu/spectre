@@ -21,15 +21,18 @@
 #include "Domain/Structure/Element.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Structure/IndexToSliceAt.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Formulation.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Penalty.hpp"
 #include "Elliptic/Systems/GetSourcesComputer.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/LiftFlux.hpp"
+#include "NumericalAlgorithms/DiscontinuousGalerkin/MetricIdentityJacobian.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NormalDotFlux.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/SimpleBoundaryData.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/SimpleMortarData.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
+#include "NumericalAlgorithms/LinearOperators/WeakDivergence.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Utilities/ErrorHandling/Assert.hpp"
@@ -615,7 +618,7 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
       // want to modify them by adding boundary corrections. E.g. linearized
       // sources use the nonlinear fields and fluxes as background fields.
       const Variables<tmpl::list<PrimalFluxesVars...>>& primal_fluxes,
-      const Mesh<Dim>& mesh,
+      const Mesh<Dim>& mesh, const tnsr::I<DataVector, Dim>& inertial_coords,
       const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
           inv_jacobian,
       const std::unordered_map<Direction<Dim>, Scalar<DataVector>>&
@@ -624,7 +627,8 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
           external_face_normal_magnitudes,
       const ::dg::MortarMap<Dim, Mesh<Dim - 1>>& all_mortar_meshes,
       const ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>& all_mortar_sizes,
-      const double penalty_parameter, const bool massive,
+      const double penalty_parameter,
+      const elliptic::dg::Formulation formulation, const bool massive,
       const TemporalId& temporal_id,
       const std::tuple<SourcesArgs...>& sources_args,
       const DirectionsPredicate& directions_predicate =
@@ -662,6 +666,11 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
                  << mesh.basis(d) << "' and quadrature '" << mesh.quadrature(d)
                  << "' in dimension " << d << ".");
     }
+    ASSERT(formulation == elliptic::dg::Formulation::Strong or
+               formulation == elliptic::dg::Formulation::StrongWeak,
+           "Unsupported DG formulation '"
+               << formulation
+               << "'. Supported formulations are 'Strong' and 'StrongWeak'.");
 #endif  // SPECTRE_DEBUG
 
     // Add boundary corrections to the auxiliary variables _before_ computing
@@ -740,11 +749,29 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
 
     // Compute the primal equation, i.e. the actual DG operator, by taking the
     // second derivative: -div(F_u(v)) + S_u = f(x)
-    divergence(operator_applied_to_vars, primal_fluxes_corrected, mesh,
-               inv_jacobian);
-    // This is the sign flip that makes the operator _minus_ the Laplacian for a
-    // Poisson system
-    *operator_applied_to_vars *= -1.;
+    if (formulation == elliptic::dg::Formulation::Strong) {
+      divergence(operator_applied_to_vars, primal_fluxes_corrected, mesh,
+                 inv_jacobian);
+      // This is the sign flip that makes the operator _minus_ the Laplacian for
+      // a Poisson system
+      *operator_applied_to_vars *= -1.;
+    } else {
+      if constexpr (Dim == 1) {
+        weak_divergence(operator_applied_to_vars, primal_fluxes_corrected, mesh,
+                        {});
+      } else {
+        const auto [det_inv_jacobian, jacobian] =
+            determinant_and_inverse(inv_jacobian);
+        InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>
+            det_jac_times_inverse_jacobian{};
+        ::dg::metric_identity_det_jac_times_inv_jac(
+            make_not_null(&det_jac_times_inverse_jacobian), mesh,
+            inertial_coords, jacobian);
+        weak_divergence(operator_applied_to_vars, primal_fluxes_corrected, mesh,
+                        det_jac_times_inverse_jacobian);
+        *operator_applied_to_vars *= get(det_inv_jacobian);
+      }
+    }
     // Using the non-boundary-corrected primal fluxes to compute sources here
     std::apply(
         [&operator_applied_to_vars, &primal_vars,
@@ -798,9 +825,12 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
           remote_data.field_data.template extract_subset<
               tmpl::list<Tags::NormalDotFluxForJump<PrimalMortarVars>...>>();
       primal_boundary_corrections_on_mortar *= penalty;
+      const double formulation_sign =
+          formulation == elliptic::dg::Formulation::Strong ? 1. : -1.;
       primal_boundary_corrections_on_mortar +=
-          0.5 * local_data.field_data.template extract_subset<
-                    tmpl::list<::Tags::NormalDotFlux<PrimalMortarVars>...>>();
+          formulation_sign * 0.5 *
+          local_data.field_data.template extract_subset<
+              tmpl::list<::Tags::NormalDotFlux<PrimalMortarVars>...>>();
       primal_boundary_corrections_on_mortar +=
           0.5 * remote_data.field_data.template extract_subset<
                     tmpl::list<::Tags::NormalDotFlux<PrimalMortarVars>...>>();
@@ -847,6 +877,7 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
       const gsl::not_null<Variables<tmpl::list<FixedSourcesTags...>>*>
           fixed_sources,
       const Element<Dim>& element, const Mesh<Dim>& mesh,
+      const tnsr::I<DataVector, Dim>& inertial_coords,
       const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
           inv_jacobian,
       const std::unordered_map<Direction<Dim>, tnsr::i<DataVector, Dim>>&
@@ -855,7 +886,8 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
           external_face_normal_magnitudes,
       const ::dg::MortarMap<Dim, Mesh<Dim - 1>>& all_mortar_meshes,
       const ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>& all_mortar_sizes,
-      const double penalty_parameter, const bool massive,
+      const double penalty_parameter,
+      const elliptic::dg::Formulation formulation, const bool massive,
       const ApplyBoundaryCondition& apply_boundary_condition,
       const std::tuple<FluxesArgs...>& fluxes_args,
       const std::tuple<SourcesArgs...>& sources_args,
@@ -898,10 +930,10 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         fluxes_args_on_internal_faces, fluxes_args_on_external_faces);
     apply_operator<true>(make_not_null(&operator_applied_to_zero_vars),
                          make_not_null(&all_mortar_data), zero_primal_vars,
-                         primal_fluxes_buffer, mesh, inv_jacobian, {},
-                         external_face_normal_magnitudes, all_mortar_meshes,
-                         all_mortar_sizes, penalty_parameter, massive,
-                         temporal_id, sources_args);
+                         primal_fluxes_buffer, mesh, inertial_coords,
+                         inv_jacobian, {}, external_face_normal_magnitudes,
+                         all_mortar_meshes, all_mortar_sizes, penalty_parameter,
+                         formulation, massive, temporal_id, sources_args);
     // Impose the nonlinear (constant) boundary contribution as fixed sources on
     // the RHS of the equations
     *fixed_sources -= operator_applied_to_zero_vars;
