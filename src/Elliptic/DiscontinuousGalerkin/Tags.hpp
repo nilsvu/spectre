@@ -4,6 +4,7 @@
 #pragma once
 
 #include "DataStructures/DataBox/Tag.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Formulation.hpp"
 #include "Options/Options.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -30,6 +31,13 @@ struct PenaltyParameter {
       "penalty parameter may need to be increased to keep the problem "
       "well-defined.";
   using group = DiscontinuousGalerkin;
+};
+
+struct Formulation {
+  using type = elliptic::dg::Formulation;
+  using group = DiscontinuousGalerkin;
+  static constexpr Options::String help =
+      "Discontinuous Galerkin formulation for the elliptic equations";
 };
 
 struct Massive {
@@ -59,6 +67,15 @@ struct PenaltyParameter : db::SimpleTag {
   static double create_from_options(const double value) noexcept {
     return value;
   }
+};
+
+/// The elliptic DG formulation
+struct Formulation : db::SimpleTag {
+  using type = elliptic::dg::Formulation;
+
+  using option_tags = tmpl::list<OptionTags::Formulation>;
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type value) noexcept { return value; }
 };
 
 struct Massive : db::SimpleTag {
