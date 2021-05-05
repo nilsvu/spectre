@@ -9,6 +9,7 @@ spectre_target_sources(
   ${LIBRARY}
   PRIVATE
   Formulation.cpp
+  Mass.cpp
   MetricIdentityJacobian.cpp
   MortarHelpers.cpp
   )
@@ -19,6 +20,7 @@ spectre_target_headers(
   HEADERS
   Formulation.hpp
   LiftFlux.hpp
+  Mass.hpp
   MetricIdentityJacobian.hpp
   MortarHelpers.hpp
   NormalDotFlux.hpp
@@ -34,8 +36,10 @@ target_link_libraries(
   Boost::boost
   DataStructures
   DomainStructure
+  ErrorHandling
   Options
   Spectral
+  Utilities
   INTERFACE
   Domain
   )
