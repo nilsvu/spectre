@@ -16,6 +16,7 @@
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/SliceVariables.hpp"
+#include "DataStructures/Tensor/EagerMath/Determinant.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
@@ -72,6 +73,7 @@ void initialize_overlap_geometry(
     const gsl::not_null<
         InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>*>
         inv_jacobian,
+    const gsl::not_null<Scalar<DataVector>*> det_inv_jacobian,
     const gsl::not_null<
         std::unordered_map<Direction<Dim>, tnsr::I<DataVector, Dim>>*>
         face_inertial_coords_internal,
@@ -121,6 +123,7 @@ void initialize_overlap_geometry(
   *inertial_coords = element_map->operator()(logical_coords);
   // Jacobian
   *inv_jacobian = element_map->inv_jacobian(logical_coords);
+  *det_inv_jacobian = determinant(*inv_jacobian);
   // Faces and mortars
   for (const auto& [direction, neighbors] : element->neighbors()) {
     const auto face_mesh = mesh->slice_away(direction.dimension());
@@ -217,6 +220,7 @@ struct InitializeSubdomain {
           domain::Tags::Element<Dim>, domain::Tags::ElementMap<Dim>,
           domain::Tags::Coordinates<Dim, Frame::Inertial>,
           domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
+          domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>,
           domain::Tags::Interface<
               domain::Tags::InternalDirections<Dim>,
               domain::Tags::Coordinates<Dim, Frame::Inertial>>,
