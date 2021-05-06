@@ -21,6 +21,7 @@ set(LIBS_TO_LINK
   Options
   Parallel
   ParallelLinearSolver
+  ParallelMultigrid
   ParallelSchwarz
   Utilities
   )

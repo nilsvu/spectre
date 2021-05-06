@@ -41,6 +41,8 @@
 #include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
+#include "ParallelAlgorithms/LinearSolver/Multigrid/ElementsAllocator.hpp"
+#include "ParallelAlgorithms/LinearSolver/Multigrid/Multigrid.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
@@ -77,6 +79,11 @@ struct GmresGroup {
 struct SchwarzSmootherGroup {
   static std::string name() noexcept { return "SchwarzSmoother"; }
   static constexpr Options::String help = "Options for the Schwarz smoother";
+  using group = LinearSolverGroup;
+};
+struct MultigridGroup {
+  static std::string name() noexcept { return "Multigrid"; }
+  static constexpr Options::String help = "Options for the multigrid";
   using group = LinearSolverGroup;
 };
 }  // namespace SolveElasticity::OptionTags
@@ -125,21 +132,26 @@ struct Metavariables {
   // The linear solver algorithm. We must use GMRES since the operator is
   // not guaranteed to be symmetric. It can be made symmetric by multiplying by
   // the DG mass matrix.
-  using linear_solver =
-      LinearSolver::gmres::Gmres<Metavariables, fields_tag,
-                                 SolveElasticity::OptionTags::GmresGroup, true>;
+  using linear_solver = LinearSolver::gmres::Gmres<
+      Metavariables, fields_tag, SolveElasticity::OptionTags::GmresGroup, true,
+      fixed_sources_tag, LinearSolver::multigrid::Tags::IsFinestGrid>;
   using linear_solver_iteration_id =
       Convergence::Tags::IterationId<typename linear_solver::options_group>;
-  // Precondition each linear solver iteration with a number of Schwarz
-  // smoothing steps
+  // Precondition each linear solver iteration with a multigrid V-cycle
+  using multigrid = LinearSolver::multigrid::Multigrid<
+      volume_dim, typename linear_solver::operand_tag,
+      SolveElasticity::OptionTags::MultigridGroup, elliptic::dg::Tags::Massive,
+      typename linear_solver::preconditioner_source_tag>;
+  // Smooth each multigrid level with a number of Schwarz smoothing steps
   using subdomain_operator =
       elliptic::dg::subdomain_operator::SubdomainOperator<
           system, SolveElasticity::OptionTags::SchwarzSmootherGroup,
           tmpl::list<Elasticity::Tags::ConstitutiveRelation<Dim>>>;
   using schwarz_smoother = LinearSolver::Schwarz::Schwarz<
-      typename linear_solver::operand_tag,
+      typename multigrid::smooth_fields_tag,
       SolveElasticity::OptionTags::SchwarzSmootherGroup, subdomain_operator,
-      typename linear_solver::preconditioner_source_tag>;
+      typename multigrid::smooth_source_tag,
+      LinearSolver::multigrid::Tags::MultigridLevel>;
   // For the GMRES linear solver we need to apply the DG operator to its
   // internal "operand" in every iteration of the algorithm.
   using vars_tag = typename linear_solver::operand_tag;
@@ -161,12 +173,15 @@ struct Metavariables {
   using events = tmpl::list<
       dg::Events::Registrars::ObserveFields<
           volume_dim, linear_solver_iteration_id, observe_fields,
-          analytic_solution_fields>,
-      dg::Events::Registrars::ObserveErrorNorms<linear_solver_iteration_id,
-                                                analytic_solution_fields>,
+          analytic_solution_fields,
+          LinearSolver::multigrid::Tags::IsFinestGrid>,
+      dg::Events::Registrars::ObserveErrorNorms<
+          linear_solver_iteration_id, analytic_solution_fields,
+          LinearSolver::multigrid::Tags::IsFinestGrid>,
       dg::Events::Registrars::ObserveVolumeIntegrals<
           volume_dim, linear_solver_iteration_id,
-          tmpl::list<Elasticity::Tags::PotentialEnergyDensity<volume_dim>>>>;
+          tmpl::list<Elasticity::Tags::PotentialEnergyDensity<volume_dim>>,
+          LinearSolver::multigrid::Tags::IsFinestGrid>>;
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       linear_solver_iteration_id>>;
 
@@ -178,7 +193,7 @@ struct Metavariables {
   // Collect all reduction tags for observers
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
       tmpl::flatten<tmpl::list<typename Event<events>::creatable_classes,
-                               linear_solver, schwarz_smoother>>>;
+                               linear_solver, multigrid, schwarz_smoother>>>;
 
   // Specify all global synchronization points.
   enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
@@ -186,6 +201,7 @@ struct Metavariables {
   using initialization_actions = tmpl::list<
       Actions::SetupDataBox, dg::Actions::InitializeDomain<volume_dim>,
       typename linear_solver::initialize_element,
+      typename multigrid::initialize_element,
       typename schwarz_smoother::initialize_element,
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       elliptic::Actions::InitializeFixedSources<system, background_tag>,
@@ -216,15 +232,21 @@ struct Metavariables {
 
   using register_actions =
       tmpl::list<observers::Actions::RegisterEventsWithObservers,
+                 typename multigrid::register_element,
                  typename schwarz_smoother::register_element,
                  Parallel::Actions::TerminatePhase>;
 
+  template <typename Label>
+  using smooth_actions = tmpl::list<build_linear_operator_actions,
+                                    typename schwarz_smoother::template solve<
+                                        build_linear_operator_actions, Label>>;
+
   using solve_actions = tmpl::list<
-      typename linear_solver::template solve<
-          tmpl::list<Actions::RunEventsAndTriggers,
-                     tmpl::list<build_linear_operator_actions,
-                                typename schwarz_smoother::template solve<
-                                    build_linear_operator_actions>>>>,
+      typename linear_solver::template solve<tmpl::list<
+          Actions::RunEventsAndTriggers,
+          typename multigrid::template solve<
+              smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
+              smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>>>,
       Actions::RunEventsAndTriggers, Parallel::Actions::TerminatePhase>;
 
   using dg_element_array = elliptic::DgElementArray<
@@ -233,11 +255,14 @@ struct Metavariables {
                                         initialization_actions>,
                  Parallel::PhaseActions<Phase, Phase::RegisterWithObserver,
                                         register_actions>,
-                 Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>>>;
+                 Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>>,
+      LinearSolver::multigrid::ElementsAllocator<
+          volume_dim, typename multigrid::options_group>>;
 
   // Specify all parallel components that will execute actions at some point.
   using component_list = tmpl::flatten<
       tmpl::list<dg_element_array, typename linear_solver::component_list,
+                 typename multigrid::component_list,
                  typename schwarz_smoother::component_list,
                  observers::Observer<Metavariables>,
                  observers::ObserverWriter<Metavariables>>>;

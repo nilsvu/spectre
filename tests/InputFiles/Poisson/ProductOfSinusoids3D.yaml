@@ -53,6 +53,12 @@ LinearSolver:
     Verbosity: Quiet
     SubdomainSolver: ExplicitInverse
 
+  Multigrid:
+    Iterations: 1
+    MaxLevels: Auto
+    Verbosity: Verbose
+    OutputVolumeData: False
+
 EventsAndTriggers:
   ? EveryNIterations:
       N: 1
