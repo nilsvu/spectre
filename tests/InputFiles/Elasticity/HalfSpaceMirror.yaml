@@ -53,6 +53,7 @@ DomainCreator:
 Discretization:
   DiscontinuousGalerkin:
     PenaltyParameter: 1.
+    Massive: True
 
 Observers:
   VolumeFileName: "ElasticHalfSpaceMirrorVolume"
@@ -61,7 +62,7 @@ Observers:
 LinearSolver:
   GMRES:
     ConvergenceCriteria:
-      MaxIterations: 2
+      MaxIterations: 1
       RelativeResidual: 1.e-4
       AbsoluteResidual: 1.e-12
     Verbosity: Verbose
@@ -75,7 +76,7 @@ LinearSolver:
 EventsAndTriggers:
   ? EveryNIterations:
       N: 1
-      Offset: 2
+      Offset: 1
   : - ObserveErrorNorms:
         SubfileName: ErrorNorms
     - ObserveVolumeIntegrals:
