@@ -21,3 +21,18 @@ target_link_libraries(
   ParallelMultigrid
   Utilities
   )
+
+add_distributed_linear_solver_algorithm_test("MultigridAlgorithm")
+target_link_libraries(
+  Test_MultigridAlgorithm
+  PRIVATE
+  ParallelMultigrid
+  )
+
+add_distributed_linear_solver_algorithm_test(
+  "MultigridPreconditionedGmresAlgorithm")
+target_link_libraries(
+  Test_MultigridPreconditionedGmresAlgorithm
+  PRIVATE
+  ParallelMultigrid
+  )

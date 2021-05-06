@@ -1,0 +1,85 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# The test problem being solved here is a DG-discretized 1D Poisson equation
+# -u''(x) = f(x) on the interval [0, pi] with source f(x)=sin(x) and homogeneous
+# Dirichlet boundary conditions such that the solution is u(x)=sin(x) as well.
+#
+# Details:
+# - Domain decomposition: 2 elements with 3 LGL grid-points each on finest mesh
+# - DG scheme: Compact flux formulation (no auxiliary variables)
+# - "Massless": Multiplied by inverse mass matrix with mass-lumping. Note that
+#   whether or not the operator is DG-massive is relevant for the multigrid
+#   restriction operation.
+# - Internal penalty flux with sigma = 1.5 * (N_points - 1)^2 / h
+
+DomainCreator:
+  Interval:
+    LowerBound: [0]
+    UpperBound: [3.141592653589793]
+    IsPeriodicIn: [false]
+    InitialRefinement: [1]
+    InitialGridPoints: [3]
+    TimeDependence: None
+
+LinearOperator:
+  - [[[71.3301132842058, 3.242277876554809, -2.8369931419854577],
+      [0.8105694691387026, 3.2422778765548097, -0.405284734569351],
+      [-2.8369931419854577, -1.6211389382774053, 38.50204978408835],
+      [1.2158542037080533, -4.863416814832214, -32.828063500117445],
+      [0.0, 0.0, -1.2158542037080537],
+      [0.0, 0.0, 1.2158542037080533]],
+     [[1.2158542037080533, 0.0, 0.0],
+      [-1.2158542037080537, 0.0, 0.0],
+      [-32.828063500117445, -4.863416814832214, 1.2158542037080533],
+      [38.50204978408835, -1.6211389382774053, -2.8369931419854577],
+      [-0.405284734569351, 3.2422778765548097, 0.8105694691387026],
+      [-2.836993141985458, 3.242277876554809, 71.3301132842058]]]
+  - [[[17.83252832105145, 0.8105694691387022, -1.0132118364233778],
+      [0.20264236728467566, 0.8105694691387024, 0.20264236728467566],
+      [-1.0132118364233778, 0.8105694691387022, 17.83252832105145]]]
+  # A massive primal operator:
+  # - [[[ 5.305164769729845,  0.848826363156775, -0.742723067762178],
+  #     [ 0.848826363156775,  3.395305452627101, -0.424413181578388],
+  #     [-0.742723067762178, -0.424413181578388,  3.395305452627101],
+  #     [ 0.318309886183791, -1.273239544735163, -1.909859317102744],
+  #     [ 0.               ,  0.               , -1.273239544735163],
+  #     [ 0.               ,  0.               ,  0.318309886183791]],
+  #   [[ 0.318309886183791,  0.               ,  0.               ],
+  #     [-1.273239544735163,  0.               ,  0.               ],
+  #     [-1.909859317102744, -1.273239544735163,  0.318309886183791],
+  #     [ 3.395305452627101, -0.424413181578388, -0.742723067762178],
+  #     [-0.424413181578388,  3.395305452627101,  0.848826363156775],
+  #     [-0.742723067762178,  0.848826363156775,  5.305164769729845]]]
+  # - [[[ 2.65258238,  0.42441318, -0.53051648],
+  #      [ 0.42441318,  1.69765273,  0.42441318],
+  #      [-0.53051648,  0.42441318,  2.65258238]]]
+
+Source:
+  - [0.0, 0.7071067811865475, 1.0]
+  - [1.0, 0.7071067811865475, 0.0]
+  # For massive primal operator:
+  # - [0.                , 0.740480489693061, 0.2617993877991494]
+  # - [0.2617993877991494, 0.740480489693061, 0.                ]
+
+# ExpectedResult:
+#   - [-0.0363482510397858,  0.7235793356729757,  0.9928055333486293]
+#   - [ 0.9928055333486292,  0.7235793356729758, -0.0363482510397858]
+
+Observers:
+  VolumeFileName: "Test_MultigridAlgorithm_Volume"
+  ReductionFileName: "Test_MultigridAlgorithm_Reductions"
+
+MultigridSolver:
+  Iterations: 2
+  Verbosity: Verbose
+  MaxLevels: Auto
+
+RichardsonSmoother:
+  Iterations: 20
+  RelaxationParameter: 0.026186259038717068
+  # For massive primal operator:
+  # RelaxationParameter: 0.2916330767929102
+  Verbosity: Verbose
+
+# ConvergenceReason: MaxIterations
