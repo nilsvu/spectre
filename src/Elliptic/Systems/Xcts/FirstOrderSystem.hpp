@@ -7,6 +7,10 @@
 
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
+#include "Elliptic/BoundaryConditions/AnalyticSolution.hpp"
+#include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
+#include "Elliptic/Systems/Xcts/BoundaryConditions/ApparentHorizon.hpp"
+#include "Elliptic/Systems/Xcts/BoundaryConditions/Flatness.hpp"
 #include "Elliptic/Systems/Xcts/FluxesAndSources.hpp"
 #include "Elliptic/Systems/Xcts/Geometry.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
@@ -262,6 +266,16 @@ struct FirstOrderSystem {
   using sources_computer_linearized =
       LinearizedSources<EnabledEquations, ConformalGeometry,
                         ConformalMatterScale>;
+
+  // The supported boundary conditions. Boundary conditions can be
+  // factory-created from this base class.
+  using boundary_conditions_base =
+      elliptic::BoundaryConditions::BoundaryCondition<
+          3, tmpl::list<elliptic::BoundaryConditions::Registrars::
+                            AnalyticSolution<FirstOrderSystem>,
+                        BoundaryConditions::Registrars::Flatness,
+                        BoundaryConditions::Registrars::ApparentHorizon<
+                            ConformalGeometry>>>;
 
   // The tag of the operator to compute magnitudes on the manifold, e.g. to
   // normalize vectors on the faces of an element
