@@ -58,7 +58,9 @@ class ConstitutiveRelation : public PUP::able {
  public:
   static constexpr size_t volume_dim = Dim;
 
-  using creatable_classes = tmpl::list<CubicCrystal, IsotropicHomogeneous<Dim>>;
+  using creatable_classes = tmpl::append<
+      tmpl::list<IsotropicHomogeneous<Dim>>,
+      tmpl::conditional_t<Dim == 3, tmpl::list<CubicCrystal>, tmpl::list<>>>;
 
   ConstitutiveRelation() = default;
   ConstitutiveRelation(const ConstitutiveRelation&) = default;
