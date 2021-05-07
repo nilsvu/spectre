@@ -9,6 +9,7 @@
 #include "Domain/Block.hpp"
 #include "Domain/Creators/DomainCreator.hpp"
 #include "Domain/Domain.hpp"
+#include "Domain/ElementDistribution.hpp"
 #include "Domain/OptionTags.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Structure/InitialElementIds.hpp"
@@ -16,8 +17,8 @@
 #include "Parallel/Algorithms/AlgorithmArray.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/ParallelComponentHelpers.hpp"
-#include "Utilities/System/ParallelInfo.hpp"
 #include "Utilities/Numeric.hpp"
+#include "Utilities/System/ParallelInfo.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -44,15 +45,16 @@ struct DefaultElementsAllocator {
     const auto& domain = Parallel::get<domain::Tags::Domain<Dim>>(local_cache);
     const auto& initial_refinement_levels =
         get<domain::Tags::InitialRefinementLevels<Dim>>(initialization_items);
-    int which_proc = 0;
+    const domain::BlockZCurveProcDistribution<Dim> element_distribution{
+        static_cast<size_t>(sys::number_of_procs()), initial_refinement_levels};
     for (const auto& block : domain.blocks()) {
       const std::vector<ElementId<Dim>> element_ids = initial_element_ids(
           block.id(), initial_refinement_levels[block.id()]);
-      const int number_of_procs = sys::number_of_procs();
-      for (size_t i = 0; i < element_ids.size(); ++i) {
-        element_array(element_ids[i])
-            .insert(global_cache, initialization_items, which_proc);
-        which_proc = which_proc + 1 == number_of_procs ? 0 : which_proc + 1;
+      for (const auto& element_id : element_ids) {
+        const size_t target_proc = element_distribution.get_proc_for_element(
+            block.id(), element_id);
+        element_array(element_id)
+            .insert(global_cache, initialization_items, target_proc);
       }
     }
     element_array.doneInserting();

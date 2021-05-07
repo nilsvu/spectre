@@ -7,6 +7,7 @@
 #include <optional>
 #include <vector>
 
+#include "Domain/ElementDistribution.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
 #include "Parallel/Section.hpp"
@@ -103,10 +104,13 @@ struct ElementsAllocator {
       // Create the elements for this refinement level and distribute them among
       // processors
       const int number_of_procs = sys::number_of_procs();
-      for (size_t i = 0; i < all_element_ids.size(); ++i) {
-        element_array(all_element_ids[i])
-            .insert(global_cache, initialization_items,
-                    static_cast<int>(i) % number_of_procs);
+      const domain::BlockZCurveProcDistribution<Dim> element_distribution{
+          static_cast<size_t>(number_of_procs), initial_refinement_levels};
+      for (const auto& element_id : all_element_ids) {
+        const size_t target_proc = element_distribution.get_proc_for_element(
+            element_id.block_id(), element_id);
+        element_array(element_id)
+            .insert(global_cache, initialization_items, target_proc);
       }
       Parallel::printf(
           "%s level %zu has %zu elements in %zu blocks distributed on %d "
