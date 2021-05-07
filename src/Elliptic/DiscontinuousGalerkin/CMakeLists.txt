@@ -8,6 +8,7 @@ add_spectre_library(${LIBRARY})
 spectre_target_sources(
   ${LIBRARY}
   PRIVATE
+  Formulation.cpp
   Penalty.cpp
 )
 
@@ -17,6 +18,7 @@ spectre_target_headers(
   HEADERS
   DgElementArray.hpp
   DgOperator.hpp
+  Formulation.hpp
   ImposeBoundaryConditions.hpp
   ImposeInhomogeneousBoundaryConditionsOnSource.hpp
   InitializeFirstOrderOperator.hpp

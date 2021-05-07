@@ -47,6 +47,7 @@ DomainCreator:
 Discretization:
   DiscontinuousGalerkin:
     PenaltyParameter: 1.
+    Formulation: Strong
     Massive: True
 
 Observers:
