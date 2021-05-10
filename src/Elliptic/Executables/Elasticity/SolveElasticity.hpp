@@ -12,6 +12,7 @@
 #include "Elliptic/Actions/InitializeFields.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/ApplyOperator.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/InitializeSubdomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
@@ -34,7 +35,6 @@
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
 #include "ParallelAlgorithms/Actions/MutateApply.hpp"
-#include "ParallelAlgorithms/DiscontinuousGalerkin/InitializeDomain.hpp"
 #include "ParallelAlgorithms/Events/ObserveErrorNorms.hpp"
 #include "ParallelAlgorithms/Events/ObserveFields.hpp"
 #include "ParallelAlgorithms/Events/ObserveVolumeIntegrals.hpp"
@@ -200,7 +200,8 @@ struct Metavariables {
   enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
 
   using initialization_actions = tmpl::list<
-      Actions::SetupDataBox, dg::Actions::InitializeDomain<volume_dim>,
+      Actions::SetupDataBox,
+      elliptic::dg::Actions::InitializeDomain<volume_dim>,
       typename linear_solver::initialize_element,
       typename multigrid::initialize_element,
       typename schwarz_smoother::initialize_element,

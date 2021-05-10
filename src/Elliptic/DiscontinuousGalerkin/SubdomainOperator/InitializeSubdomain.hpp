@@ -102,12 +102,12 @@ void initialize_overlap_geometry(
         neighbor_mortar_sizes,
     const std::vector<std::array<size_t, Dim>>& initial_extents,
     const std::vector<std::array<size_t, Dim>>& initial_refinement,
-    const Domain<Dim>& domain, const size_t max_overlap,
-    const ElementId<Dim>& element_id,
+    const Spectral::Quadrature quadrature, const Domain<Dim>& domain,
+    const size_t max_overlap, const ElementId<Dim>& element_id,
     const Direction<Dim>& overlap_direction) noexcept {
   // Mesh
-  *mesh = domain::Initialization::create_initial_mesh(
-      initial_extents, element_id, Spectral::Quadrature::GaussLobatto);
+  *mesh = domain::Initialization::create_initial_mesh(initial_extents,
+                                                      element_id, quadrature);
   // Extruding extent
   *extruding_extent = LinearSolver::Schwarz::overlap_extent(
       mesh->extents(overlap_direction.dimension()), max_overlap);
@@ -139,12 +139,11 @@ void initialize_overlap_geometry(
       const ::dg::MortarId<Dim> mortar_id{direction, neighbor_id};
       // Geometry on this side of the mortar
       mortar_meshes->emplace(
-          mortar_id,
-          ::dg::mortar_mesh(face_mesh,
-                            domain::Initialization::create_initial_mesh(
-                                initial_extents, neighbor_id,
-                                Spectral::Quadrature::GaussLobatto, orientation)
-                                .slice_away(direction.dimension())));
+          mortar_id, ::dg::mortar_mesh(
+                         face_mesh, domain::Initialization::create_initial_mesh(
+                                        initial_extents, neighbor_id,
+                                        quadrature, orientation)
+                                        .slice_away(direction.dimension())));
       mortar_sizes->emplace(
           mortar_id, ::dg::mortar_size(element_id, neighbor_id,
                                        direction.dimension(), orientation));
@@ -154,9 +153,9 @@ void initialize_overlap_geometry(
       // computational cost and memory usage is probably irrelevant though.
       const auto& neighbor_mesh =
           neighbor_meshes
-              ->emplace(mortar_id, domain::Initialization::create_initial_mesh(
-                                       initial_extents, neighbor_id,
-                                       Spectral::Quadrature::GaussLobatto))
+              ->emplace(mortar_id,
+                        domain::Initialization::create_initial_mesh(
+                            initial_extents, neighbor_id, quadrature))
               .first->second;
       const auto neighbor_face_mesh =
           neighbor_mesh.slice_away(direction_from_neighbor.dimension());
@@ -277,7 +276,8 @@ struct InitializeSubdomain {
  public:
   using initialization_tags =
       tmpl::list<domain::Tags::InitialExtents<Dim>,
-                 domain::Tags::InitialRefinementLevels<Dim>>;
+                 domain::Tags::InitialRefinementLevels<Dim>,
+                 elliptic::dg::Tags::Quadrature>;
   using const_global_cache_tags =
       tmpl::list<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>;
   using simple_tags = tmpl::append<
@@ -311,6 +311,7 @@ struct InitializeSubdomain {
         using geometry_argument_tags =
             tmpl::list<domain::Tags::InitialExtents<Dim>,
                        domain::Tags::InitialRefinementLevels<Dim>,
+                       elliptic::dg::Tags::Quadrature,
                        domain::Tags::Domain<Dim>,
                        LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>;
         elliptic::util::mutate_apply_at<geometry_tags, geometry_argument_tags,

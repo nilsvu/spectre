@@ -19,6 +19,7 @@
 #include "Domain/Structure/Element.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "ParallelAlgorithms/Initialization/MutateAssign.hpp"
@@ -34,8 +35,7 @@ struct Inertial;
 }  // namespace Frame
 /// \endcond
 
-namespace dg {
-namespace Actions {
+namespace elliptic::dg::Actions {
 /*!
  * \ingroup InitializationGroup
  * \brief Initialize items related to the basic structure of the element
@@ -67,7 +67,8 @@ template <size_t Dim>
 struct InitializeDomain {
   using initialization_tags =
       tmpl::list<domain::Tags::InitialExtents<Dim>,
-                 domain::Tags::InitialRefinementLevels<Dim>>;
+                 domain::Tags::InitialRefinementLevels<Dim>,
+                 elliptic::dg::Tags::Quadrature>;
 
   using simple_tags =
       tmpl::list<domain::Tags::Mesh<Dim>, domain::Tags::Element<Dim>,
@@ -95,10 +96,12 @@ struct InitializeDomain {
     const auto& initial_refinement =
         db::get<domain::Tags::InitialRefinementLevels<Dim>>(box);
     const auto& domain = db::get<domain::Tags::Domain<Dim>>(box);
+    const Spectral::Quadrature quadrature =
+        db::get<elliptic::dg::Tags::Quadrature>(box);
 
     const auto& my_block = domain.blocks()[element_id.block_id()];
     Mesh<Dim> mesh = domain::Initialization::create_initial_mesh(
-        initial_extents, element_id, Spectral::Quadrature::GaussLobatto);
+        initial_extents, element_id, quadrature);
     Element<Dim> element = domain::Initialization::create_initial_element(
         element_id, my_block, initial_refinement);
     if (my_block.is_time_dependent()) {
@@ -116,5 +119,4 @@ struct InitializeDomain {
     return std::make_tuple(std::move(box));
   }
 };
-}  // namespace Actions
-}  // namespace dg
+}  // namespace elliptic::dg::Actions

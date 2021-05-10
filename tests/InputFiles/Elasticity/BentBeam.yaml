@@ -43,6 +43,7 @@ Discretization:
   DiscontinuousGalerkin:
     PenaltyParameter: 1.
     Formulation: Strong
+    Quadrature: GaussLobatto
     Massive: True
 
 Observers:

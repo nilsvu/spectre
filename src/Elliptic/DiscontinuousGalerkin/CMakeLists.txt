@@ -39,6 +39,7 @@ target_link_libraries(
   Elliptic
   EllipticSystems
   ErrorHandling
+  Evolution
   Initialization
   LinearOperators
   Options

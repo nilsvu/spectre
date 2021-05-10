@@ -22,6 +22,7 @@
 #include "Elliptic/DiscontinuousGalerkin/Formulation.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Penalty.hpp"
 #include "Elliptic/Systems/GetSourcesComputer.hpp"
+#include "Evolution/DiscontinuousGalerkin/LiftFromBoundary.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/LiftFlux.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Mass.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
@@ -320,9 +321,10 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
 #ifdef SPECTRE_DEBUG
     for (size_t d = 0; d < Dim; ++d) {
       ASSERT(mesh.basis(d) == Spectral::Basis::Legendre and
-                 mesh.quadrature(d) == Spectral::Quadrature::GaussLobatto,
+                 (mesh.quadrature(d) == Spectral::Quadrature::GaussLobatto or
+                  mesh.quadrature(d) == Spectral::Quadrature::Gauss),
              "The elliptic DG operator is currently only implemented for "
-             "Legendre-Gauss-Lobatto grids. Found basis '"
+             "Legendre-Gauss(-Lobatto) grids. Found basis '"
                  << mesh.basis(d) << "' and quadrature '" << mesh.quadrature(d)
                  << "' in dimension " << d << ".");
     }
@@ -412,7 +414,6 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
       const auto& fluxes_args_on_face =
           is_internal ? fluxes_args_on_internal_faces.at(direction)
                       : fluxes_args_on_external_faces.at(direction);
-      const size_t slice_index = index_to_slice_at(mesh.extents(), direction);
       Variables<tmpl::list<PrimalFluxesVars..., AuxiliaryFluxesVars...>>
           fluxes_on_face{face_num_points};
       Variables<tmpl::list<::Tags::NormalDotFlux<AuxiliaryFields>...>>
@@ -425,10 +426,34 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         // data such as the element size will be set below.
         boundary_data.field_data.initialize(face_num_points, 0.);
       } else {
+        // Slice or interpolate fluxes to face
+        if (mesh.quadrature(direction.dimension()) ==
+            Spectral::Quadrature::GaussLobatto) {
+          const size_t slice_index =
+              index_to_slice_at(mesh.extents(), direction);
+          fluxes_on_face.assign_subset(
+              data_on_slice(*auxiliary_fluxes, mesh.extents(),
+                            direction.dimension(), slice_index));
+          fluxes_on_face.assign_subset(
+              data_on_slice(*primal_fluxes, mesh.extents(),
+                            direction.dimension(), slice_index));
+        } else {
+          const Matrix identity{};
+          auto interpolation_matrices = make_array<Dim>(std::cref(identity));
+          const std::pair<Matrix, Matrix>& both_matrices =
+              Spectral::boundary_interpolation_matrices(
+                  mesh.slice_through(direction.dimension()));
+          gsl::at(interpolation_matrices, direction.dimension()) =
+              direction.side() == Side::Upper ? both_matrices.second
+                                              : both_matrices.first;
+          const auto interpolated_auxiliary_fluxes = apply_matrices(
+              interpolation_matrices, *auxiliary_fluxes, mesh.extents());
+          const auto interpolated_primal_fluxes = apply_matrices(
+              interpolation_matrices, *primal_fluxes, mesh.extents());
+          fluxes_on_face.assign_subset(interpolated_auxiliary_fluxes);
+          fluxes_on_face.assign_subset(interpolated_primal_fluxes);
+        }
         // Compute F_u(n.F_v)
-        fluxes_on_face.assign_subset(
-            data_on_slice(*auxiliary_fluxes, mesh.extents(),
-                          direction.dimension(), slice_index));
         EXPAND_PACK_LEFT_TO_RIGHT(normal_dot_flux(
             make_not_null(
                 &get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_aux_fluxes)),
@@ -451,9 +476,6 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         // to the auxiliary variables. The reason is essentially that the
         // internal penalty flux uses average(grad(u)) in place of average(v),
         // i.e. the raw primal field derivatives without boundary corrections.
-        fluxes_on_face.assign_subset(
-            data_on_slice(*primal_fluxes, mesh.extents(), direction.dimension(),
-                          slice_index));
         EXPAND_PACK_LEFT_TO_RIGHT(normal_dot_flux(
             make_not_null(&get<::Tags::NormalDotFlux<PrimalMortarVars>>(
                 boundary_data.field_data)),
@@ -515,8 +537,26 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         // the boundary conditions is taken from the "interior" side of the
         // boundary, i.e. with a normal vector that points _out_ of the
         // computational domain.
-        auto dirichlet_vars = data_on_slice(primal_vars, mesh.extents(),
-                                            direction.dimension(), slice_index);
+        auto dirichlet_vars = [&primal_vars, &mesh, &direction]() noexcept {
+          if (mesh.quadrature(direction.dimension()) ==
+              Spectral::Quadrature::GaussLobatto) {
+            const size_t slice_index =
+                index_to_slice_at(mesh.extents(), direction);
+            return data_on_slice(primal_vars, mesh.extents(),
+                                 direction.dimension(), slice_index);
+          } else {
+            const Matrix identity{};
+            auto interpolation_matrices = make_array<Dim>(std::cref(identity));
+            const std::pair<Matrix, Matrix>& both_matrices =
+                Spectral::boundary_interpolation_matrices(
+                    mesh.slice_through(direction.dimension()));
+            gsl::at(interpolation_matrices, direction.dimension()) =
+                direction.side() == Side::Upper ? both_matrices.second
+                                                : both_matrices.first;
+            return apply_matrices(interpolation_matrices, primal_vars,
+                                  mesh.extents());
+          }
+        }();
         apply_boundary_condition(
             direction, make_not_null(&get<PrimalVars>(dirichlet_vars))...,
             make_not_null(&get<::Tags::NormalDotFlux<PrimalMortarVars>>(
@@ -663,9 +703,10 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
 #ifdef SPECTRE_DEBUG
     for (size_t d = 0; d < Dim; ++d) {
       ASSERT(mesh.basis(d) == Spectral::Basis::Legendre and
-                 mesh.quadrature(d) == Spectral::Quadrature::GaussLobatto,
+                 (mesh.quadrature(d) == Spectral::Quadrature::GaussLobatto or
+                  mesh.quadrature(d) == Spectral::Quadrature::Gauss),
              "The elliptic DG operator is currently only implemented for "
-             "Legendre-Gauss-Lobatto grids. Found basis '"
+             "Legendre-Gauss(-Lobatto) grids. Found basis '"
                  << mesh.basis(d) << "' and quadrature '" << mesh.quadrature(d)
                  << "' in dimension " << d << ".");
     }
@@ -711,7 +752,6 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         continue;
       }
       const auto face_mesh = mesh.slice_away(direction.dimension());
-      const size_t slice_index = index_to_slice_at(mesh.extents(), direction);
       const auto& local_data = mortar_data.local_data(temporal_id);
       const auto& remote_data = mortar_data.remote_data(temporal_id);
       const auto& face_normal_magnitude =
@@ -747,21 +787,34 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
                     mortar_mesh, mortar_size)
               : std::move(auxiliary_boundary_corrections_on_mortar);
 
-      // Lift the boundary correction to the volume, but still only provide the
-      // data only on the face because it is zero everywhere else. This is the
-      // "massless" lifting operation, i.e. it involves an inverse mass matrix.
-      // The mass matrix is diagonally approximated ("mass lumping") so it
-      // reduces to a division by quadrature weights.
-      ::dg::lift_flux(make_not_null(&auxiliary_boundary_corrections),
-                      mesh.extents(direction.dimension()),
-                      face_normal_magnitude);
-      // The `dg::lift_flux` function contains an extra minus sign
+      // The lifting functions below contain an extra minus sign
       auxiliary_boundary_corrections *= -1.;
 
-      // Add the boundary corrections to the auxiliary variables
-      add_slice_to_data(make_not_null(&primal_fluxes_corrected),
-                        auxiliary_boundary_corrections, mesh.extents(),
-                        direction.dimension(), slice_index);
+      // Lift boundary corrections and add to volume. This is the "massless"
+      // lifting operation, i.e. it involves an inverse mass matrix. The mass
+      // matrix is diagonally approximated ("mass lumping") so it reduces to a
+      // division by quadrature weights.
+      if (mesh.quadrature(direction.dimension()) ==
+          Spectral::Quadrature::GaussLobatto) {
+        // Lift the boundary correction to the volume, but still only provide
+        // the data only on the face because it is zero everywhere else.
+        ::dg::lift_flux(make_not_null(&auxiliary_boundary_corrections),
+                        mesh.extents(direction.dimension()),
+                        face_normal_magnitude);
+        const size_t slice_index = index_to_slice_at(mesh.extents(), direction);
+        add_slice_to_data(make_not_null(&primal_fluxes_corrected),
+                          auxiliary_boundary_corrections, mesh.extents(),
+                          direction.dimension(), slice_index);
+      } else {
+        const Scalar<DataVector> det_inv_jacobian_fake{
+            mesh.number_of_grid_points(), 1.};
+        const Scalar<DataVector> face_det_jacobian_fake{
+            face_mesh.number_of_grid_points(), 1.};
+        evolution::dg::lift_boundary_terms_gauss_points(
+            make_not_null(&primal_fluxes_corrected), det_inv_jacobian_fake,
+            mesh, direction, auxiliary_boundary_corrections,
+            face_normal_magnitude, face_det_jacobian_fake);
+      }
     }  // apply auxiliary boundary corrections on all mortars
 
     // Compute the primal equation, i.e. the actual DG operator, by taking the
@@ -798,7 +851,6 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         }
       }
       const auto face_mesh = mesh.slice_away(direction.dimension());
-      const size_t slice_index = index_to_slice_at(mesh.extents(), direction);
       const auto [local_data, remote_data] = mortar_data.extract();
       const auto& face_normal_magnitude =
           is_internal ? internal_face_normal_magnitudes.at(direction)
@@ -862,11 +914,24 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
               ? ::dg::project_from_mortar(primal_boundary_corrections_on_mortar,
                                           face_mesh, mortar_mesh, mortar_size)
               : std::move(primal_boundary_corrections_on_mortar);
-      ::dg::lift_flux(make_not_null(&primal_boundary_corrections),
-                      mesh.extents(direction.dimension()),
-                      face_normal_magnitude);
-      add_slice_to_data(operator_applied_to_vars, primal_boundary_corrections,
-                        mesh.extents(), direction.dimension(), slice_index);
+      if (mesh.quadrature(direction.dimension()) ==
+          Spectral::Quadrature::GaussLobatto) {
+        ::dg::lift_flux(make_not_null(&primal_boundary_corrections),
+                        mesh.extents(direction.dimension()),
+                        face_normal_magnitude);
+        const size_t slice_index = index_to_slice_at(mesh.extents(), direction);
+        add_slice_to_data(operator_applied_to_vars, primal_boundary_corrections,
+                          mesh.extents(), direction.dimension(), slice_index);
+      } else {
+        const Scalar<DataVector> det_inv_jacobian_fake{
+            mesh.number_of_grid_points(), 1.};
+        const Scalar<DataVector> face_det_jacobian_fake{
+            face_mesh.number_of_grid_points(), 1.};
+        evolution::dg::lift_boundary_terms_gauss_points(
+            operator_applied_to_vars, det_inv_jacobian_fake, mesh, direction,
+            primal_boundary_corrections, face_normal_magnitude,
+            face_det_jacobian_fake);
+      }
     }  // loop over all mortars
 
     // Apply DG mass

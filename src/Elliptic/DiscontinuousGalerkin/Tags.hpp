@@ -40,6 +40,13 @@ struct Formulation {
       "Discontinuous Galerkin formulation for the elliptic equations";
 };
 
+struct Quadrature {
+  using type = Spectral::Quadrature;
+  using group = DiscontinuousGalerkin;
+  static constexpr Options::String help =
+      "The placement of collocation points within elements";
+};
+
 struct Massive {
   using type = bool;
   static constexpr Options::String help =
@@ -74,6 +81,16 @@ struct Formulation : db::SimpleTag {
 
   using option_tags = tmpl::list<OptionTags::Formulation>;
   static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type value) noexcept { return value; }
+};
+
+/// Whether or not to multiply the DG operator with the mass matrix. Massive DG
+/// operators can be easier to solve because they are symmetric, or at least
+/// closer to symmetry.
+struct Quadrature : db::SimpleTag {
+  using type = Spectral::Quadrature;
+  static constexpr bool pass_metavariables = false;
+  using option_tags = tmpl::list<OptionTags::Quadrature>;
   static type create_from_options(const type value) noexcept { return value; }
 };
 
