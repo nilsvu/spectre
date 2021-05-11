@@ -4,8 +4,10 @@
 #pragma once
 
 #include <optional>
+#include <string>
 
 #include "DataStructures/DataBox/Tag.hpp"
+#include "DataStructures/DataBox/TagName.hpp"
 #include "Parallel/ParallelComponentHelpers.hpp"
 #include "Parallel/PupStlCpp17.hpp"
 #include "Parallel/Section.hpp"
@@ -25,6 +27,9 @@ namespace Parallel::Tags {
  */
 template <typename ParallelComponent, typename SectionIdTag>
 struct Section : db::SimpleTag {
+  static std::string name() noexcept {
+    return "Section(" + db::tag_name<SectionIdTag>() + ")";
+  }
   using type =
       std::optional<Parallel::Section<ParallelComponent, SectionIdTag>>;
   // Allow default-constructing the tag so sections can be created and assigned
