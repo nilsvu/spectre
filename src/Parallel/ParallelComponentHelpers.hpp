@@ -3,13 +3,16 @@
 
 #pragma once
 
-#include "Parallel/Callback.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 #include "Utilities/TypeTraits.hpp"
 
 namespace Parallel {
+/// \cond
+struct Callback;
+/// \endcond
+
 namespace detail {
 template <class Action, class = std::void_t<>>
 struct get_inbox_tags_from_action {

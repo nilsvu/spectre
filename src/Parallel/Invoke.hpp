@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "Parallel/ArrayMessage.hpp"
 #include "Parallel/MaxInlineMethodsReached.hpp"
 #include "Parallel/TypeTraits.hpp"
 
@@ -68,6 +69,15 @@ void simple_action(Proxy&& proxy, Arg0&& arg0, Args&&... args) noexcept {
   proxy.template simple_action<Action>(
       std::tuple<std::decay_t<Arg0>, std::decay_t<Args>...>(
           std::forward<Arg0>(arg0), std::forward<Args>(args)...));
+}
+
+template <typename Action, typename Proxy, typename Arg0, typename... Args>
+void simple_action_message(Proxy&& proxy, Arg0&& arg0,
+                           Args&&... args) noexcept {
+  using MessageType = ArrayMessage<std::decay_t<Arg0>, std::decay_t<Args>...>;
+  MessageType* msg =
+      new MessageType(std::forward<Arg0>(arg0), std::forward<Args>(args)...);
+  proxy.template simple_action<Action>(msg);
 }
 // @}
 

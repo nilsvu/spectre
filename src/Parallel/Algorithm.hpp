@@ -23,6 +23,7 @@
 #include "Parallel/Algorithms/AlgorithmGroupDeclarations.hpp"
 #include "Parallel/Algorithms/AlgorithmNodegroupDeclarations.hpp"
 #include "Parallel/Algorithms/AlgorithmSingletonDeclarations.hpp"
+#include "Parallel/ArrayMessage.hpp"
 #include "Parallel/CharmRegistration.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/Info.hpp"
@@ -242,6 +243,9 @@ class AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>
   /// is not one of the types of the algorithm then a compilation error occurs.
   template <typename Action, typename... Args>
   void simple_action(std::tuple<Args...> args) noexcept;
+
+  template <typename Action, typename... Args>
+  void simple_action(ArrayMessage<Args...>* msg) noexcept;
 
   template <typename Action>
   void simple_action() noexcept;
@@ -730,6 +734,39 @@ void AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>::
   performing_action_ = true;
   forward_tuple_to_action<Action>(std::move(args),
                                   std::make_index_sequence<sizeof...(Args)>{});
+  performing_action_ = false;
+  if constexpr (std::is_same_v<Parallel::NodeLock, decltype(node_lock_)>) {
+    node_lock_.unlock();
+  }
+  perform_algorithm();
+}
+
+template <typename ParallelComponent, typename... PhaseDepActionListsPack>
+template <typename Action, typename... Args>
+void AlgorithmImpl<ParallelComponent, tmpl::list<PhaseDepActionListsPack...>>::
+    simple_action(ArrayMessage<Args...>* msg) noexcept {
+  (void)Parallel::charmxx::RegisterSimpleAction<ParallelComponent, Action,
+                                                Args...>::registrar;
+  if constexpr (std::is_same_v<Parallel::NodeLock, decltype(node_lock_)>) {
+    node_lock_.lock();
+  }
+  if (performing_action_) {
+    ERROR(
+        "Already performing an Action and cannot execute additional Actions "
+        "from inside of an Action. This is only possible if the "
+        "simple_action function is not invoked via a proxy, which "
+        "we do not allow.");
+  }
+  performing_action_ = true;
+  // Passing the message to the action directly, so we can retrieve metadata
+  // from it (e.g. section cookie updating):
+  forward_tuple_to_action<Action>(std::make_tuple(msg),
+                                  std::make_index_sequence<1>{});
+  // Alternatively, this would be a drop-in replacement for current simple
+  // actions based on parameter-marshalling:
+  // forward_tuple_to_action<Action>(std::move(msg->data),
+  //                               std::make_index_sequence<sizeof...(Args)>{});
+  delete msg;
   performing_action_ = false;
   if constexpr (std::is_same_v<Parallel::NodeLock, decltype(node_lock_)>) {
     node_lock_.unlock();

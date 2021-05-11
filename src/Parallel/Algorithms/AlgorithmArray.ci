@@ -6,6 +6,9 @@ module AlgorithmArray {
   include "Parallel/GlobalCache.decl.h";
   include "Parallel/MaxInlineMethodsReached.hpp";
 
+  template <typename... Args>
+  message ArrayMessage;
+
   // note: the array index here is a hack to use our own types in the chare
   // array index. The way the ci file is parsed as of charm++ 6.10.2 is such
   // that:
@@ -38,6 +41,9 @@ module AlgorithmArray {
 
     template <typename Action, typename... Args>
     entry [inline] void simple_action(std::tuple<Args...> & args);
+
+    template <typename Action, typename... Args>
+    entry [inline] void simple_action(ArrayMessage<Args...>* msg);
 
     template <typename Action>
     entry [inline] void simple_action();

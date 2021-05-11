@@ -39,6 +39,8 @@ class GlobalCache;
 template <typename Metavariables>
 class Main;
 }  // namespace Parallel
+template <typename... Args>
+struct ArrayMessage;
 /// \endcond
 
 namespace Parallel {
@@ -249,6 +251,8 @@ struct RegisterSimpleAction : RegistrationHelper {
     done_registration = true;
     ckindex::template idx_simple_action<Action>(
         static_cast<void (algorithm::*)(const std::tuple<Args...>&)>(nullptr));
+    ckindex::template idx_simple_action<Action>(
+        static_cast<void (algorithm::*)(ArrayMessage<Args...>*)>(nullptr));
   }
 
   std::string name() const noexcept override {

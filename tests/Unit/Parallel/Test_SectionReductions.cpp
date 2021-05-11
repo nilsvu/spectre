@@ -35,6 +35,15 @@ namespace {
 
 enum class EvenOrOdd { Even, Odd };
 
+std::ostream& operator<<(std::ostream& os,
+                         const EvenOrOdd& even_or_odd) noexcept {
+  if (even_or_odd == EvenOrOdd::Even) {
+    return os << "Even";
+  } else {
+    return os << "Odd";
+  }
+}
+
 // These don't need to be DataBox tags because they aren't placed in the
 // DataBox. they are used to identify the section. Note that in many practical
 // applications the section ID tag _is_ placed in the DataBox nonetheless.
@@ -47,6 +56,36 @@ struct IsFirstElementTag {
 
 template <typename ArraySectionIdTag>
 struct ReceiveCount;
+
+template <typename ArraySectionIdTag>
+struct UpdateSection {
+  template <
+      typename ParallelComponent, typename DbTagsList, typename Metavariables,
+      Requires<tmpl::list_contains_v<
+          DbTagsList, Parallel::Tags::Section<ParallelComponent,
+                                              ArraySectionIdTag>>> = nullptr>
+  static void apply(db::DataBox<DbTagsList>& box,
+                    Parallel::GlobalCache<Metavariables>& /*cache*/,
+                    const int array_index, ArrayMessage<int>* msg) noexcept {
+    auto& section = db::get_mutable_reference<
+        Parallel::Tags::Section<ParallelComponent, ArraySectionIdTag>>(
+        make_not_null(&box));
+    ASSERT(section.has_value(),
+           "Trying to update the section on an element that is not part of any "
+           "section with this tag. The section tag is '"
+               << db::tag_name<ArraySectionIdTag>()
+               << "' and the element ID is: " << array_index);
+    const int pre_pe = section->cookie().get_pe();
+    const auto pre_val = section->cookie().get_val();
+    CkGetSectionInfo(section->cookie(), msg);
+    Parallel::printf("%d Updated " + db::tag_name<ArraySectionIdTag>() +
+                         " section cookie: pe %d -> %d (msg %d, actual pe %d). "
+                         "val %p -> %p\n",
+                     array_index, pre_pe, section->cookie().get_pe(),
+                     msg->gpe(), sys::my_proc(), pre_val,
+                     section->cookie().get_val());
+  }
+};
 
 template <typename ArraySectionIdTag>
 struct Count {
@@ -163,17 +202,17 @@ struct ArrayComponent {
     std::vector<CkArrayIndex> first_element{};
     first_element.push_back(Parallel::ArrayIndex<int>(0));
     using EvenOrOddSection = Parallel::Section<ArrayComponent, EvenOrOddTag>;
-    const EvenOrOddSection even_section{
+    EvenOrOddSection even_section{
         EvenOrOdd::Even, EvenOrOddSection::cproxy_section::ckNew(
                              array_proxy.ckGetArrayID(), even_elements.data(),
                              even_elements.size())};
-    const EvenOrOddSection odd_section{
+    EvenOrOddSection odd_section{
         EvenOrOdd::Odd, EvenOrOddSection::cproxy_section::ckNew(
                             array_proxy.ckGetArrayID(), odd_elements.data(),
                             odd_elements.size())};
     using IsFirstElementSection =
         Parallel::Section<ArrayComponent, IsFirstElementTag>;
-    const IsFirstElementSection is_first_element_section{
+    IsFirstElementSection is_first_element_section{
         true, IsFirstElementSection::cproxy_section::ckNew(
                   array_proxy.ckGetArrayID(), first_element.data(),
                   first_element.size())};
@@ -192,6 +231,14 @@ struct ArrayComponent {
           static_cast<int>(i) % number_of_procs);
     }
     array_proxy.doneInserting();
+
+    // Update section cookies asynchronously
+    Parallel::simple_action_message<UpdateSection<EvenOrOddTag>>(
+        even_section.proxy(), -1);
+    Parallel::simple_action_message<UpdateSection<EvenOrOddTag>>(
+        odd_section.proxy(), -1);
+    Parallel::simple_action_message<UpdateSection<IsFirstElementTag>>(
+        is_first_element_section.proxy(), -1);
   }
   // [sections_example]
 
