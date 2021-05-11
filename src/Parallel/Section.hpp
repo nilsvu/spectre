@@ -20,9 +20,17 @@ namespace Parallel {
  * the block ID in the computational domain, so elements are partitioned per
  * block. Chares can be a member of multiple sections.
  *
+ * - [Details on sections in the Charm++
+ *   documentation](https://charm.readthedocs.io/en/latest/charm++/manual.html#sections-subsets-of-a-chare-array-group)
+ *
  * Here's an example how to work with sections in an array parallel component:
  *
  * \snippet Test_SectionReductions.cpp sections_example
+ *
+ * \warning The Charm++ documentation indicates some [creation order
+ * restrictions](https://charm.readthedocs.io/en/latest/charm++/manual.html#creation-order-restrictions)
+ * for sections that may become relevant if we encounter issues with race
+ * conditions in the future.
  */
 template <typename ParallelComponent, typename SectionIdTag>
 struct Section {
