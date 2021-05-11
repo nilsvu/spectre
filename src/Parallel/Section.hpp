@@ -68,7 +68,10 @@ struct Section {
    * reductions see:
    * https://charm.readthedocs.io/en/latest/charm++/manual.html?#sections-subsets-of-a-chare-array-group
    */
-  CkSectionInfo& cookie() const noexcept { return cookie_; }
+  // @{
+  const CkSectionInfo& cookie() const noexcept { return cookie_; }
+  CkSectionInfo& cookie() noexcept { return cookie_; }
+  // @}
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) noexcept {
@@ -80,7 +83,7 @@ struct Section {
  private:
   IdType id_{};
   cproxy_section proxy_{};
-  mutable CkSectionInfo cookie_{};
+  CkSectionInfo cookie_{};
 };
 
 }  // namespace Parallel

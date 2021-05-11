@@ -66,9 +66,9 @@ struct Count {
       }
     }();
     // [section_reduction]
-    const auto& array_section =
-        db::get<Parallel::Tags::Section<ParallelComponent, ArraySectionIdTag>>(
-            box);
+    auto& array_section = db::get_mutable_reference<
+        Parallel::Tags::Section<ParallelComponent, ArraySectionIdTag>>(
+        make_not_null(&box));
     if (array_section.has_value()) {
       // We'll just count the elements in each section
       Parallel::ReductionData<

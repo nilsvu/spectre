@@ -240,7 +240,10 @@ void ReductionData<ReductionDatum<Ts, InvokeCombines, InvokeFinals,
 /// Can be used instead of a `Parallel::Section` when no section is desired.
 ///
 /// \see Parallel::contribute_to_reduction
+// @{
 struct NoSection {};
+NoSection no_section{};
+// @}
 
 /*!
  * \ingroup ParallelGroup
@@ -257,10 +260,10 @@ struct NoSection {};
  */
 template <class Action, class SenderProxy, class TargetProxy, class... Ts,
           class SectionType = NoSection>
-void contribute_to_reduction(
-    ReductionData<Ts...> reduction_data, const SenderProxy& sender_component,
-    const TargetProxy& target_component,
-    const SectionType& section = NoSection{}) noexcept {
+void contribute_to_reduction(ReductionData<Ts...> reduction_data,
+                             const SenderProxy& sender_component,
+                             const TargetProxy& target_component,
+                             SectionType& section = no_section) noexcept {
   (void)Parallel::charmxx::RegisterReducerFunction<
       &ReductionData<Ts...>::combine>::registrar;
   CkCallback callback(
