@@ -42,8 +42,8 @@ function(add_spectre_executable TARGET_NAME)
   target_link_libraries(
     ${TARGET_NAME}
     PRIVATE
-    SpectreFlags
     CharmModuleInit
+    SpectreFlags
     )
 endfunction()
 
