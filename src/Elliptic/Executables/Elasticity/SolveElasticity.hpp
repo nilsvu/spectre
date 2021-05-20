@@ -177,7 +177,7 @@ struct Metavariables {
           analytic_solution_fields,
           LinearSolver::multigrid::Tags::IsFinestGrid>,
       dg::Events::Registrars::ObserveErrorNorms<
-          linear_solver_iteration_id, analytic_solution_fields,
+          volume_dim, linear_solver_iteration_id, analytic_solution_fields,
           LinearSolver::multigrid::Tags::IsFinestGrid>,
       dg::Events::Registrars::ObserveVolumeIntegrals<
           volume_dim, linear_solver_iteration_id,

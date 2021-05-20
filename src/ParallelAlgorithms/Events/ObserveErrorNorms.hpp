@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <optional>
@@ -13,6 +14,7 @@
 
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataBox/TagName.hpp"
+#include "DataStructures/DataVector.hpp"
 #include "Domain/Tags.hpp"
 #include "IO/Observer/ArrayComponentId.hpp"
 #include "IO/Observer/Helpers.hpp"
@@ -20,6 +22,7 @@
 #include "IO/Observer/ObserverComponent.hpp"  // IWYU pragma: keep
 #include "IO/Observer/ReductionActions.hpp"   // IWYU pragma: keep
 #include "IO/Observer/TypeOfObservation.hpp"
+#include "NumericalAlgorithms/LinearOperators/DefiniteIntegral.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/ArrayIndex.hpp"
 #include "Parallel/CharmPupable.hpp"
@@ -44,22 +47,24 @@ struct Inertial;
 
 namespace dg {
 namespace Events {
-template <typename ObservationValueTag, typename Tensors,
+template <size_t Dim, typename ObservationValueTag, typename Tensors,
           typename ArraySectionIdTag, typename EventRegistrars>
 class ObserveErrorNorms;
 
 namespace Registrars {
-template <typename ObservationValueTag, typename Tensors,
+template <size_t Dim, typename ObservationValueTag, typename Tensors,
           typename ArraySectionIdTag = void>
-using ObserveErrorNorms =
-    ::Registration::Registrar<Events::ObserveErrorNorms, ObservationValueTag,
-                              Tensors, ArraySectionIdTag>;
+struct ObserveErrorNorms {
+  template <typename RegistrarList>
+  using f = Events::ObserveErrorNorms<Dim, ObservationValueTag, Tensors,
+                                      ArraySectionIdTag, RegistrarList>;
+};
 }  // namespace Registrars
 
-template <typename ObservationValueTag, typename Tensors,
+template <size_t Dim, typename ObservationValueTag, typename Tensors,
           typename ArraySectionIdTag = void,
           typename EventRegistrars = tmpl::list<Registrars::ObserveErrorNorms<
-              ObservationValueTag, Tensors, ArraySectionIdTag>>>
+              Dim, ObservationValueTag, Tensors, ArraySectionIdTag>>>
 class ObserveErrorNorms;  // IWYU pragma: keep
 
 /*!
@@ -75,25 +80,43 @@ class ObserveErrorNorms;  // IWYU pragma: keep
  *   \text{value} - \text{analytic solution}\right]^2}\right)\f$
  *   over all points
  */
-template <typename ObservationValueTag, typename... Tensors,
+template <size_t Dim, typename ObservationValueTag, typename... Tensors,
           typename ArraySectionIdTag, typename EventRegistrars>
-class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
+class ObserveErrorNorms<Dim, ObservationValueTag, tmpl::list<Tensors...>,
                         ArraySectionIdTag, EventRegistrars>
     : public Event<EventRegistrars> {
  private:
   template <typename Tag>
-  struct LocalSquareError {
+  struct LocalRmsSquareError {
+    using type = double;
+  };
+  template <typename Tag>
+  struct LocalLinfError {
+    using type = double;
+  };
+  template <typename Tag>
+  struct LocalL2SquareError {
     using type = double;
   };
 
+  using RmsErrorDatum = Parallel::ReductionDatum<double, funcl::Plus<>,
+                                                 funcl::Sqrt<funcl::Divides<>>,
+                                                 std::index_sequence<1>>;
+  using LinfErrorDatum = Parallel::ReductionDatum<double, funcl::Max<>>;
   using L2ErrorDatum = Parallel::ReductionDatum<double, funcl::Plus<>,
                                                 funcl::Sqrt<funcl::Divides<>>,
-                                                std::index_sequence<1>>;
+                                                std::index_sequence<2>>;
   using ReductionData = tmpl::wrap<
-      tmpl::append<
-          tmpl::list<Parallel::ReductionDatum<double, funcl::AssertEqual<>>,
-                     Parallel::ReductionDatum<size_t, funcl::Plus<>>>,
-          tmpl::filled_list<L2ErrorDatum, sizeof...(Tensors)>>,
+      tmpl::append<tmpl::list<
+                       // Observation value
+                       Parallel::ReductionDatum<double, funcl::AssertEqual<>>,
+                       // Number of points
+                       Parallel::ReductionDatum<size_t, funcl::Plus<>>,
+                       // Volume
+                       Parallel::ReductionDatum<double, funcl::Plus<>>>,
+                   tmpl::filled_list<RmsErrorDatum, sizeof...(Tensors)>,
+                   tmpl::filled_list<LinfErrorDatum, sizeof...(Tensors)>,
+                   tmpl::filled_list<L2ErrorDatum, sizeof...(Tensors)>>,
       Parallel::ReductionData>;
 
  public:
@@ -136,12 +159,16 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
                  tmpl::conditional_t<
                      std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
                      observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>,
+                 domain::Tags::Mesh<Dim>,
+                 domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>,
                  Tensors..., ::Tags::AnalyticSolutionsBase>>;
 
   template <typename OptionalAnalyticSolutions, typename Metavariables,
             typename ArrayIndex, typename ParallelComponent>
   void operator()(const typename ObservationValueTag::type& observation_value,
                   const std::optional<std::string>& observation_key_suffix,
+                  const Mesh<Dim>& mesh,
+                  const Scalar<DataVector>& det_inv_jacobian,
                   const typename Tensors::type&... tensors,
                   const OptionalAnalyticSolutions& optional_analytic_solutions,
                   Parallel::GlobalCache<Metavariables>& cache,
@@ -166,19 +193,32 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
       }
     }();
 
-    tuples::TaggedTuple<LocalSquareError<Tensors>...> local_square_errors;
-    const auto record_errors = [&local_square_errors, &analytic_solutions](
+    const double local_volume =
+        definite_integral(1. / get(det_inv_jacobian), mesh);
+    tuples::TaggedTuple<LocalRmsSquareError<Tensors>...,
+                        LocalLinfError<Tensors>...,
+                        LocalL2SquareError<Tensors>...>
+        local_errors;
+    const auto record_errors = [&local_errors, &analytic_solutions, &mesh,
+                                &det_inv_jacobian](
                                    const auto tensor_tag_v,
                                    const auto& tensor) noexcept {
       using tensor_tag = tmpl::type_from<decltype(tensor_tag_v)>;
-      double local_square_error = 0.0;
+      double local_rms_square_error = 0.0;
+      double local_linf_error = 0.0;
+      double local_l2_square_error = 0.0;
       for (size_t i = 0; i < tensor.size(); ++i) {
-        const auto error = tensor[i] - get<::Tags::Analytic<tensor_tag>>(
-                                           analytic_solutions)[i];
-        local_square_error += alg::accumulate(square(error), 0.0);
+        const DataVector error = tensor[i] - get<::Tags::Analytic<tensor_tag>>(
+                                                 analytic_solutions)[i];
+        local_rms_square_error += alg::accumulate(square(error), 0.0);
+        local_linf_error = std::max(max(abs(error)), local_linf_error);
+        local_l2_square_error +=
+            definite_integral(square(error) / get(det_inv_jacobian), mesh);
       }
-      get<LocalSquareError<tensor_tag>>(local_square_errors) =
-          local_square_error;
+      get<LocalRmsSquareError<tensor_tag>>(local_errors) =
+          local_rms_square_error;
+      get<LocalLinfError<tensor_tag>>(local_errors) = local_linf_error;
+      get<LocalL2SquareError<tensor_tag>>(local_errors) = local_l2_square_error;
       return 0;
     };
     expand_pack(record_errors(tmpl::type_<Tensors>{}, tensors)...);
@@ -199,25 +239,31 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
             std::add_pointer_t<ParallelComponent>{nullptr},
             Parallel::ArrayIndex<ArrayIndex>(array_index)},
         subfile_path_with_suffix,
-        std::vector<std::string>{db::tag_name<ObservationValueTag>(),
-                                 "NumberOfPoints",
-                                 ("Error(" + db::tag_name<Tensors>() + ")")...},
-        ReductionData{
-            static_cast<double>(observation_value), num_points,
-            std::move(get<LocalSquareError<Tensors>>(local_square_errors))...});
+        std::vector<std::string>{
+            db::tag_name<ObservationValueTag>(), "NumberOfPoints", "Volume",
+            ("RmsError(" + db::tag_name<Tensors>() + ")")...,
+            ("LinfError(" + db::tag_name<Tensors>() + ")")...,
+            ("L2Error(" + db::tag_name<Tensors>() + ")")...},
+        ReductionData{static_cast<double>(observation_value), num_points,
+                      local_volume,
+                      get<LocalRmsSquareError<Tensors>>(local_errors)...,
+                      get<LocalLinfError<Tensors>>(local_errors)...,
+                      get<LocalL2SquareError<Tensors>>(local_errors)...});
   }
 
-  template <typename OptionalAnalyticSolutions, typename Metavariables, typename ArrayIndex,
-            typename ParallelComponent>
-  void operator()(
-      const typename ObservationValueTag::type& observation_value,
-      const typename Tensors::type&... tensors,
-      const OptionalAnalyticSolutions& optional_analytic_solutions,
-      Parallel::GlobalCache<Metavariables>& cache,
-      const ArrayIndex& array_index,
-      const ParallelComponent* const meta) const noexcept {
-    this->operator()(observation_value, std::make_optional(""), tensors...,
-                     optional_analytic_solutions, cache, array_index, meta);
+  template <typename OptionalAnalyticSolutions, typename Metavariables,
+            typename ArrayIndex, typename ParallelComponent>
+  void operator()(const typename ObservationValueTag::type& observation_value,
+                  const Mesh<Dim>& mesh,
+                  const Scalar<DataVector>& det_inv_jacobian,
+                  const typename Tensors::type&... tensors,
+                  const OptionalAnalyticSolutions& optional_analytic_solutions,
+                  Parallel::GlobalCache<Metavariables>& cache,
+                  const ArrayIndex& array_index,
+                  const ParallelComponent* const meta) const noexcept {
+    this->operator()(observation_value, std::make_optional(""), mesh,
+                     det_inv_jacobian, tensors..., optional_analytic_solutions,
+                     cache, array_index, meta);
   }
 
   using observation_registration_tags = tmpl::conditional_t<
@@ -246,19 +292,19 @@ class ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
   std::string subfile_path_;
 };
 
-template <typename ObservationValueTag, typename... Tensors,
+template <size_t Dim, typename ObservationValueTag, typename... Tensors,
           typename ArraySectionIdTag, typename EventRegistrars>
-ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
+ObserveErrorNorms<Dim, ObservationValueTag, tmpl::list<Tensors...>,
                   ArraySectionIdTag,
                   EventRegistrars>::ObserveErrorNorms(const std::string&
                                                           subfile_name) noexcept
     : subfile_path_("/" + subfile_name) {}
 
 /// \cond
-template <typename ObservationValueTag, typename... Tensors,
+template <size_t Dim, typename ObservationValueTag, typename... Tensors,
           typename ArraySectionIdTag, typename EventRegistrars>
-PUP::able::PUP_ID ObserveErrorNorms<ObservationValueTag, tmpl::list<Tensors...>,
-                                    ArraySectionIdTag,
+PUP::able::PUP_ID ObserveErrorNorms<Dim, ObservationValueTag,
+                                    tmpl::list<Tensors...>, ArraySectionIdTag,
                                     EventRegistrars>::my_PUP_ID = 0;  // NOLINT
 /// \endcond
 }  // namespace Events

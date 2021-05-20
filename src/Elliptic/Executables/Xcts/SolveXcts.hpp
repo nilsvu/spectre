@@ -195,14 +195,14 @@ struct Metavariables {
                                                 typename system::primal_fluxes>;
   using observe_fields = tmpl::append<analytic_solution_fields,
                                       typename system::background_fields>;
-  using events =
-      tmpl::list<dg::Events::Registrars::ObserveFields<
-                     volume_dim, nonlinear_solver_iteration_id, observe_fields,
-                     analytic_solution_fields,
-                     LinearSolver::multigrid::Tags::IsFinestGrid>,
-                 dg::Events::Registrars::ObserveErrorNorms<
-                     nonlinear_solver_iteration_id, analytic_solution_fields,
-                     LinearSolver::multigrid::Tags::IsFinestGrid>>;
+  using events = tmpl::list<
+      dg::Events::Registrars::ObserveFields<
+          volume_dim, nonlinear_solver_iteration_id, observe_fields,
+          analytic_solution_fields,
+          LinearSolver::multigrid::Tags::IsFinestGrid>,
+      dg::Events::Registrars::ObserveErrorNorms<
+          volume_dim, nonlinear_solver_iteration_id, analytic_solution_fields,
+          LinearSolver::multigrid::Tags::IsFinestGrid>>;
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       nonlinear_solver_iteration_id>>;
 

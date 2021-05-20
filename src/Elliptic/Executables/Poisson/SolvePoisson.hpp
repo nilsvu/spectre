@@ -161,14 +161,14 @@ struct Metavariables {
   // (public for use by the Charm++ registration code)
   using analytic_solution_fields = typename system::primal_fields;
   using observe_fields = analytic_solution_fields;
-  using events =
-      tmpl::list<dg::Events::Registrars::ObserveFields<
-                     volume_dim, linear_solver_iteration_id, observe_fields,
-                     analytic_solution_fields,
-                     LinearSolver::multigrid::Tags::IsFinestGrid>,
-                 dg::Events::Registrars::ObserveErrorNorms<
-                     linear_solver_iteration_id, analytic_solution_fields,
-                     LinearSolver::multigrid::Tags::IsFinestGrid>>;
+  using events = tmpl::list<
+      dg::Events::Registrars::ObserveFields<
+          volume_dim, linear_solver_iteration_id, observe_fields,
+          analytic_solution_fields,
+          LinearSolver::multigrid::Tags::IsFinestGrid>,
+      dg::Events::Registrars::ObserveErrorNorms<
+          volume_dim, linear_solver_iteration_id, analytic_solution_fields,
+          LinearSolver::multigrid::Tags::IsFinestGrid>>;
   using triggers = tmpl::list<elliptic::Triggers::Registrars::EveryNIterations<
       linear_solver_iteration_id>>;
 
