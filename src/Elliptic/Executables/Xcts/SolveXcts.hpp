@@ -222,14 +222,15 @@ struct Metavariables {
 
   using initialization_actions = tmpl::list<
       Actions::SetupDataBox,
-      elliptic::dg::Actions::InitializeDomain<volume_dim>,
+      elliptic::dg::Actions::InitializeDomain<volume_dim,
+                                              system::inv_metric_tag>,
       typename nonlinear_solver::initialize_element,
       typename linear_solver::initialize_element,
       typename multigrid::initialize_element,
       typename schwarz_smoother::initialize_element,
+      elliptic::Actions::InitializeBackgroundFields<system, background_tag>,
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       elliptic::Actions::InitializeFixedSources<system, background_tag>,
-      elliptic::Actions::InitializeBackgroundFields<system, background_tag>,
       elliptic::Actions::InitializeOptionalAnalyticSolution<
           background_tag, analytic_solution_fields,
           Xcts::Solutions::AnalyticSolution<tmpl::append<

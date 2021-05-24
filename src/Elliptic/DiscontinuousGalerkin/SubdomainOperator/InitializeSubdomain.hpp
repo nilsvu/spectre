@@ -432,6 +432,18 @@ struct InitializeSubdomain {
   static void normalize_face_normals(
       db::DataBox<DbTagsList>& box,
       const LinearSolver::Schwarz::OverlapId<Dim>& overlap_id) noexcept {
+    // First, multiply the DetInvJacobian with the metric determinant
+    if constexpr (is_curved) {
+      using inv_metric_tag = overlaps_tag<typename System::inv_metric_tag>;
+      elliptic::util::mutate_apply_at<
+          tmpl::list<overlaps_tag<
+              domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>>>,
+          tmpl::list<inv_metric_tag>, tmpl::list<>>(
+          [](const auto det_inv_jacobian, const auto& inv_metric) noexcept {
+            get(*det_inv_jacobian) *= get(determinant(inv_metric));
+          },
+          make_not_null(&box), overlap_id);
+    }
     // Faces of the overlapped element (internal and external)
     const auto& element =
         db::get<overlaps_tag<domain::Tags::Element<Dim>>>(box).at(overlap_id);

@@ -257,6 +257,26 @@ struct DetInvJacobianCompute : db::ComputeTag,
   }
 };
 
+template <size_t Dim, typename SourceFrame, typename TargetFrame,
+          typename InvMetricTag>
+struct DetInvJacobianAndMetricCompute
+    : db::ComputeTag,
+      DetInvJacobian<SourceFrame, TargetFrame> {
+  using base = DetInvJacobian<SourceFrame, TargetFrame>;
+  using return_type = typename base::type;
+  using argument_tags =
+      tmpl::list<InverseJacobian<Dim, SourceFrame, TargetFrame>, InvMetricTag>;
+  static void function(
+      const gsl::not_null<return_type*> det_inv_jac,
+      const ::InverseJacobian<DataVector, Dim, SourceFrame, TargetFrame>&
+          inv_jac,
+      const tnsr::II<DataVector, Dim, TargetFrame>& inv_metric) noexcept {
+    determinant(det_inv_jac, inv_jac);
+    const auto det_inv_metric = determinant(inv_metric);
+    get(*det_inv_jac) *= get(det_inv_metric);
+  }
+};
+
 /// \ingroup DataBoxTagsGroup
 /// \ingroup ComputationalDomainGroup
 /// Base tag for boundary data needed for updating the variables.

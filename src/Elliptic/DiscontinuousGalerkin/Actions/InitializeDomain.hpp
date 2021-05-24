@@ -63,7 +63,7 @@ namespace elliptic::dg::Actions {
  * mechanism, so `Actions::SetupDataBox` must be present in the `Initialization`
  * phase action list prior to this action.
  */
-template <size_t Dim>
+template <size_t Dim, typename InvMetricTag = void>
 struct InitializeDomain {
   using initialization_tags =
       tmpl::list<domain::Tags::InitialExtents<Dim>,
@@ -81,7 +81,12 @@ struct InitializeDomain {
       domain ::Tags::InverseJacobianCompute<
           domain ::Tags::ElementMap<Dim>,
           domain::Tags::Coordinates<Dim, Frame::Logical>>,
-      domain::Tags::DetInvJacobianCompute<Dim, Frame::Logical, Frame::Inertial>,
+      tmpl::conditional_t<
+          std::is_same_v<InvMetricTag, void>,
+          domain::Tags::DetInvJacobianCompute<Dim, Frame::Logical,
+                                              Frame::Inertial>,
+          domain::Tags::DetInvJacobianAndMetricCompute<
+              Dim, Frame::Logical, Frame::Inertial, InvMetricTag>>,
       domain::Tags::MinimumGridSpacingCompute<Dim, Frame::Inertial>>>;
 
   template <typename DataBox, typename... InboxTags, typename Metavariables,
