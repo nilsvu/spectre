@@ -273,7 +273,7 @@ struct DetInvJacobianAndMetricCompute
       const tnsr::II<DataVector, Dim, TargetFrame>& inv_metric) noexcept {
     determinant(det_inv_jac, inv_jac);
     const auto det_inv_metric = determinant(inv_metric);
-    get(*det_inv_jac) *= get(det_inv_metric);
+    get(*det_inv_jac) *= sqrt(get(det_inv_metric));
   }
 };
 

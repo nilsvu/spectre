@@ -440,7 +440,7 @@ struct InitializeSubdomain {
               domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>>>,
           tmpl::list<inv_metric_tag>, tmpl::list<>>(
           [](const auto det_inv_jacobian, const auto& inv_metric) noexcept {
-            get(*det_inv_jacobian) *= get(determinant(inv_metric));
+            get(*det_inv_jacobian) *= sqrt(get(determinant(inv_metric)));
           },
           make_not_null(&box), overlap_id);
     }
