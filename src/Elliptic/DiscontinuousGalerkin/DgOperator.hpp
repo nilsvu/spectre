@@ -806,14 +806,23 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
                           auxiliary_boundary_corrections, mesh.extents(),
                           direction.dimension(), slice_index);
       } else {
-        const Scalar<DataVector> det_inv_jacobian_fake{
-            mesh.number_of_grid_points(), 1.};
-        const Scalar<DataVector> face_det_jacobian_fake{
-            face_mesh.number_of_grid_points(), 1.};
+        Scalar<DataVector> face_det_jacobian{face_mesh.number_of_grid_points()};
+        const Matrix identity{};
+        auto interpolation_matrices = make_array<Dim>(std::cref(identity));
+        const std::pair<Matrix, Matrix>& matrices =
+            Spectral::boundary_interpolation_matrices(
+                mesh.slice_through(direction.dimension()));
+        gsl::at(interpolation_matrices, direction.dimension()) =
+            direction.side() == Side::Upper ? matrices.second : matrices.first;
+        const DataVector volume_det_jacobian = 1.0 / get(det_inv_jacobian);
+        apply_matrices(make_not_null(&get(face_det_jacobian)),
+                       interpolation_matrices, volume_det_jacobian,
+                       mesh.extents());
+
         evolution::dg::lift_boundary_terms_gauss_points(
-            make_not_null(&primal_fluxes_corrected), det_inv_jacobian_fake,
-            mesh, direction, auxiliary_boundary_corrections,
-            face_normal_magnitude, face_det_jacobian_fake);
+            make_not_null(&primal_fluxes_corrected), det_inv_jacobian, mesh,
+            direction, auxiliary_boundary_corrections, face_normal_magnitude,
+            face_det_jacobian);
       }
     }  // apply auxiliary boundary corrections on all mortars
 
@@ -923,14 +932,23 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         add_slice_to_data(operator_applied_to_vars, primal_boundary_corrections,
                           mesh.extents(), direction.dimension(), slice_index);
       } else {
-        const Scalar<DataVector> det_inv_jacobian_fake{
-            mesh.number_of_grid_points(), 1.};
-        const Scalar<DataVector> face_det_jacobian_fake{
-            face_mesh.number_of_grid_points(), 1.};
+        Scalar<DataVector> face_det_jacobian{face_mesh.number_of_grid_points()};
+        const Matrix identity{};
+        auto interpolation_matrices = make_array<Dim>(std::cref(identity));
+        const std::pair<Matrix, Matrix>& matrices =
+            Spectral::boundary_interpolation_matrices(
+                mesh.slice_through(direction.dimension()));
+        gsl::at(interpolation_matrices, direction.dimension()) =
+            direction.side() == Side::Upper ? matrices.second : matrices.first;
+        const DataVector volume_det_jacobian = 1.0 / get(det_inv_jacobian);
+        apply_matrices(make_not_null(&get(face_det_jacobian)),
+                       interpolation_matrices, volume_det_jacobian,
+                       mesh.extents());
+
         evolution::dg::lift_boundary_terms_gauss_points(
-            operator_applied_to_vars, det_inv_jacobian_fake, mesh, direction,
+            operator_applied_to_vars, det_inv_jacobian, mesh, direction,
             primal_boundary_corrections, face_normal_magnitude,
-            face_det_jacobian_fake);
+            face_det_jacobian);
       }
     }  // loop over all mortars
 
