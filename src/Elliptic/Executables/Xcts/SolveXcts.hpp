@@ -232,7 +232,7 @@ struct Metavariables {
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       elliptic::Actions::InitializeFixedSources<system, background_tag>,
       elliptic::Actions::InitializeOptionalAnalyticSolution<
-          background_tag, analytic_solution_fields,
+          volume_dim, background_tag, analytic_solution_fields,
           Xcts::Solutions::AnalyticSolution<tmpl::append<
               analytic_solution_registrars, analytic_data_registrars>>>,
       elliptic::dg::Actions::initialize_operator<system>,

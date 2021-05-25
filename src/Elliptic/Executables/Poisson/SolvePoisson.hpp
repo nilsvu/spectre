@@ -194,8 +194,9 @@ struct Metavariables {
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       elliptic::Actions::InitializeFixedSources<system, analytic_solution_tag>,
       elliptic::Actions::InitializeAnalyticSolution<
-          analytic_solution_tag, tmpl::append<typename system::primal_fields,
-                                              typename system::primal_fluxes>>,
+          volume_dim, analytic_solution_tag,
+          tmpl::append<typename system::primal_fields,
+                       typename system::primal_fluxes>>,
       elliptic::dg::Actions::initialize_operator<system>,
       elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
           system, analytic_solution_tag,

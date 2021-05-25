@@ -214,7 +214,7 @@ struct Metavariables {
           Elasticity::Tags::StrainCompute<volume_dim>,
           Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>>>,
       elliptic::Actions::InitializeOptionalAnalyticSolution<
-          background_tag,
+          volume_dim, background_tag,
           tmpl::append<typename system::primal_fields,
                        typename system::primal_fluxes>,
           Elasticity::Solutions::AnalyticSolution<Dim, background_registrars>>,

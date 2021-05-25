@@ -4,10 +4,12 @@
 #pragma once
 
 #include <optional>
+#include <unordered_map>
 
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Tag.hpp"
 #include "DataStructures/Variables.hpp"
+#include "Domain/Structure/Direction.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/Serialize.hpp"
 #include "PointwiseFunctions/AnalyticData/Tags.hpp"
@@ -119,4 +121,23 @@ struct AnalyticSolutionsOptional : AnalyticSolutionsBase, db::SimpleTag {
   using type =
       std::optional<::Variables<db::wrap_tags_in<Analytic, FieldTags>>>;
 };
+
+struct AnalyticSolutionsOnBoundaryBase : db::BaseTag {};
+
+template <size_t Dim, typename FieldTags>
+struct AnalyticSolutionsOnBoundary : AnalyticSolutionsOnBoundaryBase,
+                                     db::SimpleTag {
+  using type =
+      std::unordered_map<Direction<Dim>,
+                         ::Variables<db::wrap_tags_in<Analytic, FieldTags>>>;
+};
+
+template <size_t Dim, typename FieldTags>
+struct AnalyticSolutionsOnBoundaryOptional : AnalyticSolutionsOnBoundaryBase,
+                                             db::SimpleTag {
+  static std::string name() noexcept { return "AnalyticSolutionsOnBoundary"; }
+  using type = std::optional<std::unordered_map<
+      Direction<Dim>, ::Variables<db::wrap_tags_in<Analytic, FieldTags>>>>;
+};
+
 }  // namespace Tags

@@ -4,15 +4,15 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 #include <ostream>
 #include <pup.h>
 #include <string>
 
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
-#include "DataStructures/Tensor/Slice.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Domain/FaceNormal.hpp"
 #include "Domain/Structure/Direction.hpp"
-#include "Domain/Structure/IndexToSliceAt.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryConditionType.hpp"
@@ -112,19 +112,17 @@ class AnalyticSolution<System, Dim, tmpl::list<FieldTags...>,
     return boundary_condition_types_;
   }
 
-  using argument_tags =
-      tmpl::list<::Tags::AnalyticSolutionsBase, domain::Tags::Mesh<Dim>,
-                 domain::Tags::Direction<Dim>,
-                 ::Tags::Normalized<domain::Tags::UnnormalizedFaceNormal<
-                     Dim, Frame::Inertial>>>;
-  using volume_tags =
-      tmpl::list<::Tags::AnalyticSolutionsBase, domain::Tags::Mesh<Dim>>;
+  using argument_tags = tmpl::list<
+      ::Tags::AnalyticSolutionsOnBoundaryBase, domain::Tags::Direction<Dim>,
+      ::Tags::Normalized<
+          domain::Tags::UnnormalizedFaceNormal<Dim, Frame::Inertial>>>;
+  using volume_tags = tmpl::list<::Tags::AnalyticSolutionsOnBoundaryBase>;
 
   template <typename OptionalAnalyticSolutions>
   void apply(const gsl::not_null<typename FieldTags::type*>... fields,
              const gsl::not_null<typename FieldTags::type*>... n_dot_fluxes,
              const OptionalAnalyticSolutions& optional_analytic_solutions,
-             const Mesh<Dim>& volume_mesh, const Direction<Dim>& direction,
+             const Direction<Dim>& direction,
              const tnsr::i<DataVector, Dim>& face_normal) const noexcept {
     const auto& analytic_solutions = [&optional_analytic_solutions]() noexcept
         -> const auto& {
@@ -143,11 +141,8 @@ class AnalyticSolution<System, Dim, tmpl::list<FieldTags...>,
       }
     }
     ();
-    const size_t slice_index =
-        index_to_slice_at(volume_mesh.extents(), direction);
     const auto impose_boundary_condition = [this, &analytic_solutions,
-                                            &volume_mesh, &direction,
-                                            &slice_index, &face_normal](
+                                            &direction, &face_normal](
                                                auto field_tag_v,
                                                auto flux_tag_v,
                                                const auto field,
@@ -157,16 +152,13 @@ class AnalyticSolution<System, Dim, tmpl::list<FieldTags...>,
       switch (get<elliptic::Tags::BoundaryConditionType<field_tag>>(
           boundary_condition_types())) {
         case elliptic::BoundaryConditionType::Dirichlet:
-          data_on_slice(
-              field, get<::Tags::Analytic<field_tag>>(analytic_solutions),
-              volume_mesh.extents(), direction.dimension(), slice_index);
+          *field = get<::Tags::Analytic<field_tag>>(
+              analytic_solutions.at(direction));
           break;
         case elliptic::BoundaryConditionType::Neumann:
-          normal_dot_flux(
-              n_dot_flux, face_normal,
-              data_on_slice(get<::Tags::Analytic<flux_tag>>(analytic_solutions),
-                            volume_mesh.extents(), direction.dimension(),
-                            slice_index));
+          normal_dot_flux(n_dot_flux, face_normal,
+                          get<::Tags::Analytic<flux_tag>>(
+                              analytic_solutions.at(direction)));
           break;
         default:
           ERROR("Unsupported boundary condition type: "
