@@ -187,7 +187,7 @@ struct Metavariables {
 
   using initialization_actions = tmpl::list<
       Actions::SetupDataBox,
-      elliptic::dg::Actions::InitializeDomain<volume_dim>,
+      elliptic::dg::Actions::InitializeDomain<system, void>,
       typename linear_solver::initialize_element,
       typename multigrid::initialize_element,
       typename schwarz_smoother::initialize_element,
@@ -197,7 +197,6 @@ struct Metavariables {
           volume_dim, analytic_solution_tag,
           tmpl::append<typename system::primal_fields,
                        typename system::primal_fluxes>>,
-      elliptic::dg::Actions::initialize_operator<system>,
       elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
           system, analytic_solution_tag,
           typename schwarz_smoother::options_group>,

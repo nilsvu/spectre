@@ -37,6 +37,7 @@ Discretization:
     Formulation: Strong
     Quadrature: GaussLobatto
     Massive: True
+    OversamplingOrder: 0
 
 Observers:
   VolumeFileName: "PoissonProductOfSinusoids3DVolume"

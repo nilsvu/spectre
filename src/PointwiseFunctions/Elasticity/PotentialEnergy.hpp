@@ -36,6 +36,14 @@ void potential_energy_density(
         constitutive_relation) noexcept;
 
 template <size_t Dim>
+void potential_energy_density(
+    gsl::not_null<Scalar<DataVector>*> potential_energy_density,
+    const tnsr::ii<DataVector, Dim>& strain, const Mesh<Dim>& mesh,
+    const ElementMap<Dim, Frame::Inertial>& element_map,
+    const ConstitutiveRelations::ConstitutiveRelation<Dim>&
+        constitutive_relation) noexcept;
+
+template <size_t Dim>
 Scalar<DataVector> potential_energy_density(
     const tnsr::ii<DataVector, Dim>& strain,
     const tnsr::I<DataVector, Dim>& coordinates,
@@ -55,12 +63,12 @@ struct PotentialEnergyDensityCompute
   using base = Elasticity::Tags::PotentialEnergyDensity<Dim>;
   using return_type = Scalar<DataVector>;
   using argument_tags =
-      tmpl::list<Elasticity::Tags::Strain<Dim>,
-                 domain::Tags::Coordinates<Dim, Frame::Inertial>,
+      tmpl::list<Elasticity::Tags::Strain<Dim>, domain::Tags::Mesh<Dim>,
+                 domain::Tags::ElementMap<Dim>,
                  Elasticity::Tags::ConstitutiveRelation<Dim>>;
   static constexpr auto function = static_cast<void (*)(
       gsl::not_null<Scalar<DataVector>*>, const tnsr::ii<DataVector, Dim>&,
-      const tnsr::I<DataVector, Dim>&,
+      const Mesh<Dim>&, const ElementMap<Dim, Frame::Inertial>&,
       const ConstitutiveRelations::ConstitutiveRelation<Dim>&) noexcept>(
       &potential_energy_density<Dim>);
 };

@@ -194,7 +194,7 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
       tmpl::conditional_t<
           std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
           observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>,
-      domain::Tags::Mesh<VolumeDim>, coordinates_tag,
+      domain::Tags::Mesh<VolumeDim>, domain::Tags::ElementMap<VolumeDim>,
       AnalyticSolutionTensors..., NonSolutionTensors...,
       tmpl::conditional_t<(sizeof...(AnalyticSolutionTensors) > 0),
                           ::Tags::AnalyticSolutionsBase, tmpl::list<>>>>;
@@ -205,8 +205,7 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
       const typename ObservationValueTag::type& observation_value,
       const std::optional<std::string>& observation_key_suffix,
       const Mesh<VolumeDim>& mesh,
-      const tnsr::I<DataVector, VolumeDim, Frame::Inertial>&
-          inertial_coordinates,
+      const ElementMap<VolumeDim, Frame::Inertial>& element_map,
       const typename AnalyticSolutionTensors::
           type&... analytic_solution_tensors,
       const typename NonSolutionTensors::type&... non_solution_tensors,
@@ -219,9 +218,10 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
     }
     call_operator_impl(
         subfile_path_ + *observation_key_suffix, variables_to_observe_,
-        interpolation_mesh_, observation_value, mesh, inertial_coordinates,
-        analytic_solution_tensors..., non_solution_tensors...,
-        optional_analytic_solutions, cache, array_index, component);
+        interpolation_mesh_, observation_value, mesh,
+        element_map(logical_coordinates(mesh)), analytic_solution_tensors...,
+        non_solution_tensors..., optional_analytic_solutions, cache,
+        array_index, component);
   }
 
   // This overload is called when the list of analytic-solution tensors is
@@ -232,15 +232,14 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
       const typename ObservationValueTag::type& observation_value,
       const std::optional<std::string>& observation_key_suffix,
       const Mesh<VolumeDim>& mesh,
-      const tnsr::I<DataVector, VolumeDim, Frame::Inertial>&
-          inertial_coordinates,
+      const ElementMap<VolumeDim, Frame::Inertial>& element_map,
       const typename NonSolutionTensors::type&... non_solution_tensors,
       Parallel::GlobalCache<Metavariables>& cache,
       const ElementId<VolumeDim>& array_index,
       const ParallelComponent* const component) const noexcept {
     this->operator()(observation_value, observation_key_suffix, mesh,
-                     inertial_coordinates, non_solution_tensors...,
-                     std::nullopt, cache, array_index, component);
+                     element_map, non_solution_tensors..., std::nullopt, cache,
+                     array_index, component);
   }
 
   // Repeat the overloads with missing `observation_key_suffix`
@@ -249,8 +248,7 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
   void operator()(
       const typename ObservationValueTag::type& observation_value,
       const Mesh<VolumeDim>& mesh,
-      const tnsr::I<DataVector, VolumeDim, Frame::Inertial>&
-          inertial_coordinates,
+      const ElementMap<VolumeDim, Frame::Inertial>& element_map,
       const typename AnalyticSolutionTensors::
           type&... analytic_solution_tensors,
       const typename NonSolutionTensors::type&... non_solution_tensors,
@@ -259,7 +257,7 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
       const ElementId<VolumeDim>& array_index,
       const ParallelComponent* const meta) const noexcept {
     this->operator()(observation_value, std::make_optional(""), mesh,
-                     inertial_coordinates, analytic_solution_tensors...,
+                     element_map, analytic_solution_tensors...,
                      non_solution_tensors..., optional_analytic_solutions,
                      cache, array_index, meta);
   }
@@ -268,15 +266,14 @@ class ObserveFields<VolumeDim, ObservationValueTag, tmpl::list<Tensors...>,
   void operator()(
       const typename ObservationValueTag::type& observation_value,
       const Mesh<VolumeDim>& mesh,
-      const tnsr::I<DataVector, VolumeDim, Frame::Inertial>&
-          inertial_coordinates,
+      const ElementMap<VolumeDim, Frame::Inertial>& element_map,
       const typename NonSolutionTensors::type&... non_solution_tensors,
       Parallel::GlobalCache<Metavariables>& cache,
       const ElementId<VolumeDim>& array_index,
       const ParallelComponent* const component) const noexcept {
     this->operator()(observation_value, std::make_optional(""), mesh,
-                     inertial_coordinates, non_solution_tensors...,
-                     std::nullopt, cache, array_index, component);
+                     element_map, non_solution_tensors..., std::nullopt, cache,
+                     array_index, component);
   }
 
   // We factor out the work into a static member function so it can  be shared

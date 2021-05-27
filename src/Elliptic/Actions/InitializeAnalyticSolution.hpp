@@ -18,6 +18,7 @@
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Structure/IndexToSliceAt.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
@@ -47,19 +48,22 @@ void initialize_analytic_solution(
         Variables<db::wrap_tags_in<::Tags::Analytic, AnalyticSolutionFields>>>*>
         analytic_fields_on_external_faces,
     const AnalyticSolution& analytic_solution, const Mesh<Dim>& mesh,
-    const tnsr::I<DataVector, Dim>& inertial_coords,
+    const Mesh<Dim>& oversampled_mesh,
+    const ElementMap<Dim, Frame::Inertial>& element_map,
     const std::unordered_map<Direction<Dim>, tnsr::I<DataVector, Dim>>&
         inertial_coords_on_external_faces) noexcept {
   // Analytic solution in the volume
-  *analytic_fields = variables_from_tagged_tuple(
-      analytic_solution.variables(inertial_coords, AnalyticSolutionFields{}));
+  *analytic_fields = variables_from_tagged_tuple(analytic_solution.variables(
+      element_map(logical_coordinates(mesh)), AnalyticSolutionFields{}));
   // Analytic solution on the external boundary faces, for boundary conditions
   for (const auto& [direction, inertial_coords_on_face] :
        inertial_coords_on_external_faces) {
     auto& analytic_fields_on_face =
         (*analytic_fields_on_external_faces)[direction];
     if (mesh.quadrature(direction.dimension()) ==
-        Spectral::Quadrature::GaussLobatto) {
+            Spectral::Quadrature::GaussLobatto and
+        mesh.extents(direction.dimension()) ==
+            oversampled_mesh.extents(direction.dimension())) {
       // Slice the boundary data from the volume so we don't have to re-evaluate
       // the analytic solution
       data_on_slice(make_not_null(&analytic_fields_on_face), *analytic_fields,
@@ -133,7 +137,8 @@ struct InitializeAnalyticSolution {
     db::mutate_apply<
         simple_tags,
         tmpl::list<AnalyticSolutionTag, domain::Tags::Mesh<Dim>,
-                   domain::Tags::Coordinates<Dim, Frame::Inertial>,
+                   elliptic::dg::Tags::Oversampled<domain::Tags::Mesh<Dim>>,
+                   domain::Tags::ElementMap<Dim, Frame::Inertial>,
                    domain::Tags::Interface<
                        domain::Tags::BoundaryDirectionsInterior<Dim>,
                        domain::Tags::Coordinates<Dim, Frame::Inertial>>>>(
@@ -175,7 +180,8 @@ struct InitializeOptionalAnalyticSolution {
       db::mutate_apply<
           simple_tags,
           tmpl::list<domain::Tags::Mesh<Dim>,
-                     domain::Tags::Coordinates<Dim, Frame::Inertial>,
+                     elliptic::dg::Tags::Oversampled<domain::Tags::Mesh<Dim>>,
+                     domain::Tags::ElementMap<Dim, Frame::Inertial>,
                      domain::Tags::Interface<
                          domain::Tags::BoundaryDirectionsInterior<Dim>,
                          domain::Tags::Coordinates<Dim, Frame::Inertial>>>>(

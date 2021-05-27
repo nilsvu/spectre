@@ -113,6 +113,7 @@ struct SubdomainOperator
   // neighbors
   using prepare_args_tags = tmpl::list<
       domain::Tags::Element<Dim>, domain::Tags::Mesh<Dim>,
+      elliptic::dg::Tags::Oversampled<domain::Tags::Mesh<Dim>>,
       domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
       domain::Tags::Interface<
           domain::Tags::InternalDirections<Dim>,
@@ -130,6 +131,7 @@ struct SubdomainOperator
       ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>;
   using apply_args_tags = tmpl::list<
       domain::Tags::Mesh<Dim>,
+      elliptic::dg::Tags::Oversampled<domain::Tags::Mesh<Dim>>,
       domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
       domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>,
       domain::Tags::Interface<

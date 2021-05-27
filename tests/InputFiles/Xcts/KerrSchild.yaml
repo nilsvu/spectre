@@ -50,6 +50,8 @@ Discretization:
     PenaltyParameter: 1.
     Formulation: Strong
     Massive: True
+    Quadrature: GaussLobatto
+    OversamplingOrder: 0
 
 Observers:
   VolumeFileName: "KerrSchildVolume"

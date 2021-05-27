@@ -34,6 +34,7 @@
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Structure/IndexToSliceAt.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Oversample.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/Tags.hpp"
 #include "Elliptic/Utilities/ApplyAt.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
@@ -65,6 +66,7 @@ namespace detail {
 // Initialize the geometry of a neighbor into which an overlap extends
 template <size_t Dim>
 void initialize_overlap_geometry(
+    const gsl::not_null<Mesh<Dim>*> vars_mesh,
     const gsl::not_null<Mesh<Dim>*> mesh,
     const gsl::not_null<size_t*> extruding_extent,
     const gsl::not_null<Element<Dim>*> element,
@@ -102,15 +104,17 @@ void initialize_overlap_geometry(
         neighbor_mortar_sizes,
     const std::vector<std::array<size_t, Dim>>& initial_extents,
     const std::vector<std::array<size_t, Dim>>& initial_refinement,
-    const Spectral::Quadrature quadrature, const Domain<Dim>& domain,
-    const size_t max_overlap, const ElementId<Dim>& element_id,
+    const Spectral::Quadrature quadrature, const size_t oversample_points,
+    const Domain<Dim>& domain, const size_t max_overlap,
+    const ElementId<Dim>& element_id,
     const Direction<Dim>& overlap_direction) noexcept {
   // Mesh
-  *mesh = domain::Initialization::create_initial_mesh(initial_extents,
-                                                      element_id, quadrature);
+  *vars_mesh = domain::Initialization::create_initial_mesh(
+      initial_extents, element_id, quadrature);
+  *mesh = elliptic::dg::oversample(*vars_mesh, oversample_points);
   // Extruding extent
   *extruding_extent = LinearSolver::Schwarz::overlap_extent(
-      mesh->extents(overlap_direction.dimension()), max_overlap);
+      vars_mesh->extents(overlap_direction.dimension()), max_overlap);
   // Element
   const auto& block = domain.blocks()[element_id.block_id()];
   *element = domain::Initialization::create_initial_element(element_id, block,
@@ -139,11 +143,14 @@ void initialize_overlap_geometry(
       const ::dg::MortarId<Dim> mortar_id{direction, neighbor_id};
       // Geometry on this side of the mortar
       mortar_meshes->emplace(
-          mortar_id, ::dg::mortar_mesh(
-                         face_mesh, domain::Initialization::create_initial_mesh(
-                                        initial_extents, neighbor_id,
-                                        quadrature, orientation)
-                                        .slice_away(direction.dimension())));
+          mortar_id,
+          ::dg::mortar_mesh(
+              face_mesh,
+              elliptic::dg::oversample(
+                  domain::Initialization::create_initial_mesh(
+                      initial_extents, neighbor_id, quadrature, orientation),
+                  oversample_points)
+                  .slice_away(direction.dimension())));
       mortar_sizes->emplace(
           mortar_id, ::dg::mortar_size(element_id, neighbor_id,
                                        direction.dimension(), orientation));
@@ -154,8 +161,10 @@ void initialize_overlap_geometry(
       const auto& neighbor_mesh =
           neighbor_meshes
               ->emplace(mortar_id,
-                        domain::Initialization::create_initial_mesh(
-                            initial_extents, neighbor_id, quadrature))
+                        elliptic::dg::oversample(
+                            domain::Initialization::create_initial_mesh(
+                                initial_extents, neighbor_id, quadrature),
+                            oversample_points))
               .first->second;
       const auto neighbor_face_mesh =
           neighbor_mesh.slice_away(direction_from_neighbor.dimension());
@@ -215,6 +224,7 @@ struct InitializeSubdomain {
       overlaps_tag,
       tmpl::list<
           domain::Tags::Mesh<Dim>,
+          elliptic::dg::Tags::Oversampled<domain::Tags::Mesh<Dim>>,
           elliptic::dg::subdomain_operator::Tags::ExtrudingExtent,
           domain::Tags::Element<Dim>, domain::Tags::ElementMap<Dim>,
           domain::Tags::Coordinates<Dim, Frame::Inertial>,
@@ -277,7 +287,8 @@ struct InitializeSubdomain {
   using initialization_tags =
       tmpl::list<domain::Tags::InitialExtents<Dim>,
                  domain::Tags::InitialRefinementLevels<Dim>,
-                 elliptic::dg::Tags::Quadrature>;
+                 elliptic::dg::Tags::Quadrature,
+                 elliptic::dg::Tags::OversamplingOrder>;
   using const_global_cache_tags =
       tmpl::list<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>;
   using simple_tags = tmpl::append<
@@ -312,6 +323,7 @@ struct InitializeSubdomain {
             tmpl::list<domain::Tags::InitialExtents<Dim>,
                        domain::Tags::InitialRefinementLevels<Dim>,
                        elliptic::dg::Tags::Quadrature,
+                       elliptic::dg::Tags::OversamplingOrder,
                        domain::Tags::Domain<Dim>,
                        LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>;
         elliptic::util::mutate_apply_at<geometry_tags, geometry_argument_tags,

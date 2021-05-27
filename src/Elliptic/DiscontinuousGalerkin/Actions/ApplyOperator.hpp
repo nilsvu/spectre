@@ -23,6 +23,7 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/BoundaryConditions/ApplyBoundaryCondition.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgOperator.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Oversample.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
 #include "Elliptic/Systems/GetSourcesComputer.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/MortarHelpers.hpp"
@@ -60,119 +61,6 @@ struct MortarDataInboxTag
       FixedHashMap<maximum_number_of_neighbors(Dim), ::dg::MortarId<Dim>,
                    elliptic::dg::BoundaryData<PrimalFields, PrimalFluxes>,
                    boost::hash<::dg::MortarId<Dim>>>>;
-};
-
-// Initializes all quantities the DG operator needs on internal and external
-// faces, as well as the mortars between neighboring elements.
-template <typename System>
-struct InitializeFacesAndMortars {
- private:
-  static constexpr size_t Dim = System::volume_dim;
-
-  // The DG operator needs these background fields on faces:
-  // - The `inv_metric_tag` on internal and external faces to normalize face
-  //   normals (should be included in background fields)
-  // - The background fields in the `System::fluxes_computer::argument_tags` on
-  //   internal and external faces to compute fluxes
-  // - All background fields on external faces to impose boundary conditions
-  using slice_tags_to_faces = tmpl::conditional_t<
-      std::is_same_v<typename System::background_fields, tmpl::list<>>,
-      tmpl::list<>,
-      tmpl::list<
-          // Possible optimization: Only the background fields in the
-          // System::fluxes_computer::argument_tags are needed on internal faces
-          ::Tags::Variables<typename System::background_fields>>>;
-  using face_compute_tags = tmpl::list<
-      // For boundary conditions. Possible optimization: Not all systems need
-      // the coordinates on internal faces. Adding the compute item shouldn't
-      // incur a runtime overhead though since it's lazily evaluated.
-      domain::Tags::BoundaryCoordinates<System::volume_dim>>;
-
-  template <typename TagToSlice, typename DirectionsTag>
-  struct make_slice_tag {
-    using type = domain::Tags::Slice<DirectionsTag, TagToSlice>;
-  };
-
-  template <typename ComputeTag, typename DirectionsTag>
-  struct make_face_compute_tag {
-    using type = domain::Tags::InterfaceCompute<DirectionsTag, ComputeTag>;
-  };
-
-  template <typename DirectionsTag>
-  using face_tags = tmpl::flatten<tmpl::list<
-      domain::Tags::InterfaceCompute<DirectionsTag,
-                                     domain::Tags::Direction<Dim>>,
-      domain::Tags::InterfaceCompute<DirectionsTag,
-                                     domain::Tags::InterfaceMesh<Dim>>,
-      tmpl::transform<slice_tags_to_faces,
-                      make_slice_tag<tmpl::_1, tmpl::pin<DirectionsTag>>>,
-      domain::Tags::InterfaceCompute<
-          DirectionsTag, domain::Tags::UnnormalizedFaceNormalCompute<Dim>>,
-      domain::Tags::InterfaceCompute<
-          DirectionsTag,
-          tmpl::conditional_t<
-              std::is_same_v<typename System::inv_metric_tag, void>,
-              ::Tags::EuclideanMagnitude<
-                  domain::Tags::UnnormalizedFaceNormal<Dim>>,
-              ::Tags::NonEuclideanMagnitude<
-                  domain::Tags::UnnormalizedFaceNormal<Dim>,
-                  typename System::inv_metric_tag>>>,
-      domain::Tags::InterfaceCompute<
-          DirectionsTag,
-          ::Tags::NormalizedCompute<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
-      tmpl::transform<
-          face_compute_tags,
-          make_face_compute_tag<tmpl::_1, tmpl::pin<DirectionsTag>>>>>;
-
- public:
-  using simple_tags =
-      tmpl::list<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
-                 ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>;
-  using compute_tags = tmpl::append<
-      tmpl::list<domain::Tags::InternalDirectionsCompute<Dim>,
-                 domain::Tags::BoundaryDirectionsInteriorCompute<Dim>>,
-      face_tags<domain::Tags::InternalDirections<Dim>>,
-      face_tags<domain::Tags::BoundaryDirectionsInterior<Dim>>>;
-
-  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
-            typename ArrayIndex, typename ActionList,
-            typename ParallelComponent>
-  static std::tuple<db::DataBox<DbTagsList>&&> apply(
-      db::DataBox<DbTagsList>& box,
-      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
-      const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, ActionList /*meta*/,
-      const ParallelComponent* const /*meta*/) noexcept {
-    const auto& element = db::get<domain::Tags::Element<Dim>>(box);
-    const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
-    const auto& initial_extents =
-        db::get<domain::Tags::InitialExtents<Dim>>(box);
-
-    // Setup initial mortars at interfaces to neighbors
-    ::dg::MortarMap<Dim, Mesh<Dim - 1>> all_mortar_meshes{};
-    ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>> all_mortar_sizes{};
-    for (const auto& [direction, neighbors] : element.neighbors()) {
-      const auto face_mesh = mesh.slice_away(direction.dimension());
-      const auto& orientation = neighbors.orientation();
-      for (const auto& neighbor : neighbors) {
-        const ::dg::MortarId<Dim> mortar_id{direction, neighbor};
-        all_mortar_meshes.emplace(
-            mortar_id,
-            ::dg::mortar_mesh(
-                face_mesh,
-                domain::Initialization::create_initial_mesh(
-                    initial_extents, neighbor, mesh.quadrature(0), orientation)
-                    .slice_away(direction.dimension())));
-        all_mortar_sizes.emplace(
-            mortar_id, ::dg::mortar_size(element.id(), neighbor,
-                                         direction.dimension(), orientation));
-      }
-    }
-    ::Initialization::mutate_assign<simple_tags>(make_not_null(&box),
-                                                 std::move(all_mortar_meshes),
-                                                 std::move(all_mortar_sizes));
-    return {std::move(box)};
-  }
 };
 
 // Compute auxiliary variables and fluxes from the primal variables, prepare the
@@ -232,6 +120,8 @@ struct PrepareAndSendMortarData<
     const auto& temporal_id = db::get<TemporalIdTag>(box);
     const auto& element = db::get<domain::Tags::Element<Dim>>(box);
     const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
+    const auto& oversampled_mesh =
+        db::get<elliptic::dg::Tags::Oversampled<domain::Tags::Mesh<Dim>>>(box);
     const size_t num_points = mesh.number_of_grid_points();
     const auto& mortar_meshes =
         db::get<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>(box);
@@ -288,7 +178,7 @@ struct PrepareAndSendMortarData<
         make_not_null(&auxiliary_fields_buffer),
         make_not_null(&auxiliary_fluxes_buffer), make_not_null(&primal_fluxes),
         make_not_null(&all_mortar_data), db::get<PrimalFieldsTag>(box), element,
-        db::get<domain::Tags::Mesh<Dim>>(box),
+        mesh, oversampled_mesh,
         db::get<domain::Tags::InverseJacobian<Dim, Frame::Logical,
                                               Frame::Inertial>>(box),
         db::get<domain::Tags::Interface<
@@ -447,6 +337,7 @@ struct ReceiveMortarDataAndApplyOperator<
         },
         db::get<PrimalFieldsTag>(box), db::get<PrimalFluxesTag>(box),
         db::get<domain::Tags::Mesh<Dim>>(box),
+        db::get<elliptic::dg::Tags::Oversampled<domain::Tags::Mesh<Dim>>>(box),
         db::get<domain::Tags::InverseJacobian<Dim, Frame::Logical,
                                               Frame::Inertial>>(box),
         db::get<domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>>(
@@ -469,15 +360,6 @@ struct ReceiveMortarDataAndApplyOperator<
 };
 
 }  // namespace detail
-
-/*!
- * \brief Initialize DataBox tags for applying the DG operator
- *
- * \see elliptic::dg::Actions::apply_operator
- */
-template <typename System>
-using initialize_operator =
-    tmpl::list<detail::InitializeFacesAndMortars<System>>;
 
 /*!
  * \brief Apply the DG operator to the `PrimalFieldsTag` and write the result to
@@ -591,6 +473,7 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource<
     elliptic::dg::impose_inhomogeneous_boundary_conditions_on_source<System>(
         make_not_null(&fixed_sources), db::get<domain::Tags::Element<Dim>>(box),
         db::get<domain::Tags::Mesh<Dim>>(box),
+        db::get<elliptic::dg::Tags::Oversampled<domain::Tags::Mesh<Dim>>>(box),
         db::get<domain::Tags::InverseJacobian<Dim, Frame::Logical,
                                               Frame::Inertial>>(box),
         db::get<domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>>(

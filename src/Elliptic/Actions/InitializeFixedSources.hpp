@@ -14,6 +14,7 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Mass.hpp"
+#include "NumericalAlgorithms/Spectral/Projection.hpp"
 #include "ParallelAlgorithms/Initialization/MutateAssign.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
@@ -69,6 +70,9 @@ struct InitializeFixedSources {
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ElementId<Dim>& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
+    const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
+    const auto& oversampled_mesh =
+        db::get<elliptic::dg::Tags::Oversampled<domain::Tags::Mesh<Dim>>>(box);
     const auto& inertial_coords =
         get<domain::Tags::Coordinates<Dim, Frame::Inertial>>(box);
     const auto& background = db::get<BackgroundTag>(box);
@@ -80,12 +84,20 @@ struct InitializeFixedSources {
         inertial_coords, typename fixed_sources_tag::type::tags_list{}));
 
     // Apply DG mass to the fixed sources if the DG operator is massive
-    if (db::get<elliptic::dg::Tags::Massive>(box)) {
-      const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
+    const bool massive = db::get<elliptic::dg::Tags::Massive>(box);
+    if (massive) {
       const auto& det_inv_jacobian = db::get<
           domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>>(box);
       fixed_sources /= get(det_inv_jacobian);
-      ::dg::apply_mass(make_not_null(&fixed_sources), mesh);
+      ::dg::apply_mass(make_not_null(&fixed_sources), oversampled_mesh);
+    }
+
+    if (mesh != oversampled_mesh) {
+      fixed_sources = apply_matrices(
+          Spectral::projection_matrix_child_to_parent(
+              oversampled_mesh, mesh,
+              make_array<Dim>(Spectral::ChildSize::Full), massive),
+          fixed_sources, oversampled_mesh.extents());
     }
 
     ::Initialization::mutate_assign<simple_tags>(make_not_null(&box),

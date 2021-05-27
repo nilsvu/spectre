@@ -274,8 +274,9 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
           Dim, MortarData<TemporalId, tmpl::list<PrimalMortarVars...>,
                           tmpl::list<PrimalMortarFluxes...>>>*>
           all_mortar_data,
-      const Variables<tmpl::list<PrimalVars...>>& primal_vars,
-      const Element<Dim>& element, const Mesh<Dim>& mesh,
+      const Variables<tmpl::list<PrimalVars...>>& input_primal_vars,
+      const Element<Dim>& element, const Mesh<Dim>& vars_mesh,
+      const Mesh<Dim>& mesh,
       const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
           inv_jacobian,
       const std::unordered_map<Direction<Dim>, tnsr::i<DataVector, Dim>>&
@@ -329,6 +330,20 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
                  << "' in dimension " << d << ".");
     }
 #endif  // SPECTRE_DEBUG
+    Variables<tmpl::list<PrimalVars...>> oversampled_vars{};
+    const auto& primal_vars = [&mesh, &vars_mesh, &input_primal_vars,
+                               &oversampled_vars]() noexcept
+        -> const Variables<tmpl::list<PrimalVars...>>& {
+      if (mesh != vars_mesh) {
+        oversampled_vars = apply_matrices(
+            Spectral::projection_matrix_parent_to_child(
+                vars_mesh, mesh, make_array<Dim>(Spectral::ChildSize::Full)),
+            input_primal_vars, vars_mesh.extents());
+        return oversampled_vars;
+      } else {
+        return input_primal_vars;
+      }
+    }();
     const size_t num_points = mesh.number_of_grid_points();
 
     // This function and the one below allocate various Variables to compute
@@ -660,7 +675,7 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
       // want to modify them by adding boundary corrections. E.g. linearized
       // sources use the nonlinear fields and fluxes as background fields.
       const Variables<tmpl::list<PrimalFluxesVars...>>& primal_fluxes,
-      const Mesh<Dim>& mesh,
+      const Mesh<Dim>& vars_mesh, const Mesh<Dim>& mesh,
       const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
           inv_jacobian,
       const Scalar<DataVector>& det_inv_jacobian,
@@ -957,6 +972,14 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
       *operator_applied_to_vars /= get(det_inv_jacobian);
       ::dg::apply_mass(operator_applied_to_vars, mesh);
     }
+
+    if (vars_mesh != mesh) {
+      *operator_applied_to_vars = apply_matrices(
+          Spectral::projection_matrix_child_to_parent(
+              mesh, vars_mesh, make_array<Dim>(Spectral::ChildSize::Full),
+              massive),
+          *operator_applied_to_vars, mesh.extents());
+    }
   }
 
   template <typename... FixedSourcesTags, typename ApplyBoundaryCondition,
@@ -969,6 +992,7 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
       const gsl::not_null<Variables<tmpl::list<FixedSourcesTags...>>*>
           fixed_sources,
       const Element<Dim>& element, const Mesh<Dim>& mesh,
+      const Mesh<Dim>& oversampled_mesh,
       const InverseJacobian<DataVector, Dim, Frame::Logical, Frame::Inertial>&
           inv_jacobian,
       const Scalar<DataVector>& det_inv_jacobian,
@@ -998,9 +1022,12 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
     // communication step, so by just skipping internal boundaries we avoid
     // that.
     const size_t num_points = mesh.number_of_grid_points();
+    const size_t oversampled_num_points =
+        oversampled_mesh.number_of_grid_points();
     const Variables<tmpl::list<PrimalFields...>> zero_primal_vars{num_points,
                                                                   0.};
-    Variables<tmpl::list<PrimalFluxes...>> primal_fluxes_buffer{num_points};
+    Variables<tmpl::list<PrimalFluxes...>> primal_fluxes_buffer{
+        oversampled_num_points};
     Variables<tmpl::list<AuxiliaryFields...>> unused_aux_vars_buffer{};
     Variables<tmpl::list<AuxiliaryFluxes...>> unused_aux_fluxes_buffer{};
     Variables<tmpl::list<FixedSourcesTags...>> operator_applied_to_zero_vars{
@@ -1015,17 +1042,17 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         make_not_null(&unused_aux_vars_buffer),
         make_not_null(&unused_aux_fluxes_buffer),
         make_not_null(&primal_fluxes_buffer), make_not_null(&all_mortar_data),
-        zero_primal_vars, element, mesh, inv_jacobian, {},
+        zero_primal_vars, element, mesh, oversampled_mesh, inv_jacobian, {},
         external_face_normals, {}, external_face_normal_magnitudes,
         all_mortar_meshes, all_mortar_sizes, temporal_id,
         apply_boundary_condition, fluxes_args, sources_args,
         fluxes_args_on_internal_faces, fluxes_args_on_external_faces);
-    apply_operator<true>(make_not_null(&operator_applied_to_zero_vars),
-                         make_not_null(&all_mortar_data), zero_primal_vars,
-                         primal_fluxes_buffer, mesh, inv_jacobian,
-                         det_inv_jacobian, {}, external_face_normal_magnitudes,
-                         all_mortar_meshes, all_mortar_sizes, penalty_parameter,
-                         formulation, massive, temporal_id, sources_args);
+    apply_operator<true>(
+        make_not_null(&operator_applied_to_zero_vars),
+        make_not_null(&all_mortar_data), zero_primal_vars, primal_fluxes_buffer,
+        mesh, oversampled_mesh, inv_jacobian, det_inv_jacobian, {},
+        external_face_normal_magnitudes, all_mortar_meshes, all_mortar_sizes,
+        penalty_parameter, formulation, massive, temporal_id, sources_args);
     // Impose the nonlinear (constant) boundary contribution as fixed sources on
     // the RHS of the equations
     *fixed_sources -= operator_applied_to_zero_vars;

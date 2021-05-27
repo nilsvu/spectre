@@ -7,6 +7,8 @@
 
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Domain/ElementMap.hpp"
+#include "Domain/LogicalCoordinates.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
@@ -60,8 +62,7 @@ void strain(const gsl::not_null<tnsr::ii<DataType, Dim>*> strain,
 template <size_t Dim>
 void strain(const gsl::not_null<tnsr::ii<DataVector, Dim>*> strain,
             const tnsr::I<DataVector, Dim>& displacement, const Mesh<Dim>& mesh,
-            const InverseJacobian<DataVector, Dim, Frame::Logical,
-                                  Frame::Inertial>& inv_jacobian) noexcept {
+            const ElementMap<Dim, Frame::Inertial>& element_map) noexcept {
   // Copy the displacement into a Variables to take partial derivatives because
   // at this time the `partial_derivatives` function only works with Variables.
   // This function is only used for observing the strain and derived quantities
@@ -71,6 +72,7 @@ void strain(const gsl::not_null<tnsr::ii<DataVector, Dim>*> strain,
   Variables<tmpl::list<Tags::Displacement<Dim>>> vars{
       mesh.number_of_grid_points()};
   get<Tags::Displacement<Dim>>(vars) = displacement;
+  const auto inv_jacobian = element_map.inv_jacobian(logical_coordinates(mesh));
   const auto displacement_gradient =
       get<::Tags::deriv<Tags::Displacement<Dim>, tmpl::size_t<Dim>,
                         Frame::Inertial>>(
@@ -82,13 +84,12 @@ void strain(const gsl::not_null<tnsr::ii<DataVector, Dim>*> strain,
 #define DIM(data) BOOST_PP_TUPLE_ELEM(0, data)
 #define DTYPE(data) BOOST_PP_TUPLE_ELEM(1, data)
 
-#define INSTANTIATE(_, data)                                       \
-  template void strain<DIM(data)>(                                 \
-      gsl::not_null<tnsr::ii<DataVector, DIM(data)>*> strain,      \
-      const tnsr::I<DataVector, DIM(data)>& displacement,          \
-      const Mesh<DIM(data)>& mesh,                                 \
-      const InverseJacobian<DataVector, DIM(data), Frame::Logical, \
-                            Frame::Inertial>& inv_jacobian) noexcept;
+#define INSTANTIATE(_, data)                                  \
+  template void strain<DIM(data)>(                            \
+      gsl::not_null<tnsr::ii<DataVector, DIM(data)>*> strain, \
+      const tnsr::I<DataVector, DIM(data)>& displacement,     \
+      const Mesh<DIM(data)>& mesh,                            \
+      const ElementMap<DIM(data), Frame::Inertial>& element_map) noexcept;
 
 #define INSTANTIATE_DTYPE(_, data)                                          \
   template void strain(                                                     \

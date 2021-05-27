@@ -122,28 +122,28 @@ class ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
   using observed_reduction_data_tags =
       observers::make_reduction_data_tags<tmpl::list<ReductionData>>;
 
-  using argument_tags = tmpl::flatten<
-      tmpl::list<ObservationValueTag,
-                 tmpl::conditional_t<
-                     std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
-                     observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>,
-                 domain::Tags::Mesh<VolumeDim>,
-                 domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>,
-                 Tensors...>>;
+  using argument_tags = tmpl::flatten<tmpl::list<
+      ObservationValueTag,
+      tmpl::conditional_t<
+          std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
+          observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>,
+      domain::Tags::Mesh<VolumeDim>,
+      domain::Tags::ElementMap<VolumeDim, Frame::Inertial>, Tensors...>>;
 
   template <typename Metavariables, typename ArrayIndex,
             typename ParallelComponent>
   void operator()(const typename ObservationValueTag::type& observation_value,
                   const std::optional<std::string>& observation_key_suffix,
                   const Mesh<VolumeDim>& mesh,
-                  const Scalar<DataVector>& det_inv_jacobian,
+                  const ElementMap<VolumeDim, Frame::Inertial>& element_map,
                   const typename Tensors::type&... tensors,
                   Parallel::GlobalCache<Metavariables>& cache,
                   const ArrayIndex& array_index,
                   const ParallelComponent* const /*meta*/) const noexcept {
     // Determinant of Jacobian is needed because integral is performed in
     // logical coords.
-    const DataVector det_jacobian = 1.0 / get(det_inv_jacobian);
+    const DataVector det_jacobian =
+        get(determinant(element_map.jacobian(logical_coordinates(mesh))));
     const double local_volume = definite_integral(det_jacobian, mesh);
 
     std::vector<double> local_volume_integrals{};
@@ -188,13 +188,13 @@ class ObserveVolumeIntegrals<VolumeDim, ObservationValueTag,
             typename ParallelComponent>
   void operator()(const typename ObservationValueTag::type& observation_value,
                   const Mesh<VolumeDim>& mesh,
-                  const Scalar<DataVector>& det_inv_jacobian,
+                  const ElementMap<VolumeDim, Frame::Inertial>& element_map,
                   const typename Tensors::type&... tensors,
                   Parallel::GlobalCache<Metavariables>& cache,
                   const ArrayIndex& array_index,
                   const ParallelComponent* const meta) const noexcept {
     this->operator()(observation_value, std::make_optional(""), mesh,
-                     det_inv_jacobian, tensors..., cache, array_index, meta);
+                     element_map, tensors..., cache, array_index, meta);
   }
 
   using observation_registration_tags = tmpl::conditional_t<

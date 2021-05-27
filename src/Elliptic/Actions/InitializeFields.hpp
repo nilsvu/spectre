@@ -56,11 +56,12 @@ struct InitializeFields {
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ElementId<Dim>& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    const auto& inertial_coords =
-        get<domain::Tags::Coordinates<Dim, Frame::Inertial>>(box);
+    const auto& mesh = get<domain::Tags::Mesh<Dim>>(box);
+    const auto& element_map = get<domain::Tags::ElementMap<Dim>>(box);
     const auto& initial_guess = db::get<InitialGuessTag>(box);
-    auto initial_fields = variables_from_tagged_tuple(initial_guess.variables(
-        inertial_coords, typename fields_tag::tags_list{}));
+    auto initial_fields = variables_from_tagged_tuple(
+        initial_guess.variables(element_map(logical_coordinates(mesh)),
+                                typename fields_tag::tags_list{}));
     ::Initialization::mutate_assign<simple_tags>(make_not_null(&box),
                                                  std::move(initial_fields));
     return {std::move(box)};

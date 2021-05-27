@@ -56,6 +56,16 @@ struct Massive {
   using group = DiscontinuousGalerkin;
 };
 
+struct OversamplingOrder {
+  using type = size_t;
+  static constexpr Options::String help =
+      "Number of additional points per dimension that are used to evaluate "
+      "analytic expressions, such as background fields, boundary conditions "
+      "and Jacobians. Increases the computational cost of the scheme but "
+      "can help combat aliasing.";
+  using group = DiscontinuousGalerkin;
+};
+
 }  // namespace OptionTags
 
 /// DataBox tags related to elliptic discontinuous Galerkin schemes
@@ -102,6 +112,21 @@ struct Massive : db::SimpleTag {
   static constexpr bool pass_metavariables = false;
   using option_tags = tmpl::list<OptionTags::Massive>;
   static bool create_from_options(const bool value) noexcept { return value; }
+};
+
+struct OversamplingOrder : db::SimpleTag {
+  using type = size_t;
+  static constexpr bool pass_metavariables = false;
+  using option_tags = tmpl::list<OptionTags::OversamplingOrder>;
+  static size_t create_from_options(const size_t value) noexcept {
+    return value;
+  }
+};
+
+template <typename Tag>
+struct Oversampled : db::PrefixTag, db::SimpleTag {
+  using type = typename Tag::type;
+  using tag = Tag;
 };
 
 }  // namespace Tags

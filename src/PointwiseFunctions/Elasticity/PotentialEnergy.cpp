@@ -7,6 +7,8 @@
 
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Domain/ElementMap.hpp"
+#include "Domain/LogicalCoordinates.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/ConstitutiveRelation.hpp"
@@ -38,6 +40,17 @@ void potential_energy_density(
 }
 
 template <size_t Dim>
+void potential_energy_density(
+    const gsl::not_null<Scalar<DataVector>*> result,
+    const tnsr::ii<DataVector, Dim>& strain, const Mesh<Dim>& mesh,
+    const ElementMap<Dim, Frame::Inertial>& element_map,
+    const ConstitutiveRelations::ConstitutiveRelation<Dim>&
+        constitutive_relation) noexcept {
+  const auto coords = element_map(logical_coordinates(mesh));
+  potential_energy_density(result, strain, coords, constitutive_relation);
+}
+
+template <size_t Dim>
 Scalar<DataVector> potential_energy_density(
     const tnsr::ii<DataVector, Dim>& strain,
     const tnsr::I<DataVector, Dim>& coordinates,
@@ -57,6 +70,13 @@ Scalar<DataVector> potential_energy_density(
       gsl::not_null<Scalar<DataVector>*> potential_energy_density,  \
       const tnsr::ii<DataVector, DIM(data)>& strain,                \
       const tnsr::I<DataVector, DIM(data)>& coordinates,            \
+      const ConstitutiveRelations::ConstitutiveRelation<DIM(data)>& \
+          constitutive_relation) noexcept;                          \
+  template void potential_energy_density<DIM(data)>(                \
+      gsl::not_null<Scalar<DataVector>*> potential_energy_density,  \
+      const tnsr::ii<DataVector, DIM(data)>& strain,                \
+      const Mesh<DIM(data)>& mesh,                                  \
+      const ElementMap<DIM(data), Frame::Inertial>& element_map,    \
       const ConstitutiveRelations::ConstitutiveRelation<DIM(data)>& \
           constitutive_relation) noexcept;                          \
   template Scalar<DataVector> potential_energy_density<DIM(data)>(  \

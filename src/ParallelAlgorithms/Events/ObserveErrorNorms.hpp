@@ -15,6 +15,7 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataBox/TagName.hpp"
 #include "DataStructures/DataVector.hpp"
+#include "DataStructures/Tensor/EagerMath/Determinant.hpp"
 #include "Domain/Tags.hpp"
 #include "IO/Observer/ArrayComponentId.hpp"
 #include "IO/Observer/Helpers.hpp"
@@ -159,8 +160,7 @@ class ObserveErrorNorms<Dim, ObservationValueTag, tmpl::list<Tensors...>,
                  tmpl::conditional_t<
                      std::is_same_v<ArraySectionIdTag, void>, tmpl::list<>,
                      observers::Tags::ObservationKeySuffix<ArraySectionIdTag>>,
-                 domain::Tags::Mesh<Dim>,
-                 domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>,
+                 domain::Tags::Mesh<Dim>, domain::Tags::ElementMap<Dim>,
                  Tensors..., ::Tags::AnalyticSolutionsBase>>;
 
   template <typename OptionalAnalyticSolutions, typename Metavariables,
@@ -168,7 +168,7 @@ class ObserveErrorNorms<Dim, ObservationValueTag, tmpl::list<Tensors...>,
   void operator()(const typename ObservationValueTag::type& observation_value,
                   const std::optional<std::string>& observation_key_suffix,
                   const Mesh<Dim>& mesh,
-                  const Scalar<DataVector>& det_inv_jacobian,
+                  const ElementMap<Dim, Frame::Inertial>& element_map,
                   const typename Tensors::type&... tensors,
                   const OptionalAnalyticSolutions& optional_analytic_solutions,
                   Parallel::GlobalCache<Metavariables>& cache,
@@ -193,16 +193,16 @@ class ObserveErrorNorms<Dim, ObservationValueTag, tmpl::list<Tensors...>,
       }
     }();
 
-    const double local_volume =
-        definite_integral(1. / get(det_inv_jacobian), mesh);
+    const auto det_jacobian =
+        determinant(element_map.jacobian(logical_coordinates(mesh)));
+    const double local_volume = definite_integral(get(det_jacobian), mesh);
     tuples::TaggedTuple<LocalRmsSquareError<Tensors>...,
                         LocalLinfError<Tensors>...,
                         LocalL2SquareError<Tensors>...>
         local_errors;
     const auto record_errors = [&local_errors, &analytic_solutions, &mesh,
-                                &det_inv_jacobian](
-                                   const auto tensor_tag_v,
-                                   const auto& tensor) noexcept {
+                                &det_jacobian](const auto tensor_tag_v,
+                                               const auto& tensor) noexcept {
       using tensor_tag = tmpl::type_from<decltype(tensor_tag_v)>;
       double local_rms_square_error = 0.0;
       double local_linf_error = 0.0;
@@ -213,7 +213,7 @@ class ObserveErrorNorms<Dim, ObservationValueTag, tmpl::list<Tensors...>,
         local_rms_square_error += alg::accumulate(square(error), 0.0);
         local_linf_error = std::max(max(abs(error)), local_linf_error);
         local_l2_square_error +=
-            definite_integral(square(error) / get(det_inv_jacobian), mesh);
+            definite_integral(square(error) * get(det_jacobian), mesh);
       }
       get<LocalRmsSquareError<tensor_tag>>(local_errors) =
           local_rms_square_error;
@@ -255,14 +255,14 @@ class ObserveErrorNorms<Dim, ObservationValueTag, tmpl::list<Tensors...>,
             typename ArrayIndex, typename ParallelComponent>
   void operator()(const typename ObservationValueTag::type& observation_value,
                   const Mesh<Dim>& mesh,
-                  const Scalar<DataVector>& det_inv_jacobian,
+                  const ElementMap<Dim, Frame::Inertial>& element_map,
                   const typename Tensors::type&... tensors,
                   const OptionalAnalyticSolutions& optional_analytic_solutions,
                   Parallel::GlobalCache<Metavariables>& cache,
                   const ArrayIndex& array_index,
                   const ParallelComponent* const meta) const noexcept {
     this->operator()(observation_value, std::make_optional(""), mesh,
-                     det_inv_jacobian, tensors..., optional_analytic_solutions,
+                     element_map, tensors..., optional_analytic_solutions,
                      cache, array_index, meta);
   }
 
