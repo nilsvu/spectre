@@ -42,15 +42,18 @@ struct ApparentHorizonImpl {
   };
   struct Spin {
     using type = std::array<double, 3>;
-    static constexpr Options::String help = "The spin parameter on the surface";
+    static constexpr Options::String help =
+        "The spin parameter 'Omega' on the surface. ";
   };
   struct Mass {
     using type = Options::Auto<double>;
     static constexpr Options::String help =
         "Mass of a corresponding Kerr solution. When you provide a mass, the "
         "corresponding Kerr solution's lapse at the excision boundary is "
-        "imposed as a Dirichlet condition on the lapse, instead of a zero "
-        "von-Neumann boundary condition.";
+        "imposed as a Dirichlet condition on the lapse. Alternatively, set the "
+        "mass to 'Auto' to impose a zero von-Neumann boundary condition on the "
+        "lapse. Note that the latter will not result in the standard "
+        "Kerr-Schild slicing for a single black hole.";
   };
 
   using options = tmpl::list<Center, Spin, Mass>;
@@ -71,6 +74,10 @@ struct ApparentHorizonImpl {
 
   using argument_tags = tmpl::flatten<tmpl::list<
       ::Tags::Normalized<
+          domain::Tags::UnnormalizedFaceNormal<3, Frame::Inertial>>,
+      ::Tags::deriv<domain::Tags::UnnormalizedFaceNormal<3, Frame::Inertial>,
+                    tmpl::size_t<3>, Frame::Inertial>,
+      ::Tags::Magnitude<
           domain::Tags::UnnormalizedFaceNormal<3, Frame::Inertial>>,
       domain::Tags::Coordinates<3, Frame::Inertial>,
       gr::Tags::TraceExtrinsicCurvature<DataVector>,
@@ -95,6 +102,8 @@ struct ApparentHorizonImpl {
       const gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess,
       const tnsr::i<DataVector, 3>& face_normal,
+      const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+      const Scalar<DataVector>& face_normal_magnitude,
       const tnsr::I<DataVector, 3>& x,
       const Scalar<DataVector>& extrinsic_curvature_trace,
       const tnsr::I<DataVector, 3>& shift_background,
@@ -111,6 +120,8 @@ struct ApparentHorizonImpl {
       const gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess,
       const tnsr::i<DataVector, 3>& face_normal,
+      const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+      const Scalar<DataVector>& face_normal_magnitude,
       const tnsr::I<DataVector, 3>& x,
       const Scalar<DataVector>& extrinsic_curvature_trace,
       const tnsr::I<DataVector, 3>& shift_background,
@@ -122,7 +133,10 @@ struct ApparentHorizonImpl {
   using argument_tags_linearized = tmpl::flatten<tmpl::list<
       ::Tags::Normalized<
           domain::Tags::UnnormalizedFaceNormal<3, Frame::Inertial>>,
-      domain::Tags::Coordinates<3, Frame::Inertial>,
+      ::Tags::deriv<domain::Tags::UnnormalizedFaceNormal<3, Frame::Inertial>,
+                    tmpl::size_t<3>, Frame::Inertial>,
+      ::Tags::Magnitude<
+          domain::Tags::UnnormalizedFaceNormal<3, Frame::Inertial>>,
       gr::Tags::TraceExtrinsicCurvature<DataVector>,
       Tags::LongitudinalShiftBackgroundMinusDtConformalMetric<DataVector, 3,
                                                               Frame::Inertial>,
@@ -149,7 +163,8 @@ struct ApparentHorizonImpl {
       const gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess_correction,
       const tnsr::i<DataVector, 3>& face_normal,
-      const tnsr::I<DataVector, 3>& x,
+      const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+      const Scalar<DataVector>& face_normal_magnitude,
       const Scalar<DataVector>& extrinsic_curvature_trace,
       const tnsr::II<DataVector, 3>& longitudinal_shift_background,
       const Scalar<DataVector>& conformal_factor,
@@ -169,7 +184,8 @@ struct ApparentHorizonImpl {
       const gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess_correction,
       const tnsr::i<DataVector, 3>& face_normal,
-      const tnsr::I<DataVector, 3>& x,
+      const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+      const Scalar<DataVector>& face_normal_magnitude,
       const Scalar<DataVector>& extrinsic_curvature_trace,
       const tnsr::II<DataVector, 3>& longitudinal_shift_background,
       const Scalar<DataVector>& conformal_factor,
@@ -219,7 +235,7 @@ struct ApparentHorizon {
  *
  * These boundary conditions on the conformal factor \f$\psi\f$, the lapse
  * \f$\alpha\f$ and the shift \f$\beta^i\f$ impose the surface is an apparent
- * horizon, i.e. that the expansion on the surface vanishes \f$\Theta=0\f$.
+ * horizon, i.e. that the expansion on the surface vanishes: \f$\Theta=0\f$.
  * Specifically, we impose:
  *
  * \f{align}

@@ -38,36 +38,49 @@ void make_metric_riemannian(
 }
 
 // Generate a face normal pretending the surface is a coordinate sphere
-tnsr::i<DataVector, 3> make_spherical_face_normal(
+std::tuple<tnsr::i<DataVector, 3>, tnsr::ij<DataVector, 3>, Scalar<DataVector>>
+make_spherical_face_normal(
     tnsr::I<DataVector, 3> x, const std::array<double, 3>& center,
     const tnsr::II<DataVector, 3>& inv_conformal_metric) {
   for (size_t d = 0; d < 3; ++d) {
     x.get(d) -= gsl::at(center, d);
   }
-  DataVector proper_radius{x.begin()->size(), 0.};
+  Scalar<DataVector> proper_radius{x.begin()->size(), 0.};
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j < 3; ++j) {
-      proper_radius += inv_conformal_metric.get(i, j) * x.get(i) * x.get(j);
+      get(proper_radius) +=
+          inv_conformal_metric.get(i, j) * x.get(i) * x.get(j);
     }
   }
-  proper_radius = sqrt(proper_radius);
+  get(proper_radius) = sqrt(get(proper_radius));
   tnsr::i<DataVector, 3> face_normal{x.begin()->size()};
-  get<0>(face_normal) = -get<0>(x) / proper_radius;
-  get<1>(face_normal) = -get<1>(x) / proper_radius;
-  get<2>(face_normal) = -get<2>(x) / proper_radius;
-  return face_normal;
+  get<0>(face_normal) = -get<0>(x) / get(proper_radius);
+  get<1>(face_normal) = -get<1>(x) / get(proper_radius);
+  get<2>(face_normal) = -get<2>(x) / get(proper_radius);
+  tnsr::ij<DataVector, 3> deriv_unnormalized_face_normal{x.begin()->size(), 0.};
+  get<0, 0>(deriv_unnormalized_face_normal) = -1.;
+  get<1, 1>(deriv_unnormalized_face_normal) = -1.;
+  get<2, 2>(deriv_unnormalized_face_normal) = -1.;
+  return {std::move(face_normal), std::move(deriv_unnormalized_face_normal),
+          std::move(proper_radius)};
 }
-tnsr::i<DataVector, 3> make_spherical_face_normal_flat_cartesian(
-    tnsr::I<DataVector, 3> x, const std::array<double, 3>& center) {
+std::tuple<tnsr::i<DataVector, 3>, tnsr::ij<DataVector, 3>, Scalar<DataVector>>
+make_spherical_face_normal_flat_cartesian(tnsr::I<DataVector, 3> x,
+                                          const std::array<double, 3>& center) {
   for (size_t d = 0; d < 3; ++d) {
     x.get(d) -= gsl::at(center, d);
   }
-  const auto euclidean_radius = get(magnitude(x));
+  Scalar<DataVector> euclidean_radius = magnitude(x);
   tnsr::i<DataVector, 3> face_normal{x.begin()->size()};
-  get<0>(face_normal) = -get<0>(x) / euclidean_radius;
-  get<1>(face_normal) = -get<1>(x) / euclidean_radius;
-  get<2>(face_normal) = -get<2>(x) / euclidean_radius;
-  return face_normal;
+  get<0>(face_normal) = -get<0>(x) / get(euclidean_radius);
+  get<1>(face_normal) = -get<1>(x) / get(euclidean_radius);
+  get<2>(face_normal) = -get<2>(x) / get(euclidean_radius);
+  tnsr::ij<DataVector, 3> deriv_unnormalized_face_normal{x.begin()->size(), 0.};
+  get<0, 0>(deriv_unnormalized_face_normal) = -1.;
+  get<1, 1>(deriv_unnormalized_face_normal) = -1.;
+  get<2, 2>(deriv_unnormalized_face_normal) = -1.;
+  return {std::move(face_normal), std::move(deriv_unnormalized_face_normal),
+          std::move(euclidean_radius)};
 }
 
 template <Xcts::Geometry ConformalGeometry, bool Linearized, typename... Args>
@@ -84,18 +97,16 @@ void apply_boundary_condition_impl(
   const ApparentHorizon<ConformalGeometry> boundary_condition{center, spin,
                                                               std::nullopt};
   const auto direction = Direction<3>::lower_xi();
-  const auto box = db::create<tmpl::transform<
+  const auto box = db::create<make_interface_tags<
       tmpl::conditional_t<
           Linearized,
           typename ApparentHorizon<ConformalGeometry>::argument_tags_linearized,
           typename ApparentHorizon<ConformalGeometry>::argument_tags>,
-      make_interface_tag<
-          tmpl::_1, tmpl::pin<domain::Tags::BoundaryDirectionsInterior<3>>,
-          tmpl::pin<tmpl::conditional_t<
-              Linearized,
-              typename ApparentHorizon<
-                  ConformalGeometry>::volume_tags_linearized,
-              typename ApparentHorizon<ConformalGeometry>::volume_tags>>>>>(
+      domain::Tags::BoundaryDirectionsInterior<3>,
+      tmpl::conditional_t<
+          Linearized,
+          typename ApparentHorizon<ConformalGeometry>::volume_tags_linearized,
+          typename ApparentHorizon<ConformalGeometry>::volume_tags>>>(
       std::unordered_map<Direction<3>, std::decay_t<decltype(args)>>{
           {direction, std::move(args)}}...);
   elliptic::apply_boundary_condition<Linearized>(
@@ -122,16 +133,17 @@ void apply_boundary_condition(
     tnsr::II<DataVector, 3> inv_conformal_metric,
     const tnsr::Ijj<DataVector, 3>& conformal_christoffel_second_kind) {
   make_metric_riemannian(make_not_null(&inv_conformal_metric));
-  auto face_normal =
+  auto [face_normal, deriv_unnormalized_face_normal, face_normal_magnitude] =
       make_spherical_face_normal(x, center, inv_conformal_metric);
   apply_boundary_condition_impl<Xcts::Geometry::Curved, false>(
       n_dot_conformal_factor_gradient,
       n_dot_lapse_times_conformal_factor_gradient, shift_excess,
       conformal_factor, lapse_times_conformal_factor,
-      n_dot_longitudinal_shift_excess, center, spin, std::move(face_normal), x,
-      extrinsic_curvature_trace, shift_background,
-      longitudinal_shift_background, std::move(inv_conformal_metric),
-      conformal_christoffel_second_kind);
+      n_dot_longitudinal_shift_excess, center, spin, std::move(face_normal),
+      std::move(deriv_unnormalized_face_normal),
+      std::move(face_normal_magnitude), x, extrinsic_curvature_trace,
+      shift_background, longitudinal_shift_background,
+      std::move(inv_conformal_metric), conformal_christoffel_second_kind);
 }
 
 void apply_boundary_condition_flat_cartesian(
@@ -147,14 +159,16 @@ void apply_boundary_condition_flat_cartesian(
     const Scalar<DataVector>& extrinsic_curvature_trace,
     const tnsr::I<DataVector, 3>& shift_background,
     const tnsr::II<DataVector, 3>& longitudinal_shift_background) {
-  auto face_normal = make_spherical_face_normal_flat_cartesian(x, center);
+  auto [face_normal, deriv_unnormalized_face_normal, face_normal_magnitude] =
+      make_spherical_face_normal_flat_cartesian(x, center);
   apply_boundary_condition_impl<Xcts::Geometry::FlatCartesian, false>(
       n_dot_conformal_factor_gradient,
       n_dot_lapse_times_conformal_factor_gradient, shift_excess,
       conformal_factor, lapse_times_conformal_factor,
-      n_dot_longitudinal_shift_excess, center, spin, std::move(face_normal), x,
-      extrinsic_curvature_trace, shift_background,
-      longitudinal_shift_background);
+      n_dot_longitudinal_shift_excess, center, spin, std::move(face_normal),
+      std::move(deriv_unnormalized_face_normal),
+      std::move(face_normal_magnitude), x, extrinsic_curvature_trace,
+      shift_background, longitudinal_shift_background);
 }
 
 void apply_boundary_condition_linearized(
@@ -176,7 +190,7 @@ void apply_boundary_condition_linearized(
     tnsr::II<DataVector, 3> inv_conformal_metric,
     const tnsr::Ijj<DataVector, 3>& conformal_christoffel_second_kind) {
   make_metric_riemannian(make_not_null(&inv_conformal_metric));
-  auto face_normal =
+  auto [face_normal, deriv_unnormalized_face_normal, face_normal_magnitude] =
       make_spherical_face_normal(x, center, inv_conformal_metric);
   apply_boundary_condition_impl<Xcts::Geometry::Curved, true>(
       n_dot_conformal_factor_gradient_correction,
@@ -184,7 +198,8 @@ void apply_boundary_condition_linearized(
       shift_excess_correction, conformal_factor_correction,
       lapse_times_conformal_factor_correction,
       n_dot_longitudinal_shift_excess_correction, center, spin,
-      std::move(face_normal), x, extrinsic_curvature_trace,
+      std::move(face_normal), std::move(deriv_unnormalized_face_normal),
+      std::move(face_normal_magnitude), extrinsic_curvature_trace,
       longitudinal_shift_background, conformal_factor,
       lapse_times_conformal_factor, n_dot_longitudinal_shift_excess,
       std::move(inv_conformal_metric), conformal_christoffel_second_kind);
@@ -206,14 +221,16 @@ void apply_boundary_condition_linearized_flat_cartesian(
     const Scalar<DataVector>& conformal_factor,
     const Scalar<DataVector>& lapse_times_conformal_factor,
     const tnsr::I<DataVector, 3>& n_dot_longitudinal_shift_excess) {
-  auto face_normal = make_spherical_face_normal_flat_cartesian(x, center);
+  auto [face_normal, deriv_unnormalized_face_normal, face_normal_magnitude] =
+      make_spherical_face_normal_flat_cartesian(x, center);
   apply_boundary_condition_impl<Xcts::Geometry::FlatCartesian, true>(
       n_dot_conformal_factor_gradient_correction,
       n_dot_lapse_times_conformal_factor_gradient_correction,
       shift_excess_correction, conformal_factor_correction,
       lapse_times_conformal_factor_correction,
       n_dot_longitudinal_shift_excess_correction, center, spin,
-      std::move(face_normal), x, extrinsic_curvature_trace,
+      std::move(face_normal), std::move(deriv_unnormalized_face_normal),
+      std::move(face_normal_magnitude), extrinsic_curvature_trace,
       longitudinal_shift_background, conformal_factor,
       lapse_times_conformal_factor, n_dot_longitudinal_shift_excess);
 }
@@ -223,9 +240,9 @@ void apply_boundary_condition_linearized_flat_cartesian(
 SPECTRE_TEST_CASE("Unit.Xcts.BoundaryConditions.ApparentHorizon",
                   "[Unit][Elliptic]") {
   // Test factory-creation
-  const auto created = TestHelpers::test_factory_creation<
-      elliptic::BoundaryConditions::BoundaryCondition<
-          3, tmpl::list<Registrars::ApparentHorizon<Xcts::Geometry::Curved>>>>(
+  const auto created = TestHelpers::test_creation<
+      std::unique_ptr<elliptic::BoundaryConditions::BoundaryCondition<
+          3, tmpl::list<Registrars::ApparentHorizon<Xcts::Geometry::Curved>>>>>(
       "ApparentHorizon:\n"
       "  Center: [1., 2., 3.]\n"
       "  Spin: [0.1, 0.2, 0.3]\n"

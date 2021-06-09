@@ -134,7 +134,7 @@ def shift_excess(conformal_factor, lapse_times_conformal_factor,
     conformal_unit_normal_raised = np.einsum('ij,j', inv_conformal_metric,
                                              conformal_unit_normal)
     shift_orthogonal = lapse_times_conformal_factor / conformal_factor**3
-    shift_parallel = np.cross(spin, x / np.linalg.norm(x))
+    shift_parallel = np.cross(spin, x)
     return (shift_orthogonal * conformal_unit_normal_raised + shift_parallel -
             shift_background)
 

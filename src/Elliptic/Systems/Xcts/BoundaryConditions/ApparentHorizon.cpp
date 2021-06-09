@@ -9,6 +9,8 @@
 
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/LeviCivitaIterator.hpp"
+#include "DataStructures/Tags/TempTensor.hpp"
+#include "DataStructures/TempBuffer.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
@@ -47,67 +49,63 @@ const std::optional<double>& ApparentHorizonImpl<ConformalGeometry>::mass()
   return mass_;
 }
 
-void add_normal_gradient_term_flat_cartesian(
+void normal_gradient_term_flat_cartesian(
     const gsl::not_null<Scalar<DataVector>*> n_dot_conformal_factor_gradient,
     const Scalar<DataVector>& conformal_factor,
-    const DataVector& euclidean_radius) noexcept {
-  get(*n_dot_conformal_factor_gradient) +=
-      0.5 * get(conformal_factor) / euclidean_radius;
+    const tnsr::i<DataVector, 3>& face_normal,
+    const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+    const Scalar<DataVector>& face_normal_magnitude) noexcept {
+  // Write directly into the output buffer
+  DataVector& projected_normal_gradient = get(*n_dot_conformal_factor_gradient);
+  projected_normal_gradient = (1. - square(get<0>(face_normal))) *
+                                  get<0, 0>(deriv_unnormalized_face_normal) -
+                              get<0>(face_normal) * get<1>(face_normal) *
+                                  get<0, 1>(deriv_unnormalized_face_normal) -
+                              get<0>(face_normal) * get<2>(face_normal) *
+                                  get<0, 2>(deriv_unnormalized_face_normal);
+  for (size_t i = 1; i < 3; ++i) {
+    projected_normal_gradient += deriv_unnormalized_face_normal.get(i, i);
+    for (size_t j = 0; j < 3; ++j) {
+      projected_normal_gradient -= face_normal.get(i) * face_normal.get(j) *
+                                   deriv_unnormalized_face_normal.get(i, j);
+    }
+  }
+  projected_normal_gradient *=
+      -0.25 * get(conformal_factor) / get(face_normal_magnitude);
 }
 
-void add_normal_gradient_term_curved(
+void normal_gradient_term_curved(
     const gsl::not_null<Scalar<DataVector>*> n_dot_conformal_factor_gradient,
+    const gsl::not_null<DataVector*> temp_buffer,
     const Scalar<DataVector>& conformal_factor,
-    const tnsr::i<DataVector, 3>& minus_conformal_horizon_normal,
-    const tnsr::I<DataVector, 3>& minus_conformal_horizon_normal_raised,
+    const tnsr::i<DataVector, 3>& face_normal,
+    const tnsr::I<DataVector, 3>& face_normal_raised,
+    const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+    const Scalar<DataVector>& face_normal_magnitude,
     const tnsr::II<DataVector, 3>& inv_conformal_metric,
-    const tnsr::Ijj<DataVector, 3>& conformal_christoffel_second_kind,
-    const tnsr::I<DataVector, 3>& inertial_coords) noexcept {
-  // Assuming here that the surface is a coordinate-sphere
-  DataVector non_euclidean_radius_square{inertial_coords.begin()->size(), 0.};
+    const tnsr::Ijj<DataVector, 3>&
+        conformal_christoffel_second_kind) noexcept {
+  // Write directly into the output buffer
+  DataVector& projected_normal_gradient = get(*n_dot_conformal_factor_gradient);
+  DataVector& projection = *temp_buffer;
+  // Possible performance optimization: unroll the first iteration of the loop
+  // to avoid zeroing the buffer. It's very verbose to do that though.
+  *projected_normal_gradient = 0.;
   for (size_t i = 0; i < 3; ++i) {
     for (size_t j = 0; j < 3; ++j) {
-      non_euclidean_radius_square += inv_conformal_metric.get(i, j) *
-                                     inertial_coords.get(i) *
-                                     inertial_coords.get(j);
-    }
-  }
-#ifdef SPECTRE_DEBUG
-  for (size_t i = 0; i < 3; ++i) {
-    for (size_t j = 0; j < non_euclidean_radius_square.size(); ++j) {
-      ASSERT(equal_within_roundoff(minus_conformal_horizon_normal.get(i)[j],
-                                   -inertial_coords.get(i)[j] /
-                                       sqrt(non_euclidean_radius_square[j])),
-             "Horizon normal is incorrect at point ("
-                 << get<0>(inertial_coords)[j] << ","
-                 << get<1>(inertial_coords)[j] << ","
-                 << get<2>(inertial_coords)[j] << ") in dim=" << i
-                 << ". Is the boundary not a coordinate sphere? Expected "
-                 << inertial_coords.get(i)[j] << " / "
-                 << sqrt(non_euclidean_radius_square[j]) << ", got "
-                 << -minus_conformal_horizon_normal.get(i)[j]);
-    }
-  }
-#endif  // SPECTRE_DEBUG
-  DataVector projected_normal_gradient{inertial_coords.begin()->size(), 0.};
-  for (size_t i = 0; i < 3; ++i) {
-    projected_normal_gradient +=
-        (inv_conformal_metric.get(i, i) -
-         square(minus_conformal_horizon_normal_raised.get(i))) /
-        sqrt(non_euclidean_radius_square);
-    for (size_t j = 0; j < 3; ++j) {
-      DataVector projection = inv_conformal_metric.get(i, j) -
-                              minus_conformal_horizon_normal_raised.get(i) *
-                                  minus_conformal_horizon_normal_raised.get(j);
+      projection = inv_conformal_metric.get(i, j) -
+                   face_normal_raised.get(i) * face_normal_raised.get(j);
+      projected_normal_gradient += projection *
+                                   deriv_unnormalized_face_normal.get(i, j) /
+                                   get(face_normal_magnitude);
       for (size_t k = 0; k < 3; ++k) {
-        projected_normal_gradient +=
-            projection * minus_conformal_horizon_normal.get(k) *
+        projected_normal_gradient -=
+            projection * face_normal.get(k) *
             conformal_christoffel_second_kind.get(k, i, j);
       }
     }
   }
-  get(*n_dot_conformal_factor_gradient) +=
-      0.25 * get(conformal_factor) * projected_normal_gradient;
+  projected_normal_gradient *= -0.25 * get(conformal_factor);
 }
 
 template <Xcts::Geometry ConformalGeometry>
@@ -122,76 +120,88 @@ void apparent_horizon_impl(
         n_dot_longitudinal_shift_excess,
     const std::array<double, 3>& center, const std::array<double, 3>& spin,
     const std::optional<double>& mass,
-    const tnsr::i<DataVector, 3>& face_normal, tnsr::I<DataVector, 3> x,
+    const tnsr::i<DataVector, 3>& face_normal,
+    const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+    const Scalar<DataVector>& face_normal_magnitude,
+    const tnsr::I<DataVector, 3>& x_offcenter,
     const Scalar<DataVector>& extrinsic_curvature_trace,
     const tnsr::I<DataVector, 3>& shift_background,
     const tnsr::II<DataVector, 3>& longitudinal_shift_background,
-    const std::optional<std::reference_wrapper<const tnsr::II<DataVector, 3>>>
+    [[maybe_unused]] const std::optional<
+        std::reference_wrapper<const tnsr::II<DataVector, 3>>>
         inv_conformal_metric,
-    const std::optional<std::reference_wrapper<const tnsr::Ijj<DataVector, 3>>>
+    [[maybe_unused]] const std::optional<
+        std::reference_wrapper<const tnsr::Ijj<DataVector, 3>>>
         conformal_christoffel_second_kind) noexcept {
+  // Allocate some temporary memory
+  TempBuffer<tmpl::list<::Tags::TempI<0, 3>, ::Tags::TempScalar<1>,
+                        ::Tags::TempI<2, 3>>>
+      buffer{face_normal.begin()->size()};
   // Center the coordinates
+  tnsr::I<DataVector, 3>& x = get<::Tags::TempI<2, 3>>(buffer);
+  x = x_offcenter;
   get<0>(x) -= center[0];
   get<1>(x) -= center[1];
   get<2>(x) -= center[2];
-  const DataVector euclidean_radius = get(magnitude(x));
-  // The conformal unit normal to the horizon surface s_i. Note that the face
-  // normal points _out_ of the computational domain, i.e. _into_ the excised
-  // region.
-  const auto& minus_conformal_horizon_normal = face_normal;
-  tnsr::I<DataVector, 3> minus_conformal_horizon_normal_raised{
-      x.begin()->size()};
+  // Note that the face normal points _out_ of the computational domain, i.e.
+  // _into_ the excised region. It is opposite the conformal unit normal to the
+  // horizon surface: \bar{s}_i = -n_i.
+  tnsr::I<DataVector, 3>& face_normal_raised = get<::Tags::TempI<0, 3>>(buffer);
   if constexpr (ConformalGeometry == Xcts::Geometry::FlatCartesian) {
-    (void)inv_conformal_metric;
-    (void)conformal_christoffel_second_kind;
-    get<0>(minus_conformal_horizon_normal_raised) =
-        get<0>(minus_conformal_horizon_normal);
-    get<1>(minus_conformal_horizon_normal_raised) =
-        get<1>(minus_conformal_horizon_normal);
-    get<2>(minus_conformal_horizon_normal_raised) =
-        get<2>(minus_conformal_horizon_normal);
+    get<0>(face_normal_raised) = get<0>(face_normal);
+    get<1>(face_normal_raised) = get<1>(face_normal);
+    get<2>(face_normal_raised) = get<2>(face_normal);
   } else {
-    raise_or_lower_index(make_not_null(&minus_conformal_horizon_normal_raised),
-                         minus_conformal_horizon_normal,
+    raise_or_lower_index(make_not_null(&face_normal_raised), face_normal,
                          inv_conformal_metric->get());
   }
 
   // Shift
-  const DataVector beta_orthogonal =
-      get(*lapse_times_conformal_factor) / cube(get(*conformal_factor));
-  for (size_t i = 0; i < 3; ++i) {
-    shift_excess->get(i) =
-        -beta_orthogonal * minus_conformal_horizon_normal_raised.get(i) -
-        shift_background.get(i);
+  {
+    DataVector& beta_orthogonal = get(get<::Tags::TempScalar<1>>(buffer));
+    beta_orthogonal =
+        get(*lapse_times_conformal_factor) / cube(get(*conformal_factor));
+    for (size_t i = 0; i < 3; ++i) {
+      shift_excess->get(i) = -beta_orthogonal * face_normal_raised.get(i) -
+                             shift_background.get(i);
+    }
   }
   for (LeviCivitaIterator<3> it; it; ++it) {
-    shift_excess->get(it[0]) +=
-        it.sign() * gsl::at(spin, it[1]) * x.get(it[2]) / euclidean_radius;
+    shift_excess->get(it[0]) += it.sign() * gsl::at(spin, it[1]) * x.get(it[2]);
   }
 
   // Conformal factor
-  tnsr::I<DataVector, 3> n_dot_longitudinal_shift{x.begin()->size()};
-  normal_dot_flux(make_not_null(&n_dot_longitudinal_shift),
-                  minus_conformal_horizon_normal,
-                  longitudinal_shift_background);
-  for (size_t i = 0; i < 3; ++i) {
-    n_dot_longitudinal_shift.get(i) += n_dot_longitudinal_shift_excess->get(i);
-  }
-  Scalar<DataVector> nn_dot_longitudinal_shift{x.begin()->size()};
-  normal_dot_flux(make_not_null(&nn_dot_longitudinal_shift),
-                  minus_conformal_horizon_normal, n_dot_longitudinal_shift);
-  get(*n_dot_conformal_factor_gradient) =
-      -get(extrinsic_curvature_trace) * cube(get(*conformal_factor)) / 6. +
-      pow<4>(get(*conformal_factor)) / 8. / get(*lapse_times_conformal_factor) *
-          get(nn_dot_longitudinal_shift);
   if constexpr (ConformalGeometry == Xcts::Geometry::FlatCartesian) {
-    add_normal_gradient_term_flat_cartesian(
-        n_dot_conformal_factor_gradient, *conformal_factor, euclidean_radius);
+    normal_gradient_term_flat_cartesian(
+        n_dot_conformal_factor_gradient, *conformal_factor, face_normal,
+        deriv_unnormalized_face_normal, face_normal_magnitude);
   } else {
-    add_normal_gradient_term_curved(
-        n_dot_conformal_factor_gradient, *conformal_factor,
-        minus_conformal_horizon_normal, minus_conformal_horizon_normal_raised,
-        *inv_conformal_metric, *conformal_christoffel_second_kind, x);
+    normal_gradient_term_curved(
+        n_dot_conformal_factor_gradient,
+        make_not_null(&get(get<::Tags::TempScalar<1>>(buffer))),
+        *conformal_factor, face_normal, face_normal_raised,
+        deriv_unnormalized_face_normal, face_normal_magnitude,
+        *inv_conformal_metric, *conformal_christoffel_second_kind);
+  }
+  // At this point we're done with the raised face normal, so we're re-using the
+  // memory buffer
+  {
+    tnsr::I<DataVector, 3>& n_dot_longitudinal_shift =
+        get<::Tags::TempI<0, 3>>(buffer);
+    normal_dot_flux(make_not_null(&n_dot_longitudinal_shift), face_normal,
+                    longitudinal_shift_background);
+    for (size_t i = 0; i < 3; ++i) {
+      n_dot_longitudinal_shift.get(i) +=
+          n_dot_longitudinal_shift_excess->get(i);
+    }
+    Scalar<DataVector>& nn_dot_longitudinal_shift =
+        get<::Tags::TempScalar<1>>(buffer);
+    normal_dot_flux(make_not_null(&nn_dot_longitudinal_shift), face_normal,
+                    n_dot_longitudinal_shift);
+    get(*n_dot_conformal_factor_gradient) +=
+        -get(extrinsic_curvature_trace) * cube(get(*conformal_factor)) / 6. +
+        pow<4>(get(*conformal_factor)) / 8. /
+            get(*lapse_times_conformal_factor) * get(nn_dot_longitudinal_shift);
   }
 
   // Lapse
@@ -217,89 +227,97 @@ void linearized_apparent_horizon_impl(
         n_dot_lapse_times_conformal_factor_gradient_correction,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_correction,
-    const std::array<double, 3>& center, const std::optional<double>& mass,
-    const tnsr::i<DataVector, 3>& face_normal, tnsr::I<DataVector, 3> x,
+    const std::optional<double>& mass,
+    const tnsr::i<DataVector, 3>& face_normal,
+    const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+    const Scalar<DataVector>& face_normal_magnitude,
     const Scalar<DataVector>& extrinsic_curvature_trace,
     const tnsr::II<DataVector, 3>& longitudinal_shift_background,
     const Scalar<DataVector>& conformal_factor,
     const Scalar<DataVector>& lapse_times_conformal_factor,
     const tnsr::I<DataVector, 3>& n_dot_longitudinal_shift_excess,
-    const std::optional<std::reference_wrapper<const tnsr::II<DataVector, 3>>>
+    [[maybe_unused]] const std::optional<
+        std::reference_wrapper<const tnsr::II<DataVector, 3>>>
         inv_conformal_metric,
-    const std::optional<std::reference_wrapper<const tnsr::Ijj<DataVector, 3>>>
+    [[maybe_unused]] const std::optional<
+        std::reference_wrapper<const tnsr::Ijj<DataVector, 3>>>
         conformal_christoffel_second_kind) noexcept {
-  // Center the coordinates
-  get<0>(x) -= center[0];
-  get<1>(x) -= center[1];
-  get<2>(x) -= center[2];
-  // The conformal unit normal to the horizon surface s_i
-  const auto& minus_conformal_horizon_normal = face_normal;
-  tnsr::I<DataVector, 3> minus_conformal_horizon_normal_raised{
-      x.begin()->size()};
+  // Allocate some temporary memory
+  TempBuffer<tmpl::list<::Tags::TempI<0, 3>, ::Tags::TempScalar<1>>> buffer{
+      face_normal.begin()->size()};
+  tnsr::I<DataVector, 3>& face_normal_raised = get<::Tags::TempI<0, 3>>(buffer);
   if constexpr (ConformalGeometry == Xcts::Geometry::FlatCartesian) {
-    (void)inv_conformal_metric;
-    (void)conformal_christoffel_second_kind;
-    get<0>(minus_conformal_horizon_normal_raised) =
-        get<0>(minus_conformal_horizon_normal);
-    get<1>(minus_conformal_horizon_normal_raised) =
-        get<1>(minus_conformal_horizon_normal);
-    get<2>(minus_conformal_horizon_normal_raised) =
-        get<2>(minus_conformal_horizon_normal);
+    get<0>(face_normal_raised) = get<0>(face_normal);
+    get<1>(face_normal_raised) = get<1>(face_normal);
+    get<2>(face_normal_raised) = get<2>(face_normal);
   } else {
-    raise_or_lower_index(make_not_null(&minus_conformal_horizon_normal_raised),
-                         minus_conformal_horizon_normal,
+    raise_or_lower_index(make_not_null(&face_normal_raised), face_normal,
                          inv_conformal_metric->get());
   }
 
   // Shift
-  const DataVector beta_orthogonal_correction =
-      get(*lapse_times_conformal_factor_correction) /
-          cube(get(conformal_factor)) -
-      3. * get(lapse_times_conformal_factor) / pow<4>(get(conformal_factor)) *
-          get(*conformal_factor_correction);
-  for (size_t i = 0; i < 3; ++i) {
-    shift_correction->get(i) = -beta_orthogonal_correction *
-                               minus_conformal_horizon_normal_raised.get(i);
+  {
+    DataVector& beta_orthogonal_correction =
+        get(get<::Tags::TempScalar<1>>(buffer));
+    beta_orthogonal_correction = get(*lapse_times_conformal_factor_correction) /
+                                     cube(get(conformal_factor)) -
+                                 3. * get(lapse_times_conformal_factor) /
+                                     pow<4>(get(conformal_factor)) *
+                                     get(*conformal_factor_correction);
+    for (size_t i = 0; i < 3; ++i) {
+      shift_correction->get(i) =
+          -beta_orthogonal_correction * face_normal_raised.get(i);
+    }
   }
 
   // Conformal factor
-  tnsr::I<DataVector, 3> n_dot_longitudinal_shift{x.begin()->size()};
-  normal_dot_flux(make_not_null(&n_dot_longitudinal_shift),
-                  minus_conformal_horizon_normal,
-                  longitudinal_shift_background);
-  for (size_t i = 0; i < 3; ++i) {
-    n_dot_longitudinal_shift.get(i) += n_dot_longitudinal_shift_excess.get(i);
-  }
-  Scalar<DataVector> nn_dot_longitudinal_shift{x.begin()->size()};
-  normal_dot_flux(make_not_null(&nn_dot_longitudinal_shift),
-                  minus_conformal_horizon_normal, n_dot_longitudinal_shift);
-  Scalar<DataVector> nn_dot_longitudinal_shift_correction{x.begin()->size()};
-  normal_dot_flux(make_not_null(&nn_dot_longitudinal_shift_correction),
-                  minus_conformal_horizon_normal,
-                  *n_dot_longitudinal_shift_correction);
-  get(*n_dot_conformal_factor_gradient_correction) =
-      -0.5 * get(extrinsic_curvature_trace) * square(get(conformal_factor)) *
-          get(*conformal_factor_correction) +
-      0.5 * pow<3>(get(conformal_factor)) / get(lapse_times_conformal_factor) *
-          get(nn_dot_longitudinal_shift) * get(*conformal_factor_correction) -
-      0.125 * pow<4>(get(conformal_factor)) /
-          square(get(lapse_times_conformal_factor)) *
-          get(nn_dot_longitudinal_shift) *
-          get(*lapse_times_conformal_factor_correction) +
-      0.125 * pow<4>(get(conformal_factor)) /
-          get(lapse_times_conformal_factor) *
-          get(nn_dot_longitudinal_shift_correction);
   if constexpr (ConformalGeometry == Xcts::Geometry::FlatCartesian) {
-    const DataVector euclidean_radius = get(magnitude(x));
-    add_normal_gradient_term_flat_cartesian(
+    normal_gradient_term_flat_cartesian(
         n_dot_conformal_factor_gradient_correction,
-        *conformal_factor_correction, euclidean_radius);
+        *conformal_factor_correction, face_normal,
+        deriv_unnormalized_face_normal, face_normal_magnitude);
   } else {
-    add_normal_gradient_term_curved(
+    normal_gradient_term_curved(
         n_dot_conformal_factor_gradient_correction,
-        *conformal_factor_correction, minus_conformal_horizon_normal,
-        minus_conformal_horizon_normal_raised, *inv_conformal_metric,
-        *conformal_christoffel_second_kind, x);
+        make_not_null(&get(get<::Tags::TempScalar<1>>(buffer))),
+        *conformal_factor_correction, face_normal, face_normal_raised,
+        deriv_unnormalized_face_normal, face_normal_magnitude,
+        *inv_conformal_metric, *conformal_christoffel_second_kind);
+  }
+  // At this point we're done with the raised face normal, so we're re-using the
+  // memory buffer
+  {
+    tnsr::I<DataVector, 3>& n_dot_longitudinal_shift =
+        get<::Tags::TempI<0, 3>>(buffer);
+    normal_dot_flux(make_not_null(&n_dot_longitudinal_shift), face_normal,
+                    longitudinal_shift_background);
+    for (size_t i = 0; i < 3; ++i) {
+      n_dot_longitudinal_shift.get(i) += n_dot_longitudinal_shift_excess.get(i);
+    }
+    Scalar<DataVector>& nn_dot_longitudinal_shift =
+        get<::Tags::TempScalar<1>>(buffer);
+    normal_dot_flux(make_not_null(&nn_dot_longitudinal_shift), face_normal,
+                    n_dot_longitudinal_shift);
+    get(*n_dot_conformal_factor_gradient_correction) +=
+        -0.5 * get(extrinsic_curvature_trace) * square(get(conformal_factor)) *
+            get(*conformal_factor_correction) +
+        0.5 * pow<3>(get(conformal_factor)) /
+            get(lapse_times_conformal_factor) * get(nn_dot_longitudinal_shift) *
+            get(*conformal_factor_correction) -
+        0.125 * pow<4>(get(conformal_factor)) /
+            square(get(lapse_times_conformal_factor)) *
+            get(nn_dot_longitudinal_shift) *
+            get(*lapse_times_conformal_factor_correction);
+  }
+  {
+    Scalar<DataVector>& nn_dot_longitudinal_shift_correction =
+        get<::Tags::TempScalar<1>>(buffer);
+    normal_dot_flux(make_not_null(&nn_dot_longitudinal_shift_correction),
+                    face_normal, *n_dot_longitudinal_shift_correction);
+    get(*n_dot_conformal_factor_gradient_correction) +=
+        0.125 * pow<4>(get(conformal_factor)) /
+        get(lapse_times_conformal_factor) *
+        get(nn_dot_longitudinal_shift_correction);
   }
 
   // Lapse
@@ -320,7 +338,10 @@ void ApparentHorizonImpl<ConformalGeometry>::apply(
         n_dot_lapse_times_conformal_factor_gradient,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess,
-    const tnsr::i<DataVector, 3>& face_normal, const tnsr::I<DataVector, 3>& x,
+    const tnsr::i<DataVector, 3>& face_normal,
+    const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+    const Scalar<DataVector>& face_normal_magnitude,
+    const tnsr::I<DataVector, 3>& x,
     const Scalar<DataVector>& extrinsic_curvature_trace,
     const tnsr::I<DataVector, 3>& shift_background,
     const tnsr::II<DataVector, 3>& longitudinal_shift_background)
@@ -329,7 +350,8 @@ void ApparentHorizonImpl<ConformalGeometry>::apply(
       conformal_factor, lapse_times_conformal_factor, shift_excess,
       n_dot_conformal_factor_gradient,
       n_dot_lapse_times_conformal_factor_gradient,
-      n_dot_longitudinal_shift_excess, center_, spin_, mass_, face_normal, x,
+      n_dot_longitudinal_shift_excess, center_, spin_, mass_, face_normal,
+      deriv_unnormalized_face_normal, face_normal_magnitude, x,
       extrinsic_curvature_trace, shift_background,
       longitudinal_shift_background, std::nullopt, std::nullopt);
 }
@@ -344,7 +366,10 @@ void ApparentHorizonImpl<ConformalGeometry>::apply(
         n_dot_lapse_times_conformal_factor_gradient,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess,
-    const tnsr::i<DataVector, 3>& face_normal, const tnsr::I<DataVector, 3>& x,
+    const tnsr::i<DataVector, 3>& face_normal,
+    const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+    const Scalar<DataVector>& face_normal_magnitude,
+    const tnsr::I<DataVector, 3>& x,
     const Scalar<DataVector>& extrinsic_curvature_trace,
     const tnsr::I<DataVector, 3>& shift_background,
     const tnsr::II<DataVector, 3>& longitudinal_shift_background,
@@ -355,7 +380,8 @@ void ApparentHorizonImpl<ConformalGeometry>::apply(
       conformal_factor, lapse_times_conformal_factor, shift_excess,
       n_dot_conformal_factor_gradient,
       n_dot_lapse_times_conformal_factor_gradient,
-      n_dot_longitudinal_shift_excess, center_, spin_, mass_, face_normal, x,
+      n_dot_longitudinal_shift_excess, center_, spin_, mass_, face_normal,
+      deriv_unnormalized_face_normal, face_normal_magnitude, x,
       extrinsic_curvature_trace, shift_background,
       longitudinal_shift_background, inv_conformal_metric,
       conformal_christoffel_second_kind);
@@ -373,7 +399,9 @@ void ApparentHorizonImpl<ConformalGeometry>::apply_linearized(
         n_dot_lapse_times_conformal_factor_gradient_correction,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess_correction,
-    const tnsr::i<DataVector, 3>& face_normal, const tnsr::I<DataVector, 3>& x,
+    const tnsr::i<DataVector, 3>& face_normal,
+    const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+    const Scalar<DataVector>& face_normal_magnitude,
     const Scalar<DataVector>& extrinsic_curvature_trace,
     const tnsr::II<DataVector, 3>& longitudinal_shift_background,
     const Scalar<DataVector>& conformal_factor,
@@ -384,8 +412,9 @@ void ApparentHorizonImpl<ConformalGeometry>::apply_linearized(
       conformal_factor_correction, lapse_times_conformal_factor_correction,
       shift_excess_correction, n_dot_conformal_factor_gradient_correction,
       n_dot_lapse_times_conformal_factor_gradient_correction,
-      n_dot_longitudinal_shift_excess_correction, center_, mass_, face_normal,
-      x, extrinsic_curvature_trace, longitudinal_shift_background,
+      n_dot_longitudinal_shift_excess_correction, mass_, face_normal,
+      deriv_unnormalized_face_normal, face_normal_magnitude,
+      extrinsic_curvature_trace, longitudinal_shift_background,
       conformal_factor, lapse_times_conformal_factor,
       n_dot_longitudinal_shift_excess, std::nullopt, std::nullopt);
 }
@@ -402,7 +431,9 @@ void ApparentHorizonImpl<ConformalGeometry>::apply_linearized(
         n_dot_lapse_times_conformal_factor_gradient_correction,
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess_correction,
-    const tnsr::i<DataVector, 3>& face_normal, const tnsr::I<DataVector, 3>& x,
+    const tnsr::i<DataVector, 3>& face_normal,
+    const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+    const Scalar<DataVector>& face_normal_magnitude,
     const Scalar<DataVector>& extrinsic_curvature_trace,
     const tnsr::II<DataVector, 3>& longitudinal_shift_background,
     const Scalar<DataVector>& conformal_factor,
@@ -415,8 +446,9 @@ void ApparentHorizonImpl<ConformalGeometry>::apply_linearized(
       conformal_factor_correction, lapse_times_conformal_factor_correction,
       shift_excess_correction, n_dot_conformal_factor_gradient_correction,
       n_dot_lapse_times_conformal_factor_gradient_correction,
-      n_dot_longitudinal_shift_excess_correction, center_, mass_, face_normal,
-      x, extrinsic_curvature_trace, longitudinal_shift_background,
+      n_dot_longitudinal_shift_excess_correction, mass_, face_normal,
+      deriv_unnormalized_face_normal, face_normal_magnitude,
+      extrinsic_curvature_trace, longitudinal_shift_background,
       conformal_factor, lapse_times_conformal_factor,
       n_dot_longitudinal_shift_excess, inv_conformal_metric,
       conformal_christoffel_second_kind);
