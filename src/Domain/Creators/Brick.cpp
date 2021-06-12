@@ -44,11 +44,12 @@ Brick::Brick(
       initial_number_of_grid_points_in_xyz_(                 // NOLINT
           std::move(initial_number_of_grid_points_in_xyz)),  // NOLINT
       time_dependence_(std::move(time_dependence)),
-      boundary_condition_(nullptr) {
+      boundary_condition_lower_z_(nullptr) {
   if (time_dependence_ == nullptr) {
     time_dependence_ =
         std::make_unique<domain::creators::time_dependence::None<3>>();
   }
+  block_names_.push_back("Brick");
 }
 
 Brick::Brick(
@@ -56,37 +57,30 @@ Brick::Brick(
     typename InitialRefinement::type initial_refinement_level_xyz,
     typename InitialGridPoints::type initial_number_of_grid_points_in_xyz,
     std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
-        boundary_condition,
+        boundary_condition_lower_z,
+    std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
+        boundary_condition_remaining,
     std::unique_ptr<domain::creators::time_dependence::TimeDependence<3>>
         time_dependence,
     const Options::Context& context)
-    // clang-tidy: trivially copyable
-    : lower_xyz_(std::move(lower_xyz)),  // NOLINT
-      upper_xyz_(std::move(upper_xyz)),  // NOLINT
-      is_periodic_in_xyz_{{false, false, false}},
-      initial_refinement_level_xyz_(                         // NOLINT
-          std::move(initial_refinement_level_xyz)),          // NOLINT
-      initial_number_of_grid_points_in_xyz_(                 // NOLINT
-          std::move(initial_number_of_grid_points_in_xyz)),  // NOLINT
-      time_dependence_(std::move(time_dependence)),
-      boundary_condition_(std::move(boundary_condition)) {
-  if (time_dependence_ == nullptr) {
-    time_dependence_ =
-        std::make_unique<domain::creators::time_dependence::None<3>>();
-  }
+    : Brick(lower_xyz, upper_xyz, initial_refinement_level_xyz,
+            initial_number_of_grid_points_in_xyz, {{false, false, false}},
+            std::move(time_dependence)) {
+  boundary_condition_lower_z_ = std::move(boundary_condition_lower_z);
+  boundary_condition_remaining_ = std::move(boundary_condition_remaining);
   using domain::BoundaryConditions::is_none;
-  if (is_none(boundary_condition_)) {
+  if (is_none(boundary_condition_lower_z_)) {
     PARSE_ERROR(
         context,
         "None boundary condition is not supported. If you would like an "
         "outflow boundary condition, you must use that.");
   }
   using domain::BoundaryConditions::is_periodic;
-  if (is_periodic(boundary_condition_)) {
+  if (is_periodic(boundary_condition_lower_z_)) {
     is_periodic_in_xyz_[0] = true;
     is_periodic_in_xyz_[1] = true;
     is_periodic_in_xyz_[2] = true;
-    boundary_condition_ = nullptr;
+    boundary_condition_lower_z_ = nullptr;
   }
 }
 
@@ -107,12 +101,18 @@ Domain<3> Brick::create_domain() const noexcept {
   std::vector<DirectionMap<
       3, std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>>>
       boundary_conditions_all_blocks{};
-  if (boundary_condition_ != nullptr) {
+  if (boundary_condition_lower_z_ != nullptr) {
     DirectionMap<3,
                  std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>>
         boundary_conditions{};
     for (const auto& direction : Direction<3>::all_directions()) {
-      boundary_conditions[direction] = boundary_condition_->get_clone();
+      if (direction == Direction<3>::lower_zeta()) {
+        boundary_conditions[direction] =
+            boundary_condition_lower_z_->get_clone();
+      } else {
+        boundary_conditions[direction] =
+            boundary_condition_remaining_->get_clone();
+      }
     }
     boundary_conditions_all_blocks.push_back(std::move(boundary_conditions));
   }

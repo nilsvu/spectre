@@ -84,11 +84,26 @@ class Brick : public DomainCreator<3> {
         "The time dependence of the moving mesh domain."};
   };
 
-  template <typename BoundaryConditionsBase>
-  struct BoundaryCondition {
-    static std::string name() noexcept { return "BoundaryCondition"; }
+  struct BoundaryConditions {
     static constexpr Options::String help =
-        "The boundary condition to impose on all sides.";
+        "Options for the boundary conditions";
+  };
+
+  template <typename BoundaryConditionsBase>
+  struct LowerZBoundaryCondition {
+    using group = BoundaryConditions;
+    static std::string name() noexcept { return "LowerZ"; }
+    static constexpr Options::String help =
+        "The boundary condition to impose on the lower-z side.";
+    using type = std::unique_ptr<BoundaryConditionsBase>;
+  };
+
+  template <typename BoundaryConditionsBase>
+  struct RemainingBoundaryCondition {
+    using group = BoundaryConditions;
+    static std::string name() noexcept { return "Remaining"; }
+    static constexpr Options::String help =
+        "The boundary condition to impose on all other sides.";
     using type = std::unique_ptr<BoundaryConditionsBase>;
   };
 
@@ -102,9 +117,13 @@ class Brick : public DomainCreator<3> {
       tmpl::conditional_t<
           domain::BoundaryConditions::has_boundary_conditions_base_v<
               typename Metavariables::system>,
-          tmpl::list<BoundaryCondition<
-              domain::BoundaryConditions::get_boundary_conditions_base<
-                  typename Metavariables::system>>>,
+          tmpl::list<
+              LowerZBoundaryCondition<
+                  domain::BoundaryConditions::get_boundary_conditions_base<
+                      typename Metavariables::system>>,
+              RemainingBoundaryCondition<
+                  domain::BoundaryConditions::get_boundary_conditions_base<
+                      typename Metavariables::system>>>,
           options_periodic>,
       tmpl::list<TimeDependence>>;
 
@@ -123,7 +142,9 @@ class Brick : public DomainCreator<3> {
         typename InitialRefinement::type initial_refinement_level_xyz,
         typename InitialGridPoints::type initial_number_of_grid_points_in_xyz,
         std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
-            boundary_condition = nullptr,
+            boundary_condition_lower_z = nullptr,
+        std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
+            boundary_condition_remaining = nullptr,
         std::unique_ptr<domain::creators::time_dependence::TimeDependence<3>>
             time_dependence = nullptr,
         const Options::Context& context = {});
@@ -159,7 +180,9 @@ class Brick : public DomainCreator<3> {
   std::unique_ptr<domain::creators::time_dependence::TimeDependence<3>>
       time_dependence_;
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
-      boundary_condition_;
+      boundary_condition_lower_z_;
+  std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
+      boundary_condition_remaining_;
   std::vector<std::string> block_names_{};
   std::unordered_map<std::string, std::unordered_set<std::string>>
       block_groups_{};
