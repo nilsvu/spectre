@@ -163,6 +163,7 @@ separate_arguments(CHARM_LDXX_FLAGS)
 # Define variables with standard names for compatibility, though these should
 # not be used outside this script.
 set(CHARM_INCLUDE_DIR ${CHARMINC})
+set(CHARM_INCLUDE_DIRS ${CHARMINC})
 if(CHARM_SHARED_LIBS)
   set(CHARM_LIBRARIES ${CHARMLIBSO})
 else()
@@ -231,10 +232,24 @@ list(FILTER CHARM_CXX_FLAGS EXCLUDE REGEX "^-std=")
 # - Remove the standard library flag so the CMake setting is used.
 list(FILTER CHARM_CXX_FLAGS EXCLUDE REGEX "^-stdlib=")
 list(FILTER CHARM_LDXX_FLAGS EXCLUDE REGEX "^-stdlib=")
-# - Remove the include directory so we can set it properly with CMake. That's
-#   better because it is declared as "SYSTEM", which silences warnings from
-#   those headers.
+# - Extract the include directories so we can set them properly with CMake.
+#   That's better because they are declared as "SYSTEM", which silences warnings
+#   from those headers.
 list(FILTER CHARM_CXX_FLAGS EXCLUDE REGEX "^-I${CHARM_INCLUDE_DIR}$")
+set(CHARM_INCLUDE_EXTRA ${CHARM_CXX_FLAGS})
+list(FILTER CHARM_INCLUDE_EXTRA INCLUDE REGEX "^-I.+")
+list(FILTER CHARM_CXX_FLAGS EXCLUDE REGEX "^-I.+")
+list(TRANSFORM CHARM_INCLUDE_EXTRA REPLACE "^-I" "")
+list(APPEND CHARM_INCLUDE_DIRS ${CHARM_INCLUDE_EXTRA})
+# - Remove the rpath linker argument, since CMake adds it automatically.
+list(FILTER CHARM_LDXX_FLAGS EXCLUDE REGEX "^-Wl,-rpath,${CHARM_LIBRARIES}/?$")
+# - Extract lib directories
+list(FILTER CHARM_LDXX_FLAGS EXCLUDE REGEX "^-L${CHARM_LIBRARIES}$")
+set(CHARM_LIBRARIES_EXTRA ${CHARM_LDXX_FLAGS})
+list(FILTER CHARM_LIBRARIES_EXTRA INCLUDE REGEX "^-L.+")
+list(FILTER CHARM_LDXX_FLAGS EXCLUDE REGEX "^-L.+")
+list(TRANSFORM CHARM_LIBRARIES_EXTRA REPLACE "^-L" "")
+list(APPEND CHARM_LIBRARIES ${CHARM_LIBRARIES_EXTRA})
 # - Remove the link directory and find the libraries on the system so we can
 #   configure them properly with CMake. That's more robust when switching
 #   between static and shared libs builds. Instead of parsing the list of libs
@@ -242,7 +257,6 @@ list(FILTER CHARM_CXX_FLAGS EXCLUDE REGEX "^-I${CHARM_INCLUDE_DIR}$")
 #   Charm versions and could be annoying to debug. However, it would give us
 #   more control over which libs to link. Ideally, Charm++ would provide
 #   exported targets with these libs.
-list(FILTER CHARM_LDXX_FLAGS EXCLUDE REGEX "^-L${CHARM_LIBRARIES}$")
 set(CHARM_LIB_NAMES ${CHARM_LDXX_FLAGS})
 list(FILTER CHARM_LIB_NAMES INCLUDE REGEX "^-l.+")
 list(FILTER CHARM_LDXX_FLAGS EXCLUDE REGEX "^-l.+")
@@ -276,8 +290,6 @@ endforeach()
 set(CHARM_LIB_conv-static ${CHARM_LDXX_FLAGS})
 list(FILTER CHARM_LIB_conv-static INCLUDE REGEX "conv-static.o$")
 list(FILTER CHARM_LDXX_FLAGS EXCLUDE REGEX "conv-static.o$")
-# - Remove the rpath linker argument, since CMake adds it automatically.
-list(FILTER CHARM_LDXX_FLAGS EXCLUDE REGEX "^-Wl,-rpath,${CHARM_LIBRARIES}/?$")
 
 # Report remaining flags that will be ignored. They have been used to compile
 # Charm++ but may not be compatible with the compiler that the SpECTRE build is
@@ -317,11 +329,11 @@ add_library(CharmModuleInit OBJECT ${CMAKE_BINARY_DIR}/CharmModuleInit.C)
 # Use the charm building blocks to construct imported targets
 # - Imported target with all Charm libs
 add_library(Charmxx::charmxx INTERFACE IMPORTED)
-target_include_directories(Charmxx::charmxx INTERFACE ${CHARM_INCLUDE_DIR})
+target_include_directories(Charmxx::charmxx INTERFACE ${CHARM_INCLUDE_DIRS})
 target_link_libraries(Charmxx::charmxx INTERFACE ${CHARM_LIBS})
 # - Target just for the PUP serialization library.
 add_library(Charmxx::pup INTERFACE IMPORTED)
-target_include_directories(Charmxx::pup INTERFACE ${CHARM_INCLUDE_DIR})
+target_include_directories(Charmxx::pup INTERFACE ${CHARM_INCLUDE_DIRS})
 target_link_libraries(Charmxx::pup INTERFACE ${PUP_LIBS})
 # - Target that defines the Charm++ main function.
 add_library(Charmxx::main INTERFACE IMPORTED)
