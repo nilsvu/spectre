@@ -16,6 +16,9 @@ namespace detail {
 template <size_t Dim>
 void apply_mass_impl(const gsl::not_null<double*> data,
                      const Mesh<Dim>& mesh) noexcept;
+template <size_t Dim>
+void apply_inverse_mass_impl(const gsl::not_null<double*> data,
+                             const Mesh<Dim>& mesh) noexcept;
 }  // namespace detail
 
 /*!
@@ -72,5 +75,30 @@ void apply_mass(const gsl::not_null<Variables<TagsList>*> data,
   }
 }
 // @}
+
+template <size_t Dim>
+void apply_inverse_mass(const gsl::not_null<DataVector*> data,
+                        const Mesh<Dim>& mesh) noexcept {
+  ASSERT(data->size() == mesh.number_of_grid_points(),
+         "The DataVector has size " << data->size() << ", but expected size "
+                                    << mesh.number_of_grid_points()
+                                    << " on the given mesh.");
+  detail::apply_inverse_mass_impl(data->data(), mesh);
+}
+
+template <size_t Dim, typename TagsList>
+void apply_inverse_mass(const gsl::not_null<Variables<TagsList>*> data,
+                        const Mesh<Dim>& mesh) noexcept {
+  const size_t num_points = data->number_of_grid_points();
+  ASSERT(num_points == mesh.number_of_grid_points(),
+         "The Variables data has "
+             << num_points << " grid points, but expected "
+             << mesh.number_of_grid_points() << " on the given mesh.");
+  constexpr size_t num_comps =
+      Variables<TagsList>::number_of_independent_components;
+  for (size_t i = 0; i < num_comps; ++i) {
+    detail::apply_inverse_mass_impl(data->data() + i * num_points, mesh);
+  }
+}
 
 }  // namespace dg

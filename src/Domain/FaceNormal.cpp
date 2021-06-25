@@ -14,7 +14,6 @@
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/Gsl.hpp"
 
-namespace {
 template <size_t VolumeDim, typename TargetFrame>
 void unnormalized_face_normal(
     const gsl::not_null<tnsr::i<DataVector, VolumeDim, TargetFrame>*> result,
@@ -42,7 +41,6 @@ tnsr::i<DataVector, VolumeDim, TargetFrame> unnormalized_face_normal(
                            inv_jacobian_on_interface, direction);
   return result;
 }
-}  // namespace
 
 template <size_t VolumeDim, typename TargetFrame>
 void unnormalized_face_normal(
@@ -164,6 +162,20 @@ tnsr::i<DataVector, VolumeDim, Frame::Inertial> unnormalized_face_normal(
 #define GET_FRAME(data) BOOST_PP_TUPLE_ELEM(1, data)
 
 #define INSTANTIATION(_, data)                                                \
+  template void unnormalized_face_normal(                                     \
+      gsl::not_null<tnsr::i<DataVector, GET_DIM(data), GET_FRAME(data)>*>     \
+          result,                                                             \
+      const Mesh<GET_DIM(data) - 1>& interface_mesh,                          \
+      const InverseJacobian<DataVector, GET_DIM(data), Frame::Logical,        \
+                            GET_FRAME(data)>& inv_jacobian_on_interface,      \
+      const Direction<GET_DIM(data)>& direction) noexcept;                    \
+                                                                              \
+  template tnsr::i<DataVector, GET_DIM(data), GET_FRAME(data)>                \
+  unnormalized_face_normal(                                                   \
+      const Mesh<GET_DIM(data) - 1>& interface_mesh,                          \
+      const InverseJacobian<DataVector, GET_DIM(data), Frame::Logical,        \
+                            GET_FRAME(data)>& inv_jacobian_on_interface,      \
+      const Direction<GET_DIM(data)>& direction) noexcept;                    \
   template void unnormalized_face_normal(                                     \
       const gsl::not_null<                                                    \
           tnsr::i<DataVector, GET_DIM(data), GET_FRAME(data)>*>               \

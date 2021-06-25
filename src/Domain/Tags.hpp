@@ -240,6 +240,15 @@ struct DetInvJacobian : db::SimpleTag {
   }
 };
 
+template <typename SourceFrame, typename TargetFrame>
+struct DetSurfaceJacobian : db::SimpleTag {
+  using type = Scalar<DataVector>;
+  static std::string name() noexcept {
+    return "DetSurfaceJacobian(" + get_output(SourceFrame{}) + "," +
+           get_output(TargetFrame{}) + ")";
+  }
+};
+
 /// \ingroup DataBoxTagsGroup
 /// \ingroup ComputationalDomainGroup
 /// Computes the determinant of the inverse Jacobian.

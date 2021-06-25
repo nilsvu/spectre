@@ -83,14 +83,21 @@ Variables<Tags> project_to_mortar(const Variables<Tags>& vars,
 /// Project variables from a mortar to a face.
 template <typename Tags, size_t Dim>
 Variables<Tags> project_from_mortar(
-    const Variables<Tags>& vars, const Mesh<Dim>& face_mesh,
-    const Mesh<Dim>& mortar_mesh, const MortarSize<Dim>& mortar_size) noexcept {
+    Variables<Tags> vars, const Mesh<Dim>& face_mesh,
+    const Scalar<DataVector>& face_jacobian, const Mesh<Dim>& mortar_mesh,
+    const MortarSize<Dim>& mortar_size,
+    const Scalar<DataVector>& mortar_jacobian) noexcept {
   ASSERT(Spectral::needs_projection(face_mesh, mortar_mesh, mortar_size),
          "project_from_mortar should not be called if the interface mesh and "
          "mortar mesh are identical. Please elide the copy instead.");
   const auto projection_matrices = Spectral::projection_matrix_child_to_parent(
-      mortar_mesh, face_mesh, mortar_size);
-  return apply_matrices(projection_matrices, vars, mortar_mesh.extents());
+      mortar_mesh, face_mesh, mortar_size, true);
+  vars *= get(mortar_jacobian);
+  apply_mass(make_not_null(&vars), mortar_mesh);
+  vars = apply_matrices(projection_matrices, vars, mortar_mesh.extents());
+  vars /= get(face_jacobian);
+  apply_inverse_mass(make_not_null(&vars), face_mesh);
+  return vars;
 }
 
 }  // namespace dg

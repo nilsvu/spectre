@@ -53,6 +53,21 @@ template <size_t VolumeDim, typename TargetFrame>
 void unnormalized_face_normal(
     gsl::not_null<tnsr::i<DataVector, VolumeDim, TargetFrame>*> result,
     const Mesh<VolumeDim - 1>& interface_mesh,
+    const InverseJacobian<DataVector, VolumeDim, Frame::Logical, TargetFrame>&
+        inv_jacobian_on_interface,
+    const Direction<VolumeDim>& direction) noexcept;
+
+template <size_t VolumeDim, typename TargetFrame>
+tnsr::i<DataVector, VolumeDim, TargetFrame> unnormalized_face_normal(
+    const Mesh<VolumeDim - 1>& interface_mesh,
+    const InverseJacobian<DataVector, VolumeDim, Frame::Logical, TargetFrame>&
+        inv_jacobian_on_interface,
+    const Direction<VolumeDim>& direction) noexcept;
+
+template <size_t VolumeDim, typename TargetFrame>
+void unnormalized_face_normal(
+    gsl::not_null<tnsr::i<DataVector, VolumeDim, TargetFrame>*> result,
+    const Mesh<VolumeDim - 1>& interface_mesh,
     const ElementMap<VolumeDim, TargetFrame>& map,
     const Direction<VolumeDim>& direction) noexcept;
 

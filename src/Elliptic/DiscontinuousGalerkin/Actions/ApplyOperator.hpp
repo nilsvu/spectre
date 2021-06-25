@@ -348,8 +348,15 @@ struct ReceiveMortarDataAndApplyOperator<
         db::get<domain::Tags::Interface<
             domain::Tags::BoundaryDirectionsInterior<Dim>,
             ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>>(box),
+        db::get<domain::Tags::Interface<
+            domain::Tags::InternalDirections<Dim>,
+            domain::Tags::DetSurfaceJacobian<Frame::Logical, Frame::Inertial>>>(
+            box),
         db::get<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>(box),
         db::get<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>(box),
+        db::get<::Tags::Mortars<
+            domain::Tags::DetSurfaceJacobian<Frame::Logical, Frame::Inertial>,
+            Dim>>(box),
         db::get<elliptic::dg::Tags::PenaltyParameter>(box),
         db::get<elliptic::dg::Tags::Formulation>(box),
         db::get<elliptic::dg::Tags::Massive>(box), temporal_id,

@@ -140,8 +140,14 @@ struct SubdomainOperator
       domain::Tags::Interface<
           domain::Tags::BoundaryDirectionsInterior<Dim>,
           ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>,
+      domain::Tags::Interface<
+          domain::Tags::InternalDirections<Dim>,
+          domain::Tags::DetSurfaceJacobian<Frame::Logical, Frame::Inertial>>,
       ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
       ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>,
+      ::Tags::Mortars<
+          domain::Tags::DetSurfaceJacobian<Frame::Logical, Frame::Inertial>,
+          Dim>,
       elliptic::dg::Tags::PenaltyParameter, elliptic::dg::Tags::Formulation,
       elliptic::dg::Tags::Massive>;
   using fluxes_args_tags = typename System::fluxes_computer::argument_tags;

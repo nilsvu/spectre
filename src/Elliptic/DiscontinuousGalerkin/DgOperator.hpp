@@ -683,8 +683,11 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
           internal_face_normal_magnitudes,
       const std::unordered_map<Direction<Dim>, Scalar<DataVector>>&
           external_face_normal_magnitudes,
+      const std::unordered_map<Direction<Dim>, Scalar<DataVector>>&
+          face_jacobians,
       const ::dg::MortarMap<Dim, Mesh<Dim - 1>>& all_mortar_meshes,
       const ::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>& all_mortar_sizes,
+      const ::dg::MortarMap<Dim, Scalar<DataVector>>& mortar_jacobians,
       const double penalty_parameter,
       const elliptic::dg::Formulation formulation, const bool massive,
       const TemporalId& temporal_id,
@@ -799,7 +802,8 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
           Spectral::needs_projection(face_mesh, mortar_mesh, mortar_size)
               ? ::dg::project_from_mortar(
                     auxiliary_boundary_corrections_on_mortar, face_mesh,
-                    mortar_mesh, mortar_size)
+                    face_jacobians.at(direction), mortar_mesh, mortar_size,
+                    mortar_jacobians.at(mortar_id))
               : std::move(auxiliary_boundary_corrections_on_mortar);
 
       // The lifting functions below contain an extra minus sign
@@ -935,8 +939,10 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
       // to operator. See auxiliary boundary corrections above for details.
       auto primal_boundary_corrections =
           Spectral::needs_projection(face_mesh, mortar_mesh, mortar_size)
-              ? ::dg::project_from_mortar(primal_boundary_corrections_on_mortar,
-                                          face_mesh, mortar_mesh, mortar_size)
+              ? ::dg::project_from_mortar(
+                    primal_boundary_corrections_on_mortar, face_mesh,
+                    face_jacobians.at(direction), mortar_mesh, mortar_size,
+                    mortar_jacobians.at(mortar_id))
               : std::move(primal_boundary_corrections_on_mortar);
       if (mesh.quadrature(direction.dimension()) ==
           Spectral::Quadrature::GaussLobatto) {
@@ -1047,12 +1053,13 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         all_mortar_meshes, all_mortar_sizes, temporal_id,
         apply_boundary_condition, fluxes_args, sources_args,
         fluxes_args_on_internal_faces, fluxes_args_on_external_faces);
-    apply_operator<true>(
-        make_not_null(&operator_applied_to_zero_vars),
-        make_not_null(&all_mortar_data), zero_primal_vars, primal_fluxes_buffer,
-        mesh, oversampled_mesh, inv_jacobian, det_inv_jacobian, {},
-        external_face_normal_magnitudes, all_mortar_meshes, all_mortar_sizes,
-        penalty_parameter, formulation, massive, temporal_id, sources_args);
+    apply_operator<true>(make_not_null(&operator_applied_to_zero_vars),
+                         make_not_null(&all_mortar_data), zero_primal_vars,
+                         primal_fluxes_buffer, mesh, oversampled_mesh,
+                         inv_jacobian, det_inv_jacobian, {},
+                         external_face_normal_magnitudes, {}, all_mortar_meshes,
+                         all_mortar_sizes, {}, penalty_parameter, formulation,
+                         massive, temporal_id, sources_args);
     // Impose the nonlinear (constant) boundary contribution as fixed sources on
     // the RHS of the equations
     *fixed_sources -= operator_applied_to_zero_vars;

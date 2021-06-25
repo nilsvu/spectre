@@ -92,9 +92,13 @@ void initialize_overlap_geometry(
     /*face_normal_magnitudes_internal*/,
     const gsl::not_null<std::unordered_map<Direction<Dim>, Scalar<DataVector>>*>
     /*face_normal_magnitudes_external*/,
+    const gsl::not_null<std::unordered_map<Direction<Dim>, Scalar<DataVector>>*>
+    /*face_jacobians*/,
     const gsl::not_null<::dg::MortarMap<Dim, Mesh<Dim - 1>>*> mortar_meshes,
     const gsl::not_null<::dg::MortarMap<Dim, ::dg::MortarSize<Dim - 1>>*>
         mortar_sizes,
+    const gsl::not_null<::dg::MortarMap<Dim, Scalar<DataVector>>*>
+    /*mortar_jacobians*/,
     const gsl::not_null<::dg::MortarMap<Dim, Mesh<Dim>>*> neighbor_meshes,
     const gsl::not_null<::dg::MortarMap<Dim, Scalar<DataVector>>*>
     /*neighbor_face_normal_magnitudes*/,
@@ -244,8 +248,14 @@ struct InitializeSubdomain {
                                   face_normal_magnitude_tag>,
           domain::Tags::Interface<domain::Tags::BoundaryDirectionsInterior<Dim>,
                                   face_normal_magnitude_tag>,
+          domain::Tags::Interface<domain::Tags::InternalDirections<Dim>,
+                                  domain::Tags::DetSurfaceJacobian<
+                                      Frame::Logical, Frame::Inertial>>,
           ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
           ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>,
+          ::Tags::Mortars<
+              domain::Tags::DetSurfaceJacobian<Frame::Logical, Frame::Inertial>,
+              Dim>,
           elliptic::dg::subdomain_operator::Tags::NeighborMortars<
               domain::Tags::Mesh<Dim>, Dim>,
           elliptic::dg::subdomain_operator::Tags::NeighborMortars<
@@ -487,6 +497,81 @@ struct InitializeSubdomain {
     };
     for (auto& direction : element.internal_boundaries()) {
       normalize_face_normal(direction, domain::Tags::InternalDirections<Dim>{});
+      // Face Jacobians
+      elliptic::util::mutate_apply_at<
+          tmpl::list<overlaps_tag<
+              domain::Tags::Interface<domain::Tags::InternalDirections<Dim>,
+                                      domain::Tags::DetSurfaceJacobian<
+                                          Frame::Logical, Frame::Inertial>>>>,
+          tmpl::list<overlaps_tag<domain::Tags::Interface<
+              domain::Tags::InternalDirections<Dim>,
+              ::Tags::Magnitude<domain::Tags::UnnormalizedFaceNormal<Dim>>>>>,
+          tmpl::list<>>(
+          [&direction](const auto face_jacobian,
+                       const auto& face_normal_magnitude,
+                       const auto& element_map, const auto& mesh) noexcept {
+            const auto face_mesh = mesh.slice_away(direction.dimension());
+            const auto face_logical_coords =
+                interface_logical_coordinates(face_mesh, direction);
+            const auto det_jacobian_on_face =
+                determinant(element_map.jacobian(face_logical_coords));
+            *face_jacobian = face_normal_magnitude;
+            get(*face_jacobian) *= get(det_jacobian_on_face);
+          },
+          make_not_null(&box), std::make_tuple(overlap_id, direction),
+          db::get<overlaps_tag<domain::Tags::ElementMap<Dim>>>(box).at(
+              overlap_id),
+          db::get<overlaps_tag<domain::Tags::Mesh<Dim>>>(box).at(overlap_id));
+      for (const auto& neighbor_id : element.neighbors().at(direction)) {
+        const ::dg::MortarId<Dim> mortar_id{direction, neighbor_id};
+        // Mortar Jacobians
+        elliptic::util::mutate_apply_at<
+            tmpl::list<overlaps_tag<
+                ::Tags::Mortars<domain::Tags::DetSurfaceJacobian<
+                                    Frame::Logical, Frame::Inertial>,
+                                Dim>>>,
+            tmpl::list<
+                overlaps_tag<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>,
+                overlaps_tag<
+                    ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>>,
+            tmpl::list<>>(
+            [&direction](const auto mortar_jacobian, const auto& mortar_mesh,
+                         const auto& mortar_sizes,
+                         const auto& element_map) noexcept {
+              auto mortar_logical_coords =
+                  interface_logical_coordinates(mortar_mesh, direction);
+              size_t d_m = 0;
+              for (size_t d = 0; d < Dim; ++d) {
+                if (d == direction.dimension()) {
+                  continue;
+                }
+                if (mortar_sizes.at(d_m) == Spectral::MortarSize::LowerHalf) {
+                  mortar_logical_coords.get(d) -= 1.;
+                  mortar_logical_coords.get(d) *= 0.5;
+                } else if (mortar_sizes.at(d_m) ==
+                           Spectral::MortarSize::UpperHalf) {
+                  mortar_logical_coords.get(d) += 1.;
+                  mortar_logical_coords.get(d) *= 0.5;
+                }
+                ++d_m;
+              }
+              const auto det_jacobian_on_mortar =
+                  determinant(element_map.jacobian(mortar_logical_coords));
+              const auto inv_jacobian_on_mortar =
+                  element_map.inv_jacobian(mortar_logical_coords);
+              *mortar_jacobian = magnitude(unnormalized_face_normal(
+                  mortar_mesh, inv_jacobian_on_mortar, direction));
+              get(*mortar_jacobian) *= get(det_jacobian_on_mortar);
+              for (const auto& mortar_size : mortar_sizes) {
+                if (mortar_size != Spectral::MortarSize::Full) {
+                  get(*mortar_jacobian) *= 0.5;
+                }
+              }
+            },
+            make_not_null(&box), std::make_tuple(overlap_id, mortar_id),
+            db::get<overlaps_tag<domain::Tags::ElementMap<Dim>>>(box).at(
+                overlap_id));
+      }
     }
     for (auto& direction : element.external_boundaries()) {
       normalize_face_normal(direction,
