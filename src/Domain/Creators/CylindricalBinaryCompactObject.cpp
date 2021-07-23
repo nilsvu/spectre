@@ -241,8 +241,8 @@ CylindricalBinaryCompactObject::CylindricalBinaryCompactObject(
   add_cylinder_name("CB", "Outer");
 
   // Expand initial refinement over all blocks
-  const ExpandOverBlocks<size_t, 3> expand_over_blocks{block_names,
-                                                       std::move(block_groups)};
+  const ExpandOverBlocks<std::array<size_t, 3>> expand_over_blocks{
+      block_names, std::move(block_groups)};
   try {
     initial_refinement_ = std::visit(expand_over_blocks, initial_refinement);
   } catch (const std::exception& error) {
