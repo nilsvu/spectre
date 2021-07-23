@@ -86,6 +86,14 @@ struct MakeIdentityIfSkipped {
           },
           get<typename LinearSolverType::source_tag>(box));
     }
+    if (false) {
+      db::mutate<typename LinearSolverType::fields_tag>(
+          make_not_null(&box),
+          [](const auto fields, const auto& source) noexcept {
+            *fields = source;
+          },
+          get<typename LinearSolverType::source_tag>(box));
+    }
     return {std::move(box)};
   }
 };
