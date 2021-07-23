@@ -1,0 +1,12 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Disable PR comments
+comment: false
+
+# Check that PRs increase coverage
+coverage:
+  status:
+    project:
+      default:
+        target: auto
