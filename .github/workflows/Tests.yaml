@@ -86,7 +86,7 @@ jobs:
     name: Files and formatting
     runs-on: ubuntu-latest
     container:
-      image: sxscollaboration/spectrebuildenv:latest
+      image: ghcr.io/nilsleiffischer/spectrebuildenv:latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -172,7 +172,7 @@ jobs:
       || github.ref != 'refs/heads/develop'
     runs-on: ubuntu-latest
     container:
-      image: sxscollaboration/spectrebuildenv:latest
+      image: ghcr.io/nilsleiffischer/spectrebuildenv:latest
     strategy:
       matrix:
         build_type: [Debug, Release]
@@ -223,7 +223,7 @@ jobs:
     name: Documentation
     runs-on: ubuntu-latest
     container:
-      image: sxscollaboration/spectrebuildenv:latest
+      image: ghcr.io/nilsleiffischer/spectrebuildenv:latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -332,7 +332,7 @@ jobs:
             ccache_max_size: 400M
 
     container:
-      image: sxscollaboration/spectrebuildenv:latest
+      image: ghcr.io/nilsleiffischer/spectrebuildenv:latest
       env:
         # We run unit tests with the following compiler flags:
         # - `-Werror`: Treat warnings as error.
@@ -691,7 +691,7 @@ ${{ env.CACHE_KEY_SUFFIX }}"
               "-skl;skylake" "-icx;icelake-server" "-tgl;tigerlake")
             compiler: clang-11
     container:
-      image: sxscollaboration/spectrebuildenv:latest
+      image: ghcr.io/nilsleiffischer/spectrebuildenv:latest
       env:
         # See the unit test job for the reasons for these configuration choices
         CXXFLAGS: "-Werror"
