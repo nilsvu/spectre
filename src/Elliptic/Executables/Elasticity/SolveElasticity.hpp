@@ -22,6 +22,7 @@
 #include "Elliptic/SubdomainPreconditioners/MinusLaplacian.hpp"
 #include "Elliptic/SubdomainPreconditioners/RegisterDerived.hpp"
 #include "Elliptic/Systems/Elasticity/Actions/InitializeConstitutiveRelation.hpp"
+#include "Elliptic/Systems/Elasticity/Actions/ObservePerLayer.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
@@ -188,6 +189,11 @@ struct Metavariables {
       tmpl::list<Elasticity::Tags::Strain<volume_dim>,
                  Elasticity::Tags::PotentialEnergyDensity<volume_dim>>>;
 
+  // Set up the action to observe reductions per-layer
+  using observer_per_layer_action = Elasticity::Actions::ObservePerLayer<
+      volume_dim, linear_solver_iteration_id,
+      LinearSolver::multigrid::Tags::IsFinestGrid>;
+
   // Collect all items to store in the cache.
   using const_global_cache_tags =
       tmpl::list<background_tag, initial_guess_tag, Tags::EventsAndTriggers>;
@@ -216,7 +222,8 @@ struct Metavariables {
   using observed_reduction_data_tags =
       observers::collect_reduction_data_tags<tmpl::flatten<tmpl::list<
           tmpl::at<typename factory_creation::factory_classes, Event>,
-          linear_solver, multigrid, schwarz_smoother>>>;
+          linear_solver, multigrid, schwarz_smoother,
+          observer_per_layer_action>>>;
 
   // Specify all global synchronization points.
   enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
@@ -259,6 +266,8 @@ struct Metavariables {
       tmpl::list<observers::Actions::RegisterEventsWithObservers,
                  typename multigrid::register_element,
                  typename schwarz_smoother::register_element,
+                 observers::Actions::RegisterWithObservers<
+                     typename observer_per_layer_action::RegisterWithObservers>,
                  Parallel::Actions::TerminatePhase>;
 
   template <typename Label>
@@ -271,7 +280,7 @@ struct Metavariables {
           typename schwarz_smoother::fields_tag,
           typename schwarz_smoother::options_group, subdomain_operator>,
       typename linear_solver::template solve<tmpl::list<
-          Actions::RunEventsAndTriggers,
+          Actions::RunEventsAndTriggers, observer_per_layer_action,
           typename multigrid::template solve<
               build_linear_operator_actions,
               smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
