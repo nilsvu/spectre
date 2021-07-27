@@ -23,6 +23,7 @@
 #include "Elliptic/SubdomainPreconditioners/MinusLaplacian.hpp"
 #include "Elliptic/SubdomainPreconditioners/RegisterDerived.hpp"
 #include "Elliptic/Systems/Elasticity/Actions/InitializeConstitutiveRelation.hpp"
+#include "Elliptic/Systems/Elasticity/Actions/ObservePerLayer.hpp"
 #include "Elliptic/Systems/Elasticity/BoundaryConditions/Factory.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
@@ -42,6 +43,7 @@
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
+#include "ParallelAlgorithms/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Actions/MutateApply.hpp"
 #include "ParallelAlgorithms/Actions/RemoveOptionsAndTerminatePhase.hpp"
 #include "ParallelAlgorithms/Actions/TerminatePhase.hpp"
@@ -169,12 +171,17 @@ struct Metavariables {
   using error_tags = db::wrap_tags_in<Tags::Error, analytic_solution_fields>;
   using observe_fields = tmpl::append<
       analytic_solution_fields, error_tags,
-      tmpl::list<Elasticity::Tags::StrainCompute<volume_dim>,
-                 Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>,
+      tmpl::list<Elasticity::Tags::Strain<volume_dim>,
+                 Elasticity::Tags::PotentialEnergyDensity<volume_dim>,
                  domain::Tags::Coordinates<volume_dim, Frame::Inertial>>>;
   using observer_compute_tags =
       tmpl::list<::Events::Tags::ObserverMeshCompute<volume_dim>,
                  error_compute>;
+
+  // Set up the action to observe reductions per-layer
+  using observer_per_layer_action = Elasticity::Actions::ObservePerLayer<
+      volume_dim, linear_solver_iteration_id,
+      LinearSolver::multigrid::Tags::IsFinestGrid>;
 
   // Collect all items to store in the cache.
   using const_global_cache_tags =
@@ -218,7 +225,8 @@ struct Metavariables {
   using observed_reduction_data_tags =
       observers::collect_reduction_data_tags<tmpl::flatten<tmpl::list<
           tmpl::at<typename factory_creation::factory_classes, Event>,
-          linear_solver, multigrid, schwarz_smoother>>>;
+          linear_solver, multigrid, schwarz_smoother,
+          observer_per_layer_action>>>;
 
   using initialization_actions = tmpl::list<
       elliptic::dg::Actions::InitializeDomain<volume_dim>,
@@ -233,6 +241,9 @@ struct Metavariables {
           tmpl::append<typename system::primal_fields,
                        typename system::primal_fluxes>,
           elliptic::analytic_data::AnalyticSolution>,
+      ::Initialization::Actions::AddComputeTags<tmpl::list<
+          Elasticity::Tags::StrainCompute<volume_dim>,
+          Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>>>,
       elliptic::dg::Actions::initialize_operator<system>,
       elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
           system, background_tag, typename schwarz_smoother::options_group>,
@@ -252,6 +263,8 @@ struct Metavariables {
       tmpl::list<observers::Actions::RegisterEventsWithObservers,
                  typename multigrid::register_element,
                  typename schwarz_smoother::register_element,
+                 observers::Actions::RegisterWithObservers<
+                     typename observer_per_layer_action::RegisterWithObservers>,
                  Parallel::Actions::TerminatePhase>;
 
   template <typename Label>
@@ -263,7 +276,7 @@ struct Metavariables {
       LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
           typename schwarz_smoother::options_group>,
       typename linear_solver::template solve<tmpl::list<
-          Actions::RunEventsAndTriggers,
+          Actions::RunEventsAndTriggers, observer_per_layer_action,
           typename multigrid::template solve<
               build_linear_operator_actions,
               smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
