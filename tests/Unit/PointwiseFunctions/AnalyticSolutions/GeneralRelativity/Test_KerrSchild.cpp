@@ -58,11 +58,12 @@ void test_schwarzschild(const DataType& used_for_size) noexcept {
   const double mass = 1.01;
   const std::array<double, 3> spin{{0.0, 0.0, 0.0}};
   const std::array<double, 3> center{{0.0, 0.0, 0.0}};
+  const std::array<double, 3> boost_velocity{{0.0, 0.0, 0.0}};
   const auto x = spatial_coords<Frame>(used_for_size);
   const double t = 1.3;
 
   // Evaluate solution
-  gr::Solutions::KerrSchild solution(mass, spin, center);
+  gr::Solutions::KerrSchild solution(mass, spin, center, boost_velocity);
 
   const auto vars = solution.variables(
       x, t, typename gr::Solutions::KerrSchild::tags<DataType, Frame>{});
@@ -162,11 +163,12 @@ void test_tag_retrieval(const DataType& used_for_size) noexcept {
   const double mass = 1.234;
   const std::array<double, 3> spin{{0.1, -0.2, 0.3}};
   const std::array<double, 3> center{{1.0, 2.0, 3.0}};
+  const std::array<double, 3> boost_velocity{{0.2, -0.3, 0.1}};
   const auto x = spatial_coords<Frame>(used_for_size);
   const double t = 1.3;
 
   // Evaluate solution
-  const gr::Solutions::KerrSchild solution(mass, spin, center);
+  const gr::Solutions::KerrSchild solution(mass, spin, center, boost_velocity);
   TestHelpers::AnalyticSolutions::test_tag_retrieval(
       solution, x, t,
       typename gr::Solutions::KerrSchild::template tags<DataType, Frame>{});
@@ -179,11 +181,12 @@ void test_einstein_solution() noexcept {
   const double mass = 1.7;
   const std::array<double, 3> spin{{0.1, 0.2, 0.3}};
   const std::array<double, 3> center{{0.3, 0.2, 0.4}};
+  const std::array<double, 3> boost_velocity{{0.2, -0.3, 0.1}};
   //   ...for grid
   const std::array<double, 3> lower_bound{{0.82, 1.24, 1.32}};
   const double time = -2.8;
 
-  gr::Solutions::KerrSchild solution(mass, spin, center);
+  gr::Solutions::KerrSchild solution(mass, spin, center, boost_velocity);
   TestHelpers::VerifyGrSolution::verify_consistency(
       solution, time, tnsr::I<double, 3, Frame>{lower_bound}, 0.01, 1.0e-10);
   if constexpr (std::is_same_v<Frame, ::Frame::Inertial>) {
@@ -198,12 +201,14 @@ void test_einstein_solution() noexcept {
 }
 
 void test_serialize() noexcept {
-  gr::Solutions::KerrSchild solution(3.0, {{0.2, 0.3, 0.2}}, {{0.0, 3.0, 4.0}});
+  gr::Solutions::KerrSchild solution(3.0, {{0.2, 0.3, 0.2}}, {{0.0, 3.0, 4.0}},
+                                     {{0.1, 0.2, 0.3}});
   test_serialization(solution);
 }
 
 void test_copy_and_move() noexcept {
-  gr::Solutions::KerrSchild solution(3.0, {{0.2, 0.3, 0.2}}, {{0.0, 3.0, 4.0}});
+  gr::Solutions::KerrSchild solution(3.0, {{0.2, 0.3, 0.2}}, {{0.0, 3.0, 4.0}},
+                                     {{0.1, 0.2, 0.3}});
   test_copy_semantics(solution);
   auto solution_copy = solution;
   // clang-tidy: std::move of trivially copyable type
@@ -214,9 +219,11 @@ void test_construct_from_options() {
   const auto created = TestHelpers::test_creation<gr::Solutions::KerrSchild>(
       "Mass: 0.5\n"
       "Spin: [0.1,0.2,0.3]\n"
-      "Center: [1.0,3.0,2.0]");
-  CHECK(created ==
-        gr::Solutions::KerrSchild(0.5, {{0.1, 0.2, 0.3}}, {{1.0, 3.0, 2.0}}));
+      "Center: [1.0,3.0,2.0]\n"
+      "Velocity: [0.5,0.4,0.3]");
+  CHECK(created == gr::Solutions::KerrSchild(0.5, {{0.1, 0.2, 0.3}},
+                                             {{1.0, 3.0, 2.0}},
+                                             {{0.5, 0.4, 0.3}}));
 }
 
 }  // namespace
@@ -238,40 +245,4 @@ SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.KerrSchild",
   test_tag_retrieval<Frame::Grid>(DataVector(5));
   test_tag_retrieval<Frame::Grid>(0.0);
   test_einstein_solution<Frame::Grid>();
-}
-
-// [[OutputRegex, Spin magnitude must be < 1]]
-SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.KerrSchildSpin",
-                  "[PointwiseFunctions][Unit]") {
-  ERROR_TEST();
-  gr::Solutions::KerrSchild solution(1.0, {{1.0, 1.0, 1.0}}, {{0.0, 0.0, 0.0}});
-}
-
-// [[OutputRegex, Mass must be non-negative]]
-SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.KerrSchildMass",
-                  "[PointwiseFunctions][Unit]") {
-  ERROR_TEST();
-  gr::Solutions::KerrSchild solution(-1.0, {{0.0, 0.0, 0.0}},
-                                     {{0.0, 0.0, 0.0}});
-}
-
-// [[OutputRegex, In string:.*At line 2 column 9:.Value -0.5 is below the lower
-// bound of 0]]
-SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.KerrSchildOptM",
-                  "[PointwiseFunctions][Unit]") {
-  ERROR_TEST();
-  TestHelpers::test_creation<gr::Solutions::KerrSchild>(
-      "Mass: -0.5\n"
-      "Spin: [0.1,0.2,0.3]\n"
-      "Center: [1.0,3.0,2.0]");
-}
-
-// [[OutputRegex, In string:.*At line 2 column 3:.Spin magnitude must be < 1]]
-SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.KerrSchildOptS",
-                  "[PointwiseFunctions][Unit]") {
-  ERROR_TEST();
-  TestHelpers::test_creation<gr::Solutions::KerrSchild>(
-      "Mass: 0.5\n"
-      "Spin: [1.1,0.9,0.3]\n"
-      "Center: [1.0,3.0,2.0]");
 }
