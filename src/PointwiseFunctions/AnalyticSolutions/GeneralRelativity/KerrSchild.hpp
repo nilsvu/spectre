@@ -230,11 +230,18 @@ class KerrSchild : public AnalyticSolution<3_st>,
     static constexpr Options::String help = {
         "The [x,y,z] center of the black hole"};
   };
-  using options = tmpl::list<Mass, Spin, Center>;
+  struct Velocity {
+    using type = std::array<double, volume_dim>;
+    static constexpr Options::String help = {
+        "The [x,y,z] boost velocity of the black hole"};
+  };
+  using options = tmpl::list<Mass, Spin, Center, Velocity>;
   static constexpr Options::String help{
       "Black hole in Kerr-Schild coordinates"};
 
-  KerrSchild(double mass, Spin::type dimensionless_spin, Center::type center,
+  KerrSchild(double mass, std::array<double, volume_dim> dimensionless_spin,
+             std::array<double, volume_dim> center,
+             std::array<double, volume_dim> boost_velocity,
              const Options::Context& context = {});
 
   explicit KerrSchild(CkMigrateMessage* /*unused*/) noexcept {}
@@ -263,16 +270,22 @@ class KerrSchild : public AnalyticSolution<3_st>,
   void pup(PUP::er& p) noexcept;  // NOLINT
 
   SPECTRE_ALWAYS_INLINE double mass() const noexcept { return mass_; }
-  SPECTRE_ALWAYS_INLINE const std::array<double, volume_dim>& center() const
-      noexcept {
-    return center_;
-  }
   SPECTRE_ALWAYS_INLINE const std::array<double, volume_dim>&
   dimensionless_spin() const noexcept {
     return dimensionless_spin_;
   }
+  SPECTRE_ALWAYS_INLINE const std::array<double, volume_dim>& center()
+      const noexcept {
+    return center_;
+  }
+  SPECTRE_ALWAYS_INLINE const std::array<double, volume_dim>& boost_velocity()
+      const noexcept {
+    return boost_velocity_;
+  }
 
   struct internal_tags {
+    template <typename DataType, typename Frame = ::Frame::Inertial>
+    using x_minus_center_unboosted = ::Tags::TempI<21, 3, Frame, DataType>;
     template <typename DataType, typename Frame = ::Frame::Inertial>
     using x_minus_center = ::Tags::TempI<0, 3, Frame, DataType>;
     template <typename DataType>
@@ -300,15 +313,21 @@ class KerrSchild : public AnalyticSolution<3_st>,
     template <typename DataType>
     using deriv_H_temp2 = ::Tags::TempScalar<12, DataType>;
     template <typename DataType, typename Frame = ::Frame::Inertial>
-    using deriv_H = ::Tags::Tempi<13, 3, Frame, DataType>;
+    using deriv_H_unboosted = ::Tags::Tempa<22, 3, Frame, DataType>;
+    template <typename DataType, typename Frame = ::Frame::Inertial>
+    using deriv_H = ::Tags::Tempa<13, 3, Frame, DataType>;
     template <typename DataType>
     using denom = ::Tags::TempScalar<14, DataType>;
     template <typename DataType>
     using a_dot_x_over_r = ::Tags::TempScalar<15, DataType>;
     template <typename DataType, typename Frame = ::Frame::Inertial>
-    using null_form = ::Tags::Tempi<16, 3, Frame, DataType>;
+    using null_form_unboosted = ::Tags::Tempa<23, 3, Frame, DataType>;
     template <typename DataType, typename Frame = ::Frame::Inertial>
-    using deriv_null_form = ::Tags::Tempij<17, 3, Frame, DataType>;
+    using null_form = ::Tags::Tempa<16, 3, Frame, DataType>;
+    template <typename DataType, typename Frame = ::Frame::Inertial>
+    using deriv_null_form_unboosted = ::Tags::Tempab<24, 3, Frame, DataType>;
+    template <typename DataType, typename Frame = ::Frame::Inertial>
+    using deriv_null_form = ::Tags::Tempab<17, 3, Frame, DataType>;
     template <typename DataType>
     using lapse_squared = ::Tags::TempScalar<18, DataType>;
     template <typename DataType>
@@ -323,6 +342,7 @@ class KerrSchild : public AnalyticSolution<3_st>,
   template <typename DataType, typename Frame = ::Frame::Inertial>
   using CachedBuffer = CachedTempBuffer<
       IntermediateComputer<DataType, Frame>,
+      internal_tags::x_minus_center_unboosted<DataType, Frame>,
       internal_tags::x_minus_center<DataType, Frame>,
       internal_tags::a_dot_x<DataType>,
       internal_tags::a_dot_x_squared<DataType>,
@@ -334,9 +354,12 @@ class KerrSchild : public AnalyticSolution<3_st>,
       internal_tags::H_denom<DataType>, internal_tags::H<DataType>,
       internal_tags::deriv_H_temp1<DataType>,
       internal_tags::deriv_H_temp2<DataType>,
+      internal_tags::deriv_H_unboosted<DataType, Frame>,
       internal_tags::deriv_H<DataType, Frame>, internal_tags::denom<DataType>,
       internal_tags::a_dot_x_over_r<DataType>,
+      internal_tags::null_form_unboosted<DataType, Frame>,
       internal_tags::null_form<DataType, Frame>,
+      internal_tags::deriv_null_form_unboosted<DataType, Frame>,
       internal_tags::deriv_null_form<DataType, Frame>,
       internal_tags::lapse_squared<DataType>, gr::Tags::Lapse<DataType>,
       internal_tags::deriv_lapse_multiplier<DataType>,
@@ -357,6 +380,12 @@ class KerrSchild : public AnalyticSolution<3_st>,
 
     void operator()(
         gsl::not_null<tnsr::I<DataType, 3, Frame>*> x_minus_center,
+        gsl::not_null<CachedBuffer*> /*cache*/,
+        internal_tags::x_minus_center_unboosted<DataType, Frame> /*meta*/)
+        const noexcept;
+
+    void operator()(
+        gsl::not_null<tnsr::I<DataType, 3, Frame>*> x_minus_center_boosted,
         gsl::not_null<CachedBuffer*> /*cache*/,
         internal_tags::x_minus_center<DataType, Frame> /*meta*/) const noexcept;
 
@@ -415,29 +444,46 @@ class KerrSchild : public AnalyticSolution<3_st>,
                     internal_tags::deriv_H_temp2<DataType> /*meta*/) const
         noexcept;
 
-    void operator()(gsl::not_null<tnsr::i<DataType, 3, Frame>*> deriv_H,
+    void operator()(gsl::not_null<tnsr::a<DataType, 3, Frame>*> deriv_H,
                     gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::deriv_H<DataType, Frame> /*meta*/) const
-        noexcept;
+                    internal_tags::deriv_H_unboosted<DataType, Frame> /*meta*/)
+        const noexcept;
+
+    void operator()(
+        gsl::not_null<tnsr::a<DataType, 3, Frame>*> deriv_H_boosted,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::deriv_H<DataType, Frame> /*meta*/) const noexcept;
 
     void operator()(gsl::not_null<Scalar<DataType>*> denom,
                     gsl::not_null<CachedBuffer*> cache,
                     internal_tags::denom<DataType> /*meta*/) const noexcept;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> a_dot_x_over_r,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::a_dot_x_over_r<DataType> /*meta*/) const
-        noexcept;
+    void operator()(
+        gsl::not_null<Scalar<DataType>*> a_dot_x_over_r,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::a_dot_x_over_r<DataType> /*meta*/) const noexcept;
 
-    void operator()(gsl::not_null<tnsr::i<DataType, 3, Frame>*> null_form,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::null_form<DataType, Frame> /*meta*/) const
-        noexcept;
+    void operator()(
+        gsl::not_null<tnsr::a<DataType, 3, Frame>*> null_form,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::null_form_unboosted<DataType, Frame> /*meta*/)
+        const noexcept;
 
-    void operator()(gsl::not_null<tnsr::ij<DataType, 3, Frame>*>
-                    deriv_null_form,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::deriv_null_form<DataType, Frame> /*meta*/)
+    void operator()(
+        gsl::not_null<tnsr::a<DataType, 3, Frame>*> null_form_boosted,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::null_form<DataType, Frame> /*meta*/) const noexcept;
+
+    void operator()(
+        gsl::not_null<tnsr::ab<DataType, 3, Frame>*> deriv_null_form,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::deriv_null_form_unboosted<DataType, Frame> /*meta*/)
+        const noexcept;
+
+    void operator()(
+        gsl::not_null<tnsr::ab<DataType, 3, Frame>*> deriv_null_form_boosted,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::deriv_null_form<DataType, Frame> /*meta*/)
         const noexcept;
 
     void operator()(gsl::not_null<Scalar<DataType>*> lapse_squared,
@@ -536,13 +582,16 @@ class KerrSchild : public AnalyticSolution<3_st>,
       make_array<volume_dim>(std::numeric_limits<double>::signaling_NaN());
   std::array<double, volume_dim> center_ =
       make_array<volume_dim>(std::numeric_limits<double>::signaling_NaN());
+  std::array<double, volume_dim> boost_velocity_ =
+      make_array<volume_dim>(std::numeric_limits<double>::signaling_NaN());
 };
 
 SPECTRE_ALWAYS_INLINE bool operator==(const KerrSchild& lhs,
                                       const KerrSchild& rhs) noexcept {
   return lhs.mass() == rhs.mass() and
          lhs.dimensionless_spin() == rhs.dimensionless_spin() and
-         lhs.center() == rhs.center();
+         lhs.center() == rhs.center() and
+         lhs.boost_velocity() == rhs.boost_velocity();
 }
 
 SPECTRE_ALWAYS_INLINE bool operator!=(const KerrSchild& lhs,

@@ -38,6 +38,7 @@ target_link_libraries(
   ErrorHandling
   GeneralRelativity
   Interpolation
+  SpecialRelativity
   )
 
 add_subdirectory(Python)
