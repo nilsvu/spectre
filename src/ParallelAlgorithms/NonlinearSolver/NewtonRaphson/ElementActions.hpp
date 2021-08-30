@@ -83,6 +83,7 @@ struct InitializeElement {
  public:
   using simple_tags =
       tmpl::list<Convergence::Tags::IterationId<OptionsGroup>,
+                 Convergence::Tags::ObservationId<OptionsGroup>,
                  Convergence::Tags::HasConverged<OptionsGroup>,
                  nonlinear_operator_applied_to_fields_tag, correction_tag,
                  NonlinearSolver::Tags::Globalization<
@@ -136,10 +137,13 @@ struct PrepareSolve {
         const Parallel::GlobalCache<Metavariables>& /*cache*/,
         const ArrayIndex& array_index, const ActionList /*meta*/,
         const ParallelComponent* const /*meta*/) noexcept {
-    db::mutate<Convergence::Tags::IterationId<OptionsGroup>>(
+    db::mutate<Convergence::Tags::IterationId<OptionsGroup>,
+               Convergence::Tags::ObservationId<OptionsGroup>>(
         make_not_null(&box),
-        [](const gsl::not_null<size_t*> iteration_id) noexcept {
+        [](const gsl::not_null<size_t*> iteration_id,
+           const gsl::not_null<size_t*> observation_id) noexcept {
           *iteration_id = 0;
+          ++(*observation_id);
         });
 
     // Skip the initial reduction on elements that are not part of the section
@@ -267,10 +271,13 @@ struct ReceiveInitialHasConverged {
       if (not db::get<Parallel::Tags::Section<ParallelComponent,
                                               ArraySectionIdTag>>(box)
                   .has_value()) {
-        db::mutate<Convergence::Tags::IterationId<OptionsGroup>>(
+        db::mutate<Convergence::Tags::IterationId<OptionsGroup>,
+                   Convergence::Tags::ObservationId<OptionsGroup>>(
             make_not_null(&box),
-            [](const gsl::not_null<size_t*> local_iteration_id) noexcept {
+            [](const gsl::not_null<size_t*> local_iteration_id,
+               const gsl::not_null<size_t*> local_observation_id) noexcept {
               *local_iteration_id = 1;
+              ++(*local_observation_id);
             });
         constexpr size_t prepare_step_index =
             tmpl::index_of<ActionList,
@@ -334,20 +341,23 @@ struct PrepareStep {
           db::get<Convergence::Tags::IterationId<OptionsGroup>>(box) + 1);
     }
 
-    db::mutate<Convergence::Tags::IterationId<OptionsGroup>, correction_tag,
+    db::mutate<Convergence::Tags::IterationId<OptionsGroup>,
+               Convergence::Tags::ObservationId<OptionsGroup>, correction_tag,
                linear_operator_applied_to_correction_tag,
                NonlinearSolver::Tags::Globalization<
                    Convergence::Tags::IterationId<OptionsGroup>>,
                NonlinearSolver::Tags::StepLength<OptionsGroup>,
                globalization_fields_tag>(
         make_not_null(&box),
-        [](const gsl::not_null<size_t*> iteration_id, const auto correction,
+        [](const gsl::not_null<size_t*> iteration_id,
+           const gsl::not_null<size_t*> observation_id, const auto correction,
            const auto linear_operator_applied_to_correction,
            const gsl::not_null<size_t*> globalization_iteration_id,
            const gsl::not_null<double*> step_length,
            const auto globalization_fields, const auto& fields,
            const double damping_factor) noexcept {
           ++(*iteration_id);
+          ++(*observation_id);
           // Begin the linear solve with a zero initial guess
           *correction =
               make_with_value<typename correction_tag::type>(fields, 0.);
@@ -542,14 +552,17 @@ struct Globalize {
             get<Convergence::HasConverged>(globalization_result);
 
         db::mutate<Convergence::Tags::HasConverged<OptionsGroup>,
-                   Convergence::Tags::IterationId<OptionsGroup>>(
+                   Convergence::Tags::IterationId<OptionsGroup>,
+                   Convergence::Tags::ObservationId<OptionsGroup>>(
             make_not_null(&box),
             [&has_converged](
                 const gsl::not_null<Convergence::HasConverged*>
                     local_has_converged,
-                const gsl::not_null<size_t*> local_iteration_id) noexcept {
+                const gsl::not_null<size_t*> local_iteration_id,
+                const gsl::not_null<size_t*> local_observation_id) noexcept {
               *local_has_converged = std::move(has_converged);
               ++(*local_iteration_id);
+              ++(*local_observation_id);
             });
 
         return {std::move(box), Parallel::AlgorithmExecution::Continue,

@@ -14,6 +14,7 @@
 #include "DataStructures/DataBox/Tag.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Domain/Tags.hpp"
+#include "NumericalAlgorithms/Convergence/Tags.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "Options/Auto.hpp"
 #include "Options/Options.hpp"
@@ -134,12 +135,8 @@ struct ParentMesh : db::SimpleTag {
 
 /// Continuously incrementing ID for volume observations
 template <typename OptionsGroup>
-struct ObservationId : db::SimpleTag {
-  using type = size_t;
-  static std::string name() noexcept {
-    return "ObservationId(" + Options::name<OptionsGroup>() + ")";
-  }
-};
+using ObservationId = Convergence::Tags::ObservationId<OptionsGroup>;
+
 /// @{
 /// Prefix tag for recording volume data in
 /// `LinearSolver::multigrid::Tags::VolumeDataForOutput`

@@ -78,6 +78,16 @@ struct IterationId : db::SimpleTag {
   using type = size_t;
 };
 
+/// Continuously incrementing ID for observations across multiple invocations of
+/// the iterative algorithm
+template <typename Label>
+struct ObservationId : db::SimpleTag {
+  static std::string name() noexcept {
+    return "ObservationId(" + pretty_type::short_name<Label>() + ")";
+  }
+  using type = size_t;
+};
+
 /*!
  * \brief Holds a `Convergence::HasConverged` flag that signals the iterative
  * algorithm has converged, along with the reason for convergence.

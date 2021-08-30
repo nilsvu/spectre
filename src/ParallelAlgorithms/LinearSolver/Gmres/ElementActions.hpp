@@ -75,10 +75,13 @@ struct PrepareSolve {
       Parallel::GlobalCache<Metavariables>& cache,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
-    db::mutate<Convergence::Tags::IterationId<OptionsGroup>>(
+    db::mutate<Convergence::Tags::IterationId<OptionsGroup>,
+               Convergence::Tags::ObservationId<OptionsGroup>>(
         make_not_null(&box),
-        [](const gsl::not_null<size_t*> iteration_id) noexcept {
+        [](const gsl::not_null<size_t*> iteration_id,
+           const gsl::not_null<size_t*> observation_id) noexcept {
           *iteration_id = 0;
+          ++(*observation_id);
         });
 
     // Skip the initial reduction on elements that are not part of the section
@@ -526,13 +529,16 @@ struct NormalizeOperandAndUpdateField {
     const auto& minres = get<1>(received_data);
     auto& has_converged = get<2>(received_data);
     db::mutate<Convergence::Tags::HasConverged<OptionsGroup>,
-               Convergence::Tags::IterationId<OptionsGroup>>(
+               Convergence::Tags::IterationId<OptionsGroup>,
+               Convergence::Tags::ObservationId<OptionsGroup>>(
         make_not_null(&box),
         [&has_converged](
             const gsl::not_null<Convergence::HasConverged*> local_has_converged,
-            const gsl::not_null<size_t*> local_iteration_id) noexcept {
+            const gsl::not_null<size_t*> local_iteration_id,
+            const gsl::not_null<size_t*> local_observation_id) noexcept {
           *local_has_converged = std::move(has_converged);
           ++(*local_iteration_id);
+          ++(*local_observation_id);
         });
 
     // Elements that are not part of the section jump directly to the

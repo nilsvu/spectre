@@ -52,6 +52,7 @@ struct InitializeElement {
  public:
   using simple_tags = tmpl::append<
       tmpl::list<Convergence::Tags::IterationId<OptionsGroup>,
+                 Convergence::Tags::ObservationId<OptionsGroup>,
                  initial_fields_tag, operator_applied_to_fields_tag,
                  operand_tag, operator_applied_to_operand_tag,
                  orthogonalization_iteration_id_tag, basis_history_tag,
