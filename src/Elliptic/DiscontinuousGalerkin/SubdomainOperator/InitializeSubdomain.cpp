@@ -49,21 +49,16 @@ void InitializeOverlapGeometry<Dim>::operator()(
         orientation(mesh).slice_away(direction_from_neighbor.dimension());
     for (const auto& neighbor_id : neighbors) {
       const ::dg::MortarId<Dim> mortar_id{direction, neighbor_id};
-      const auto& neighbor_mesh =
-          neighbor_meshes
-              ->emplace(mortar_id,
-                        domain::Initialization::create_initial_mesh(
-                            initial_extents, neighbor_id, quadrature))
-              .first->second;
-      const auto neighbor_face_mesh =
-          neighbor_mesh.slice_away(direction_from_neighbor.dimension());
-      neighbor_mortar_meshes->emplace(
-          mortar_id,
-          ::dg::mortar_mesh(reoriented_face_mesh, neighbor_face_mesh));
-      neighbor_mortar_sizes->emplace(
-          mortar_id, ::dg::mortar_size(neighbor_id, element_id,
-                                       direction_from_neighbor.dimension(),
-                                       orientation.inverse_map()));
+      (*neighbor_meshes)[mortar_id] =
+          domain::Initialization::create_initial_mesh(initial_extents,
+                                                      neighbor_id, quadrature);
+      const auto neighbor_face_mesh = neighbor_meshes->at(mortar_id).slice_away(
+          direction_from_neighbor.dimension());
+      (*neighbor_mortar_meshes)[mortar_id] =
+          ::dg::mortar_mesh(reoriented_face_mesh, neighbor_face_mesh);
+      (*neighbor_mortar_sizes)[mortar_id] = ::dg::mortar_size(
+          neighbor_id, element_id, direction_from_neighbor.dimension(),
+          orientation.inverse_map());
     }  // neighbors
   }    // internal directions
 }

@@ -104,24 +104,21 @@ void InitializeFacesAndMortars<Dim>::operator()(
     const auto& orientation = neighbors.orientation();
     for (const auto& neighbor_id : neighbors) {
       const ::dg::MortarId<Dim> mortar_id{direction, neighbor_id};
-      mortar_meshes->emplace(
-          mortar_id, ::dg::mortar_mesh(
-                         face_mesh, domain::Initialization::create_initial_mesh(
-                                        initial_extents, neighbor_id,
-                                        quadrature, orientation)
-                                        .slice_away(direction.dimension())));
-      mortar_sizes->emplace(
-          mortar_id, ::dg::mortar_size(element_id, neighbor_id,
-                                       direction.dimension(), orientation));
+      (*mortar_meshes)[mortar_id] = ::dg::mortar_mesh(
+          face_mesh, domain::Initialization::create_initial_mesh(
+                         initial_extents, neighbor_id, quadrature, orientation)
+                         .slice_away(direction.dimension()));
+      (*mortar_sizes)[mortar_id] = ::dg::mortar_size(
+          element_id, neighbor_id, direction.dimension(), orientation);
     }  // neighbors
   }    // internal directions
   for (const auto& direction : element.external_boundaries()) {
     const auto face_mesh = mesh.slice_away(direction.dimension());
     const auto mortar_id =
         std::make_pair(direction, ElementId<Dim>::external_boundary_id());
-    mortar_meshes->emplace(mortar_id, face_mesh);
-    mortar_sizes->emplace(mortar_id,
-                          make_array<Dim - 1>(Spectral::MortarSize::Full));
+    (*mortar_meshes)[mortar_id] = face_mesh;
+    (*mortar_sizes)[mortar_id] =
+        make_array<Dim - 1>(Spectral::MortarSize::Full);
   }  // external directions
 }
 
