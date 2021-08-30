@@ -12,6 +12,7 @@
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/Actions/InitializeFields.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
+#include "Elliptic/Amr/Amr.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/ApplyOperator.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
@@ -139,6 +140,10 @@ struct Metavariables {
   using operator_applied_to_fields_tag =
       db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo, fields_tag>;
 
+  // The AMR algorithm
+  using amr = elliptic::amr::Amr<Metavariables, volume_dim,
+                                 LinearSolver::multigrid::Tags::IsFinestGrid>;
+
   using nonlinear_solver = NonlinearSolver::newton_raphson::NewtonRaphson<
       Metavariables, fields_tag, SolveXcts::OptionTags::NewtonRaphsonGroup,
       fixed_sources_tag, LinearSolver::multigrid::Tags::IsFinestGrid>;
@@ -204,7 +209,9 @@ struct Metavariables {
                    tmpl::flatten<tmpl::list<
                        Events::Completion,
                        dg::Events::field_observations<
-                           volume_dim, nonlinear_solver_iteration_id,
+                           volume_dim,
+                           Convergence::Tags::ObservationId<
+                               typename nonlinear_solver::options_group>,
                            observe_fields, analytic_solution_fields,
                            LinearSolver::multigrid::Tags::IsFinestGrid>>>>,
         tmpl::pair<Trigger, elliptic::Triggers::all_triggers<
@@ -221,7 +228,6 @@ struct Metavariables {
   enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
 
   using initialization_actions = tmpl::list<
-      Actions::SetupDataBox,
       elliptic::dg::Actions::InitializeDomain<volume_dim>,
       typename nonlinear_solver::initialize_element,
       typename linear_solver::initialize_element,
@@ -235,8 +241,7 @@ struct Metavariables {
               analytic_solution_registrars, analytic_data_registrars>>>,
       elliptic::dg::Actions::initialize_operator<system, background_tag>,
       elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
-          system, background_tag, typename schwarz_smoother::options_group>,
-      Initialization::Actions::RemoveOptionsAndTerminatePhase>;
+          system, background_tag, typename schwarz_smoother::options_group>>;
 
   template <bool Linearized>
   using build_operator_actions = elliptic::dg::Actions::apply_operator<
@@ -261,36 +266,42 @@ struct Metavariables {
                                         build_operator_actions<true>, Label>>;
 
   using solve_actions = tmpl::list<
-      typename nonlinear_solver::template solve<
-          build_operator_actions<false>,
-          tmpl::list<
-              LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
-                  volume_dim, tmpl::list<fields_tag, fluxes_tag>,
-                  typename multigrid::options_group>,
-              LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
-                  tmpl::list<fields_tag, fluxes_tag>,
-                  typename multigrid::options_group, void>,
-              LinearSolver::Schwarz::Actions::SendOverlapFields<
-                  communicated_overlap_tags,
-                  typename schwarz_smoother::options_group, false>,
-              LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
-                  volume_dim, communicated_overlap_tags,
-                  typename schwarz_smoother::options_group>,
-              LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
-                  typename schwarz_smoother::options_group>,
-              typename linear_solver::template solve<tmpl::list<
-                  typename multigrid::template solve<
-                      smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
-                      smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
-                  ::LinearSolver::Actions::make_identity_if_skipped<
-                      multigrid, build_operator_actions<true>>>>>,
-          Actions::RunEventsAndTriggers>,
+      typename amr::template iterate<
+          initialization_actions,
+          tmpl::list<typename nonlinear_solver::template solve<
+              build_operator_actions<false>,
+              tmpl::list<
+                  LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
+                      volume_dim, tmpl::list<fields_tag, fluxes_tag>,
+                      typename multigrid::options_group>,
+                  LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
+                      tmpl::list<fields_tag, fluxes_tag>,
+                      typename multigrid::options_group, void>,
+                  LinearSolver::Schwarz::Actions::SendOverlapFields<
+                      communicated_overlap_tags,
+                      typename schwarz_smoother::options_group, false>,
+                  LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
+                      volume_dim, communicated_overlap_tags,
+                      typename schwarz_smoother::options_group>,
+                  LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
+                      typename schwarz_smoother::options_group>,
+                  typename linear_solver::template solve<tmpl::list<
+                      typename multigrid::template solve<
+                          smooth_actions<
+                              LinearSolver::multigrid::VcycleDownLabel>,
+                          smooth_actions<
+                              LinearSolver::multigrid::VcycleUpLabel>>,
+                      ::LinearSolver::Actions::make_identity_if_skipped<
+                          multigrid, build_operator_actions<true>>>>>,
+              Actions::RunEventsAndTriggers>>>,
       Parallel::Actions::TerminatePhase>;
 
   using dg_element_array = elliptic::DgElementArray<
       Metavariables,
-      tmpl::list<Parallel::PhaseActions<Phase, Phase::Initialization,
-                                        initialization_actions>,
+      tmpl::list<Parallel::PhaseActions<
+                     Phase, Phase::Initialization,
+                     tmpl::list<Actions::SetupDataBox, initialization_actions,
+                                Parallel::Actions::TerminatePhase>>,
                  Parallel::PhaseActions<Phase, Phase::RegisterWithObserver,
                                         register_actions>,
                  Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>>,
@@ -298,13 +309,14 @@ struct Metavariables {
           volume_dim, typename multigrid::options_group>>;
 
   // Specify all parallel components that will execute actions at some point.
-  using component_list = tmpl::flatten<
-      tmpl::list<dg_element_array, typename nonlinear_solver::component_list,
-                 typename linear_solver::component_list,
-                 typename multigrid::component_list,
-                 typename schwarz_smoother::component_list,
-                 observers::Observer<Metavariables>,
-                 observers::ObserverWriter<Metavariables>>>;
+  using component_list =
+      tmpl::flatten<tmpl::list<dg_element_array, typename amr::component_list,
+                               typename nonlinear_solver::component_list,
+                               typename linear_solver::component_list,
+                               typename multigrid::component_list,
+                               typename schwarz_smoother::component_list,
+                               observers::Observer<Metavariables>,
+                               observers::ObserverWriter<Metavariables>>>;
 
   // Specify the transitions between phases.
   template <typename... Tags>

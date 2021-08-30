@@ -267,6 +267,14 @@ struct InitializeElement {
       }
     }
 
+    // Reset subdomain solver when this element is re-initialized by AMR. The
+    // change in resolution on this element and/or neighbors means the subdomain
+    // operator has changed, so we need to discard subdomain-solver caches.
+    db::mutate<subdomain_solver_tag>(make_not_null(&box),
+                                     [](const auto subdomain_solver) noexcept {
+                                       (*subdomain_solver)->reset();
+                                     });
+
     Initialization::mutate_assign<simple_tags>(
         make_not_null(&box), std::move(intruding_extents),
         std::move(element_weight), std::move(intruding_overlap_weights),

@@ -14,6 +14,7 @@
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/Actions/InitializeFields.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
+#include "Elliptic/Amr/Amr.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/ApplyOperator.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
@@ -134,6 +135,10 @@ struct Metavariables {
   using operator_applied_to_fields_tag =
       db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
 
+  // The AMR algorithm
+  using amr = elliptic::amr::Amr<Metavariables, volume_dim,
+                                 LinearSolver::multigrid::Tags::IsFinestGrid>;
+
   // The linear solver algorithm. We must use GMRES since the operator is
   // not guaranteed to be symmetric. It can be made symmetric by multiplying by
   // the DG mass matrix.
@@ -183,7 +188,9 @@ struct Metavariables {
                    tmpl::flatten<tmpl::list<
                        Events::Completion,
                        dg::Events::field_observations<
-                           volume_dim, linear_solver_iteration_id,
+                           volume_dim,
+                           Convergence::Tags::ObservationId<
+                               typename linear_solver::options_group>,
                            observe_fields, analytic_solution_fields,
                            LinearSolver::multigrid::Tags::IsFinestGrid>>>>,
         tmpl::pair<Trigger, elliptic::Triggers::all_triggers<
@@ -193,14 +200,13 @@ struct Metavariables {
   // Collect all reduction tags for observers
   using observed_reduction_data_tags =
       observers::collect_reduction_data_tags<tmpl::flatten<tmpl::list<
-          tmpl::at<typename factory_creation::factory_classes, Event>,
+          tmpl::at<typename factory_creation::factory_classes, Event>, amr,
           linear_solver, multigrid, schwarz_smoother>>>;
 
   // Specify all global synchronization points.
   enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
 
   using initialization_actions = tmpl::list<
-      Actions::SetupDataBox,
       elliptic::dg::Actions::InitializeDomain<volume_dim>,
       typename linear_solver::initialize_element,
       typename multigrid::initialize_element,
@@ -219,8 +225,7 @@ struct Metavariables {
       // Apply the DG operator to the initial guess
       elliptic::dg::Actions::apply_operator<
           system, true, linear_solver_iteration_id, fields_tag, fluxes_vars_tag,
-          operator_applied_to_fields_tag, vars_tag, fluxes_vars_tag>,
-      Initialization::Actions::RemoveOptionsAndTerminatePhase>;
+          operator_applied_to_fields_tag, vars_tag, fluxes_vars_tag>>;
 
   using build_linear_operator_actions = elliptic::dg::Actions::apply_operator<
       system, true, linear_solver_iteration_id, vars_tag, fluxes_vars_tag,
@@ -238,19 +243,25 @@ struct Metavariables {
                                         build_linear_operator_actions, Label>>;
 
   using solve_actions = tmpl::list<
-      typename linear_solver::template solve<tmpl::list<
-          Actions::RunEventsAndTriggers,
-          typename multigrid::template solve<
-              smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
-              smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
-          ::LinearSolver::Actions::make_identity_if_skipped<
-              multigrid, build_linear_operator_actions>>>,
-      Actions::RunEventsAndTriggers, Parallel::Actions::TerminatePhase>;
+      typename amr::template iterate<
+          initialization_actions,
+          tmpl::list<
+              typename linear_solver::template solve<tmpl::list<
+                  Actions::RunEventsAndTriggers,
+                  typename multigrid::template solve<
+                      smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
+                      smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
+                  ::LinearSolver::Actions::make_identity_if_skipped<
+                      multigrid, build_linear_operator_actions>>>,
+              Actions::RunEventsAndTriggers>>,
+      Parallel::Actions::TerminatePhase>;
 
   using dg_element_array = elliptic::DgElementArray<
       Metavariables,
-      tmpl::list<Parallel::PhaseActions<Phase, Phase::Initialization,
-                                        initialization_actions>,
+      tmpl::list<Parallel::PhaseActions<
+                     Phase, Phase::Initialization,
+                     tmpl::list<Actions::SetupDataBox, initialization_actions,
+                                Parallel::Actions::TerminatePhase>>,
                  Parallel::PhaseActions<Phase, Phase::RegisterWithObserver,
                                         register_actions>,
                  Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>>,
@@ -258,12 +269,13 @@ struct Metavariables {
           volume_dim, typename multigrid::options_group>>;
 
   // Specify all parallel components that will execute actions at some point.
-  using component_list = tmpl::flatten<
-      tmpl::list<dg_element_array, typename linear_solver::component_list,
-                 typename multigrid::component_list,
-                 typename schwarz_smoother::component_list,
-                 observers::Observer<Metavariables>,
-                 observers::ObserverWriter<Metavariables>>>;
+  using component_list =
+      tmpl::flatten<tmpl::list<dg_element_array, typename amr::component_list,
+                               typename linear_solver::component_list,
+                               typename multigrid::component_list,
+                               typename schwarz_smoother::component_list,
+                               observers::Observer<Metavariables>,
+                               observers::ObserverWriter<Metavariables>>>;
 
   // Specify the transitions between phases.
   template <typename... Tags>
