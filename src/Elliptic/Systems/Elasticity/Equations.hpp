@@ -6,7 +6,9 @@
 #include <cstddef>
 
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Domain/Structure/Element.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/Systems/Elasticity/Actions/InitializeConstitutiveRelation.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/Tags.hpp"
 #include "Utilities/Gsl.hpp"
@@ -102,20 +104,26 @@ void add_curved_auxiliary_sources(
 template <size_t Dim>
 struct Fluxes {
   using argument_tags =
-      tmpl::list<Tags::ConstitutiveRelation<Dim>,
+      tmpl::list<Tags::ConstitutiveRelationPerBlockBase,
+                 domain::Tags::Element<Dim>,
                  domain::Tags::Coordinates<Dim, Frame::Inertial>>;
-  using volume_tags = tmpl::list<Tags::ConstitutiveRelation<Dim>>;
+  using volume_tags = tmpl::list<Tags::ConstitutiveRelationPerBlockBase,
+                                 domain::Tags::Element<Dim>>;
   static void apply(
       gsl::not_null<tnsr::II<DataVector, Dim>*> flux_for_displacement,
-      const ConstitutiveRelations::ConstitutiveRelation<Dim>&
-          constitutive_relation,
+      const std::vector<
+          std::unique_ptr<ConstitutiveRelations::ConstitutiveRelation<Dim>>>&
+          constitutive_relation_per_block,
+      const Element<Dim>& element,
       const tnsr::I<DataVector, Dim>& coordinates,
       const tnsr::ii<DataVector, Dim>& strain) noexcept;
-  static void apply(gsl::not_null<tnsr::Ijj<DataVector, Dim>*> flux_for_strain,
-                    const ConstitutiveRelations::ConstitutiveRelation<Dim>&
-                        constitutive_relation,
-                    const tnsr::I<DataVector, Dim>& coordinates,
-                    const tnsr::I<DataVector, Dim>& displacement) noexcept;
+  static void apply(
+      gsl::not_null<tnsr::Ijj<DataVector, Dim>*> flux_for_strain,
+      const std::vector<
+          std::unique_ptr<ConstitutiveRelations::ConstitutiveRelation<Dim>>>&
+          constitutive_relation_per_block,
+      const Element<Dim>& element, const tnsr::I<DataVector, Dim>& coordinates,
+      const tnsr::I<DataVector, Dim>& displacement) noexcept;
   // clang-tidy: no runtime references
   void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
 };

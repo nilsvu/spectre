@@ -98,19 +98,23 @@ void add_curved_auxiliary_sources(
 template <size_t Dim>
 void Fluxes<Dim>::apply(
     const gsl::not_null<tnsr::II<DataVector, Dim>*> flux_for_displacement,
-    const ConstitutiveRelations::ConstitutiveRelation<Dim>&
-        constitutive_relation,
-    const tnsr::I<DataVector, Dim>& coordinates,
+    const std::vector<
+        std::unique_ptr<ConstitutiveRelations::ConstitutiveRelation<Dim>>>&
+        constitutive_relation_per_block,
+    const Element<Dim>& element, const tnsr::I<DataVector, Dim>& coordinates,
     const tnsr::ii<DataVector, Dim>& strain) noexcept {
-  primal_fluxes(flux_for_displacement, strain, constitutive_relation,
+  primal_fluxes(flux_for_displacement, strain,
+                *constitutive_relation_per_block.at(element.id().block_id()),
                 coordinates);
 }
 
 template <size_t Dim>
 void Fluxes<Dim>::apply(
     const gsl::not_null<tnsr::Ijj<DataVector, Dim>*> flux_for_strain,
-    const ConstitutiveRelations::ConstitutiveRelation<
-        Dim>& /*constitutive_relation*/,
+    const std::vector<
+        std::unique_ptr<ConstitutiveRelations::ConstitutiveRelation<Dim>>>&
+        /*constitutive_relation_per_block*/,
+    const Element<Dim>& /*element*/,
     const tnsr::I<DataVector, Dim>& /*coordinates*/,
     const tnsr::I<DataVector, Dim>& displacement) noexcept {
   auxiliary_fluxes(flux_for_strain, displacement);
