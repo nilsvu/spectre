@@ -162,7 +162,7 @@ struct Metavariables {
   using subdomain_operator =
       elliptic::dg::subdomain_operator::SubdomainOperator<
           system, SolveElasticity::OptionTags::SchwarzSmootherGroup,
-          tmpl::list<Elasticity::Tags::ConstitutiveRelation<Dim>>>;
+          tmpl::list<Elasticity::Tags::ConstitutiveRelationPerBlockBase>>;
   using subdomain_preconditioners = tmpl::list<
       elliptic::subdomain_preconditioners::Registrars::MinusLaplacian<
           Poisson::FirstOrderSystem<volume_dim, void, void>,
