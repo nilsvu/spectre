@@ -21,6 +21,7 @@
 #include "Domain/Tags.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Options/Options.hpp"
+#include "Parallel/AlgorithmExecution.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/ConstitutiveRelation.hpp"
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/Tags.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
