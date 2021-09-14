@@ -181,6 +181,27 @@ bool operator!=(const Direction<VolumeDim>& lhs,
   return not(lhs == rhs);
 }
 
+template <size_t Dim>
+bool operator<(const Direction<Dim>& lhs, const Direction<Dim>& rhs) {
+  if (lhs.axis() != rhs.axis()) {
+    return lhs.axis() < rhs.axis();
+  }
+  return lhs.side() < rhs.side();
+}
+
+template <size_t Dim>
+inline bool operator>(const Direction<Dim>& lhs, const Direction<Dim>& rhs) {
+  return rhs < lhs;
+}
+template <size_t Dim>
+inline bool operator<=(const Direction<Dim>& lhs, const Direction<Dim>& rhs) {
+  return !(lhs > rhs);
+}
+template <size_t Dim>
+inline bool operator>=(const Direction<Dim>& lhs, const Direction<Dim>& rhs) {
+  return !(lhs < rhs);
+}
+
 template <size_t VolumeDim>
 size_t hash_value(const Direction<VolumeDim>& d) {
   return std::hash<size_t>{}(d.dimension()) xor std::hash<double>{}(d.sign());
