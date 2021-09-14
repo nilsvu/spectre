@@ -418,6 +418,10 @@ void test_variables_math() noexcept {
   test_assignment2 = test_assignment2 * 1.0;
   CHECK(test_assignment2 == test_assignment);
 
+  TestVariablesType test_assignment3{num_points};
+  test_assignment3 = 2.;
+  CHECK(test_assignment3 == TestVariablesType{num_points, 2.});
+
   const auto check_components =
       [](const auto& variables, const VectorType& tensor) noexcept {
     tmpl::for_each<typename std::decay_t<decltype(variables)>::tags_list>(
