@@ -57,6 +57,18 @@ class Irregular {
       noexcept;
   /// @}
 
+  /// @{
+  /// \brief Interpolate a DataVector onto the target points.
+  ///
+  /// \note When interpolating multiple tensors, the Variables interface is more
+  /// efficient. However, this DataVector interface is useful for applications
+  /// where only some components of a Tensor or Variables need to be
+  /// interpolated.
+  void interpolate(gsl::not_null<DataVector*> result,
+                   const DataVector& input) const noexcept;
+  DataVector interpolate(const DataVector& input) const noexcept;
+  /// @}
+
  private:
   friend bool operator==(const Irregular& lhs, const Irregular& rhs) noexcept {
     return lhs.interpolation_matrix_ == rhs.interpolation_matrix_;
@@ -90,11 +102,36 @@ void Irregular<Dim>::interpolate(
 }
 
 template <size_t Dim>
+void Irregular<Dim>::interpolate(const gsl::not_null<DataVector*> result,
+                                 const DataVector& input) const noexcept {
+  const size_t m = interpolation_matrix_.rows();
+  const size_t k = interpolation_matrix_.columns();
+  ASSERT(k == input.size(),
+         "Number of points in 'input', "
+             << input.size()
+             << ",\n disagrees with the size of the source_mesh, " << k
+             << ", that was passed into the constructor");
+  if (result->size() != m) {
+    *result = DataVector{m};
+  }
+  dgemm_('n', 'n', m, 1, k, 1.0, interpolation_matrix_.data(),
+         interpolation_matrix_.spacing(), input.data(), k, 0.0, result->data(),
+         m);
+}
+
+template <size_t Dim>
 template <typename TagsList>
 Variables<TagsList> Irregular<Dim>::interpolate(
     const Variables<TagsList>& vars) const noexcept {
   Variables<TagsList> result;
   interpolate(make_not_null(&result), vars);
+  return result;
+}
+
+template <size_t Dim>
+DataVector Irregular<Dim>::interpolate(const DataVector& input) const noexcept {
+  DataVector result{input.size()};
+  interpolate(make_not_null(&result), input);
   return result;
 }
 
