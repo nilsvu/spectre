@@ -110,6 +110,13 @@ EventsAndTriggers:
           - Name: MomentumConstraint
             NormType: L2Norm
             Components: Individual
+    - ObserveAtPoint:
+        Coordinates: [0.6, 0, 0]
+        SubfileName: NearHorizon
+        TensorsToObserve:
+          - ConformalFactor
+          - LapseTimesConformalFactor
+          - ShiftExcess
     - ObserveFields:
         SubfileName: VolumeData
         VariablesToObserve:
