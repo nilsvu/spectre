@@ -37,8 +37,9 @@
 template <typename T, bool TF = blaze::defaultTransposeFlag>
 class DenseVector : public blaze::DynamicVector<T, TF> {
  public:
-  // Inherit constructors
+  // Inherit constructors and assignment operator
   using blaze::DynamicVector<T, TF>::DynamicVector;
+  using blaze::DynamicVector<T, TF>::operator=;
 
   /// Charm++ serialization
   // clang-tidy: runtime-references
