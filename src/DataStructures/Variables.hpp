@@ -316,6 +316,11 @@ class Variables<tmpl::list<Tags...>> {
     return *this;
   }
 
+  SPECTRE_ALWAYS_INLINE Variables& operator=(const value_type& rhs) noexcept {
+    variable_data_ = rhs;
+    return *this;
+  }
+
   template <typename... WrappedTags,
             Requires<tmpl2::flat_all<std::is_same_v<
                 db::remove_all_prefixes<WrappedTags>,

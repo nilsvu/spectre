@@ -417,8 +417,12 @@ void test_variables_math() {
   test_assignment2 = test_assignment2 * 1.0;
   CHECK(test_assignment2 == test_assignment);
 
-  const auto check_components = [](const auto& variables,
-                                   const VectorType& tensor) {
+  TestVariablesType test_assignment3{num_points};
+  test_assignment3 = 2.;
+  CHECK(test_assignment3 == TestVariablesType{num_points, 2.});
+
+  const auto check_components =
+      [](const auto& variables, const VectorType& tensor) {
     tmpl::for_each<typename std::decay_t<decltype(variables)>::tags_list>(
         [&variables, &tensor](auto tag) {
           using Tag = tmpl::type_from<decltype(tag)>;
