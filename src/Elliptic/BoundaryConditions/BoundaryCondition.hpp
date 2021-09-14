@@ -8,6 +8,7 @@
 
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "Domain/BoundaryConditions/BoundaryCondition.hpp"
+#include "Elliptic/BoundaryConditions/BoundaryConditionType.hpp"
 #include "Parallel/CharmPupable.hpp"
 #include "Utilities/Registration.hpp"
 #include "Utilities/TMPL.hpp"
@@ -109,6 +110,13 @@ class BoundaryCondition : public domain::BoundaryConditions::BoundaryCondition {
   /// \endcond
 
   using creatable_classes = Registration::registrants<registrars>;
+
+  // The type of boundary condition (Dirichlet or Neumann) for every tensor
+  // component. For example, if the derived class imposes Neumann-type
+  // conditions on a Scalar and Dirichlet-type conditions on a 2D vector, then
+  // it should return `{Dirichlet, Neumann, Neumann}` here.
+  virtual std::vector<elliptic::BoundaryConditionType>
+  boundary_condition_types() const = 0;
 };
 
 }  // namespace BoundaryConditions

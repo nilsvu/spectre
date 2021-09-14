@@ -9,6 +9,7 @@
 
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
+#include "Elliptic/BoundaryConditions/BoundaryConditionType.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
 #include "Utilities/Gsl.hpp"
@@ -73,7 +74,7 @@ struct RobinImpl {
 
   void pup(PUP::er& p);
 
- private:
+ protected:
   double dirichlet_weight_ = std::numeric_limits<double>::signaling_NaN();
   double neumann_weight_ = std::numeric_limits<double>::signaling_NaN();
   double constant_ = std::numeric_limits<double>::signaling_NaN();
@@ -127,6 +128,15 @@ class Robin
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition> get_clone()
       const override {
     return std::make_unique<Robin>(*this);
+  }
+
+  std::vector<elliptic::BoundaryConditionType> boundary_condition_types()
+      const override {
+    if (neumann_weight_ == 0.) {
+      return {1, elliptic::BoundaryConditionType::Dirichlet};
+    } else {
+      return {1, elliptic::BoundaryConditionType::Neumann};
+    }
   }
 
   void pup(PUP::er& p) override {

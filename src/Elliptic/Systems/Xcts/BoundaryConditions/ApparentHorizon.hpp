@@ -219,7 +219,7 @@ struct ApparentHorizonImpl {
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p);
 
- private:
+ protected:
   std::array<double, 3> center_ =
       make_array<3>(std::numeric_limits<double>::signaling_NaN());
   std::array<double, 3> rotation_ =
@@ -346,6 +346,20 @@ class ApparentHorizon
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition> get_clone()
       const override {
     return std::make_unique<ApparentHorizon>(*this);
+  }
+
+  std::vector<elliptic::BoundaryConditionType> boundary_condition_types()
+      const override {
+    return {// Conformal factor
+            elliptic::BoundaryConditionType::Neumann,
+            // Lapse times conformal factor
+            this->kerr_solution_for_lapse_.has_value()
+                ? elliptic::BoundaryConditionType::Dirichlet
+                : elliptic::BoundaryConditionType::Neumann,
+            // Shift
+            elliptic::BoundaryConditionType::Dirichlet,
+            elliptic::BoundaryConditionType::Dirichlet,
+            elliptic::BoundaryConditionType::Dirichlet};
   }
 
   void pup(PUP::er& p) override {
