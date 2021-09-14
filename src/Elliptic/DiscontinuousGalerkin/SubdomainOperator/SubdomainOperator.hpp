@@ -103,8 +103,8 @@ struct make_neighbor_mortars_tag_impl {
  * `elliptic::subdomain_preconditioners::MinusLaplacian`, where an auxiliary
  * Poisson system is used for preconditioning that doesn't have boundary
  * conditions set up in the domain. In these cases, the boundary conditions used
- * for the subdomain operator can be overridden with the
- * `override_boundary_conditions` argument in the constructor. Note that the
+ * for the subdomain operator can be overridden with the optional
+ * `override_boundary_conditions` argument to the `operator()`. Note that the
  * subdomain operator always applies the _linearized_ boundary conditions.
  *
  * \warning The subdomain operator hasn't been tested with periodic boundary
@@ -114,7 +114,6 @@ template <typename System, typename OptionsGroup,
           typename ArgsTagsFromCenter = tmpl::list<>>
 struct SubdomainOperator
     : LinearSolver::Schwarz::SubdomainOperator<System::volume_dim> {
- private:
   static constexpr size_t Dim = System::volume_dim;
 
   // Operator applications happen sequentially so we don't have to keep track of
@@ -188,11 +187,6 @@ struct SubdomainOperator
                                              tmpl::pin<tmpl::size_t<Dim>>>;
 
  public:
-  SubdomainOperator(std::optional<std::unique_ptr<BoundaryConditionsBase>>
-                        override_boundary_conditions = std::nullopt) noexcept
-      : override_boundary_conditions_(std::move(override_boundary_conditions)) {
-  }
-
   /// \warning This function is not thread-safe because it accesses mutable
   /// memory buffers.
   template <typename ResultTags, typename OperandTags, typename DbTagsList>
@@ -202,7 +196,11 @@ struct SubdomainOperator
           result,
       const LinearSolver::Schwarz::ElementCenteredSubdomainData<
           Dim, OperandTags>& operand,
-      const db::DataBox<DbTagsList>& box) const noexcept {
+      const db::DataBox<DbTagsList>& box,
+      const std::unordered_map<std::pair<size_t, Direction<Dim>>,
+                               const BoundaryConditionsBase&,
+                               boost::hash<std::pair<size_t, Direction<Dim>>>>&
+          override_boundary_conditions = {}) const noexcept {
     // Used to retrieve items out of the DataBox to forward to functions. This
     // replaces a long series of db::get calls.
     const auto get_items = [](const auto&... args) noexcept {
@@ -255,8 +253,7 @@ struct SubdomainOperator
 
     // Setup boundary conditions
     const auto apply_boundary_condition =
-        [&box, &local_domain = domain,
-         &override_boundary_conditions = override_boundary_conditions_](
+        [&box, &local_domain = domain, &override_boundary_conditions](
             const ElementId<Dim>& local_element_id,
             const Direction<Dim>& local_direction, auto is_overlap,
             const auto& map_keys, const auto... fields_and_fluxes) noexcept {
@@ -268,8 +265,20 @@ struct SubdomainOperator
               [&local_domain, &local_element_id, &local_direction,
                &override_boundary_conditions]() noexcept
               -> const BoundaryConditionsBase& {
-            if (override_boundary_conditions.has_value()) {
-              return **override_boundary_conditions;
+            if (not override_boundary_conditions.empty()) {
+              const auto found_overridden_boundary_conditions =
+                  override_boundary_conditions.find(
+                      {local_element_id.block_id(), local_direction});
+              ASSERT(found_overridden_boundary_conditions !=
+                         override_boundary_conditions.end(),
+                     "Overriding boundary conditions in subdomain operator, "
+                     "but none is available for block "
+                         << local_element_id.block_id() << " in direction "
+                         << local_direction
+                         << ". Have you missed this external boundary of the "
+                            "subdomain? If this is intentional, add support to "
+                            "elliptic::dg::SubdomainOperator.");
+              return found_overridden_boundary_conditions->second;
             }
             const auto& boundary_conditions =
                 local_domain.blocks()
@@ -618,14 +627,9 @@ struct SubdomainOperator
   }
 
   // NOLINTNEXTLINE(google-runtime-references)
-  void pup(PUP::er& p) noexcept {
-    p | override_boundary_conditions_;
-  }
+  void pup(PUP::er& /*p*/) noexcept {}
 
  private:
-  std::optional<std::unique_ptr<BoundaryConditionsBase>>
-      override_boundary_conditions_{};
-
   // Memory buffers for repeated operator applications
   mutable Variables<typename System::auxiliary_fields>
       central_auxiliary_vars_{};

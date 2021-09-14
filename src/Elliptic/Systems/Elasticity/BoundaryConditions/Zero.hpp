@@ -121,6 +121,11 @@ class Zero
       const noexcept override {
     return std::make_unique<Zero>(*this);
   }
+
+  std::vector<elliptic::BoundaryConditionType> boundary_condition_types()
+      const noexcept override {
+    return {Dim, BoundaryConditionType};
+  }
 };
 
 /// \cond

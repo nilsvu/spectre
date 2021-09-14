@@ -146,6 +146,11 @@ class LaserBeam
     return std::make_unique<LaserBeam>(*this);
   }
 
+  std::vector<elliptic::BoundaryConditionType> boundary_condition_types()
+      const noexcept override {
+    return {3, elliptic::BoundaryConditionType::Neumann};
+  }
+
   void pup(PUP::er& p) noexcept override {
     Base::pup(p);
     detail::LaserBeamImpl::pup(p);
