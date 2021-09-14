@@ -148,20 +148,17 @@ struct Residual : db::PrefixTag, db::SimpleTag {
 };
 
 /// Compute the residual \f$r=b - Ax\f$ from the `SourceTag` \f$b\f$ and the
-/// `db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo, FieldsTag>`
+/// `NonlinearSolver::Tags::OperatorAppliedTo<FieldsTag>`
 /// \f$Ax\f$.
 template <typename FieldsTag, typename SourceTag>
-struct ResidualCompute : db::add_tag_prefix<Residual, FieldsTag>,
-                         db::ComputeTag {
-  using base = db::add_tag_prefix<Residual, FieldsTag>;
-  using argument_tags =
-      tmpl::list<SourceTag, db::add_tag_prefix<OperatorAppliedTo, FieldsTag>>;
+struct ResidualCompute : Residual<FieldsTag>, db::ComputeTag {
+  using base = Residual<FieldsTag>;
+  using argument_tags = tmpl::list<SourceTag, OperatorAppliedTo<FieldsTag>>;
   using return_type = typename base::type;
-  static void function(
-      const gsl::not_null<return_type*> residual,
-      const typename SourceTag::type& source,
-      const typename db::add_tag_prefix<OperatorAppliedTo, FieldsTag>::type&
-          operator_applied_to_fields) noexcept {
+  static void function(const gsl::not_null<return_type*> residual,
+                       const typename SourceTag::type& source,
+                       const typename OperatorAppliedTo<FieldsTag>::type&
+                           operator_applied_to_fields) noexcept {
     *residual = source - operator_applied_to_fields;
   }
 };

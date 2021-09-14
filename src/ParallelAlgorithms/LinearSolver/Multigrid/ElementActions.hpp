@@ -114,15 +114,14 @@ struct InitializeElement {
 template <typename FieldsTag, typename OptionsGroup,
           typename ResidualIsMassiveTag, typename SourceTag>
 using SendResidualToCoarserGrid = Actions::SendFieldsToCoarserGrid<
-    tmpl::list<db::add_tag_prefix<LinearSolver::Tags::Residual, FieldsTag>>,
-    OptionsGroup, ResidualIsMassiveTag, tmpl::list<SourceTag>>;
+    tmpl::list<LinearSolver::Tags::Residual<FieldsTag>>, OptionsGroup,
+    ResidualIsMassiveTag, tmpl::list<SourceTag>>;
 
 template <size_t Dim, typename FieldsTag, typename OptionsGroup,
           typename SourceTag>
 using ReceiveResidualFromFinerGrid = Actions::ReceiveFieldsFromFinerGrid<
-    Dim,
-    tmpl::list<db::add_tag_prefix<LinearSolver::Tags::Residual, FieldsTag>>,
-    OptionsGroup, tmpl::list<SourceTag>>;
+    Dim, tmpl::list<LinearSolver::Tags::Residual<FieldsTag>>, OptionsGroup,
+    tmpl::list<SourceTag>>;
 
 // Once the residual from the finer grid has been received and stored in the
 // `SourceTag`, this action prepares the pre-smoothing that will determine
@@ -133,7 +132,7 @@ struct PreparePreSmoothing {
  private:
   using fields_tag = FieldsTag;
   using operator_applied_to_fields_tag =
-      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
+      LinearSolver::Tags::OperatorAppliedTo<fields_tag>;
   using source_tag = SourceTag;
 
  public:
@@ -179,12 +178,14 @@ struct PreparePreSmoothing {
           [](const auto volume_data, const auto& initial_fields,
              const auto& source) noexcept {
             volume_data->assign_subset(
-                Variables<db::wrap_tags_in<Tags::PreSmoothingInitial,
-                                           typename fields_tag::tags_list>>(
+                Variables<
+                    db::wrap_tags_in<Tags::PreSmoothingInitial,
+                                     typename fields_tag::type::tags_list>>(
                     initial_fields));
             volume_data->assign_subset(
-                Variables<db::wrap_tags_in<Tags::PreSmoothingSource,
-                                           typename fields_tag::tags_list>>(
+                Variables<
+                    db::wrap_tags_in<Tags::PreSmoothingSource,
+                                     typename fields_tag::type::tags_list>>(
                     source));
           },
           db::get<fields_tag>(box), db::get<source_tag>(box));
@@ -200,8 +201,7 @@ template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
 struct SkipPostsmoothingAtBottom {
  private:
   using fields_tag = FieldsTag;
-  using residual_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
+  using residual_tag = LinearSolver::Tags::Residual<fields_tag>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -223,12 +223,14 @@ struct SkipPostsmoothingAtBottom {
           [](const auto volume_data, const auto& result_fields,
              const auto& residuals) noexcept {
             volume_data->assign_subset(
-                Variables<db::wrap_tags_in<Tags::PreSmoothingResult,
-                                           typename fields_tag::tags_list>>(
+                Variables<
+                    db::wrap_tags_in<Tags::PreSmoothingResult,
+                                     typename fields_tag::type::tags_list>>(
                     result_fields));
             volume_data->assign_subset(
-                Variables<db::wrap_tags_in<Tags::PreSmoothingResidual,
-                                           typename fields_tag::tags_list>>(
+                Variables<
+                    db::wrap_tags_in<Tags::PreSmoothingResidual,
+                                     typename fields_tag::type::tags_list>>(
                     residuals));
           },
           db::get<fields_tag>(box), db::get<residual_tag>(box));
@@ -263,8 +265,7 @@ template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
 struct SendCorrectionToFinerGrid {
  private:
   using fields_tag = FieldsTag;
-  using residual_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
+  using residual_tag = LinearSolver::Tags::Residual<fields_tag>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -284,12 +285,14 @@ struct SendCorrectionToFinerGrid {
           [](const auto volume_data, const auto& result_fields,
              const auto& residuals) noexcept {
             volume_data->assign_subset(
-                Variables<db::wrap_tags_in<Tags::PostSmoothingResult,
-                                           typename fields_tag::tags_list>>(
+                Variables<
+                    db::wrap_tags_in<Tags::PostSmoothingResult,
+                                     typename fields_tag::type::tags_list>>(
                     result_fields));
             volume_data->assign_subset(
-                Variables<db::wrap_tags_in<Tags::PostSmoothingResidual,
-                                           typename fields_tag::tags_list>>(
+                Variables<
+                    db::wrap_tags_in<Tags::PostSmoothingResidual,
+                                     typename fields_tag::type::tags_list>>(
                     residuals));
           },
           db::get<fields_tag>(box), db::get<residual_tag>(box));
@@ -397,12 +400,14 @@ struct ReceiveCorrectionFromCoarserGrid {
           [](const auto volume_data, const auto& initial_fields,
              const auto& source) noexcept {
             volume_data->assign_subset(
-                Variables<db::wrap_tags_in<Tags::PostSmoothingInitial,
-                                           typename fields_tag::tags_list>>(
+                Variables<
+                    db::wrap_tags_in<Tags::PostSmoothingInitial,
+                                     typename fields_tag::type::tags_list>>(
                     initial_fields));
             volume_data->assign_subset(
-                Variables<db::wrap_tags_in<Tags::PostSmoothingSource,
-                                           typename fields_tag::tags_list>>(
+                Variables<
+                    db::wrap_tags_in<Tags::PostSmoothingSource,
+                                     typename fields_tag::type::tags_list>>(
                     source));
           },
           db::get<fields_tag>(box), db::get<source_tag>(box));

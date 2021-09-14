@@ -53,8 +53,8 @@ namespace elliptic::Actions {
 template <typename System, typename BackgroundTag>
 struct InitializeFixedSources {
  private:
-  using fixed_sources_tag = ::Tags::Variables<
-      db::wrap_tags_in<::Tags::FixedSource, typename System::primal_fields>>;
+  using fields_tag = ::Tags::Variables<typename System::primal_fields>;
+  using fixed_sources_tag = ::Tags::FixedSource<fields_tag>;
 
  public:
   using const_global_cache_tags = tmpl::list<elliptic::dg::Tags::Massive>;

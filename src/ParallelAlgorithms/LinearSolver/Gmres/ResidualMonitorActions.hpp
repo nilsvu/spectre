@@ -37,9 +37,8 @@ template <typename FieldsTag, typename OptionsGroup, typename BroadcastTarget>
 struct InitializeResidualMagnitude {
  private:
   using fields_tag = FieldsTag;
-  using initial_residual_magnitude_tag =
-      ::Tags::Initial<LinearSolver::Tags::Magnitude<
-          db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>>>;
+  using initial_residual_magnitude_tag = ::Tags::Initial<
+      LinearSolver::Tags::Magnitude<LinearSolver::Tags::Residual<fields_tag>>>;
   using orthogonalization_history_tag =
       LinearSolver::Tags::OrthogonalizationHistory<fields_tag>;
 
@@ -94,9 +93,8 @@ template <typename FieldsTag, typename OptionsGroup, typename BroadcastTarget>
 struct StoreOrthogonalization {
  private:
   using fields_tag = FieldsTag;
-  using initial_residual_magnitude_tag =
-      ::Tags::Initial<LinearSolver::Tags::Magnitude<
-          db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>>>;
+  using initial_residual_magnitude_tag = ::Tags::Initial<
+      LinearSolver::Tags::Magnitude<LinearSolver::Tags::Residual<fields_tag>>>;
   using orthogonalization_history_tag =
       LinearSolver::Tags::OrthogonalizationHistory<fields_tag>;
 

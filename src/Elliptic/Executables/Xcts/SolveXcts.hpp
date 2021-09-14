@@ -138,9 +138,9 @@ struct Metavariables {
   // first derivatives. These are background fields for the linearized sources.
   using fluxes_tag = ::Tags::Variables<typename system::primal_fluxes>;
   // These are the fixed sources, i.e. the RHS of the equations
-  using fixed_sources_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
+  using fixed_sources_tag = ::Tags::FixedSource<fields_tag>;
   using operator_applied_to_fields_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo, fields_tag>;
+      NonlinearSolver::Tags::OperatorAppliedTo<fields_tag>;
 
   using nonlinear_solver = NonlinearSolver::newton_raphson::NewtonRaphson<
       Metavariables, fields_tag, SolveXcts::OptionTags::NewtonRaphsonGroup,
@@ -189,13 +189,11 @@ struct Metavariables {
   // internal "operand" in every iteration of the algorithm.
   using correction_vars_tag = typename linear_solver::operand_tag;
   using operator_applied_to_correction_vars_tag =
-      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
-                         correction_vars_tag>;
+      LinearSolver::Tags::OperatorAppliedTo<correction_vars_tag>;
   // The correction fluxes can be stored in an arbitrary tag. We don't need to
   // access them anywhere, they're just a memory buffer for the linearized
   // operator.
-  using correction_fluxes_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Correction, fluxes_tag>;
+  using correction_fluxes_tag = NonlinearSolver::Tags::Correction<fluxes_tag>;
 
   using analytic_solution_fields = tmpl::append<typename system::primal_fields,
                                                 typename system::primal_fluxes>;

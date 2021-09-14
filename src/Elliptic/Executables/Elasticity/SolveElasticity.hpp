@@ -133,13 +133,13 @@ struct Metavariables {
   // These are the fields we solve for
   using fields_tag = ::Tags::Variables<typename system::primal_fields>;
   // These are the fixed sources, i.e. the RHS of the equations
-  using fixed_sources_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
+  using fixed_sources_tag = ::Tags::FixedSource<fields_tag>;
   // This is the linear operator applied to the fields. We'll only use it to
   // apply the operator to the initial guess, so an optimization would be to
   // re-use the `operator_applied_to_vars_tag` below. This optimization needs a
   // few minor changes to the parallel linear solver algorithm.
   using operator_applied_to_fields_tag =
-      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
+      LinearSolver::Tags::OperatorAppliedTo<fields_tag>;
 
   // The linear solver algorithm. We must use GMRES since the operator is
   // not guaranteed to be symmetric. It can be made symmetric by multiplying by
@@ -171,7 +171,7 @@ struct Metavariables {
   // internal "operand" in every iteration of the algorithm.
   using vars_tag = typename linear_solver::operand_tag;
   using operator_applied_to_vars_tag =
-      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, vars_tag>;
+      LinearSolver::Tags::OperatorAppliedTo<vars_tag>;
   // We'll buffer the corresponding fluxes in this tag, but won't actually need
   // to access them outside applying the operator
   using fluxes_vars_tag =

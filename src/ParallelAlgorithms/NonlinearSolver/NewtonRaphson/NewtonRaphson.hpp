@@ -38,7 +38,7 @@ namespace newton_raphson {
  * \f$\frac{\delta A_\mathrm{nonlinear}}{\delta x}(x_k) \delta x_k = r_k\f$.
  * Each step of the algorithm expects that \f$A_\mathrm{nonlinear}(x)\f$ is
  * computed and stored in the DataBox as
- * `db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo, FieldsTag>`.
+ * `NonlinearSolver::Tags::OperatorAppliedTo<FieldsTag>`.
  * To perform a solve, add the `solve` action list to an array parallel
  * component. Pass the actions that compute \f$A_\mathrm{nonlinear}(x)\f$ as
  * the first template parameter to `solve`. As the second template parameter,
@@ -79,8 +79,7 @@ namespace newton_raphson {
  * (see LinearSolver::multigrid::Multigrid).
  */
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup,
-          typename SourceTag =
-              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>,
+          typename SourceTag = ::Tags::FixedSource<FieldsTag>,
           typename ArraySectionIdTag = void>
 struct NewtonRaphson {
   using fields_tag = FieldsTag;
@@ -89,9 +88,8 @@ struct NewtonRaphson {
 
   using operand_tag = fields_tag;
   using linear_solver_fields_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
-  using linear_solver_source_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>;
+      NonlinearSolver::Tags::Correction<fields_tag>;
+  using linear_solver_source_tag = NonlinearSolver::Tags::Residual<fields_tag>;
 
   using component_list = tmpl::list<
       detail::ResidualMonitor<Metavariables, FieldsTag, OptionsGroup>>;

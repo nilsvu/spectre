@@ -26,7 +26,7 @@ namespace LinearSolver::gmres {
  * \details The only operation we need to supply to the algorithm is the
  * result of the operation \f$A(p)\f$ (see \ref LinearSolverGroup). Each step of
  * the algorithm expects that \f$A(q)\f$ is computed and stored in the DataBox
- * as `db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, operand_tag>`.
+ * as `LinearSolver::Tags::OperatorAppliedTo<operand_tag>`.
  * To perform a solve, add the `solve` action list to an array parallel
  * component. Pass the actions that compute \f$A(q)\f$, as well as any further
  * actions you wish to run in each step of the algorithm, as the first template
@@ -39,7 +39,7 @@ namespace LinearSolver::gmres {
  * preconditioner should approximately solve the linear problem \f$A(q)=b\f$
  * where \f$q\f$ is the `operand_tag` and \f$b\f$ is the
  * `preconditioner_source_tag`. Make sure the tag
- * `db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, operand_tag>`
+ * `LinearSolver::Tags::OperatorAppliedTo<operand_tag>`
  * is updated with the preconditioned result in each step of the algorithm, i.e.
  * that it is \f$A(q)\f$ where \f$q\f$ is the preconditioner's approximate
  * solution to \f$A(q)=b\f$. The preconditioner always begins at an initial
@@ -48,7 +48,7 @@ namespace LinearSolver::gmres {
  *
  * Note that the operand \f$q\f$ for which \f$A(q)\f$ needs to be computed is
  * not the field \f$x\f$ we are solving for but
- * `db::add_tag_prefix<LinearSolver::Tags::Operand, FieldsTag>`. This field is
+ * `LinearSolver::Tags::Operand<FieldsTag>`. This field is
  * initially set to the residual \f$q_0 = b - A(x_0)\f$ where \f$x_0\f$ is the
  * initial value of the `FieldsTag`.
  *
@@ -95,8 +95,7 @@ namespace LinearSolver::gmres {
  */
 template <typename Metavariables, typename FieldsTag, typename OptionsGroup,
           bool Preconditioned,
-          typename SourceTag =
-              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>,
+          typename SourceTag = ::Tags::FixedSource<FieldsTag>,
           typename ArraySectionIdTag = void>
 struct Gmres {
   using fields_tag = FieldsTag;
@@ -105,17 +104,15 @@ struct Gmres {
   static constexpr bool preconditioned = Preconditioned;
 
   /// Apply the linear operator to this tag in each iteration
-  using operand_tag = std::conditional_t<
-      Preconditioned,
-      db::add_tag_prefix<
-          LinearSolver::Tags::Preconditioned,
-          db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>>,
-      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>>;
+  using operand_tag =
+      std::conditional_t<Preconditioned,
+                         LinearSolver::Tags::Preconditioned<
+                             LinearSolver::Tags::Operand<fields_tag>>,
+                         LinearSolver::Tags::Operand<fields_tag>>;
 
   /// Invoke a linear solver on the `operand_tag` sourced by the
   /// `preconditioner_source_tag` before applying the operator in each step
-  using preconditioner_source_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+  using preconditioner_source_tag = LinearSolver::Tags::Operand<fields_tag>;
 
   /*!
    * \brief The parallel components used by the GMRES linear solver

@@ -152,15 +152,16 @@ struct PrepareAndSendMortarData<
     tmpl::list<FluxesArgsTags...>, tmpl::list<SourcesArgsTags...>> {
  private:
   static constexpr size_t Dim = System::volume_dim;
-  using all_mortar_data_tag = ::Tags::Mortars<
-      elliptic::dg::Tags::MortarData<typename TemporalIdTag::type,
-                                     typename PrimalMortarFieldsTag::tags_list,
-                                     typename PrimalMortarFluxesTag::tags_list>,
-      Dim>;
+  using all_mortar_data_tag =
+      ::Tags::Mortars<elliptic::dg::Tags::MortarData<
+                          typename TemporalIdTag::type,
+                          typename PrimalMortarFieldsTag::type::tags_list,
+                          typename PrimalMortarFluxesTag::type::tags_list>,
+                      Dim>;
   using mortar_data_inbox_tag =
       MortarDataInboxTag<Dim, TemporalIdTag,
-                         typename PrimalMortarFieldsTag::tags_list,
-                         typename PrimalMortarFluxesTag::tags_list>;
+                         typename PrimalMortarFieldsTag::type::tags_list,
+                         typename PrimalMortarFluxesTag::type::tags_list>;
   using BoundaryConditionsBase = typename System::boundary_conditions_base;
 
  public:
@@ -335,15 +336,16 @@ struct ReceiveMortarDataAndApplyOperator<
     tmpl::list<FluxesArgsTags...>, tmpl::list<SourcesArgsTags...>> {
  private:
   static constexpr size_t Dim = System::volume_dim;
-  using all_mortar_data_tag = ::Tags::Mortars<
-      elliptic::dg::Tags::MortarData<typename TemporalIdTag::type,
-                                     typename PrimalMortarFieldsTag::tags_list,
-                                     typename PrimalMortarFluxesTag::tags_list>,
-      Dim>;
+  using all_mortar_data_tag =
+      ::Tags::Mortars<elliptic::dg::Tags::MortarData<
+                          typename TemporalIdTag::type,
+                          typename PrimalMortarFieldsTag::type::tags_list,
+                          typename PrimalMortarFluxesTag::type::tags_list>,
+                      Dim>;
   using mortar_data_inbox_tag =
       MortarDataInboxTag<Dim, TemporalIdTag,
-                         typename PrimalMortarFieldsTag::tags_list,
-                         typename PrimalMortarFluxesTag::tags_list>;
+                         typename PrimalMortarFieldsTag::type::tags_list,
+                         typename PrimalMortarFluxesTag::type::tags_list>;
 
  public:
   using const_global_cache_tags =

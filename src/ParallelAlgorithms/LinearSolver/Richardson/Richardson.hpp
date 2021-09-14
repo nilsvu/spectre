@@ -37,8 +37,7 @@ namespace detail {
 template <typename FieldsTag, typename OptionsGroup, typename SourceTag>
 struct UpdateFields {
  private:
-  using residual_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Residual, FieldsTag>;
+  using residual_tag = LinearSolver::Tags::Residual<FieldsTag>;
 
  public:
   using const_global_cache_tags =
@@ -108,8 +107,7 @@ struct UpdateFields {
  * norms over all elements in the array.
  */
 template <typename FieldsTag, typename OptionsGroup,
-          typename SourceTag =
-              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>,
+          typename SourceTag = ::Tags::FixedSource<FieldsTag>,
           typename ArraySectionIdTag = void>
 struct Richardson {
   using fields_tag = FieldsTag;

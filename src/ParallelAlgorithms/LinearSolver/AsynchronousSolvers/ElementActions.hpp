@@ -141,10 +141,9 @@ struct InitializeElement {
  private:
   using fields_tag = FieldsTag;
   using operator_applied_to_fields_tag =
-      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
+      LinearSolver::Tags::OperatorAppliedTo<fields_tag>;
   using source_tag = SourceTag;
-  using residual_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
+  using residual_tag = LinearSolver::Tags::Residual<fields_tag>;
   using residual_magnitude_square_tag =
       LinearSolver::Tags::MagnitudeSquare<residual_tag>;
 
@@ -211,7 +210,7 @@ using RegisterElement = observers::Actions::RegisterWithObservers<
  * This action resets the asynchronous linear solver to its initial state, and
  * optionally observes the initial residual. If the initial residual should be
  * observed, both the `SourceTag` as well as the
- * `db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, FieldsTag>`
+ * `LinearSolver::Tags::OperatorAppliedTo<FieldsTag>`
  * must be up-to-date at the time this action is invoked.
  *
  * This action also provides an anchor point in the action list for looping the
@@ -240,8 +239,7 @@ template <typename FieldsTag, typename OptionsGroup, typename SourceTag,
 struct PrepareSolve {
  private:
   using fields_tag = FieldsTag;
-  using residual_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Residual, FieldsTag>;
+  using residual_tag = LinearSolver::Tags::Residual<FieldsTag>;
 
  public:
   using const_global_cache_tags =
@@ -309,7 +307,7 @@ struct PrepareSolve {
  *
  * This action prepares the next step of the asynchronous linear solver, and
  * observes the residual. To observe the correct residual, make sure the
- * `db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, FieldsTag>` is
+ * `LinearSolver::Tags::OperatorAppliedTo<FieldsTag>` is
  * up-to-date at the time this action is invoked.
  *
  * This action checks if the algorithm has converged, i.e. it has completed the
@@ -338,8 +336,7 @@ template <typename FieldsTag, typename OptionsGroup, typename SourceTag,
 struct CompleteStep {
  private:
   using fields_tag = FieldsTag;
-  using residual_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
+  using residual_tag = LinearSolver::Tags::Residual<fields_tag>;
 
  public:
   using const_global_cache_tags =

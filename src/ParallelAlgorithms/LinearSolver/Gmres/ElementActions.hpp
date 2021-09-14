@@ -56,12 +56,11 @@ template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
 struct PrepareSolve {
  private:
   using fields_tag = FieldsTag;
-  using initial_fields_tag = db::add_tag_prefix<::Tags::Initial, fields_tag>;
+  using initial_fields_tag = ::Tags::Initial<fields_tag>;
   using source_tag = SourceTag;
   using operator_applied_to_fields_tag =
-      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, fields_tag>;
-  using operand_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+      LinearSolver::Tags::OperatorAppliedTo<fields_tag>;
+  using operand_tag = LinearSolver::Tags::Operand<fields_tag>;
   using basis_history_tag =
       LinearSolver::Tags::KrylovSubspaceBasis<operand_tag>;
 
@@ -123,7 +122,7 @@ struct PrepareSolve {
 
     if constexpr (Preconditioned) {
       using preconditioned_operand_tag =
-          db::add_tag_prefix<LinearSolver::Tags::Preconditioned, operand_tag>;
+          LinearSolver::Tags::Preconditioned<operand_tag>;
       using preconditioned_basis_history_tag =
           LinearSolver::Tags::KrylovSubspaceBasis<preconditioned_operand_tag>;
 
@@ -144,8 +143,7 @@ template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
 struct NormalizeInitialOperand {
  private:
   using fields_tag = FieldsTag;
-  using operand_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+  using operand_tag = LinearSolver::Tags::Operand<fields_tag>;
   using basis_history_tag =
       LinearSolver::Tags::KrylovSubspaceBasis<operand_tag>;
 
@@ -257,14 +255,12 @@ struct PrepareStep {
 
     if constexpr (Preconditioned) {
       using fields_tag = FieldsTag;
-      using operand_tag =
-          db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+      using operand_tag = LinearSolver::Tags::Operand<fields_tag>;
       using preconditioned_operand_tag =
-          db::add_tag_prefix<LinearSolver::Tags::Preconditioned, operand_tag>;
-      using operator_tag = db::add_tag_prefix<
-          LinearSolver::Tags::OperatorAppliedTo,
-          std::conditional_t<Preconditioned, preconditioned_operand_tag,
-                             operand_tag>>;
+          LinearSolver::Tags::Preconditioned<operand_tag>;
+      using operator_tag =
+          LinearSolver::Tags::OperatorAppliedTo<std::conditional_t<
+              Preconditioned, preconditioned_operand_tag, operand_tag>>;
 
       db::mutate<preconditioned_operand_tag, operator_tag>(
           make_not_null(&box),
@@ -298,10 +294,9 @@ template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
 struct PerformStep {
  private:
   using fields_tag = FieldsTag;
-  using operand_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+  using operand_tag = LinearSolver::Tags::Operand<fields_tag>;
   using preconditioned_operand_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Preconditioned, operand_tag>;
+      LinearSolver::Tags::Preconditioned<operand_tag>;
 
  public:
   using const_global_cache_tags =
@@ -340,10 +335,9 @@ struct PerformStep {
                        Options::name<OptionsGroup>(), iteration_id);
     }
 
-    using operator_tag = db::add_tag_prefix<
-        LinearSolver::Tags::OperatorAppliedTo,
-        std::conditional_t<Preconditioned, preconditioned_operand_tag,
-                           operand_tag>>;
+    using operator_tag =
+        LinearSolver::Tags::OperatorAppliedTo<std::conditional_t<
+            Preconditioned, preconditioned_operand_tag, operand_tag>>;
     using orthogonalization_iteration_id_tag =
         LinearSolver::Tags::Orthogonalization<
             Convergence::Tags::IterationId<OptionsGroup>>;
@@ -402,8 +396,7 @@ template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
 struct OrthogonalizeOperand {
  private:
   using fields_tag = FieldsTag;
-  using operand_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+  using operand_tag = LinearSolver::Tags::Operand<fields_tag>;
   using orthogonalization_iteration_id_tag =
       LinearSolver::Tags::Orthogonalization<
           Convergence::Tags::IterationId<OptionsGroup>>;
@@ -486,11 +479,10 @@ template <typename FieldsTag, typename OptionsGroup, bool Preconditioned,
 struct NormalizeOperandAndUpdateField {
  private:
   using fields_tag = FieldsTag;
-  using initial_fields_tag = db::add_tag_prefix<::Tags::Initial, fields_tag>;
-  using operand_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Operand, fields_tag>;
+  using initial_fields_tag = ::Tags::Initial<fields_tag>;
+  using operand_tag = LinearSolver::Tags::Operand<fields_tag>;
   using preconditioned_operand_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Preconditioned, operand_tag>;
+      LinearSolver::Tags::Preconditioned<operand_tag>;
   using basis_history_tag =
       LinearSolver::Tags::KrylovSubspaceBasis<operand_tag>;
   using preconditioned_basis_history_tag =

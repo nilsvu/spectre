@@ -74,11 +74,10 @@ struct InitializeElement {
   using fields_tag = FieldsTag;
   using source_tag = SourceTag;
   using nonlinear_operator_applied_to_fields_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::OperatorAppliedTo, fields_tag>;
-  using correction_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
+      NonlinearSolver::Tags::OperatorAppliedTo<fields_tag>;
+  using correction_tag = NonlinearSolver::Tags::Correction<fields_tag>;
   using globalization_fields_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Globalization, fields_tag>;
+      NonlinearSolver::Tags::Globalization<fields_tag>;
 
  public:
   using simple_tags =
@@ -119,8 +118,7 @@ template <typename FieldsTag, typename OptionsGroup, typename Label,
 struct PrepareSolve {
  private:
   using fields_tag = FieldsTag;
-  using nonlinear_residual_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>;
+  using nonlinear_residual_tag = NonlinearSolver::Tags::Residual<fields_tag>;
 
  public:
   using const_global_cache_tags =
@@ -176,8 +174,7 @@ template <typename FieldsTag, typename OptionsGroup, typename Label,
 struct SendInitialResidualMagnitude {
  private:
   using fields_tag = FieldsTag;
-  using nonlinear_residual_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>;
+  using nonlinear_residual_tag = NonlinearSolver::Tags::Residual<fields_tag>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -305,12 +302,11 @@ template <typename FieldsTag, typename OptionsGroup, typename Label,
 struct PrepareStep {
  private:
   using fields_tag = FieldsTag;
-  using correction_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
+  using correction_tag = NonlinearSolver::Tags::Correction<fields_tag>;
   using linear_operator_applied_to_correction_tag =
-      db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, correction_tag>;
+      LinearSolver::Tags::OperatorAppliedTo<correction_tag>;
   using globalization_fields_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Globalization, fields_tag>;
+      NonlinearSolver::Tags::Globalization<fields_tag>;
 
  public:
   using const_global_cache_tags =
@@ -380,10 +376,9 @@ template <typename FieldsTag, typename OptionsGroup, typename Label,
 struct PerformStep {
  private:
   using fields_tag = FieldsTag;
-  using correction_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Correction, fields_tag>;
+  using correction_tag = NonlinearSolver::Tags::Correction<fields_tag>;
   using globalization_fields_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Globalization, fields_tag>;
+      NonlinearSolver::Tags::Globalization<fields_tag>;
 
  public:
   using const_global_cache_tags =
@@ -450,8 +445,7 @@ template <typename FieldsTag, typename OptionsGroup, typename Label,
 struct ContributeToResidualMagnitudeReduction {
  private:
   using fields_tag = FieldsTag;
-  using nonlinear_residual_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>;
+  using nonlinear_residual_tag = NonlinearSolver::Tags::Residual<fields_tag>;
 
  public:
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,

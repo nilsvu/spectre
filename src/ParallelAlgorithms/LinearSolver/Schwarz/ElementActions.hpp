@@ -180,12 +180,12 @@ struct SubdomainDataBufferTag : db::SimpleTag {
 
 // Allow factory-creating any of these serial linear solvers for use as
 // subdomain solver
-template <typename FieldsTag, typename SubdomainOperator,
-          typename SubdomainPreconditioners,
-          typename SubdomainData = ElementCenteredSubdomainData<
-              SubdomainOperator::volume_dim,
-              typename db::add_tag_prefix<LinearSolver::Tags::Residual,
-                                          FieldsTag>::tags_list>>
+template <
+    typename FieldsTag, typename SubdomainOperator,
+    typename SubdomainPreconditioners,
+    typename SubdomainData = ElementCenteredSubdomainData<
+        SubdomainOperator::volume_dim,
+        typename LinearSolver::Tags::Residual<FieldsTag>::type::tags_list>>
 using subdomain_solver = LinearSolver::Serial::LinearSolver<tmpl::append<
     tmpl::list<::LinearSolver::Serial::Registrars::Gmres<SubdomainData>,
                ::LinearSolver::Serial::Registrars::ExplicitInverse>,
@@ -196,11 +196,10 @@ template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
 struct InitializeElement {
  private:
   using fields_tag = FieldsTag;
-  using residual_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
+  using residual_tag = LinearSolver::Tags::Residual<fields_tag>;
   static constexpr size_t Dim = SubdomainOperator::volume_dim;
   using SubdomainData =
-      ElementCenteredSubdomainData<Dim, typename residual_tag::tags_list>;
+      ElementCenteredSubdomainData<Dim, typename residual_tag::type::tags_list>;
   using subdomain_solver_tag = Tags::SubdomainSolver<
       std::unique_ptr<subdomain_solver<FieldsTag, SubdomainOperator,
                                        SubdomainPreconditioners>>,
@@ -286,8 +285,7 @@ struct InitializeElement {
 // element and send the data to those elements
 template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
 using SendOverlapData = LinearSolver::Schwarz::Actions::SendOverlapFields<
-    tmpl::list<db::add_tag_prefix<LinearSolver::Tags::Residual, FieldsTag>>,
-    OptionsGroup, true>;
+    tmpl::list<LinearSolver::Tags::Residual<FieldsTag>>, OptionsGroup, true>;
 
 template <size_t Dim, typename OptionsGroup, typename OverlapSolution>
 struct OverlapSolutionInboxTag
@@ -307,14 +305,13 @@ template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
 struct SolveSubdomain {
  private:
   using fields_tag = FieldsTag;
-  using residual_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
+  using residual_tag = LinearSolver::Tags::Residual<fields_tag>;
   static constexpr size_t Dim = SubdomainOperator::volume_dim;
   using overlap_residuals_inbox_tag =
       Actions::detail::OverlapFieldsTag<Dim, tmpl::list<residual_tag>,
                                         OptionsGroup>;
   using SubdomainData =
-      ElementCenteredSubdomainData<Dim, typename residual_tag::tags_list>;
+      ElementCenteredSubdomainData<Dim, typename residual_tag::type::tags_list>;
   using OverlapData = typename SubdomainData::OverlapData;
   using overlap_solution_inbox_tag =
       OverlapSolutionInboxTag<Dim, OptionsGroup, OverlapData>;
@@ -465,11 +462,10 @@ template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
 struct ReceiveOverlapSolution {
  private:
   using fields_tag = FieldsTag;
-  using residual_tag =
-      db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
+  using residual_tag = LinearSolver::Tags::Residual<fields_tag>;
   static constexpr size_t Dim = SubdomainOperator::volume_dim;
   using SubdomainData =
-      ElementCenteredSubdomainData<Dim, typename residual_tag::tags_list>;
+      ElementCenteredSubdomainData<Dim, typename residual_tag::type::tags_list>;
   using OverlapSolution = typename SubdomainData::OverlapData;
   using overlap_solution_inbox_tag =
       OverlapSolutionInboxTag<Dim, OptionsGroup, OverlapSolution>;

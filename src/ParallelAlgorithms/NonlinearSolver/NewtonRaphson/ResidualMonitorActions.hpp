@@ -33,8 +33,7 @@ namespace NonlinearSolver::newton_raphson::detail {
 template <typename FieldsTag, typename OptionsGroup, typename BroadcastTarget>
 struct CheckResidualMagnitude {
   using fields_tag = FieldsTag;
-  using residual_tag =
-      db::add_tag_prefix<NonlinearSolver::Tags::Residual, fields_tag>;
+  using residual_tag = NonlinearSolver::Tags::Residual<fields_tag>;
   using residual_magnitude_square_tag =
       LinearSolver::Tags::MagnitudeSquare<residual_tag>;
   using initial_residual_magnitude_tag =

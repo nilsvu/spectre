@@ -33,7 +33,7 @@ namespace LinearSolver::Schwarz {
  * This linear solver relies on an implementation of the global linear operator
  * \f$A(x)\f$ and its restriction to a subdomain \f$A_{ss}(x)\f$. Each step of
  * the algorithm expects that \f$A(x)\f$ is computed and stored in the DataBox
- * as `db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo, operand_tag>`.
+ * as `LinearSolver::Tags::OperatorAppliedTo<operand_tag>`.
  * To perform a solve, add the `solve` action list to an array parallel
  * component. Pass the actions that compute \f$A(x)\f$, as well as any further
  * actions you wish to run in each step of the algorithm, as the first template
@@ -47,7 +47,8 @@ namespace LinearSolver::Schwarz {
  * The image below gives an overview of the structure of an element-centered
  * subdomain:
  *
- * \image html subdomain_structure.svg "Fig. 1: An element-centered subdomain" width=600px
+ * \image html subdomain_structure.svg "Fig. 1: An element-centered subdomain"
+ * width=600px
  *
  * Fig. 1 shows part of a 2-dimensional computational domain. The domain is
  * composed of elements (light gray) that each carry a Legendre-Gauss-Lobatto
@@ -151,8 +152,7 @@ namespace LinearSolver::Schwarz {
  */
 template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator,
           typename SubdomainPreconditioners = tmpl::list<>,
-          typename SourceTag =
-              db::add_tag_prefix<::Tags::FixedSource, FieldsTag>,
+          typename SourceTag = ::Tags::FixedSource<FieldsTag>,
           typename ArraySectionIdTag = void>
 struct Schwarz {
   using operand_tag = FieldsTag;
