@@ -36,7 +36,7 @@ DomainCreator:
     BoundaryConditions:
       InnerBoundary:
         AnalyticSolution:
-          ConformalFactor: Dirichlet
+          ConformalFactor: Neumann
           LapseTimesConformalFactor: Dirichlet
           ShiftExcess: Dirichlet
       OuterBoundary:
@@ -68,7 +68,7 @@ NonlinearSolver:
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
-      MaxIterations: 2
+      MaxIterations: 20
       RelativeResidual: 1.e-4
       AbsoluteResidual: 1.e-12
     Verbosity: Quiet
@@ -86,7 +86,7 @@ LinearSolver:
     SubdomainSolver:
       Gmres:
         ConvergenceCriteria:
-          MaxIterations: 3
+          MaxIterations: 100
           RelativeResidual: 1.e-4
           AbsoluteResidual: 1.e-12
         Verbosity: Silent
@@ -94,6 +94,7 @@ LinearSolver:
         Preconditioner:
           MinusLaplacian:
             Solver: ExplicitInverse
+            BoundaryConditions: Auto
     SkipResets: True
     ObservePerCoreReductions: False
 

@@ -10,6 +10,7 @@
 
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
+#include "Elliptic/BoundaryConditions/BoundaryConditionType.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
 #include "Utilities/Gsl.hpp"
@@ -135,6 +136,11 @@ class Flatness
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition> get_clone()
       const noexcept override {
     return std::make_unique<Flatness>(*this);
+  }
+
+  std::vector<elliptic::BoundaryConditionType> boundary_condition_types()
+      const noexcept override {
+    return {5, elliptic::BoundaryConditionType::Dirichlet};
   }
 };
 
