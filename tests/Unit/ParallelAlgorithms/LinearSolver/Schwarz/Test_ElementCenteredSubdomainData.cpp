@@ -75,6 +75,10 @@ SPECTRE_TEST_CASE("Unit.ParallelSchwarz.ElementCenteredSubdomainData",
     subdomain_data1 /= 2.;
     CHECK(subdomain_data1 == subdomain_data_half);
   }
+  SECTION("Scalar assignment") {
+    subdomain_data1 = 2.;
+    CHECK(subdomain_data1 == make_subdomain_data({2., 2., 2.}, {2., 2.}, {2.}));
+  }
   SECTION("Iterate raw data") {
     CAPTURE(subdomain_data1);
     CAPTURE(subdomain_data2);
