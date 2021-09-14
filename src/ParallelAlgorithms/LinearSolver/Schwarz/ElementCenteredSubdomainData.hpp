@@ -138,6 +138,16 @@ struct ElementCenteredSubdomainData {
     return *this;
   }
 
+  ElementCenteredSubdomainData& operator=(const double scalar) noexcept {
+    element_data = scalar;
+    for (auto& [overlap_id, data] : overlap_data) {
+      data = scalar;
+      // Silence unused-variable warning on GCC 7
+      (void)overlap_id;
+    }
+    return *this;
+  }
+
   ElementData element_data{};
   OverlapMap<Dim, OverlapData> overlap_data{};
 };
