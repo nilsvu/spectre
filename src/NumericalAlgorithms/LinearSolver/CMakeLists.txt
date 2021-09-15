@@ -30,6 +30,7 @@ target_link_libraries(
   Blas
   Convergence
   DataStructures
+  Eigen3::Eigen
   ErrorHandling
   Logging
   Options

@@ -102,6 +102,7 @@ include(SetupBlas)
 include(SetupLapack)
 include(SetupLIBXSMM)
 
+include(SetupEigen)
 include(SetupBlaze)
 include(SetupBrigand)
 include(SetupGoogleBenchmark)
