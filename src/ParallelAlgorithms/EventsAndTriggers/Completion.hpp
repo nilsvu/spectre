@@ -47,6 +47,6 @@ class Completion : public Event {
     return true;
   }
 
-  bool needs_evolved_variables() const noexcept override { return false; }
+  bool needs_evolved_variables() const noexcept override;
 };
 }  // namespace Events
