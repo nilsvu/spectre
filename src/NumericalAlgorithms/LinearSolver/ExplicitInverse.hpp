@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <Eigen/IterativeLinearSolvers>
 #include <algorithm>
 #include <cstddef>
 #include <vector>
@@ -13,10 +14,13 @@
 #include "NumericalAlgorithms/LinearSolver/LinearSolver.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
+#include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TypeTraits/CreateIsCallable.hpp"
+
+#include "Parallel/Printf.hpp"
 
 namespace LinearSolver::Serial {
 
@@ -83,8 +87,16 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
       "cost, but all subsequent solves converge immediately.";
 
   ExplicitInverse() = default;
-  ExplicitInverse(const ExplicitInverse& /*rhs*/) = default;
-  ExplicitInverse& operator=(const ExplicitInverse& /*rhs*/) = default;
+  ExplicitInverse(const ExplicitInverse& rhs) noexcept { *this = rhs; };
+  ExplicitInverse& operator=(const ExplicitInverse& rhs) noexcept {
+    size_ = rhs.size_;
+    // TODO: copy ILU
+    if (size_ != std::numeric_limits<size_t>::max()) {
+      source_workspace_.resize(static_cast<Eigen::Index>(size_));
+      solution_workspace_.resize(static_cast<Eigen::Index>(size_));
+    }
+    return *this;
+  };
   ExplicitInverse(ExplicitInverse&& /*rhs*/) = default;
   ExplicitInverse& operator=(ExplicitInverse&& /*rhs*/) = default;
   ~ExplicitInverse() = default;
@@ -129,17 +141,18 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
 
   /// The matrix representation of the solver. This matrix approximates the
   /// inverse of the subdomain operator.
-  const DenseMatrix<double>& matrix_representation() const noexcept {
-    return inverse_;
-  }
+  // const DenseMatrix<double>& matrix_representation() const noexcept {
+  //   return inverse_;
+  // }
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) noexcept override {
     p | size_;
-    p | inverse_;
+    // TODO: serialize ILU
+    // ilu_.compute(operator_matrix_);
     if (p.isUnpacking() and size_ != std::numeric_limits<size_t>::max()) {
-      source_workspace_.resize(size_);
-      solution_workspace_.resize(size_);
+      source_workspace_.resize(static_cast<Eigen::Index>(size_));
+      solution_workspace_.resize(static_cast<Eigen::Index>(size_));
     }
   }
 
@@ -150,11 +163,11 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
  private:
   // Caches for successive solves of the same operator
   mutable size_t size_ = std::numeric_limits<size_t>::max();
-  mutable DenseMatrix<double, blaze::columnMajor> inverse_{};
+  mutable Eigen::IncompleteLUT<double> ilu_{};
 
   // Buffers to avoid re-allocating memory for applying the operator
-  mutable DenseVector<double> source_workspace_{};
-  mutable DenseVector<double> solution_workspace_{};
+  mutable Eigen::VectorXd source_workspace_{};
+  mutable Eigen::VectorXd solution_workspace_{};
 };
 
 template <typename LinearSolverRegistrars>
@@ -167,14 +180,15 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
   if (UNLIKELY(size_ == std::numeric_limits<size_t>::max())) {
     const auto& used_for_size = source;
     size_ = used_for_size.size();
-    source_workspace_.resize(size_);
-    solution_workspace_.resize(size_);
-    inverse_.resize(size_, size_);
+    source_workspace_.resize(static_cast<Eigen::Index>(size_));
+    solution_workspace_.resize(static_cast<Eigen::Index>(size_));
+    // operator_matrix_.resize(size_, size_);
     // Construct explicit matrix representation by "sniffing out" the operator,
     // i.e. feeding it unit vectors
     auto unit_vector = make_with_value<VarsType>(used_for_size, 0.);
     auto result_buffer = make_with_value<SourceType>(used_for_size, 0.);
-    auto& operator_matrix = inverse_;
+    Eigen::SparseMatrix<double> operator_matrix{
+        static_cast<Eigen::Index>(size_), static_cast<Eigen::Index>(size_)};
     size_t i = 0;
     // Re-using the iterators for all operator invocations
     auto result_iterator_begin = result_buffer.begin();
@@ -199,25 +213,31 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
         result_iterator_end = result_buffer.end();
       }
       // Store the result in column i of the matrix
-      std::copy(result_iterator_begin, result_iterator_end,
-                column(operator_matrix, i).begin());
+      for (size_t j = 0; j < size_; ++j) {
+        if (not equal_within_roundoff(*result_iterator_begin, 0.)) {
+          operator_matrix.insert(static_cast<Eigen::Index>(j),
+                                 static_cast<Eigen::Index>(i)) =
+              *result_iterator_begin;
+        }
+        ++result_iterator_begin;
+      }
       ++i;
     }
-    // Directly invert the matrix
-    try {
-      blaze::invert(inverse_);
-    } catch (const std::invalid_argument& e) {
-      ERROR("Could not invert subdomain matrix (size " << size_
-                                                       << "): " << e.what());
-    }
+    operator_matrix.makeCompressed();
+    Parallel::printf("Fillin: %f\n",
+                     static_cast<double>(operator_matrix.nonZeros()) /
+                         square(static_cast<double>(size_)));
+    ilu_.compute(operator_matrix);
+    // We could free the operator matrix at this point, if we could serialize
+    // and copy the ILU class directly.
   }
   // Copy source into contiguous workspace. In cases where the source and
   // solution data are already stored contiguously we might avoid the copy and
   // the associated workspace memory. However, compared to the cost of building
   // and storing the matrix this is likely insignificant.
   std::copy(source.begin(), source.end(), source_workspace_.begin());
-  // Apply inverse
-  solution_workspace_ = inverse_ * source_workspace_;
+  // Apply (approximate) inverse
+  solution_workspace_ = ilu_.solve(source_workspace_);
   // Reconstruct solution data from contiguous workspace
   std::copy(solution_workspace_.begin(), solution_workspace_.end(),
             solution->begin());
