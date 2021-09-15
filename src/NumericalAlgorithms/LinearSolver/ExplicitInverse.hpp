@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <Eigen/IterativeLinearSolvers>
 #include <algorithm>
 #include <cstddef>
 #include <tuple>
@@ -10,11 +11,14 @@
 
 #include "DataStructures/DynamicMatrix.hpp"
 #include "DataStructures/DynamicVector.hpp"
+#include "IO/Logging/Verbosity.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
 #include "NumericalAlgorithms/LinearSolver/BuildMatrix.hpp"
 #include "NumericalAlgorithms/LinearSolver/LinearSolver.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
+#include "Parallel/Printf.hpp"
+#include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeWithValue.hpp"
@@ -73,17 +77,79 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
   using Base = LinearSolver<LinearSolverRegistrars>;
 
  public:
-  using options = tmpl::list<>;
+  struct FillFactor {
+    using type = size_t;
+    static constexpr Options::String help =
+        "Compute an incomplete LU factorization of the operator matrix that "
+        "has an approximate fill-in of this factor times the fill-in of the "
+        "operator matrix. For example, if 10% of the entries in the operator "
+        "matrix are non-zero, then a fill-factor of 2 means that ~20% of the "
+        "entries in the LU-factorization are non-zero. A reasonable "
+        "fill-factor is problem-dependent. A large factor means the "
+        "LU-factorization approximates the operator matrix better, hence "
+        "reducing the number of iterations if this solver is used as a "
+        "preconditioner. A small factor means the LU-factorization is "
+        "more sparse, hence reducing the cost to apply this solver. Often, "
+        "even a fill-factor of only 1 provides sufficient preconditioning and "
+        "minimizes the cost to apply the preconditioner.";
+  };
+  struct Verbosity {
+    using type = ::Verbosity;
+    static constexpr Options::String help = "Logging verbosity";
+  };
+  using options = tmpl::list<FillFactor, Verbosity>;
   static constexpr Options::String help =
       "Build a matrix representation of the linear operator and invert it "
       "directly. This means that the first solve has a large initialization "
       "cost, but all subsequent solves converge immediately.";
 
   ExplicitInverse() = default;
-  ExplicitInverse(const ExplicitInverse& /*rhs*/) = default;
-  ExplicitInverse& operator=(const ExplicitInverse& /*rhs*/) = default;
-  ExplicitInverse(ExplicitInverse&& /*rhs*/) = default;
-  ExplicitInverse& operator=(ExplicitInverse&& /*rhs*/) = default;
+  explicit ExplicitInverse(const size_t fillin, const ::Verbosity verbosity)
+      : fillin_(fillin), verbosity_(verbosity) {}
+  ExplicitInverse(const ExplicitInverse& rhs) : Base(rhs) {
+    fillin_ = rhs.fillin_;
+    verbosity_ = rhs.verbosity_;
+    size_ = rhs.size_;
+    // TODO: copy ILU
+    if (size_ != std::numeric_limits<size_t>::max()) {
+      source_workspace_.resize(static_cast<Eigen::Index>(size_));
+      solution_workspace_.resize(static_cast<Eigen::Index>(size_));
+    }
+  };
+  ExplicitInverse& operator=(const ExplicitInverse& rhs) {
+    Base::operator=(rhs);
+    fillin_ = rhs.fillin_;
+    verbosity_ = rhs.verbosity_;
+    size_ = rhs.size_;
+    // TODO: copy ILU
+    if (size_ != std::numeric_limits<size_t>::max()) {
+      source_workspace_.resize(static_cast<Eigen::Index>(size_));
+      solution_workspace_.resize(static_cast<Eigen::Index>(size_));
+    }
+    return *this;
+  };
+  ExplicitInverse(ExplicitInverse&& rhs) : Base(rhs) {
+    fillin_ = rhs.fillin_;
+    verbosity_ = rhs.verbosity_;
+    size_ = rhs.size_;
+    // TODO: copy ILU
+    if (size_ != std::numeric_limits<size_t>::max()) {
+      source_workspace_.resize(static_cast<Eigen::Index>(size_));
+      solution_workspace_.resize(static_cast<Eigen::Index>(size_));
+    }
+  };
+  ExplicitInverse& operator=(ExplicitInverse&& rhs) {
+    Base::operator=(rhs);
+    fillin_ = rhs.fillin_;
+    verbosity_ = rhs.verbosity_;
+    size_ = rhs.size_;
+    // TODO: copy ILU
+    if (size_ != std::numeric_limits<size_t>::max()) {
+      source_workspace_.resize(static_cast<Eigen::Index>(size_));
+      solution_workspace_.resize(static_cast<Eigen::Index>(size_));
+    }
+    return *this;
+  };
   ~ExplicitInverse() = default;
 
   /// \cond
@@ -123,18 +189,21 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
 
   /// The matrix representation of the solver. This matrix approximates the
   /// inverse of the subdomain operator.
-  const blaze::DynamicMatrix<double, blaze::columnMajor>&
-  matrix_representation() const {
-    return inverse_;
-  }
+  // const blaze::DynamicMatrix<double, blaze::columnMajor>&
+  // matrix_representation() const {
+  //   return inverse_;
+  // }
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) override {
+    p | fillin_;
+    p | verbosity_;
     p | size_;
-    p | inverse_;
+    // TODO: serialize ILU
+    // ilu_.compute(operator_matrix_);
     if (p.isUnpacking() and size_ != std::numeric_limits<size_t>::max()) {
-      source_workspace_.resize(size_);
-      solution_workspace_.resize(size_);
+      source_workspace_.resize(static_cast<Eigen::Index>(size_));
+      solution_workspace_.resize(static_cast<Eigen::Index>(size_));
     }
   }
 
@@ -143,19 +212,20 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
   }
 
  private:
+  size_t fillin_ = std::numeric_limits<size_t>::max();
+  ::Verbosity verbosity_ = ::Verbosity::Silent;
+
   // Caches for successive solves of the same operator
   // NOLINTNEXTLINE(spectre-mutable)
   mutable size_t size_ = std::numeric_limits<size_t>::max();
-  // We currently store the matrix representation in a dense matrix because
-  // Blaze doesn't support the inversion of sparse matrices (yet).
   // NOLINTNEXTLINE(spectre-mutable)
-  mutable blaze::DynamicMatrix<double, blaze::columnMajor> inverse_{};
+  mutable Eigen::IncompleteLUT<double> ilu_{};
 
   // Buffers to avoid re-allocating memory for applying the operator
   // NOLINTNEXTLINE(spectre-mutable)
-  mutable blaze::DynamicVector<double> source_workspace_{};
+  mutable Eigen::VectorXd source_workspace_{};
   // NOLINTNEXTLINE(spectre-mutable)
-  mutable blaze::DynamicVector<double> solution_workspace_{};
+  mutable Eigen::VectorXd solution_workspace_{};
 };
 
 template <typename LinearSolverRegistrars>
@@ -168,30 +238,37 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
   if (UNLIKELY(size_ == std::numeric_limits<size_t>::max())) {
     const auto& used_for_size = source;
     size_ = used_for_size.size();
-    source_workspace_.resize(size_);
-    solution_workspace_.resize(size_);
-    inverse_.resize(size_, size_);
+    source_workspace_.resize(static_cast<Eigen::Index>(size_));
+    solution_workspace_.resize(static_cast<Eigen::Index>(size_));
+    // operator_matrix_.resize(size_, size_);
     // Construct explicit matrix representation by "sniffing out" the operator,
     // i.e. feeding it unit vectors
     auto operand_buffer = make_with_value<VarsType>(used_for_size, 0.);
     auto result_buffer = make_with_value<SourceType>(used_for_size, 0.);
-    build_matrix(make_not_null(&inverse_), make_not_null(&operand_buffer),
-                 make_not_null(&result_buffer), linear_operator, operator_args);
-    // Directly invert the matrix
-    try {
-      blaze::invert(inverse_);
-    } catch (const std::invalid_argument& e) {
-      ERROR("Could not invert subdomain matrix (size " << size_
-                                                       << "): " << e.what());
+    Eigen::SparseMatrix<double> operator_matrix{
+        static_cast<Eigen::Index>(size_), static_cast<Eigen::Index>(size_)};
+    build_matrix(make_not_null(&operator_matrix),
+                 make_not_null(&operand_buffer), make_not_null(&result_buffer),
+                 linear_operator, operator_args);
+    // Compute ILU factorization
+    if (verbosity_ >= ::Verbosity::Debug) {
+      const double matrix_fillin =
+          static_cast<double>(operator_matrix.nonZeros()) /
+          static_cast<double>(square(size_));
+      Parallel::printf("Fillin: %f\n", matrix_fillin);
     }
+    ilu_.setFillfactor(fillin_);
+    ilu_.compute(operator_matrix);
+    // We could free the operator matrix at this point, if we could serialize
+    // and copy the ILU class directly.
   }
   // Copy source into contiguous workspace. In cases where the source and
   // solution data are already stored contiguously we might avoid the copy and
   // the associated workspace memory. However, compared to the cost of building
   // and storing the matrix this is likely insignificant.
   std::copy(source.begin(), source.end(), source_workspace_.begin());
-  // Apply inverse
-  solution_workspace_ = inverse_ * source_workspace_;
+  // Apply (approximate) inverse
+  solution_workspace_ = ilu_.solve(source_workspace_);
   // Reconstruct solution data from contiguous workspace
   std::copy(solution_workspace_.begin(), solution_workspace_.end(),
             solution->begin());

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <Eigen/SparseCore>
 #include <algorithm>
 #include <blaze/math/Column.h>
 #include <blaze/math/Matrix.h>
@@ -10,7 +11,9 @@
 #include <blaze/math/typetraits/IsSparseMatrix.h>
 #include <cstddef>
 #include <tuple>
+#include <vector>
 
+#include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TypeTraits/CreateIsCallable.hpp"
@@ -46,9 +49,10 @@ void build_matrix(const gsl::not_null<MatrixType*> matrix,
                   const gsl::not_null<ResultType*> result_buffer,
                   const LinearOperator& linear_operator,
                   const std::tuple<OperatorArgs...>& operator_args = {}) {
-  static_assert(
-      blaze::IsSparseMatrix_v<MatrixType> or blaze::IsDenseMatrix_v<MatrixType>,
-      "Unexpected matrix type");
+  static_assert(blaze::IsSparseMatrix_v<MatrixType> or
+                    blaze::IsDenseMatrix_v<MatrixType> or
+                    std::is_same_v<MatrixType, Eigen::SparseMatrix<double>>,
+                "Unexpected matrix type");
   if constexpr (blaze::IsSparseMatrix_v<MatrixType>) {
     matrix->reset();
   }
@@ -56,6 +60,10 @@ void build_matrix(const gsl::not_null<MatrixType*> matrix,
   // Re-using the iterators for all operator invocations
   auto result_iterator_begin = result_buffer->begin();
   auto result_iterator_end = result_buffer->end();
+  std::vector<Eigen::Triplet<double>> sparse_entries{};
+  if constexpr (std::is_same_v<MatrixType, Eigen::SparseMatrix<double>>) {
+    sparse_entries.reserve(square(static_cast<size_t>(matrix->rows())));
+  }
   for (double& unit_vector_data : *operand_buffer) {
     // Set a 1 at the unit vector location i
     unit_vector_data = 1.;
@@ -76,20 +84,32 @@ void build_matrix(const gsl::not_null<MatrixType*> matrix,
       result_iterator_end = result_buffer->end();
     }
     // Store the result in column i of the matrix
-    auto col = column(*matrix, i);
-    if constexpr (blaze::IsSparseMatrix_v<MatrixType>) {
-      size_t k = 0;
-      while (result_iterator_begin != result_iterator_end) {
+    if constexpr (std::is_same_v<MatrixType, Eigen::SparseMatrix<double>>) {
+      for (size_t j = 0; j < static_cast<size_t>(matrix->rows()); ++j) {
         if (not equal_within_roundoff(*result_iterator_begin, 0.)) {
-          col[k] = *result_iterator_begin;
+          sparse_entries.emplace_back(j, i, *result_iterator_begin);
         }
         ++result_iterator_begin;
-        ++k;
       }
     } else {
-      std::copy(result_iterator_begin, result_iterator_end, col.begin());
+      auto col = column(*matrix, i);
+      if constexpr (blaze::IsSparseMatrix_v<MatrixType>) {
+        size_t k = 0;
+        while (result_iterator_begin != result_iterator_end) {
+          if (not equal_within_roundoff(*result_iterator_begin, 0.)) {
+            col[k] = *result_iterator_begin;
+          }
+          ++result_iterator_begin;
+          ++k;
+        }
+      } else {
+        std::copy(result_iterator_begin, result_iterator_end, col.begin());
+      }
     }
     ++i;
+  }
+  if constexpr (std::is_same_v<MatrixType, Eigen::SparseMatrix<double>>) {
+    matrix->setFromTriplets(sparse_entries.begin(), sparse_entries.end());
   }
 }
 
