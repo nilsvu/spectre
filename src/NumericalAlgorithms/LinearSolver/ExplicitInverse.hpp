@@ -10,17 +10,17 @@
 
 #include "DataStructures/DenseMatrix.hpp"
 #include "DataStructures/DenseVector.hpp"
+#include "IO/Logging/Verbosity.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
 #include "NumericalAlgorithms/LinearSolver/LinearSolver.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
+#include "Parallel/Printf.hpp"
 #include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TypeTraits/CreateIsCallable.hpp"
-
-#include "Parallel/Printf.hpp"
 
 namespace LinearSolver::Serial {
 
@@ -80,15 +80,50 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
   using Base = LinearSolver<LinearSolverRegistrars>;
 
  public:
-  using options = tmpl::list<>;
+  struct FillFactor {
+    using type = size_t;
+    static constexpr Options::String help =
+        "Compute an incomplete LU factorization of the operator matrix that "
+        "has an approximate fill-in of this factor times the fill-in of the "
+        "operator matrix. For example, if 10% of the entries in the operator "
+        "matrix are non-zero, then a fill-factor of 2 means that ~20% of the "
+        "entries in the LU-factorization are non-zero. A reasonable "
+        "fill-factor is problem-dependent. A large factor means the "
+        "LU-factorization approximates the operator matrix better, hence "
+        "reducing the number of iterations if this solver is used as a "
+        "preconditioner. A small factor means the LU-factorization is "
+        "more sparse, hence reducing the cost to apply this solver. Often, "
+        "even a fill-factor of only 1 provides sufficient preconditioning and "
+        "minimizes the cost to apply the preconditioner.";
+  };
+  struct Verbosity {
+    using type = ::Verbosity;
+    static constexpr Options::String help = "Logging verbosity";
+  };
+  using options = tmpl::list<FillFactor, Verbosity>;
   static constexpr Options::String help =
       "Build a matrix representation of the linear operator and invert it "
       "directly. This means that the first solve has a large initialization "
       "cost, but all subsequent solves converge immediately.";
 
   ExplicitInverse() = default;
-  ExplicitInverse(const ExplicitInverse& rhs) noexcept { *this = rhs; };
+  explicit ExplicitInverse(const size_t fillin,
+                           const ::Verbosity verbosity) noexcept
+      : fillin_(fillin), verbosity_(verbosity) {}
+  ExplicitInverse(const ExplicitInverse& rhs) noexcept : Base(rhs) {
+    fillin_ = rhs.fillin_;
+    verbosity_ = rhs.verbosity_;
+    size_ = rhs.size_;
+    // TODO: copy ILU
+    if (size_ != std::numeric_limits<size_t>::max()) {
+      source_workspace_.resize(static_cast<Eigen::Index>(size_));
+      solution_workspace_.resize(static_cast<Eigen::Index>(size_));
+    }
+  };
   ExplicitInverse& operator=(const ExplicitInverse& rhs) noexcept {
+    Base::operator=(rhs);
+    fillin_ = rhs.fillin_;
+    verbosity_ = rhs.verbosity_;
     size_ = rhs.size_;
     // TODO: copy ILU
     if (size_ != std::numeric_limits<size_t>::max()) {
@@ -97,8 +132,28 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
     }
     return *this;
   };
-  ExplicitInverse(ExplicitInverse&& /*rhs*/) = default;
-  ExplicitInverse& operator=(ExplicitInverse&& /*rhs*/) = default;
+  ExplicitInverse(ExplicitInverse&& rhs) noexcept : Base(rhs) {
+    fillin_ = rhs.fillin_;
+    verbosity_ = rhs.verbosity_;
+    size_ = rhs.size_;
+    // TODO: copy ILU
+    if (size_ != std::numeric_limits<size_t>::max()) {
+      source_workspace_.resize(static_cast<Eigen::Index>(size_));
+      solution_workspace_.resize(static_cast<Eigen::Index>(size_));
+    }
+  };
+  ExplicitInverse& operator=(ExplicitInverse&& rhs) noexcept {
+    Base::operator=(rhs);
+    fillin_ = rhs.fillin_;
+    verbosity_ = rhs.verbosity_;
+    size_ = rhs.size_;
+    // TODO: copy ILU
+    if (size_ != std::numeric_limits<size_t>::max()) {
+      source_workspace_.resize(static_cast<Eigen::Index>(size_));
+      solution_workspace_.resize(static_cast<Eigen::Index>(size_));
+    }
+    return *this;
+  };
   ~ExplicitInverse() = default;
 
   /// \cond
@@ -132,9 +187,7 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
 
   /// Flags the operator to require re-initialization. No memory is released.
   /// Call this function to rebuild the solver when the operator changed.
-  void reset() noexcept override {
-    size_ = std::numeric_limits<size_t>::max();
-  }
+  void reset() noexcept override { size_ = std::numeric_limits<size_t>::max(); }
 
   /// Size of the operator. The stored matrix will have `size^2` entries.
   size_t size() const noexcept { return size_; }
@@ -147,6 +200,8 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) noexcept override {
+    p | fillin_;
+    p | verbosity_;
     p | size_;
     // TODO: serialize ILU
     // ilu_.compute(operator_matrix_);
@@ -161,6 +216,9 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
   }
 
  private:
+  size_t fillin_ = std::numeric_limits<size_t>::max();
+  ::Verbosity verbosity_ = ::Verbosity::Silent;
+
   // Caches for successive solves of the same operator
   mutable size_t size_ = std::numeric_limits<size_t>::max();
   mutable Eigen::IncompleteLUT<double> ilu_{};
@@ -193,6 +251,8 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
     // Re-using the iterators for all operator invocations
     auto result_iterator_begin = result_buffer.begin();
     auto result_iterator_end = result_buffer.end();
+    std::vector<Eigen::Triplet<double>> sparse_entries{};
+    sparse_entries.reserve(square(size_));
     for (double& unit_vector_data : unit_vector) {
       // Add a 1 at the unit vector location i
       unit_vector_data = 1.;
@@ -205,8 +265,8 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
       unit_vector_data = 0.;
       // Reset the iterator by calling its `reset` member function or by
       // re-creating it
-      if constexpr (detail::is_reset_callable_v<decltype(
-                        result_iterator_begin)>) {
+      if constexpr (detail::is_reset_callable_v<
+                        decltype(result_iterator_begin)>) {
         result_iterator_begin.reset();
       } else {
         result_iterator_begin = result_buffer.begin();
@@ -215,18 +275,21 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
       // Store the result in column i of the matrix
       for (size_t j = 0; j < size_; ++j) {
         if (not equal_within_roundoff(*result_iterator_begin, 0.)) {
-          operator_matrix.insert(static_cast<Eigen::Index>(j),
-                                 static_cast<Eigen::Index>(i)) =
-              *result_iterator_begin;
+          sparse_entries.emplace_back(j, i, *result_iterator_begin);
         }
         ++result_iterator_begin;
       }
       ++i;
     }
-    operator_matrix.makeCompressed();
-    Parallel::printf("Fillin: %f\n",
-                     static_cast<double>(operator_matrix.nonZeros()) /
-                         square(static_cast<double>(size_)));
+    operator_matrix.setFromTriplets(sparse_entries.begin(),
+                                    sparse_entries.end());
+    if (verbosity_ >= ::Verbosity::Debug) {
+      const double matrix_fillin =
+          static_cast<double>(operator_matrix.nonZeros()) /
+          static_cast<double>(square(size_));
+      Parallel::printf("Fillin: %f\n", matrix_fillin);
+    }
+    ilu_.setFillfactor(fillin_);
     ilu_.compute(operator_matrix);
     // We could free the operator matrix at this point, if we could serialize
     // and copy the ILU class directly.
