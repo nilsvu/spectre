@@ -29,22 +29,24 @@
 namespace elliptic::subdomain_preconditioners {
 
 /// \cond
-template <size_t Dim, typename OptionsGroup, typename Solver,
+template <typename PoissonSystem, typename OptionsGroup, typename Solver,
           typename LinearSolverRegistrars>
 struct MinusLaplacian;
 /// \endcond
 
 namespace Registrars {
-template <size_t Dim, typename OptionsGroup,
-          typename Solver = LinearSolver::Serial::LinearSolver<tmpl::list<
-              ::LinearSolver::Serial::Registrars::Gmres<
-                  ::LinearSolver::Schwarz::ElementCenteredSubdomainData<
-                      Dim, tmpl::list<Poisson::Tags::Field>>>,
-              ::LinearSolver::Serial::Registrars::ExplicitInverse>>>
+template <
+    typename PoissonSystem, typename OptionsGroup,
+    typename Solver = LinearSolver::Serial::LinearSolver<tmpl::list<
+        ::LinearSolver::Serial::Registrars::Gmres<
+            ::LinearSolver::Schwarz::ElementCenteredSubdomainData<
+                PoissonSystem::volume_dim, tmpl::list<Poisson::Tags::Field>>>,
+        ::LinearSolver::Serial::Registrars::ExplicitInverse>>>
 struct MinusLaplacian {
   template <typename LinearSolverRegistrars>
-  using f = subdomain_preconditioners::MinusLaplacian<Dim, OptionsGroup, Solver,
-                                                      LinearSolverRegistrars>;
+  using f =
+      subdomain_preconditioners::MinusLaplacian<PoissonSystem, OptionsGroup,
+                                                Solver, LinearSolverRegistrars>;
 };
 }  // namespace Registrars
 
@@ -67,17 +69,19 @@ struct MinusLaplacian {
  * but typically a `LinearSolver::Serial::LinearSolver`. The solver will be
  * factory-created from input-file options.
  */
-template <size_t Dim, typename OptionsGroup,
-          typename Solver = LinearSolver::Serial::LinearSolver<tmpl::list<
-              ::LinearSolver::Serial::Registrars::Gmres<
-                  ::LinearSolver::Schwarz::ElementCenteredSubdomainData<
-                      Dim, tmpl::list<Poisson::Tags::Field>>>,
-              ::LinearSolver::Serial::Registrars::ExplicitInverse>>,
-          typename LinearSolverRegistrars =
-              tmpl::list<Registrars::MinusLaplacian<Dim, OptionsGroup, Solver>>>
+template <
+    typename PoissonSystem, typename OptionsGroup,
+    typename Solver = LinearSolver::Serial::LinearSolver<tmpl::list<
+        ::LinearSolver::Serial::Registrars::Gmres<
+            ::LinearSolver::Schwarz::ElementCenteredSubdomainData<
+                PoissonSystem::volume_dim, tmpl::list<Poisson::Tags::Field>>>,
+        ::LinearSolver::Serial::Registrars::ExplicitInverse>>,
+    typename LinearSolverRegistrars = tmpl::list<
+        Registrars::MinusLaplacian<PoissonSystem, OptionsGroup, Solver>>>
 class MinusLaplacian
     : public LinearSolver::Serial::LinearSolver<LinearSolverRegistrars> {
  private:
+  static constexpr size_t Dim = PoissonSystem::volume_dim;
   using Base = LinearSolver::Serial::LinearSolver<LinearSolverRegistrars>;
   using StoredSolverType = tmpl::conditional_t<std::is_abstract_v<Solver>,
                                                std::unique_ptr<Solver>, Solver>;
@@ -87,8 +91,7 @@ class MinusLaplacian
  public:
   static constexpr size_t volume_dim = Dim;
   using options_group = OptionsGroup;
-  using poisson_system =
-      Poisson::FirstOrderSystem<Dim, Poisson::Geometry::FlatCartesian>;
+  using poisson_system = PoissonSystem;
   using BoundaryConditionsBase =
       typename poisson_system::boundary_conditions_base;
   using SubdomainOperator =
@@ -396,18 +399,18 @@ void assign_component(
 }
 }  // namespace detail
 
-template <size_t Dim, typename OptionsGroup, typename Solver,
+template <typename PoissonSystem, typename OptionsGroup, typename Solver,
           typename LinearSolverRegistrars>
 template <typename System, typename VarsType, typename SourceType,
           typename... SubdomainOperatorParams, typename... OperatorArgs>
 Convergence::HasConverged
-MinusLaplacian<Dim, OptionsGroup, Solver, LinearSolverRegistrars>::solve(
-    const gsl::not_null<VarsType*> initial_guess_in_solution_out,
-    const elliptic::dg::subdomain_operator::SubdomainOperator<
-        System, OptionsGroup,
-        SubdomainOperatorParams...>& /*subdomain_operator*/,
-    const SourceType& source,
-    const std::tuple<OperatorArgs...>& operator_args) const noexcept {
+MinusLaplacian<PoissonSystem, OptionsGroup, Solver, LinearSolverRegistrars>::
+    solve(const gsl::not_null<VarsType*> initial_guess_in_solution_out,
+          const elliptic::dg::subdomain_operator::SubdomainOperator<
+              System, OptionsGroup,
+              SubdomainOperatorParams...>& /*subdomain_operator*/,
+          const SourceType& source,
+          const std::tuple<OperatorArgs...>& operator_args) const noexcept {
   // Solve each component of the source variables in turn, assuming the operator
   // is a Laplacian. For each component we select either homogeneous Dirichlet
   // or Neumann boundary conditions, based on the type of boundary conditions
@@ -435,10 +438,10 @@ MinusLaplacian<Dim, OptionsGroup, Solver, LinearSolverRegistrars>::solve(
 }
 
 /// \cond
-template <size_t Dim, typename OptionsGroup, typename Solver,
+template <typename PoissonSystem, typename OptionsGroup, typename Solver,
           typename LinearSolverRegistrars>
 // NOLINTNEXTLINE
-PUP::able::PUP_ID MinusLaplacian<Dim, OptionsGroup, Solver,
+PUP::able::PUP_ID MinusLaplacian<PoissonSystem, OptionsGroup, Solver,
                                  LinearSolverRegistrars>::my_PUP_ID = 0;
 /// \endcond
 
