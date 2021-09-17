@@ -17,12 +17,6 @@ class DataVector;
 namespace PUP {
 class er;
 }  // namespace PUP
-namespace Poisson {
-template <size_t Dim, Geometry BackgroundGeometry>
-struct Fluxes;
-template <size_t Dim, Geometry BackgroundGeometry>
-struct Sources;
-}  // namespace Poisson
 /// \endcond
 
 namespace Poisson {
@@ -70,42 +64,75 @@ void auxiliary_fluxes(
     const Scalar<DataVector>& field) noexcept;
 
 /*!
+ * \brief Compute the fluxes \f$F^i_A\f$ for the curved-space Poisson equation
+ * on a spatial metric \f$\gamma_{ij}\f$.
+ *
+ * \see Poisson::FirstOrderSystem
+ */
+template <size_t Dim, typename InvMetricTag>
+struct Fluxes {
+  using argument_tags = tmpl::list<InvMetricTag>;
+  using volume_tags = tmpl::list<>;
+  static void apply(
+      const gsl::not_null<tnsr::I<DataVector, Dim>*> flux_for_field,
+      const tnsr::II<DataVector, Dim>& inv_spatial_metric,
+      const tnsr::i<DataVector, Dim>& field_gradient) noexcept {
+    curved_fluxes(flux_for_field, inv_spatial_metric, field_gradient);
+  }
+  static void apply(
+      const gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
+      const tnsr::II<DataVector, Dim>& /*inv_spatial_metric*/,
+      const Scalar<DataVector>& field) noexcept {
+    auxiliary_fluxes(flux_for_gradient, field);
+  }
+  // clang-tidy: no runtime references
+  void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
+};
+
+/*!
  * \brief Compute the fluxes \f$F^i_A\f$ for the Poisson equation on a flat
  * metric in Cartesian coordinates.
  *
  * \see Poisson::FirstOrderSystem
  */
 template <size_t Dim>
-struct Fluxes<Dim, Geometry::FlatCartesian> {
+struct Fluxes<Dim, void> {
   using argument_tags = tmpl::list<>;
   using volume_tags = tmpl::list<>;
-  static void apply(gsl::not_null<tnsr::I<DataVector, Dim>*> flux_for_field,
-                    const tnsr::i<DataVector, Dim>& field_gradient) noexcept;
-  static void apply(gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
-                    const Scalar<DataVector>& field) noexcept;
+  static void apply(
+      const gsl::not_null<tnsr::I<DataVector, Dim>*> flux_for_field,
+      const tnsr::i<DataVector, Dim>& field_gradient) noexcept {
+    flat_cartesian_fluxes(flux_for_field, field_gradient);
+  }
+  static void apply(
+      const gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
+      const Scalar<DataVector>& field) noexcept {
+    auxiliary_fluxes(flux_for_gradient, field);
+  }
   // clang-tidy: no runtime references
   void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
 };
 
 /*!
- * \brief Compute the fluxes \f$F^i_A\f$ for the curved-space Poisson equation
+ * \brief Add the sources \f$S_A\f$ for the curved-space Poisson equation
  * on a spatial metric \f$\gamma_{ij}\f$.
  *
  * \see Poisson::FirstOrderSystem
  */
-template <size_t Dim>
-struct Fluxes<Dim, Geometry::Curved> {
-  using argument_tags = tmpl::list<
-      gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataVector>>;
-  using volume_tags = tmpl::list<>;
-  static void apply(gsl::not_null<tnsr::I<DataVector, Dim>*> flux_for_field,
-                    const tnsr::II<DataVector, Dim>& inv_spatial_metric,
-                    const tnsr::i<DataVector, Dim>& field_gradient) noexcept;
-  static void apply(gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
-                    const tnsr::II<DataVector, Dim>& inv_spatial_metric,
-                    const Scalar<DataVector>& field) noexcept;
-  // clang-tidy: no runtime references
-  void pup(PUP::er& /*p*/) noexcept {}  // NOLINT
+template <size_t Dim, typename ChristoffelContractedTag>
+struct Sources {
+  using argument_tags = tmpl::list<ChristoffelContractedTag>;
+  static void apply(const gsl::not_null<Scalar<DataVector>*> equation_for_field,
+                    const tnsr::i<DataVector, Dim>& christoffel_contracted,
+                    const Scalar<DataVector>& /*field*/,
+                    const tnsr::I<DataVector, Dim>& field_flux) noexcept {
+    add_curved_sources(equation_for_field, christoffel_contracted, field_flux);
+  }
+  static void apply(
+      const gsl::not_null<
+          tnsr::i<DataVector, Dim>*> /*equation_for_field_gradient*/,
+      const tnsr::i<DataVector, Dim>& /*christoffel_contracted*/,
+      const Scalar<DataVector>& /*field*/) noexcept {}
 };
 
 /*!
@@ -115,35 +142,16 @@ struct Fluxes<Dim, Geometry::Curved> {
  * \see Poisson::FirstOrderSystem
  */
 template <size_t Dim>
-struct Sources<Dim, Geometry::FlatCartesian> {
+struct Sources<Dim, void> {
   using argument_tags = tmpl::list<>;
-  static void apply(gsl::not_null<Scalar<DataVector>*> equation_for_field,
-                    const Scalar<DataVector>& field,
-                    const tnsr::I<DataVector, Dim>& field_flux) noexcept;
   static void apply(
-      gsl::not_null<tnsr::i<DataVector, Dim>*> equation_for_field_gradient,
-      const Scalar<DataVector>& field) noexcept;
-};
-
-/*!
- * \brief Add the sources \f$S_A\f$ for the curved-space Poisson equation
- * on a spatial metric \f$\gamma_{ij}\f$.
- *
- * \see Poisson::FirstOrderSystem
- */
-template <size_t Dim>
-struct Sources<Dim, Geometry::Curved> {
-  using argument_tags =
-      tmpl::list<gr::Tags::SpatialChristoffelSecondKindContracted<
-          Dim, Frame::Inertial, DataVector>>;
-  static void apply(gsl::not_null<Scalar<DataVector>*> equation_for_field,
-                    const tnsr::i<DataVector, Dim>& christoffel_contracted,
-                    const Scalar<DataVector>& field,
-                    const tnsr::I<DataVector, Dim>& field_flux) noexcept;
+      const gsl::not_null<Scalar<DataVector>*> /*equation_for_field*/,
+      const Scalar<DataVector>& /*field*/,
+      const tnsr::I<DataVector, Dim>& /*field_flux*/) noexcept {}
   static void apply(
-      gsl::not_null<tnsr::i<DataVector, Dim>*> equation_for_field_gradient,
-      const tnsr::i<DataVector, Dim>& christoffel_contracted,
-      const Scalar<DataVector>& field) noexcept;
+      const gsl::not_null<
+          tnsr::i<DataVector, Dim>*> /*equation_for_field_gradient*/,
+      const Scalar<DataVector>& /*field*/) noexcept {}
 };
 
 }  // namespace Poisson

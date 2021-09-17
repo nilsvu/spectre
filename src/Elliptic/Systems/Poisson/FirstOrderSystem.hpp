@@ -73,7 +73,7 @@ namespace Poisson {
  * to `Poisson::Geometry::FlatCartesian` to specialise the system for this case.
  * Set it to `Poisson::Geometry::Curved` for the general case.
  */
-template <size_t Dim, Geometry BackgroundGeometry>
+template <size_t Dim, typename InvMetricTag, typename ChristoffelContractedTag>
 struct FirstOrderSystem {
  private:
   using field = Tags::Field;
@@ -96,19 +96,14 @@ struct FirstOrderSystem {
       ::Tags::Flux<field_gradient, tmpl::size_t<Dim>, Frame::Inertial>>;
 
   // The variable-independent background fields in the equations
-  using background_fields = tmpl::conditional_t<
-      BackgroundGeometry == Geometry::FlatCartesian, tmpl::list<>,
-      tmpl::list<
-          gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataVector>,
-          gr::Tags::SpatialChristoffelSecondKindContracted<Dim, Frame::Inertial,
-                                                           DataVector>>>;
-  using inv_metric_tag = tmpl::conditional_t<
-      BackgroundGeometry == Geometry::FlatCartesian, void,
-      gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataVector>>;
+  using background_fields =
+      tmpl::conditional_t<std::is_same_v<InvMetricTag, void>, tmpl::list<>,
+                          tmpl::list<InvMetricTag, ChristoffelContractedTag>>;
+  using inv_metric_tag = InvMetricTag;
 
   // The system equations formulated as fluxes and sources
-  using fluxes_computer = Fluxes<Dim, BackgroundGeometry>;
-  using sources_computer = Sources<Dim, BackgroundGeometry>;
+  using fluxes_computer = Fluxes<Dim, InvMetricTag>;
+  using sources_computer = Sources<Dim, ChristoffelContractedTag>;
 
   // The supported boundary conditions. Boundary conditions can be
   // factory-created from this base class.
