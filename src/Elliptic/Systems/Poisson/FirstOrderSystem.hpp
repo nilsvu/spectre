@@ -62,7 +62,7 @@ namespace Poisson {
  * to `Poisson::Geometry::FlatCartesian` to specialise the system for this case.
  * Set it to `Poisson::Geometry::Curved` for the general case.
  */
-template <size_t Dim, Geometry BackgroundGeometry>
+template <size_t Dim, typename InvMetricTag, typename ChristoffelContractedTag>
 struct FirstOrderSystem
     : tt::ConformsTo<elliptic::protocols::FirstOrderSystem> {
  private:
@@ -83,18 +83,13 @@ struct FirstOrderSystem
   using auxiliary_fluxes = tmpl::list<
       ::Tags::Flux<field_gradient, tmpl::size_t<Dim>, Frame::Inertial>>;
 
-  using background_fields = tmpl::conditional_t<
-      BackgroundGeometry == Geometry::FlatCartesian, tmpl::list<>,
-      tmpl::list<
-          gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataVector>,
-          gr::Tags::SpatialChristoffelSecondKindContracted<Dim, Frame::Inertial,
-                                                           DataVector>>>;
-  using inv_metric_tag = tmpl::conditional_t<
-      BackgroundGeometry == Geometry::FlatCartesian, void,
-      gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataVector>>;
+  using background_fields =
+      tmpl::conditional_t<std::is_same_v<InvMetricTag, void>, tmpl::list<>,
+                          tmpl::list<InvMetricTag, ChristoffelContractedTag>>;
+  using inv_metric_tag = InvMetricTag;
 
-  using fluxes_computer = Fluxes<Dim, BackgroundGeometry>;
-  using sources_computer = Sources<Dim, BackgroundGeometry>;
+  using fluxes_computer = Fluxes<Dim, InvMetricTag>;
+  using sources_computer = Sources<Dim, ChristoffelContractedTag>;
 
   using boundary_conditions_base =
       elliptic::BoundaryConditions::BoundaryCondition<

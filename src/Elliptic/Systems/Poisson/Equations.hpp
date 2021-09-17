@@ -17,12 +17,6 @@ class DataVector;
 namespace PUP {
 class er;
 }  // namespace PUP
-namespace Poisson {
-template <size_t Dim, Geometry BackgroundGeometry>
-struct Fluxes;
-template <size_t Dim, Geometry BackgroundGeometry>
-struct Sources;
-}  // namespace Poisson
 /// \endcond
 
 namespace Poisson {
@@ -69,38 +63,71 @@ void auxiliary_fluxes(
     const Scalar<DataVector>& field);
 
 /*!
+ * \brief Compute the fluxes \f$F^i_A\f$ for the curved-space Poisson equation
+ * on a spatial metric \f$\gamma_{ij}\f$.
+ *
+ * \see Poisson::FirstOrderSystem
+ */
+template <size_t Dim, typename InvMetricTag>
+struct Fluxes {
+  using argument_tags = tmpl::list<InvMetricTag>;
+  using volume_tags = tmpl::list<>;
+  static void apply(
+      const gsl::not_null<tnsr::I<DataVector, Dim>*> flux_for_field,
+      const tnsr::II<DataVector, Dim>& inv_spatial_metric,
+      const tnsr::i<DataVector, Dim>& field_gradient) {
+    curved_fluxes(flux_for_field, inv_spatial_metric, field_gradient);
+  }
+  static void apply(
+      const gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
+      const tnsr::II<DataVector, Dim>& /*inv_spatial_metric*/,
+      const Scalar<DataVector>& field) {
+    auxiliary_fluxes(flux_for_gradient, field);
+  }
+};
+
+/*!
  * \brief Compute the fluxes \f$F^i_A\f$ for the Poisson equation on a flat
  * metric in Cartesian coordinates.
  *
  * \see Poisson::FirstOrderSystem
  */
 template <size_t Dim>
-struct Fluxes<Dim, Geometry::FlatCartesian> {
+struct Fluxes<Dim, void> {
   using argument_tags = tmpl::list<>;
   using volume_tags = tmpl::list<>;
-  static void apply(gsl::not_null<tnsr::I<DataVector, Dim>*> flux_for_field,
-                    const tnsr::i<DataVector, Dim>& field_gradient);
-  static void apply(gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
-                    const Scalar<DataVector>& field);
+  static void apply(
+      const gsl::not_null<tnsr::I<DataVector, Dim>*> flux_for_field,
+      const tnsr::i<DataVector, Dim>& field_gradient) {
+    flat_cartesian_fluxes(flux_for_field, field_gradient);
+  }
+  static void apply(
+      const gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
+      const Scalar<DataVector>& field) {
+    auxiliary_fluxes(flux_for_gradient, field);
+  }
 };
 
 /*!
- * \brief Compute the fluxes \f$F^i_A\f$ for the curved-space Poisson equation
+ * \brief Add the sources \f$S_A\f$ for the curved-space Poisson equation
  * on a spatial metric \f$\gamma_{ij}\f$.
  *
  * \see Poisson::FirstOrderSystem
  */
-template <size_t Dim>
-struct Fluxes<Dim, Geometry::Curved> {
-  using argument_tags = tmpl::list<
-      gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataVector>>;
-  using volume_tags = tmpl::list<>;
-  static void apply(gsl::not_null<tnsr::I<DataVector, Dim>*> flux_for_field,
-                    const tnsr::II<DataVector, Dim>& inv_spatial_metric,
-                    const tnsr::i<DataVector, Dim>& field_gradient);
-  static void apply(gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
-                    const tnsr::II<DataVector, Dim>& inv_spatial_metric,
-                    const Scalar<DataVector>& field);
+template <size_t Dim, typename ChristoffelContractedTag>
+struct Sources {
+  using argument_tags = tmpl::list<ChristoffelContractedTag>;
+  static void apply(const gsl::not_null<Scalar<DataVector>*> equation_for_field,
+                    const tnsr::i<DataVector, Dim>& christoffel_contracted,
+                    const Scalar<DataVector>& /*field*/,
+                    const tnsr::I<DataVector, Dim>& field_flux) {
+    add_curved_sources(equation_for_field, christoffel_contracted, field_flux);
+  }
+  static void apply(
+      const gsl::not_null<
+          tnsr::i<DataVector, Dim>*> /*equation_for_field_gradient*/,
+      const tnsr::i<DataVector, Dim>& /*christoffel_contracted*/,
+      const Scalar<DataVector>& /*field*/) {}
 };
 
 /*!
@@ -110,35 +137,16 @@ struct Fluxes<Dim, Geometry::Curved> {
  * \see Poisson::FirstOrderSystem
  */
 template <size_t Dim>
-struct Sources<Dim, Geometry::FlatCartesian> {
+struct Sources<Dim, void> {
   using argument_tags = tmpl::list<>;
-  static void apply(gsl::not_null<Scalar<DataVector>*> equation_for_field,
-                    const Scalar<DataVector>& field,
-                    const tnsr::I<DataVector, Dim>& field_flux);
   static void apply(
-      gsl::not_null<tnsr::i<DataVector, Dim>*> equation_for_field_gradient,
-      const Scalar<DataVector>& field);
-};
-
-/*!
- * \brief Add the sources \f$S_A\f$ for the curved-space Poisson equation
- * on a spatial metric \f$\gamma_{ij}\f$.
- *
- * \see Poisson::FirstOrderSystem
- */
-template <size_t Dim>
-struct Sources<Dim, Geometry::Curved> {
-  using argument_tags =
-      tmpl::list<gr::Tags::SpatialChristoffelSecondKindContracted<
-          Dim, Frame::Inertial, DataVector>>;
-  static void apply(gsl::not_null<Scalar<DataVector>*> equation_for_field,
-                    const tnsr::i<DataVector, Dim>& christoffel_contracted,
-                    const Scalar<DataVector>& field,
-                    const tnsr::I<DataVector, Dim>& field_flux);
+      const gsl::not_null<Scalar<DataVector>*> /*equation_for_field*/,
+      const Scalar<DataVector>& /*field*/,
+      const tnsr::I<DataVector, Dim>& /*field_flux*/) {}
   static void apply(
-      gsl::not_null<tnsr::i<DataVector, Dim>*> equation_for_field_gradient,
-      const tnsr::i<DataVector, Dim>& christoffel_contracted,
-      const Scalar<DataVector>& field);
+      const gsl::not_null<
+          tnsr::i<DataVector, Dim>*> /*equation_for_field_gradient*/,
+      const Scalar<DataVector>& /*field*/) {}
 };
 
 }  // namespace Poisson

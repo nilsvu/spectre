@@ -96,8 +96,7 @@ struct MultigridGroup {
 template <size_t Dim>
 struct Metavariables {
   static constexpr size_t volume_dim = Dim;
-  using system =
-      Poisson::FirstOrderSystem<Dim, Poisson::Geometry::FlatCartesian>;
+  using system = Poisson::FirstOrderSystem<Dim, void, void>;
 
   // List the possible backgrounds, i.e. the variable-independent part of the
   // equations that define the problem to solve (along with the boundary

@@ -168,7 +168,13 @@ struct Metavariables {
           system, SolveXcts::OptionTags::SchwarzSmootherGroup>;
   using subdomain_preconditioners = tmpl::list<
       elliptic::subdomain_preconditioners::Registrars::MinusLaplacian<
-          volume_dim, SolveXcts::OptionTags::SchwarzSmootherGroup>>;
+          Poisson::FirstOrderSystem<
+              volume_dim,
+              Xcts::Tags::InverseConformalMetric<DataVector, volume_dim,
+                                                 Frame::Inertial>,
+              Xcts::Tags::ConformalChristoffelContracted<DataVector, volume_dim,
+                                                         Frame::Inertial>>,
+          SolveXcts::OptionTags::SchwarzSmootherGroup>>;
   // This data needs to be communicated on subdomain overlap regions
   using communicated_overlap_tags = tmpl::list<
       // For linearized sources
