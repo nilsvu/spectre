@@ -62,7 +62,7 @@ struct MinusLaplacian {
  * original PDEs are to a set of decoupled flat-space Poisson equations with
  * Dirichlet boundary conditions.
  *
- * \tparam Dim Spatial dimension
+ * \tparam PoissonSystem Poisson system
  * \tparam OptionsGroup The options group identifying the
  * `LinearSolver::Schwarz::Schwarz` solver that defines the subdomain geometry.
  * \tparam Solver Any class that provides a `solve` and a `reset` function,
