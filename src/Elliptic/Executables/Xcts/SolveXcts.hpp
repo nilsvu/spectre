@@ -214,7 +214,8 @@ struct Metavariables {
 
   // Collect all items to store in the cache.
   using const_global_cache_tags =
-      tmpl::list<background_tag, initial_guess_tag, Tags::EventsAndTriggers>;
+      tmpl::list<background_tag, initial_guess_tag, Tags::EventsAndTriggers,
+                 ::Xcts::Tags::ConstraintsOversampleMesh<volume_dim>>;
 
   struct factory_creation
       : tt::ConformsTo<Options::protocols::FactoryCreation> {
@@ -228,7 +229,7 @@ struct Metavariables {
                            observe_fields, analytic_solution_fields,
                            LinearSolver::multigrid::Tags::IsFinestGrid>,
                        Events::ObserveNorms<
-                           nonlinear_solver_iteration_id, constraint_fields,
+                           nonlinear_solver_iteration_id, observe_fields,
                            LinearSolver::multigrid::Tags::IsFinestGrid>>>>,
         tmpl::pair<Trigger, elliptic::Triggers::all_triggers<
                                 typename nonlinear_solver::options_group>>>;
@@ -261,7 +262,8 @@ struct Metavariables {
           system, background_tag, typename schwarz_smoother::options_group>,
       ::Initialization::Actions::AddComputeTags<tmpl::list<
           // Constraint norms
-          Xcts::Tags::SpacetimeQuantitiesCompute<constraint_fields>,
+          Xcts::Tags::SpacetimeQuantitiesCompute<background_tag,
+                                                 constraint_fields>,
           // For linearized boundary conditions
           elliptic::Tags::BoundaryFieldsCompute<volume_dim, fields_tag>,
           elliptic::Tags::BoundaryFluxesCompute<volume_dim, fields_tag,
