@@ -93,10 +93,19 @@ LinearSolver:
         Restart: None
         Preconditioner:
           MinusLaplacian:
-            Solver: ExplicitInverse
+            Solver:
+              ExplicitInverse:
+                FillFactor: 1
+                Verbosity: Silent
             BoundaryConditions: Auto
     SkipResets: True
     ObservePerCoreReductions: False
+
+Constraints:
+  OversampleMesh:
+    Extents: 12
+    Basis: Legendre
+    Quadrature: GaussLobatto
 
 EventsAndTriggers:
   ? HasConverged
@@ -124,8 +133,8 @@ EventsAndTriggers:
           - ConformalFactor
           - LapseTimesConformalFactor
           - ShiftExcess
-          - HamiltonianConstraint
-          - MomentumConstraint
+          # - HamiltonianConstraint
+          # - MomentumConstraint
         InterpolateToMesh: None
         CoordinatesFloatingPointType: Double
         FloatingPointTypes: [Double]
