@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 
 #include "DataStructures/CachedTempBuffer.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
@@ -18,6 +19,7 @@
 #include "NumericalAlgorithms/Interpolation/RegularGridInterpolant.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
+#include "Options/Auto.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
@@ -149,7 +151,7 @@ struct Constraints {
 };
 template <size_t Dim>
 struct OversampleMesh : db::SimpleTag {
-  using type = ::Mesh<Dim>;
+  using type = Options::Auto<::Mesh<Dim>, Options::AutoLabel::None>;
   using group = Constraints;
   static constexpr Options::String help = "Compute constraints on this mesh.";
 };
@@ -159,7 +161,7 @@ namespace Tags {
 
 template <size_t Dim>
 struct ConstraintsOversampleMesh : db::SimpleTag {
-  using type = ::Mesh<Dim>;
+  using type = std::optional<::Mesh<Dim>>;
   using option_tags = tmpl::list<OptionTags::OversampleMesh<Dim>>;
   static constexpr bool pass_metavariables = false;
   static type create_from_options(const type& value) noexcept { return value; }
@@ -189,8 +191,9 @@ struct SpacetimeQuantitiesCompute : ::Tags::Variables<Tags>, db::ComputeTag {
                        const ::Variables<vars_tags>& original_vars,
                        const Mesh<3>& original_mesh,
                        const ElementMap<3, Frame::Inertial>& element_map,
-                       const Mesh<3>& mesh,
+                       const std::optional<Mesh<3>>& oversample_mesh,
                        const Background& background) noexcept {
+    const Mesh<3>& mesh = oversample_mesh.value_or(original_mesh);
     const size_t num_points = mesh.number_of_grid_points();
     if (result->number_of_grid_points() != num_points) {
       result->initialize(num_points);

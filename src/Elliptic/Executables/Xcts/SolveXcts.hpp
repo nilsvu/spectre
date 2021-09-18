@@ -232,7 +232,7 @@ struct Metavariables {
                            observe_fields, analytic_solution_fields,
                            LinearSolver::multigrid::Tags::IsFinestGrid>,
                        Events::ObserveNorms<
-                           nonlinear_solver_iteration_id, constraint_fields,
+                           nonlinear_solver_iteration_id, observe_fields,
                            LinearSolver::multigrid::Tags::IsFinestGrid>>>>,
         tmpl::pair<Trigger, elliptic::Triggers::all_triggers<
                                 typename nonlinear_solver::options_group>>>;
