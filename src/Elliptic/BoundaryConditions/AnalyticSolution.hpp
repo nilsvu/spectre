@@ -135,7 +135,48 @@ class AnalyticSolution<System, Dim, tmpl::list<FieldTags...>,
 
   template <typename OptionalAnalyticSolutions>
   void apply(const gsl::not_null<typename FieldTags::type*>... fields,
-             const gsl::not_null<typename FieldTags::type*>... n_dot_fluxes,
+             const OptionalAnalyticSolutions& optional_analytic_solutions,
+             const Mesh<Dim>& volume_mesh, const Direction<Dim>& direction,
+             const tnsr::i<DataVector, Dim>& /*face_normal*/) const noexcept {
+    const auto& analytic_solutions = [&optional_analytic_solutions]() noexcept
+        -> const auto& {
+      if constexpr (tt::is_a_v<std::optional, OptionalAnalyticSolutions>) {
+        if (not optional_analytic_solutions.has_value()) {
+          ERROR_NO_TRACE(
+              "Trying to impose boundary conditions from an analytic solution, "
+              "but no analytic solution is available. You probably selected "
+              "the 'AnalyticSolution' boundary condition but chose to solve a "
+              "problem that has no analytic solution. If this is the case, you "
+              "should probably select a different boundary condition.");
+        }
+        return *optional_analytic_solutions;
+      } else {
+        return optional_analytic_solutions;
+      }
+    }
+    ();
+    const size_t slice_index =
+        index_to_slice_at(volume_mesh.extents(), direction);
+    const auto impose_boundary_condition = [this, &analytic_solutions,
+                                            &volume_mesh, &direction,
+                                            &slice_index](
+                                               auto field_tag_v,
+                                               const auto field) noexcept {
+      using field_tag = decltype(field_tag_v);
+      if (get<elliptic::Tags::BoundaryConditionType<field_tag>>(
+              boundary_condition_types_) ==
+          elliptic::BoundaryConditionType::Dirichlet) {
+        data_on_slice(
+            field, get<::Tags::Analytic<field_tag>>(analytic_solutions),
+            volume_mesh.extents(), direction.dimension(), slice_index);
+      }
+    };
+    EXPAND_PACK_LEFT_TO_RIGHT(impose_boundary_condition(FieldTags{}, fields));
+  }
+
+  template <typename OptionalAnalyticSolutions>
+  void apply(const gsl::not_null<typename FieldTags::type*>... n_dot_fluxes,
+             const typename FieldTags::type&... /*fields*/,
              const OptionalAnalyticSolutions& optional_analytic_solutions,
              const Mesh<Dim>& volume_mesh, const Direction<Dim>& direction,
              const tnsr::i<DataVector, Dim>& face_normal) const noexcept {
@@ -158,71 +199,61 @@ class AnalyticSolution<System, Dim, tmpl::list<FieldTags...>,
     ();
     const size_t slice_index =
         index_to_slice_at(volume_mesh.extents(), direction);
-    const auto impose_boundary_condition = [this, &analytic_solutions,
-                                            &volume_mesh, &direction,
-                                            &slice_index, &face_normal](
-                                               auto field_tag_v,
-                                               auto flux_tag_v,
-                                               const auto field,
-                                               const auto n_dot_flux) noexcept {
-      using field_tag = decltype(field_tag_v);
-      using flux_tag = decltype(flux_tag_v);
-      switch (get<elliptic::Tags::BoundaryConditionType<field_tag>>(
-          boundary_condition_types_)) {
-        case elliptic::BoundaryConditionType::Dirichlet:
-          data_on_slice(
-              field, get<::Tags::Analytic<field_tag>>(analytic_solutions),
-              volume_mesh.extents(), direction.dimension(), slice_index);
-          break;
-        case elliptic::BoundaryConditionType::Neumann:
-          normal_dot_flux(
-              n_dot_flux, face_normal,
-              data_on_slice(get<::Tags::Analytic<flux_tag>>(analytic_solutions),
-                            volume_mesh.extents(), direction.dimension(),
-                            slice_index));
-          break;
-        default:
-          ERROR("Unsupported boundary condition type: "
-                << get<elliptic::Tags::BoundaryConditionType<field_tag>>(
-                       boundary_condition_types_));
-      }
-    };
-    EXPAND_PACK_LEFT_TO_RIGHT(impose_boundary_condition(FieldTags{}, FluxTags{},
-                                                        fields, n_dot_fluxes));
+    const auto impose_boundary_condition =
+        [this, &analytic_solutions, &volume_mesh, &direction, &slice_index,
+         &face_normal](auto field_tag_v, auto flux_tag_v,
+                       const auto n_dot_flux) noexcept {
+          using field_tag = decltype(field_tag_v);
+          using flux_tag = decltype(flux_tag_v);
+          if (get<elliptic::Tags::BoundaryConditionType<field_tag>>(
+                  boundary_condition_types_) ==
+              elliptic::BoundaryConditionType::Neumann) {
+            normal_dot_flux(
+                n_dot_flux, face_normal,
+                data_on_slice(
+                    get<::Tags::Analytic<flux_tag>>(analytic_solutions),
+                    volume_mesh.extents(), direction.dimension(), slice_index));
+          }
+        };
+    EXPAND_PACK_LEFT_TO_RIGHT(
+        impose_boundary_condition(FieldTags{}, FluxTags{}, n_dot_fluxes));
   }
 
   using argument_tags_linearized = tmpl::list<>;
   using volume_tags_linearized = tmpl::list<>;
 
   void apply_linearized(
-      const gsl::not_null<typename FieldTags::type*>... fields,
-      const gsl::not_null<typename FieldTags::type*>... n_dot_fluxes)
-      const noexcept {
-    const auto impose_boundary_condition = [this](
-                                               auto field_tag_v,
-                                               const auto field,
-                                               const auto n_dot_flux) noexcept {
+      const gsl::not_null<typename FieldTags::type*>... fields) const noexcept {
+    const auto impose_boundary_condition = [this](auto field_tag_v,
+                                                  const auto field) noexcept {
       using field_tag = decltype(field_tag_v);
-      switch (get<elliptic::Tags::BoundaryConditionType<field_tag>>(
-          boundary_condition_types_)) {
-        case elliptic::BoundaryConditionType::Dirichlet:
-          for (auto& field_component : *field) {
-            field_component = 0.;
-          }
-          break;
-        case elliptic::BoundaryConditionType::Neumann:
-          for (auto& n_dot_flux_component : *n_dot_flux) {
-            n_dot_flux_component = 0.;
-          }
-          break;
-        default:
-          ERROR("Unsupported boundary condition type: "
-                << get<elliptic::Tags::BoundaryConditionType<field_tag>>(
-                       boundary_condition_types_));
+      if (get<elliptic::Tags::BoundaryConditionType<field_tag>>(
+              boundary_condition_types_) ==
+          elliptic::BoundaryConditionType::Dirichlet) {
+        for (auto& field_component : *field) {
+          field_component = 0.;
+        }
       }
     };
+    EXPAND_PACK_LEFT_TO_RIGHT(impose_boundary_condition(FieldTags{}, fields));
+  }
+
+  void apply_linearized(
+      const gsl::not_null<typename FieldTags::type*>... n_dot_fluxes,
+      const typename FieldTags::type&... /*fields*/) const noexcept {
+    const auto impose_boundary_condition =
+        [this](auto field_tag_v, const auto n_dot_flux) noexcept {
+          using field_tag = decltype(field_tag_v);
+          if (get<elliptic::Tags::BoundaryConditionType<field_tag>>(
+                  boundary_condition_types_) ==
+              elliptic::BoundaryConditionType::Neumann) {
+            for (auto& n_dot_flux_component : *n_dot_flux) {
+              n_dot_flux_component = 0.;
+            }
+          }
+        };
     EXPAND_PACK_LEFT_TO_RIGHT(
-        impose_boundary_condition(FieldTags{}, fields, n_dot_fluxes));
+        impose_boundary_condition(FieldTags{}, n_dot_fluxes));
   }
 
   // NOLINTNEXTLINE

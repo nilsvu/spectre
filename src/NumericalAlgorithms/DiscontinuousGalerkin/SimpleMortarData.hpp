@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include <ostream>
 #include <optional>
+#include <ostream>
 #include <pup.h>  // IWYU pragma: keep
 #include <utility>
 
@@ -70,6 +70,24 @@ class SimpleMortarData {
     return *remote_data_;
   };
 
+  /// Retrieve the local data at `temporal_id`
+  LocalVars& local_data(const TemporalId& temporal_id) noexcept {
+    ASSERT(local_data_, "Local data not available.");
+    ASSERT(temporal_id == temporal_id_,
+           "Only have local data at temporal_id "
+               << temporal_id_ << ", but requesting at " << temporal_id);
+    return *local_data_;
+  };
+
+  /// Retrieve the remote data at `temporal_id`
+  RemoteVars& remote_data(const TemporalId& temporal_id) noexcept {
+    ASSERT(remote_data_, "Remote data not available.");
+    ASSERT(temporal_id == temporal_id_,
+           "Only have remote data at temporal_id "
+               << temporal_id_ << ", but requesting at " << temporal_id);
+    return *remote_data_;
+  };
+
  private:
   TemporalId temporal_id_{};
   std::optional<LocalVars> local_data_{};
@@ -105,7 +123,9 @@ std::pair<LocalVars, RemoteVars>
 SimpleMortarData<TemporalId, LocalVars, RemoteVars>::extract() noexcept {
   ASSERT(local_data_.has_value() and remote_data_.has_value(),
          "Tried to extract boundary data, but do not have "
-             << (local_data_ ? "remote" : remote_data_ ? "local" : "any")
+             << (local_data_    ? "remote"
+                 : remote_data_ ? "local"
+                                : "any")
              << " data.");
   auto result =
       std::make_pair(std::move(*local_data_), std::move(*remote_data_));

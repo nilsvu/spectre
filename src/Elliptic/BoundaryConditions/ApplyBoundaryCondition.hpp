@@ -42,7 +42,7 @@ void apply_boundary_condition(
     const elliptic::BoundaryConditions::BoundaryCondition<Dim, Registrars>&
         boundary_condition,
     const db::DataBox<DbTagsList>& box, const MapKeys& map_keys_to_direction,
-    const gsl::not_null<FieldsAndFluxes*>... fields_and_fluxes) noexcept {
+    const FieldsAndFluxes&... fields_and_fluxes) noexcept {
   call_with_dynamic_type<
       void, typename elliptic::BoundaryConditions::BoundaryCondition<
                 Dim, Registrars>::creatable_classes>(

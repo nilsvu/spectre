@@ -31,36 +31,45 @@ double RobinImpl::dirichlet_weight() const noexcept {
 double RobinImpl::neumann_weight() const noexcept { return neumann_weight_; }
 double RobinImpl::constant() const noexcept { return constant_; }
 
-void RobinImpl::apply(const gsl::not_null<Scalar<DataVector>*> field,
-                      const gsl::not_null<Scalar<DataVector>*>
-                          n_dot_field_gradient) const noexcept {
+void RobinImpl::apply(
+    const gsl::not_null<Scalar<DataVector>*> field) const noexcept {
   if (neumann_weight_ == 0.) {
     ASSERT(
         not equal_within_roundoff(dirichlet_weight_, 0.),
         "The dirichlet_weight is close to zero. Set it to a non-zero value to "
         "avoid divisions by small numbers.");
     get(*field) = constant_ / dirichlet_weight_;
-  } else {
+  }
+}
+
+void RobinImpl::apply(
+    const gsl::not_null<Scalar<DataVector>*> n_dot_field_gradient,
+    const Scalar<DataVector>& field) const noexcept {
+  if (neumann_weight_ != 0.) {
     ASSERT(not equal_within_roundoff(neumann_weight_, 0.),
            "The neumann_weight is close to zero. Set it to a non-zero value to "
            "avoid divisions by small numbers.");
     get(*n_dot_field_gradient) =
-        (constant_ - dirichlet_weight_ * get(*field)) / neumann_weight_;
+        (constant_ - dirichlet_weight_ * get(field)) / neumann_weight_;
   }
 }
 
 void RobinImpl::apply_linearized(
-    const gsl::not_null<Scalar<DataVector>*> field_correction,
-    const gsl::not_null<Scalar<DataVector>*> n_dot_field_gradient_correction)
-    const noexcept {
+    const gsl::not_null<Scalar<DataVector>*> field_correction) const noexcept {
   if (neumann_weight_ == 0.) {
     get(*field_correction) = 0.;
-  } else {
+  }
+}
+
+void RobinImpl::apply_linearized(
+    const gsl::not_null<Scalar<DataVector>*> n_dot_field_gradient_correction,
+    const Scalar<DataVector>& field_correction) const noexcept {
+  if (neumann_weight_ != 0.) {
     ASSERT(not equal_within_roundoff(neumann_weight_, 0.),
            "The neumann_weight is close to zero. Set it to a non-zero value to "
            "avoid divisions by small numbers.");
     get(*n_dot_field_gradient_correction) =
-        -dirichlet_weight_ / neumann_weight_ * get(*field_correction);
+        -dirichlet_weight_ / neumann_weight_ * get(field_correction);
   }
 }
 

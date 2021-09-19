@@ -45,12 +45,17 @@ struct FlatnessImpl {
   static void apply(
       gsl::not_null<Scalar<DataVector>*> conformal_factor,
       gsl::not_null<Scalar<DataVector>*> lapse_times_conformal_factor,
-      gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess,
-      gsl::not_null<Scalar<DataVector>*> n_dot_conformal_factor_gradient,
+      gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess) noexcept;
+
+  static void apply(
+      gsl::not_null<Scalar<DataVector>*> /* n_dot_conformal_factor_gradient */,
       gsl::not_null<Scalar<DataVector>*>
-          n_dot_lapse_times_conformal_factor_gradient,
-      gsl::not_null<tnsr::I<DataVector, 3>*>
-          n_dot_longitudinal_shift_excess) noexcept;
+      /* n_dot_lapse_times_conformal_factor_gradient */,
+      gsl::not_null<
+          tnsr::I<DataVector, 3>*> /* n_dot_longitudinal_shift_excess */,
+      const Scalar<DataVector>& /* conformal_factor */,
+      const Scalar<DataVector>& /* lapse_times_conformal_factor */,
+      const tnsr::I<DataVector, 3>& /* shift_excess */) noexcept {}
 
   using argument_tags_linearized = tmpl::list<>;
   using volume_tags_linearized = tmpl::list<>;
@@ -73,13 +78,19 @@ struct FlatnessImpl {
       gsl::not_null<Scalar<DataVector>*> conformal_factor_correction,
       gsl::not_null<Scalar<DataVector>*>
           lapse_times_conformal_factor_correction,
-      gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess_correction,
-      gsl::not_null<Scalar<DataVector>*>
-          n_dot_conformal_factor_gradient_correction,
-      gsl::not_null<Scalar<DataVector>*>
-          n_dot_lapse_times_conformal_factor_gradient_correction,
-      gsl::not_null<tnsr::I<DataVector, 3>*>
-          n_dot_longitudinal_shift_excess_correction) noexcept;
+      gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess_correction) noexcept;
+
+  static void apply_linearized(
+      const gsl::not_null<Scalar<DataVector>*>
+      /*n_dot_conformal_factor_gradient_correction*/,
+      const gsl::not_null<Scalar<DataVector>*>
+      /*n_dot_lapse_times_conformal_factor_gradient_correction*/,
+      const gsl::not_null<tnsr::I<DataVector, 3>*>
+      /*n_dot_longitudinal_shift_excess_correction*/,
+      const Scalar<DataVector>& /*conformal_factor_correction*/,
+      const Scalar<DataVector>&
+      /*lapse_times_conformal_factor_correction*/,
+      const tnsr::I<DataVector, 3>& /*shift_excess_correction*/) noexcept {}
 };
 
 bool operator==(const FlatnessImpl& lhs, const FlatnessImpl& rhs) noexcept;

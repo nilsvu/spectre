@@ -62,16 +62,20 @@ struct RobinImpl {
   using argument_tags = tmpl::list<>;
   using volume_tags = tmpl::list<>;
 
-  void apply(
-      gsl::not_null<Scalar<DataVector>*> field,
-      gsl::not_null<Scalar<DataVector>*> n_dot_field_gradient) const noexcept;
+  void apply(gsl::not_null<Scalar<DataVector>*> field) const noexcept;
+
+  void apply(gsl::not_null<Scalar<DataVector>*> n_dot_field_gradient,
+             const Scalar<DataVector>& field) const noexcept;
 
   using argument_tags_linearized = tmpl::list<>;
   using volume_tags_linearized = tmpl::list<>;
 
-  void apply_linearized(gsl::not_null<Scalar<DataVector>*> field_correction,
-                        gsl::not_null<Scalar<DataVector>*>
-                            n_dot_field_gradient_correction) const noexcept;
+  void apply_linearized(
+      gsl::not_null<Scalar<DataVector>*> field_correction) const noexcept;
+
+  void apply_linearized(
+      gsl::not_null<Scalar<DataVector>*> n_dot_field_gradient_correction,
+      const Scalar<DataVector>& field_correction) const noexcept;
 
   void pup(PUP::er& p) noexcept;
 

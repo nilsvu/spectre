@@ -116,14 +116,26 @@ struct ApparentHorizonImpl {
                           tmpl::list<>>>>;
   using volume_tags = tmpl::list<>;
 
+  void apply(gsl::not_null<Scalar<DataVector>*> conformal_factor,
+             gsl::not_null<Scalar<DataVector>*> lapse_times_conformal_factor,
+             gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess,
+             const tnsr::i<DataVector, 3>& face_normal,
+             const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+             const Scalar<DataVector>& face_normal_magnitude,
+             const tnsr::I<DataVector, 3>& x,
+             const Scalar<DataVector>& extrinsic_curvature_trace,
+             const tnsr::I<DataVector, 3>& shift_background,
+             const tnsr::II<DataVector, 3>& longitudinal_shift_background)
+      const noexcept;
+
   void apply(
-      gsl::not_null<Scalar<DataVector>*> conformal_factor,
-      gsl::not_null<Scalar<DataVector>*> lapse_times_conformal_factor,
-      gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess,
       gsl::not_null<Scalar<DataVector>*> n_dot_conformal_factor_gradient,
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient,
       gsl::not_null<tnsr::I<DataVector, 3>*> n_dot_longitudinal_shift_excess,
+      const Scalar<DataVector>& conformal_factor,
+      const Scalar<DataVector>& lapse_times_conformal_factor,
+      const tnsr::I<DataVector, 3>& shift_excess,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
@@ -133,14 +145,28 @@ struct ApparentHorizonImpl {
       const tnsr::II<DataVector, 3>& longitudinal_shift_background)
       const noexcept;
 
+  void apply(gsl::not_null<Scalar<DataVector>*> conformal_factor,
+             gsl::not_null<Scalar<DataVector>*> lapse_times_conformal_factor,
+             gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess,
+             const tnsr::i<DataVector, 3>& face_normal,
+             const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+             const Scalar<DataVector>& face_normal_magnitude,
+             const tnsr::I<DataVector, 3>& x,
+             const Scalar<DataVector>& extrinsic_curvature_trace,
+             const tnsr::I<DataVector, 3>& shift_background,
+             const tnsr::II<DataVector, 3>& longitudinal_shift_background,
+             const tnsr::II<DataVector, 3>& inv_conformal_metric,
+             const tnsr::Ijj<DataVector, 3>& conformal_christoffel_second_kind)
+      const noexcept;
+
   void apply(
-      gsl::not_null<Scalar<DataVector>*> conformal_factor,
-      gsl::not_null<Scalar<DataVector>*> lapse_times_conformal_factor,
-      gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess,
       gsl::not_null<Scalar<DataVector>*> n_dot_conformal_factor_gradient,
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient,
       gsl::not_null<tnsr::I<DataVector, 3>*> n_dot_longitudinal_shift_excess,
+      const Scalar<DataVector>& conformal_factor,
+      const Scalar<DataVector>& lapse_times_conformal_factor,
+      const tnsr::I<DataVector, 3>& shift_excess,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
@@ -179,12 +205,27 @@ struct ApparentHorizonImpl {
       gsl::not_null<Scalar<DataVector>*>
           lapse_times_conformal_factor_correction,
       gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess_correction,
+      const tnsr::i<DataVector, 3>& face_normal,
+      const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+      const Scalar<DataVector>& face_normal_magnitude,
+      const tnsr::I<DataVector, 3>& x,
+      const Scalar<DataVector>& extrinsic_curvature_trace,
+      const tnsr::II<DataVector, 3>& longitudinal_shift_background,
+      const Scalar<DataVector>& conformal_factor,
+      const Scalar<DataVector>& lapse_times_conformal_factor,
+      const tnsr::I<DataVector, 3>& n_dot_longitudinal_shift_excess)
+      const noexcept;
+
+  void apply_linearized(
       gsl::not_null<Scalar<DataVector>*>
           n_dot_conformal_factor_gradient_correction,
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient_correction,
       gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess_correction,
+      const Scalar<DataVector>& conformal_factor_correction,
+      const Scalar<DataVector>& lapse_times_conformal_factor_correction,
+      const tnsr::I<DataVector, 3>& shift_excess_correction,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,
@@ -201,12 +242,29 @@ struct ApparentHorizonImpl {
       gsl::not_null<Scalar<DataVector>*>
           lapse_times_conformal_factor_correction,
       gsl::not_null<tnsr::I<DataVector, 3>*> shift_excess_correction,
+      const tnsr::i<DataVector, 3>& face_normal,
+      const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
+      const Scalar<DataVector>& face_normal_magnitude,
+      const tnsr::I<DataVector, 3>& x,
+      const Scalar<DataVector>& extrinsic_curvature_trace,
+      const tnsr::II<DataVector, 3>& longitudinal_shift_background,
+      const Scalar<DataVector>& conformal_factor,
+      const Scalar<DataVector>& lapse_times_conformal_factor,
+      const tnsr::I<DataVector, 3>& n_dot_longitudinal_shift_excess,
+      const tnsr::II<DataVector, 3>& inv_conformal_metric,
+      const tnsr::Ijj<DataVector, 3>& conformal_christoffel_second_kind)
+      const noexcept;
+
+  void apply_linearized(
       gsl::not_null<Scalar<DataVector>*>
           n_dot_conformal_factor_gradient_correction,
       gsl::not_null<Scalar<DataVector>*>
           n_dot_lapse_times_conformal_factor_gradient_correction,
       gsl::not_null<tnsr::I<DataVector, 3>*>
           n_dot_longitudinal_shift_excess_correction,
+      const Scalar<DataVector>& conformal_factor_correction,
+      const Scalar<DataVector>& lapse_times_conformal_factor_correction,
+      const tnsr::I<DataVector, 3>& shift_excess_correction,
       const tnsr::i<DataVector, 3>& face_normal,
       const tnsr::ij<DataVector, 3>& deriv_unnormalized_face_normal,
       const Scalar<DataVector>& face_normal_magnitude,

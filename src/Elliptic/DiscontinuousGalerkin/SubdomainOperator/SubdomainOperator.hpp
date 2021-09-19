@@ -140,6 +140,7 @@ struct SubdomainOperator
       domain::Tags::Mesh<Dim>,
       domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
       domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>,
+      domain::Tags::Faces<Dim, domain::Tags::FaceNormal<Dim>>,
       domain::Tags::Faces<Dim,
                           domain::Tags::UnnormalizedFaceNormalMagnitude<Dim>>,
       ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
@@ -256,7 +257,7 @@ struct SubdomainOperator
         [&box, &local_domain = domain, &override_boundary_conditions](
             const ElementId<Dim>& local_element_id,
             const Direction<Dim>& local_direction, auto is_overlap,
-            const auto& map_keys, const auto... fields_and_fluxes) noexcept {
+            const auto& map_keys, const auto&... fields_and_fluxes) noexcept {
           constexpr bool is_overlap_v =
               std::decay_t<decltype(is_overlap)>::value;
           // Get boundary conditions from domain, or use overridden boundary
@@ -331,7 +332,7 @@ struct SubdomainOperator
     const auto apply_boundary_condition_center =
         [&apply_boundary_condition, &local_central_element = central_element](
             const Direction<Dim>& local_direction,
-            const auto... fields_and_fluxes) noexcept {
+            const auto&... fields_and_fluxes) noexcept {
           apply_boundary_condition(local_central_element.id(), local_direction,
                                    std::false_type{}, local_direction,
                                    fields_and_fluxes...);
@@ -417,7 +418,7 @@ struct SubdomainOperator
         const auto apply_boundary_condition_neighbor =
             [&apply_boundary_condition, &local_neighbor_id = neighbor_id,
              &overlap_id](const Direction<Dim>& local_direction,
-                          const auto... fields_and_fluxes) noexcept {
+                          const auto&... fields_and_fluxes) noexcept {
               apply_boundary_condition(
                   local_neighbor_id, local_direction, std::true_type{},
                   std::forward_as_tuple(overlap_id, local_direction),
@@ -573,10 +574,11 @@ struct SubdomainOperator
         [this, &result, &operand](const auto&... args) noexcept {
           elliptic::dg::apply_operator<System, linearized>(
               make_not_null(&result->element_data),
+              make_not_null(&central_primal_fluxes_),
               make_not_null(&central_mortar_data_), operand.element_data,
-              central_primal_fluxes_, args...);
+              args...);
         },
-        box, temporal_id, sources_args);
+        box, temporal_id, apply_boundary_condition_center, sources_args);
     // Apply on neighbors
     for (const auto& [direction, neighbors] : central_element.neighbors()) {
       const auto& orientation = neighbors.orientation();
@@ -591,16 +593,26 @@ struct SubdomainOperator
           continue;
         }
 
+        const auto apply_boundary_condition_neighbor =
+            [&apply_boundary_condition, &local_neighbor_id = neighbor_id,
+             &overlap_id](const Direction<Dim>& local_direction,
+                          const auto&... fields_and_fluxes) noexcept {
+              apply_boundary_condition(
+                  local_neighbor_id, local_direction, std::true_type{},
+                  std::forward_as_tuple(overlap_id, local_direction),
+                  fields_and_fluxes...);
+            };
+
         elliptic::util::apply_at<apply_args_tags_overlap,
                                  args_tags_from_center>(
             [this, &overlap_id](const auto&... args) noexcept {
               elliptic::dg::apply_operator<System, linearized>(
                   make_not_null(&extended_results_[overlap_id]),
+                  make_not_null(&neighbors_primal_fluxes_.at(overlap_id)),
                   make_not_null(&neighbors_mortar_data_.at(overlap_id)),
-                  extended_operand_vars_.at(overlap_id),
-                  neighbors_primal_fluxes_.at(overlap_id), args...);
+                  extended_operand_vars_.at(overlap_id), args...);
             },
-            box, overlap_id, temporal_id,
+            box, overlap_id, temporal_id, apply_boundary_condition_neighbor,
             elliptic::util::apply_at<sources_args_tags_overlap,
                                      args_tags_from_center>(get_items, box,
                                                             overlap_id));

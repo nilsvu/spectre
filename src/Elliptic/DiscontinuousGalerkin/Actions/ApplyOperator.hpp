@@ -198,7 +198,7 @@ struct PrepareAndSendMortarData<
     const auto apply_boundary_condition =
         [&box, &boundary_conditions, &element_id](
             const Direction<Dim>& direction,
-            const auto... fields_and_fluxes) noexcept {
+            const auto&... fields_and_fluxes) noexcept {
           ASSERT(
               boundary_conditions.contains(direction),
               "No boundary condition is available in block "
@@ -344,6 +344,7 @@ struct ReceiveMortarDataAndApplyOperator<
       MortarDataInboxTag<Dim, TemporalIdTag,
                          typename PrimalMortarFieldsTag::tags_list,
                          typename PrimalMortarFluxesTag::tags_list>;
+  using BoundaryConditionsBase = typename System::boundary_conditions_base;
 
  public:
   using const_global_cache_tags =
@@ -352,12 +353,12 @@ struct ReceiveMortarDataAndApplyOperator<
   using inbox_tags = tmpl::list<mortar_data_inbox_tag>;
 
   template <typename DbTags, typename... InboxTags, typename Metavariables,
-            typename ArrayIndex, typename ActionList,
+            typename ActionList,
             typename ParallelComponent>
   static std::tuple<db::DataBox<DbTags>&&, Parallel::AlgorithmExecution> apply(
       db::DataBox<DbTags>& box, tuples::TaggedTuple<InboxTags...>& inboxes,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) noexcept {
     const auto& temporal_id = get<TemporalIdTag>(box);
 
@@ -383,25 +384,82 @@ struct ReceiveMortarDataAndApplyOperator<
           });
     }
 
-    // Apply DG operator
-    db::mutate<OperatorAppliedToFieldsTag, all_mortar_data_tag>(
+    const auto& domain = db::get<domain::Tags::Domain<Dim>>(box);
+    const auto& boundary_conditions = domain.blocks()
+                                          .at(element_id.block_id())
+                                          .external_boundary_conditions();
+    const auto apply_boundary_condition =
+        [&box, &boundary_conditions, &element_id](
+            const Direction<Dim>& direction,
+            const auto&... fields_and_fluxes) noexcept {
+          ASSERT(
+              boundary_conditions.contains(direction),
+              "No boundary condition is available in block "
+                  << element_id.block_id() << " in direction " << direction
+                  << ". Make sure you are setting up boundary conditions when "
+                     "creating the domain.");
+          ASSERT(dynamic_cast<const BoundaryConditionsBase*>(
+                     boundary_conditions.at(direction).get()) != nullptr,
+                 "The boundary condition in block "
+                     << element_id.block_id() << " in direction " << direction
+                     << " has an unexpected type. Make sure it derives off the "
+                        "'boundary_conditions_base' class set in the system.");
+          const auto& boundary_condition =
+              dynamic_cast<const BoundaryConditionsBase&>(
+                  *boundary_conditions.at(direction));
+          elliptic::apply_boundary_condition<Linearized>(
+              boundary_condition, box, direction, fields_and_fluxes...);
+        };
+
+    // Can't `db::get` the arguments for the boundary conditions within
+    // `db::mutate`, so we extract the data to mutate and move it back in when
+    // we're done.
+    typename OperatorAppliedToFieldsTag::type operator_applied_to_fields;
+    typename PrimalFluxesTag::type primal_fluxes;
+    typename all_mortar_data_tag::type all_mortar_data;
+    db::mutate<OperatorAppliedToFieldsTag, PrimalFluxesTag,
+               all_mortar_data_tag>(
         make_not_null(&box),
-        [](const auto&... args) noexcept {
-          elliptic::dg::apply_operator<System, Linearized>(args...);
-        },
-        db::get<PrimalFieldsTag>(box), db::get<PrimalFluxesTag>(box),
-        db::get<domain::Tags::Mesh<Dim>>(box),
+        [&operator_applied_to_fields, &primal_fluxes, &all_mortar_data](
+            const auto local_operator_applied_to_fields,
+            const auto local_primal_fluxes, const auto local_all_mortar_data) {
+          operator_applied_to_fields =
+              std::move(*local_operator_applied_to_fields);
+          primal_fluxes = std::move(*local_primal_fluxes);
+          all_mortar_data = std::move(*local_all_mortar_data);
+        });
+
+    // Apply DG operator
+    elliptic::dg::apply_operator<System, Linearized>(
+        make_not_null(&operator_applied_to_fields),
+        make_not_null(&primal_fluxes), make_not_null(&all_mortar_data),
+        db::get<PrimalFieldsTag>(box), db::get<domain::Tags::Mesh<Dim>>(box),
         db::get<domain::Tags::InverseJacobian<Dim, Frame::Logical,
                                               Frame::Inertial>>(box),
         db::get<domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>>(
             box),
+        db::get<domain::Tags::Faces<Dim, domain::Tags::FaceNormal<Dim>>>(box),
         db::get<domain::Tags::Faces<
             Dim, domain::Tags::UnnormalizedFaceNormalMagnitude<Dim>>>(box),
         db::get<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>(box),
         db::get<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>(box),
         db::get<elliptic::dg::Tags::PenaltyParameter>(box),
         db::get<elliptic::dg::Tags::Massive>(box), temporal_id,
+        apply_boundary_condition,
         std::forward_as_tuple(db::get<SourcesArgsTags>(box)...));
+
+    // Move the mutated data back into the DataBox
+    db::mutate<OperatorAppliedToFieldsTag, PrimalFluxesTag,
+               all_mortar_data_tag>(
+        make_not_null(&box),
+        [&operator_applied_to_fields, &primal_fluxes, &all_mortar_data](
+            const auto local_operator_applied_to_fields,
+            const auto local_primal_fluxes, const auto local_all_mortar_data) {
+          *local_operator_applied_to_fields =
+              std::move(operator_applied_to_fields);
+          *local_primal_fluxes = std::move(primal_fluxes);
+          *local_all_mortar_data = std::move(all_mortar_data);
+        });
 
     return {std::move(box), Parallel::AlgorithmExecution::Continue};
   }
@@ -533,7 +591,7 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource<
     const auto apply_boundary_condition =
         [&box, &boundary_conditions, &element_id](
             const Direction<Dim>& direction,
-            const auto... fields_and_fluxes) noexcept {
+            const auto&... fields_and_fluxes) noexcept {
           ASSERT(
               boundary_conditions.contains(direction),
               "No boundary condition is available in block "
