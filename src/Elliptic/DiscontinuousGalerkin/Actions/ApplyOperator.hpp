@@ -390,6 +390,7 @@ struct ReceiveMortarDataAndApplyOperator<
           elliptic::dg::apply_operator<System, Linearized>(args...);
         },
         db::get<PrimalFieldsTag>(box), db::get<PrimalFluxesTag>(box),
+        db::get<domain::Tags::Element<Dim>>(box),
         db::get<domain::Tags::Mesh<Dim>>(box),
         db::get<domain::Tags::InverseJacobian<Dim, Frame::Logical,
                                               Frame::Inertial>>(box),
