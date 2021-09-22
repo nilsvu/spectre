@@ -30,6 +30,7 @@ template <Xcts::Geometry ConformalGeometry>
 ApparentHorizonImpl<ConformalGeometry>::ApparentHorizonImpl(
     std::array<double, 3> center, std::array<double, 3> rotation,
     std::optional<gr::Solutions::KerrSchild> kerr_solution_for_lapse,
+    const bool impose_on_lapse,
     std::optional<gr::Solutions::KerrSchild>
         kerr_solution_for_negative_expansion,
     const Options::Context& context)
@@ -37,6 +38,7 @@ ApparentHorizonImpl<ConformalGeometry>::ApparentHorizonImpl(
       rotation_(rotation),
       // NOLINTNEXTLINE(performance-move-const-arg)
       kerr_solution_for_lapse_(std::move(kerr_solution_for_lapse)),
+      impose_on_lapse_(impose_on_lapse),
       kerr_solution_for_negative_expansion_(
           // NOLINTNEXTLINE(performance-move-const-arg)
           std::move(kerr_solution_for_negative_expansion)) {
@@ -220,6 +222,7 @@ void apparent_horizon_impl(
         n_dot_longitudinal_shift_excess,
     const std::array<double, 3>& center, const std::array<double, 3>& rotation,
     const std::optional<gr::Solutions::KerrSchild>& kerr_solution_for_lapse,
+    const bool impose_on_lapse,
     const std::optional<gr::Solutions::KerrSchild>&
         kerr_solution_for_negative_expansion,
     const tnsr::i<DataVector, 3>& face_normal,
@@ -338,6 +341,9 @@ void apparent_horizon_impl(
     *lapse_times_conformal_factor =
         get<gr::Tags::Lapse<DataVector>>(kerr_solution_for_lapse->variables(
             x, 0., tmpl::list<gr::Tags::Lapse<DataVector>>{}));
+    if (impose_on_lapse) {
+      get(*lapse_times_conformal_factor) *= get(*conformal_factor);
+    }
   } else {
     get(*n_dot_lapse_times_conformal_factor_gradient) = 0.;
   }
@@ -357,6 +363,7 @@ void linearized_apparent_horizon_impl(
         n_dot_longitudinal_shift_correction,
     const std::array<double, 3>& center,
     const std::optional<gr::Solutions::KerrSchild>& kerr_solution_for_lapse,
+    const bool impose_on_lapse,
     const std::optional<gr::Solutions::KerrSchild>&
         kerr_solution_for_negative_expansion,
     const tnsr::i<DataVector, 3>& face_normal,
@@ -376,8 +383,14 @@ void linearized_apparent_horizon_impl(
         conformal_christoffel_second_kind) {
   // Allocate some temporary memory
   TempBuffer<tmpl::list<::Tags::TempI<0, 3>, ::Tags::TempScalar<1>,
-                        ::Tags::TempScalar<2>>>
+                        ::Tags::TempScalar<2>, ::Tags::TempI<3, 3>>>
       buffer{face_normal.begin()->size()};
+  // Center the coordinates
+  tnsr::I<DataVector, 3>& x = get<::Tags::TempI<3, 3>>(buffer);
+  x = x_offcenter;
+  get<0>(x) -= center[0];
+  get<1>(x) -= center[1];
+  get<2>(x) -= center[2];
 
   // Negative-expansion quantities
   Scalar<DataVector>& expansion_of_solution =
@@ -385,12 +398,6 @@ void linearized_apparent_horizon_impl(
   Scalar<DataVector>& beta_orthogonal_correction =
       get<::Tags::TempScalar<1>>(buffer);
   if (kerr_solution_for_negative_expansion.has_value()) {
-    // Center the coordinates
-    tnsr::I<DataVector, 3>& x = get<::Tags::TempI<0, 3>>(buffer);
-    x = x_offcenter;
-    get<0>(x) -= center[0];
-    get<1>(x) -= center[1];
-    get<2>(x) -= center[2];
     detail::negative_expansion_quantities(
         make_not_null(&expansion_of_solution),
         make_not_null(&beta_orthogonal_correction),
@@ -487,7 +494,15 @@ void linearized_apparent_horizon_impl(
 
   // Lapse
   if (kerr_solution_for_lapse.has_value()) {
-    get(*lapse_times_conformal_factor_correction) = 0.;
+    if (impose_on_lapse) {
+      *lapse_times_conformal_factor_correction =
+          get<gr::Tags::Lapse<DataVector>>(kerr_solution_for_lapse->variables(
+              x, 0., tmpl::list<gr::Tags::Lapse<DataVector>>{}));
+      get(*lapse_times_conformal_factor_correction) *=
+          get(*conformal_factor_correction);
+    } else {
+      get(*lapse_times_conformal_factor_correction) = 0.;
+    }
   } else {
     get(*n_dot_lapse_times_conformal_factor_gradient_correction) = 0.;
   }
@@ -515,8 +530,9 @@ void ApparentHorizonImpl<ConformalGeometry>::apply(
       n_dot_conformal_factor_gradient,
       n_dot_lapse_times_conformal_factor_gradient,
       n_dot_longitudinal_shift_excess, center_, rotation_,
-      kerr_solution_for_lapse_, kerr_solution_for_negative_expansion_,
-      face_normal, deriv_unnormalized_face_normal, face_normal_magnitude, x,
+      kerr_solution_for_lapse_, impose_on_lapse_,
+      kerr_solution_for_negative_expansion_, face_normal,
+      deriv_unnormalized_face_normal, face_normal_magnitude, x,
       extrinsic_curvature_trace, shift_background,
       longitudinal_shift_background, std::nullopt, std::nullopt);
 }
@@ -545,8 +561,9 @@ void ApparentHorizonImpl<ConformalGeometry>::apply(
       n_dot_conformal_factor_gradient,
       n_dot_lapse_times_conformal_factor_gradient,
       n_dot_longitudinal_shift_excess, center_, rotation_,
-      kerr_solution_for_lapse_, kerr_solution_for_negative_expansion_,
-      face_normal, deriv_unnormalized_face_normal, face_normal_magnitude, x,
+      kerr_solution_for_lapse_, impose_on_lapse_,
+      kerr_solution_for_negative_expansion_, face_normal,
+      deriv_unnormalized_face_normal, face_normal_magnitude, x,
       extrinsic_curvature_trace, shift_background,
       longitudinal_shift_background, inv_conformal_metric,
       conformal_christoffel_second_kind);
@@ -578,8 +595,9 @@ void ApparentHorizonImpl<ConformalGeometry>::apply_linearized(
       shift_excess_correction, n_dot_conformal_factor_gradient_correction,
       n_dot_lapse_times_conformal_factor_gradient_correction,
       n_dot_longitudinal_shift_excess_correction, center_,
-      kerr_solution_for_lapse_, kerr_solution_for_negative_expansion_,
-      face_normal, deriv_unnormalized_face_normal, face_normal_magnitude, x,
+      kerr_solution_for_lapse_, impose_on_lapse_,
+      kerr_solution_for_negative_expansion_, face_normal,
+      deriv_unnormalized_face_normal, face_normal_magnitude, x,
       extrinsic_curvature_trace, longitudinal_shift_background,
       conformal_factor, lapse_times_conformal_factor,
       n_dot_longitudinal_shift_excess, std::nullopt, std::nullopt);
@@ -613,8 +631,9 @@ void ApparentHorizonImpl<ConformalGeometry>::apply_linearized(
       shift_excess_correction, n_dot_conformal_factor_gradient_correction,
       n_dot_lapse_times_conformal_factor_gradient_correction,
       n_dot_longitudinal_shift_excess_correction, center_,
-      kerr_solution_for_lapse_, kerr_solution_for_negative_expansion_,
-      face_normal, deriv_unnormalized_face_normal, face_normal_magnitude, x,
+      kerr_solution_for_lapse_, impose_on_lapse_,
+      kerr_solution_for_negative_expansion_, face_normal,
+      deriv_unnormalized_face_normal, face_normal_magnitude, x,
       extrinsic_curvature_trace, longitudinal_shift_background,
       conformal_factor, lapse_times_conformal_factor,
       n_dot_longitudinal_shift_excess, inv_conformal_metric,
@@ -626,6 +645,7 @@ void ApparentHorizonImpl<ConformalGeometry>::pup(PUP::er& p) {
   p | center_;
   p | rotation_;
   p | kerr_solution_for_lapse_;
+  p | impose_on_lapse_;
   p | kerr_solution_for_negative_expansion_;
 }
 

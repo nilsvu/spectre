@@ -58,6 +58,12 @@ struct ApparentHorizonImpl {
         "that the latter will not result in the standard Kerr-Schild slicing "
         "for a single black hole.";
   };
+  struct ImposeOnLapse {
+    using type = bool;
+    static constexpr Options::String help =
+        "Multiply the lapse boundary condition by the conformal factor, "
+        "meaning that the Kerr lapse is imposed directly on the lapse.";
+  };
   struct NegativeExpansion {
     using type =
         Options::Auto<gr::Solutions::KerrSchild, Options::AutoLabel::None>;
@@ -71,7 +77,8 @@ struct ApparentHorizonImpl {
         "horizon.";
   };
 
-  using options = tmpl::list<Center, Rotation, Lapse, NegativeExpansion>;
+  using options =
+      tmpl::list<Center, Rotation, Lapse, ImposeOnLapse, NegativeExpansion>;
 
   ApparentHorizonImpl() = default;
   ApparentHorizonImpl(const ApparentHorizonImpl&) = default;
@@ -83,6 +90,7 @@ struct ApparentHorizonImpl {
   ApparentHorizonImpl(
       std::array<double, 3> center, std::array<double, 3> rotation,
       std::optional<gr::Solutions::KerrSchild> kerr_solution_for_lapse,
+      bool impose_on_lapse,
       std::optional<gr::Solutions::KerrSchild>
           kerr_solution_for_negative_expansion,
       const Options::Context& context = {});
@@ -225,6 +233,7 @@ struct ApparentHorizonImpl {
   std::array<double, 3> rotation_ =
       make_array<3>(std::numeric_limits<double>::signaling_NaN());
   std::optional<gr::Solutions::KerrSchild> kerr_solution_for_lapse_{};
+  bool impose_on_lapse_;
   std::optional<gr::Solutions::KerrSchild>
       kerr_solution_for_negative_expansion_{};
 };
