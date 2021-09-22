@@ -12,6 +12,8 @@
 #include "DataStructures/DataBox/DataBox.hpp"
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Tag.hpp"
+#include "DataStructures/DenseMatrix.hpp"
+#include "DataStructures/DenseVector.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
@@ -45,6 +47,7 @@
 #include "Framework/ActionTesting.hpp"
 #include "Framework/TestHelpers.hpp"
 #include "Helpers/DataStructures/MakeWithRandomValues.hpp"
+#include "NumericalAlgorithms/LinearSolver/BuildMatrix.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "Parallel/Actions/SetupDataBox.hpp"
 #include "Parallel/Actions/TerminatePhase.hpp"
@@ -262,6 +265,55 @@ struct ApplySubdomainOperator {
   }
 };
 
+template <typename SubdomainOperator, typename Fields>
+struct TestSubdomainOperatorMatrix {
+  template <typename DbTags, typename... InboxTags, typename Metavariables,
+            size_t Dim, typename ActionList, typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTags>&&> apply(
+      db::DataBox<DbTags>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
+      const ElementId<Dim>& /*array_index*/, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) noexcept {
+    const auto& subdomain_data = db::get<SubdomainDataTag<Dim, Fields>>(box);
+
+    // Build the explicit matrix representation of the subdomain operator
+    // Note: This would be an interesting unit of work to benchmark.
+    const auto& subdomain_operator =
+        db::get<SubdomainOperatorTag<SubdomainOperator>>(box);
+    const size_t operator_size = subdomain_data.size();
+    DenseMatrix<double, blaze::columnMajor> operator_matrix{operator_size,
+                                                            operator_size};
+    auto operand_buffer =
+        make_with_value<std::decay_t<decltype(subdomain_data)>>(subdomain_data,
+                                                                0.);
+    auto result_buffer = make_with_value<
+        typename SubdomainOperatorAppliedToDataTag<Dim, Fields>::type>(
+        subdomain_data, 0.);
+    ::LinearSolver::Serial::build_matrix(
+        make_not_null(&operator_matrix), make_not_null(&operand_buffer),
+        make_not_null(&result_buffer), subdomain_operator,
+        std::forward_as_tuple(box));
+
+    // Check the matrix is equivalent to the operator by applying it to the
+    // data. We need to do the matrix multiplication on a contiguous buffer
+    // because the `ElementCenteredSubdomainData` is not contiguous.
+    DenseVector<double> contiguous_operand(operator_size);
+    std::copy(subdomain_data.begin(), subdomain_data.end(),
+              contiguous_operand.begin());
+    const DenseVector<double> contiguous_result =
+        operator_matrix * contiguous_operand;
+    std::copy(contiguous_result.begin(), contiguous_result.end(),
+              result_buffer.begin());
+    const auto& expected_operator_applied_to_data =
+        db::get<SubdomainOperatorAppliedToDataTag<Dim, Fields>>(box);
+    Approx custom_approx = Approx::custom().epsilon(1.e-12).scale(1.0);
+    CHECK_ITERABLE_CUSTOM_APPROX(
+        result_buffer, expected_operator_applied_to_data, custom_approx);
+    return {std::move(box)};
+  }
+};
+
 template <typename Metavariables, typename System, typename SubdomainOperator,
           typename ExtraInitActions>
 struct ElementArray {
@@ -319,6 +371,8 @@ struct ElementArray {
                      Parallel::Actions::TerminatePhase,
                      ApplySubdomainOperator<SubdomainOperator,
                                             typename fields_tag::tags_list>,
+                     TestSubdomainOperatorMatrix<
+                         SubdomainOperator, typename fields_tag::tags_list>,
                      Parallel::Actions::TerminatePhase>>>;
 };
 
@@ -510,6 +564,15 @@ void test_subdomain_operator(
         CHECK_VARIABLES_CUSTOM_APPROX(overlap_result, expected_overlap_result,
                                       custom_approx);
       }
+
+      // Now build the matrix representation of the subdomain operator
+      // explicitly, and apply it to the data to make sure the matrix is
+      // equivalent to the matrix-free operator. This is important to test
+      // because the subdomain operator includes optimizations for when it is
+      // invoked on sparse data, i.e. data that is mostly zero, which is the
+      // case when building it explicitly column-by-column.
+      ActionTesting::next_action<element_array>(make_not_null(&runner),
+                                                subdomain_center);
     }  // loop over subdomain centers
   }    // loop over overlaps
 }

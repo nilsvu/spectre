@@ -137,7 +137,7 @@ struct SubdomainOperator
       ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
       ::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>;
   using apply_args_tags = tmpl::list<
-      domain::Tags::Mesh<Dim>,
+      domain::Tags::Element<Dim>, domain::Tags::Mesh<Dim>,
       domain::Tags::InverseJacobian<Dim, Frame::Logical, Frame::Inertial>,
       domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>,
       domain::Tags::Faces<Dim,
@@ -307,6 +307,39 @@ struct SubdomainOperator
               boundary_condition, box, map_keys, fields_and_fluxes...);
         };
 
+    // Check if the operand data is sparse, i.e. if some elements have zero
+    // data. If they are, the operator is a lot cheaper to apply due to its
+    // linearity.
+    const auto check_data_is_zero =
+        [](const Variables<OperandTags>& data) noexcept {
+          return alg::all_of(
+              data, [](const double value) noexcept { return value == 0.; });
+        };
+    std::unordered_set<ElementId<Dim>> elements_in_subdomain{
+        central_element.id()};
+    std::unordered_set<ElementId<Dim>> elements_with_zero_data{};
+    if (check_data_is_zero(operand.element_data)) {
+      elements_with_zero_data.insert(central_element.id());
+    }
+    for (const auto& [overlap_id, overlap_data] : operand.overlap_data) {
+      elements_in_subdomain.insert(overlap_id.second);
+      if (check_data_is_zero(overlap_data)) {
+        elements_with_zero_data.insert(overlap_id.second);
+      }
+    }
+    const auto is_in_subdomain =
+        [&elements_in_subdomain](const ElementId<Dim>& element_id) noexcept {
+          return elements_in_subdomain.find(element_id) !=
+                 elements_in_subdomain.end();
+        };
+    const auto data_is_zero = [&elements_with_zero_data, &is_in_subdomain](
+                                  const ElementId<Dim>& element_id) {
+      return (elements_with_zero_data.find(element_id) !=
+                  elements_with_zero_data.end() or
+              not is_in_subdomain(element_id));
+    };
+    const bool central_data_is_zero = data_is_zero(central_element.id());
+
     // The subdomain operator essentially does two sweeps over all elements in
     // the subdomain: In the first sweep it prepares the mortar data and stores
     // them on both sides of all mortars, and in the second sweep it consumes
@@ -346,7 +379,7 @@ struct SubdomainOperator
               args...);
         },
         box, temporal_id, apply_boundary_condition_center, fluxes_args,
-        sources_args, fluxes_args_on_faces);
+        sources_args, fluxes_args_on_faces, data_is_zero);
     // Prepare neighbors
     for (const auto& [direction, neighbors] : central_element.neighbors()) {
       const auto& orientation = neighbors.orientation();
@@ -361,6 +394,7 @@ struct SubdomainOperator
         const auto& mortar_mesh = central_mortar_meshes.at(mortar_id);
         const ::dg::MortarId<Dim> mortar_id_from_neighbor{
             direction_from_neighbor, central_element.id()};
+        const bool neighbor_data_is_zero = data_is_zero(neighbor_id);
 
         // Intercept empty overlaps. In the unlikely case that overlaps have
         // zero extent, meaning no point of the neighbor is part of the
@@ -394,25 +428,29 @@ struct SubdomainOperator
         }
 
         // Copy the central element's mortar data to the neighbor
-        auto oriented_mortar_data =
-            central_mortar_data_.at(mortar_id).local_data(temporal_id);
-        if (not orientation.is_aligned()) {
-          oriented_mortar_data.orient_on_slice(
-              mortar_mesh.extents(), direction.dimension(), orientation);
+        if (not(central_data_is_zero and neighbor_data_is_zero)) {
+          auto oriented_mortar_data =
+              central_mortar_data_.at(mortar_id).local_data(temporal_id);
+          if (not orientation.is_aligned()) {
+            oriented_mortar_data.orient_on_slice(
+                mortar_mesh.extents(), direction.dimension(), orientation);
+          }
+          neighbors_mortar_data_[overlap_id][::dg::MortarId<Dim>{
+                                                 direction_from_neighbor,
+                                                 central_element.id()}]
+              .remote_insert(temporal_id, std::move(oriented_mortar_data));
         }
-        neighbors_mortar_data_[overlap_id][::dg::MortarId<Dim>{
-                                               direction_from_neighbor,
-                                               central_element.id()}]
-            .remote_insert(temporal_id, std::move(oriented_mortar_data));
 
         // Now we switch perspective to the neighbor. First, we extend the
         // overlap data to the full neighbor mesh by padding it with zeros. This
         // is necessary because spectral operators such as derivatives require
         // data on the full mesh.
-        LinearSolver::Schwarz::extended_overlap_data(
-            make_not_null(&extended_operand_vars_[overlap_id]),
-            operand.overlap_data.at(overlap_id), neighbor_mesh.extents(),
-            overlap_extent, direction_from_neighbor);
+        if (not neighbor_data_is_zero) {
+          LinearSolver::Schwarz::extended_overlap_data(
+              make_not_null(&extended_operand_vars_[overlap_id]),
+              operand.overlap_data.at(overlap_id), neighbor_mesh.extents(),
+              overlap_extent, direction_from_neighbor);
+        }
 
         const auto apply_boundary_condition_neighbor =
             [&apply_boundary_condition, &local_neighbor_id = neighbor_id,
@@ -455,7 +493,7 @@ struct SubdomainOperator
             },
             box, overlap_id, temporal_id, apply_boundary_condition_neighbor,
             fluxes_args_on_overlap, sources_args_on_overlap,
-            fluxes_args_on_overlap_faces);
+            fluxes_args_on_overlap_faces, data_is_zero);
 
         // Copy this neighbor's mortar data to the other side of the mortars. On
         // the other side we either have the central element, or another element
@@ -482,8 +520,13 @@ struct SubdomainOperator
               neighbors_neighbor_direction, neighbor_id};
           const auto send_mortar_data =
               [&neighbor_orientation, &neighbor_mortar_meshes,
-               &neighbor_mortar_data, &neighbor_mortar_id,
-               &neighbor_direction](auto& remote_mortar_data) noexcept {
+               &neighbor_mortar_data, &neighbor_mortar_id, &neighbor_direction,
+               &neighbor_data_is_zero, &data_is_zero](
+                  auto& remote_mortar_data,
+                  const ElementId<Dim>& remote_element_id) noexcept {
+                if (neighbor_data_is_zero and data_is_zero(remote_element_id)) {
+                  return;
+                }
                 const auto& neighbor_mortar_mesh =
                     neighbor_mortar_meshes.at(neighbor_mortar_id);
                 auto oriented_neighbor_mortar_data =
@@ -498,16 +541,20 @@ struct SubdomainOperator
               };
           if (neighbors_neighbor_id == central_element.id() and
               mortar_id_from_neighbors_neighbor == mortar_id) {
-            send_mortar_data(central_mortar_data_.at(mortar_id));
+            send_mortar_data(central_mortar_data_.at(mortar_id),
+                             central_element.id());
             continue;
           }
           // Determine whether the neighbor's neighbor overlaps with the
           // subdomain and find its overlap ID if it does.
           const auto neighbors_neighbor_overlap_id =
               [&local_all_neighbor_mortar_meshes = all_neighbor_mortar_meshes,
-               &neighbors_neighbor_id,
-               &mortar_id_from_neighbors_neighbor]() noexcept
+               &neighbors_neighbor_id, &mortar_id_from_neighbors_neighbor,
+               &is_in_subdomain]() noexcept
               -> std::optional<LinearSolver::Schwarz::OverlapId<Dim>> {
+            if (not is_in_subdomain(neighbors_neighbor_id)) {
+              return std::nullopt;
+            }
             for (const auto& [local_overlap_id, local_mortar_meshes] :
                  local_all_neighbor_mortar_meshes) {
               if (local_overlap_id.second != neighbors_neighbor_id) {
@@ -520,6 +567,12 @@ struct SubdomainOperator
                 }
               }
             }
+            ASSERT(
+                false,
+                "The neighbor's neighbor "
+                    << neighbors_neighbor_id
+                    << " is part of the subdomain, but we didn't find its "
+                       "overlap ID. This is a bug, so please file an issue.");
             return std::nullopt;
           }();
           if (neighbors_neighbor_overlap_id.has_value()) {
@@ -531,8 +584,9 @@ struct SubdomainOperator
             // differ by orientations.
             send_mortar_data(
                 neighbors_mortar_data_[*neighbors_neighbor_overlap_id]
-                                      [mortar_id_from_neighbors_neighbor]);
-          } else {
+                                      [mortar_id_from_neighbors_neighbor],
+                neighbors_neighbor_overlap_id->second);
+          } else if (not neighbor_data_is_zero) {
             // The neighbor's neighbor does not overlap with the subdomain, so
             // we don't copy mortar data and also don't expect to receive any.
             // Instead, we assume the data on it is zero and manufacture
@@ -576,7 +630,7 @@ struct SubdomainOperator
               make_not_null(&central_mortar_data_), operand.element_data,
               central_primal_fluxes_, args...);
         },
-        box, temporal_id, sources_args);
+        box, temporal_id, sources_args, data_is_zero);
     // Apply on neighbors
     for (const auto& [direction, neighbors] : central_element.neighbors()) {
       const auto& orientation = neighbors.orientation();
@@ -603,7 +657,8 @@ struct SubdomainOperator
             box, overlap_id, temporal_id,
             elliptic::util::apply_at<sources_args_tags_overlap,
                                      args_tags_from_center>(get_items, box,
-                                                            overlap_id));
+                                                            overlap_id),
+            data_is_zero);
 
         // Restrict the extended operator data back to the subdomain, assuming
         // we can discard any data outside the overlaps. WARNING: This
