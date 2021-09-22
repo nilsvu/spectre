@@ -121,6 +121,15 @@ class Variables<tmpl::list<Tags...>> {
       blaze::CustomVector<value_type, blaze::AlignmentFlag::unaligned,
                           blaze::PaddingFlag::unpadded, transpose_flag,
                           blaze_default_group, vector_type>;
+  using iterator = typename pointer_type::Iterator;
+  using const_iterator = typename pointer_type::ConstIterator;
+
+  iterator begin() { return variable_data_.begin(); }
+  iterator end() { return variable_data_.end(); }
+  const_iterator begin() const { return variable_data_.begin(); }
+  const_iterator end() const { return variable_data_.end(); }
+  const_iterator cbegin() const { return variable_data_.cbegin(); }
+  const_iterator cend() const { return variable_data_.cend(); }
 
   static_assert(
       std::is_fundamental_v<value_type> or tt::is_a_v<std::complex, value_type>,
