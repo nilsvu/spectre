@@ -85,25 +85,6 @@ struct FillWithRandomValuesImpl<
     }
   }
 };
-
-template <typename... Tags>
-struct FillWithRandomValuesImpl<Variables<tmpl::list<Tags...>>,
-                                std::nullptr_t> {
-  template <typename UniformRandomBitGenerator,
-            typename RandomNumberDistribution>
-  static void apply(
-      const gsl::not_null<Variables<tmpl::list<Tags...>>*> data,
-      [[maybe_unused]] const gsl::not_null<UniformRandomBitGenerator*>
-          generator,
-      [[maybe_unused]] const gsl::not_null<RandomNumberDistribution*>
-          distribution) noexcept {
-    EXPAND_PACK_LEFT_TO_RIGHT(
-        FillWithRandomValuesImpl<
-            std::decay_t<decltype(get<Tags>(*data))>>::apply(&get<Tags>(*data),
-                                                             generator,
-                                                             distribution));
-  }
-};
 /// \endcond
 }  // namespace TestHelpers_detail
 
