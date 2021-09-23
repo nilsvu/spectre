@@ -74,6 +74,32 @@ auto normal_dot_flux(
 }
 /// @}
 
+template <size_t VolumeDim, typename Fr, typename Symm, typename Indices,
+          typename ResultTensor>
+void normal_times_flux(const gsl::not_null<ResultTensor*> normal_times_flux,
+                       const tnsr::i<DataVector, VolumeDim, Fr>& normal,
+                       const Tensor<DataVector, Symm, Indices>& flux_tensor) {
+  for (size_t d = 0; d < VolumeDim; ++d) {
+    for (auto it = flux_tensor.begin(); it != flux_tensor.end(); ++it) {
+      const auto result_indices = flux_tensor.get_tensor_index(it);
+      normal_times_flux->get(prepend(result_indices, d)) = normal.get(d) * *it;
+    }
+  }
+}
+
+template <typename... ReturnTags, typename... FluxTags, size_t VolumeDim,
+          typename Fr>
+void normal_times_flux(
+    const gsl::not_null<Variables<tmpl::list<ReturnTags...>>*> result,
+    const tnsr::i<DataVector, VolumeDim, Fr>& normal,
+    const Variables<tmpl::list<FluxTags...>>& fluxes) {
+  if (result->number_of_grid_points() != fluxes.number_of_grid_points()) {
+    result->initialize(fluxes.number_of_grid_points());
+  }
+  EXPAND_PACK_LEFT_TO_RIGHT(normal_times_flux(
+      make_not_null(&get<ReturnTags>(*result)), normal, get<FluxTags>(fluxes)));
+}
+
 namespace Tags {
 
 /// \ingroup ConservativeGroup
