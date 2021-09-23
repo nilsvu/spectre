@@ -53,16 +53,13 @@ struct LogicalImpl;
 //
 // - We factor out the `logical_deriv_index == 0` case so that we do not need to
 //   zero the memory in `du` before the computation.
-template <typename DerivativeTags, size_t Dim, typename DerivativeFrame>
+template <typename ResultTags, size_t Dim, typename DerivativeFrame>
 void partial_derivatives_impl(
-    const gsl::not_null<Variables<db::wrap_tags_in<
-        Tags::deriv, DerivativeTags, tmpl::size_t<Dim>, DerivativeFrame>>*>
-        du,
+    const gsl::not_null<Variables<ResultTags>*> du,
     const std::array<const double*, Dim>& logical_partial_derivatives_of_u,
-    const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
-                          DerivativeFrame>& inverse_jacobian) {
-  constexpr size_t number_of_independent_components =
-      Variables<DerivativeTags>::number_of_independent_components;
+    const InverseJacobian<DataVector, Dim, Frame::ElementLogical, DerivativeFrame>&
+        inverse_jacobian,
+    const size_t number_of_independent_components) {
   double* pdu = du->data();
   const size_t num_grid_points = du->number_of_grid_points();
   DataVector lhs{};
@@ -155,16 +152,15 @@ std::array<Variables<DerivativeTags>, Dim> logical_partial_derivatives(
     const Variables<VariableTags>& u, const Mesh<Dim>& mesh) {
   auto logical_partial_derivatives_of_u =
       make_array<Dim>(Variables<DerivativeTags>(u.number_of_grid_points()));
-  logical_partial_derivatives<DerivativeTags>(
-      make_not_null(&logical_partial_derivatives_of_u), u, mesh);
+  logical_partial_derivatives(make_not_null(&logical_partial_derivatives_of_u),
+                              u, mesh);
   return logical_partial_derivatives_of_u;
 }
 
-template <typename DerivativeTags, size_t Dim, typename DerivativeFrame>
+template <typename ResultTags, typename DerivativeTags, size_t Dim,
+          typename DerivativeFrame>
 void partial_derivatives(
-    const gsl::not_null<Variables<db::wrap_tags_in<
-        Tags::deriv, DerivativeTags, tmpl::size_t<Dim>, DerivativeFrame>>*>
-        du,
+    const gsl::not_null<Variables<ResultTags>*> du,
     const std::array<Variables<DerivativeTags>, Dim>&
         logical_partial_derivatives_of_u,
     const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
@@ -182,20 +178,20 @@ void partial_derivatives(
     gsl::at(logical_derivs, i) =
         gsl::at(logical_partial_derivatives_of_u, i).data();
   }
-  partial_derivatives_detail::partial_derivatives_impl<DerivativeTags>(
+  partial_derivatives_detail::partial_derivatives_impl(
       make_not_null(&partial_derivatives_of_u), logical_derivs,
-      inverse_jacobian);
+      inverse_jacobian,
+      Variables<DerivativeTags>::number_of_independent_components);
 }
 
-template <typename DerivativeTags, typename VariableTags, size_t Dim,
+template <typename ResultTags, typename VariableTags, size_t Dim,
           typename DerivativeFrame>
 void partial_derivatives(
-    const gsl::not_null<Variables<db::wrap_tags_in<
-        Tags::deriv, DerivativeTags, tmpl::size_t<Dim>, DerivativeFrame>>*>
-        du,
+    const gsl::not_null<Variables<ResultTags>*> du,
     const Variables<VariableTags>& u, const Mesh<Dim>& mesh,
     const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
                           DerivativeFrame>& inverse_jacobian) {
+  using DerivativeTags = VariableTags; // TODO: allow subset
   auto& partial_derivatives_of_u = *du;
   // For mutating compute items we must set the size.
   if (UNLIKELY(partial_derivatives_of_u.number_of_grid_points() !=
@@ -225,9 +221,10 @@ void partial_derivatives(
   for (size_t i = 0; i < Dim; ++i) {
     gsl::at(const_logical_derivs, i) = gsl::at(logical_derivs, i);
   }
-  partial_derivatives_detail::partial_derivatives_impl<DerivativeTags>(
+  partial_derivatives_detail::partial_derivatives_impl(
       make_not_null(&partial_derivatives_of_u), const_logical_derivs,
-      inverse_jacobian);
+      inverse_jacobian,
+      Variables<DerivativeTags>::number_of_independent_components);
 }
 
 template <typename DerivativeTags, typename VariableTags, size_t Dim,
@@ -241,7 +238,7 @@ partial_derivatives(
   Variables<db::wrap_tags_in<Tags::deriv, DerivativeTags, tmpl::size_t<Dim>,
                              DerivativeFrame>>
       partial_derivatives_of_u(u.number_of_grid_points());
-  partial_derivatives<DerivativeTags>(make_not_null(&partial_derivatives_of_u),
+  partial_derivatives(make_not_null(&partial_derivatives_of_u),
                                       u, mesh, inverse_jacobian);
   return partial_derivatives_of_u;
 }
