@@ -284,6 +284,8 @@ struct ElementCenteredSubdomainDataIterator {
   using pointer = value_type*;
   using reference = value_type&;
   using iterator_category = std::forward_iterator_tag;
+  using VarsRef = tmpl::conditional_t<Const, const Variables<TagsList>*,
+                                      Variables<TagsList>*>;
 
   /// Construct begin state
   ElementCenteredSubdomainDataIterator(PtrType data) noexcept : data_(data) {
@@ -295,6 +297,7 @@ struct ElementCenteredSubdomainDataIterator {
     overlap_index_ = (data_->element_data.size() == 0 and overlap_ids_.empty())
                          ? std::numeric_limits<size_t>::max()
                          : 0;
+    update_vars_ref();
     data_index_ = 0;
   }
 
@@ -306,12 +309,9 @@ struct ElementCenteredSubdomainDataIterator {
 
   ElementCenteredSubdomainDataIterator& operator++() noexcept {
     ++data_index_;
-    if (data_index_ ==
-        (overlap_index_ == 0
-             ? data_->element_data
-             : data_->overlap_data.at(overlap_ids_[overlap_index_ - 1]))
-            .size()) {
+    if (data_index_ == vars_ref_->size()) {
       ++overlap_index_;
+      update_vars_ref();
       data_index_ = 0;
     }
     if (overlap_index_ == overlap_ids_.size() + 1) {
@@ -321,15 +321,23 @@ struct ElementCenteredSubdomainDataIterator {
   }
 
   tmpl::conditional_t<Const, double, double&> operator*() const noexcept {
-    if (overlap_index_ == 0) {
-      return data_->element_data.data()[data_index_];
-    } else {
-      return data_->overlap_data.at(overlap_ids_[overlap_index_ - 1])
-          .data()[data_index_];
-    }
+    return vars_ref_->data()[data_index_];
   }
 
  private:
+  void update_vars_ref() noexcept {
+    // The random-access operation is relatively slow because it computes a
+    // hash, so it's important for performance to avoid repeating it at every
+    // data index. Instead, we update this reference only when the overlap index
+    // changes.
+    if (overlap_index_ > overlap_ids_.size()) {
+      return;
+    }
+    vars_ref_ = overlap_index_ == 0
+                    ? &data_->element_data
+                    : &data_->overlap_data.at(overlap_ids_[overlap_index_ - 1]);
+  }
+
   friend bool operator==(
       const ElementCenteredSubdomainDataIterator& lhs,
       const ElementCenteredSubdomainDataIterator& rhs) noexcept {
@@ -347,6 +355,7 @@ struct ElementCenteredSubdomainDataIterator {
   std::vector<OverlapId<Dim>> overlap_ids_;
   size_t overlap_index_;
   size_t data_index_;
+  VarsRef vars_ref_ = nullptr;
 };
 
 }  // namespace LinearSolver::Schwarz
