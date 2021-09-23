@@ -30,6 +30,8 @@
 #include "NumericalAlgorithms/DiscontinuousGalerkin/SimpleMortarData.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
+#include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
+#include "NumericalAlgorithms/LinearOperators/PartialDerivatives.tpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/Spectral/Projection.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
@@ -254,26 +256,45 @@ Variables<TagsList> mass_conservative_restriction(
   }
 }
 
+template <typename Tag>
+struct AuxFluxTag : db::SimpleTag, db::PrefixTag {
+  using type = TensorMetafunctions::remove_first_index<typename Tag::type>;
+  using tag = Tag;
+};
+
+template <typename AuxField, typename PrimalField, size_t Dim>
+constexpr bool is_deriv_tag_v = std::is_same_v<
+    AuxField, ::Tags::deriv<PrimalField, tmpl::size_t<Dim>, Frame::Inertial>>;
+
+template <typename AuxField, typename PrimalField, size_t Dim>
+struct MakeAuxFluxTag {
+  using type = tmpl::conditional_t<is_deriv_tag_v<AuxField, PrimalField, Dim>,
+                                   PrimalField, AuxFluxTag<AuxField>>;
+};
+
+template <typename AuxField, typename PrimalField, size_t Dim>
+using make_aux_flux_tag_t =
+    typename MakeAuxFluxTag<AuxField, PrimalField, Dim>::type;
+
 template <typename System, bool Linearized,
           typename PrimalFields = typename System::primal_fields,
           typename AuxiliaryFields = typename System::auxiliary_fields,
-          typename PrimalFluxes = typename System::primal_fluxes,
-          typename AuxiliaryFluxes = typename System::auxiliary_fluxes>
+          typename PrimalFluxes = typename System::primal_fluxes>
 struct DgOperatorImpl;
 
 template <typename System, bool Linearized, typename... PrimalFields,
-          typename... AuxiliaryFields, typename... PrimalFluxes,
-          typename... AuxiliaryFluxes>
+          typename... AuxiliaryFields, typename... PrimalFluxes>
 struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
                       tmpl::list<AuxiliaryFields...>,
-                      tmpl::list<PrimalFluxes...>,
-                      tmpl::list<AuxiliaryFluxes...>> {
+                      tmpl::list<PrimalFluxes...>> {
   static_assert(
       tt::assert_conforms_to<System, elliptic::protocols::FirstOrderSystem>);
 
   static constexpr size_t Dim = System::volume_dim;
   using FluxesComputer = typename System::fluxes_computer;
   using SourcesComputer = elliptic::get_sources_computer<System, Linearized>;
+  static constexpr bool all_aux_vars_are_derivs =
+      (is_deriv_tag_v<AuxiliaryFields, PrimalFields, Dim> and ...);
 
   struct AllDirections {
     bool operator()(const Direction<Dim>& /*unused*/) const { return true; }
@@ -288,16 +309,14 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
 
   template <bool AllDataIsZero, typename... PrimalVars,
             typename... AuxiliaryVars, typename... PrimalFluxesVars,
-            typename... AuxiliaryFluxesVars, typename... PrimalMortarVars,
-            typename... PrimalMortarFluxes, typename TemporalId,
-            typename ApplyBoundaryCondition, typename... FluxesArgs,
-            typename... SourcesArgs, typename DataIsZero = NoDataIsZero,
+            typename... PrimalMortarVars, typename... PrimalMortarFluxes,
+            typename TemporalId, typename ApplyBoundaryCondition,
+            typename... FluxesArgs, typename... SourcesArgs,
+            typename DataIsZero = NoDataIsZero,
             typename DirectionsPredicate = AllDirections>
   static void prepare_mortar_data(
       const gsl::not_null<Variables<tmpl::list<AuxiliaryVars...>>*>
           auxiliary_vars,
-      const gsl::not_null<Variables<tmpl::list<AuxiliaryFluxesVars...>>*>
-          auxiliary_fluxes,
       const gsl::not_null<Variables<tmpl::list<PrimalFluxesVars...>>*>
           primal_fluxes,
       const gsl::not_null<::dg::MortarMap<
@@ -322,8 +341,7 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
     static_assert(
         sizeof...(PrimalVars) == sizeof...(PrimalFields) and
             sizeof...(AuxiliaryVars) == sizeof...(AuxiliaryFields) and
-            sizeof...(PrimalFluxesVars) == sizeof...(PrimalFluxes) and
-            sizeof...(AuxiliaryFluxesVars) == sizeof...(AuxiliaryFluxes),
+            sizeof...(PrimalFluxesVars) == sizeof...(PrimalFluxes),
         "The number of variables must match the number of system fields.");
     static_assert(
         (std::is_same_v<typename PrimalVars::type,
@@ -334,9 +352,6 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
              ...) and
             (std::is_same_v<typename PrimalFluxesVars::type,
                             typename PrimalFluxes::type> and
-             ...) and
-            (std::is_same_v<typename AuxiliaryFluxesVars::type,
-                            typename AuxiliaryFluxes::type> and
              ...),
         "The variables must have the same tensor types as the system fields.");
 #ifdef SPECTRE_DEBUG
@@ -371,32 +386,61 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
     // first derivative have to be added to `F_u(v)`. Therefore the second
     // derivative is taken after a communication break in the `apply_operator`
     // function below.
+    Variables<
+        tmpl::list<make_aux_flux_tag_t<AuxiliaryFields, PrimalFields, Dim>...>>
+        auxiliary_fluxes{};
     if (AllDataIsZero or local_data_is_zero) {
       primal_fluxes->initialize(num_points, 0.);
     } else {
-      // Compute the auxiliary fluxes
-      auxiliary_fluxes->initialize(num_points);
-      std::apply(
-          [&auxiliary_fluxes,
-           &primal_vars](const auto&... expanded_fluxes_args) {
-            FluxesComputer::apply(
-                make_not_null(&get<AuxiliaryFluxesVars>(*auxiliary_fluxes))...,
-                expanded_fluxes_args..., get<PrimalVars>(primal_vars)...);
-          },
-          fluxes_args);
-      divergence(auxiliary_vars, *auxiliary_fluxes, mesh, inv_jacobian);
-      // Subtract the sources. Invert signs because the sources computers _add_
-      // the sources, i.e. they compute the `+ S_v` term defined above.
-      *auxiliary_vars *= -1.;
-      std::apply(
-          [&auxiliary_vars,
-           &primal_vars](const auto&... expanded_sources_args) {
-            SourcesComputer::apply(
-                make_not_null(&get<AuxiliaryVars>(*auxiliary_vars))...,
-                expanded_sources_args..., get<PrimalVars>(primal_vars)...);
-          },
-          sources_args);
-      *auxiliary_vars *= -1.;
+      // Compute the auxiliary variables from first derivatives of the primal
+      // variables
+      auxiliary_vars->initialize(num_points);
+      if constexpr (all_aux_vars_are_derivs) {
+        partial_derivatives(auxiliary_vars, primal_vars, mesh, inv_jacobian);
+      } else {
+        auxiliary_fluxes.initialize(num_points);
+        std::apply(
+            [&auxiliary_fluxes,
+             &primal_vars](const auto&... expanded_fluxes_args) {
+              FluxesComputer::apply(
+                  make_not_null(
+                      &get<make_aux_flux_tag_t<AuxiliaryFields, PrimalFields,
+                                               Dim>>(auxiliary_fluxes))...,
+                  expanded_fluxes_args..., get<PrimalVars>(primal_vars)...);
+            },
+            fluxes_args);
+        Variables<tmpl::list<tmpl::conditional_t<
+            is_deriv_tag_v<AuxiliaryFields, PrimalFields, Dim>, AuxiliaryFields,
+            ::Tags::deriv<AuxFluxTag<AuxiliaryFields>, tmpl::size_t<Dim>,
+                          Frame::Inertial>>...>>
+            aux_derivs{num_points};
+        partial_derivatives(make_not_null(&aux_derivs), auxiliary_fluxes, mesh,
+                            inv_jacobian);
+        std::apply(
+            [&auxiliary_vars,
+             &aux_derivs](const auto&... expanded_fluxes_args) {
+              FluxesComputer::apply(
+                  make_not_null(&get<AuxiliaryVars>(*auxiliary_vars))...,
+                  expanded_fluxes_args...,
+                  get<tmpl::conditional_t<
+                      is_deriv_tag_v<AuxiliaryFields, PrimalFields, Dim>,
+                      AuxiliaryFields,
+                      ::Tags::deriv<AuxFluxTag<AuxiliaryFields>,
+                                    tmpl::size_t<Dim>, Frame::Inertial>>>(
+                      aux_derivs)...);
+            },
+            fluxes_args);
+        *auxiliary_vars *= -1.;
+        std::apply(
+            [&auxiliary_vars,
+             &primal_vars](const auto&... expanded_sources_args) {
+              SourcesComputer::apply(
+                  make_not_null(&get<AuxiliaryVars>(*auxiliary_vars))...,
+                  expanded_sources_args..., get<PrimalVars>(primal_vars)...);
+            },
+            sources_args);
+        *auxiliary_vars *= -1.;
+      }
       // Compute the primal fluxes
       primal_fluxes->initialize(num_points);
       std::apply(
@@ -445,8 +489,16 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
       const auto& face_normal_magnitude = face_normal_magnitudes.at(direction);
       const auto& fluxes_args_on_face = fluxes_args_on_faces.at(direction);
       const size_t slice_index = index_to_slice_at(mesh.extents(), direction);
-      Variables<tmpl::list<PrimalFluxesVars..., AuxiliaryFluxesVars...>>
-          fluxes_on_face{};
+      Variables<tmpl::list<PrimalVars...>> primal_vars_on_face{};
+      Variables<tmpl::list<PrimalFluxesVars...>> primal_fluxes_on_face{};
+      Variables<tmpl::list<
+          make_aux_flux_tag_t<AuxiliaryFields, PrimalFields, Dim>...>>
+          auxiliary_fluxes_on_face{};
+      Variables<tmpl::list<tmpl::conditional_t<
+          is_deriv_tag_v<AuxiliaryFields, PrimalFields, Dim>, AuxiliaryFields,
+          ::Tags::deriv<AuxFluxTag<AuxiliaryFields>, tmpl::size_t<Dim>,
+                        Frame::Inertial>>...>>
+          n_times_aux_on_face{};
       Variables<tmpl::list<::Tags::NormalDotFlux<AuxiliaryFields>...>>
           n_dot_aux_fluxes{};
       BoundaryData<tmpl::list<PrimalMortarVars...>,
@@ -457,16 +509,38 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         // data such as the element size will be set below.
         boundary_data.field_data.initialize(face_num_points, 0.);
       } else {
-        fluxes_on_face.initialize(face_num_points);
+        primal_fluxes_on_face.initialize(face_num_points);
         n_dot_aux_fluxes.initialize(face_num_points);
         // Compute F_u(n.F_v)
-        fluxes_on_face.assign_subset(
-            data_on_slice(*auxiliary_fluxes, mesh.extents(),
-                          direction.dimension(), slice_index));
-        EXPAND_PACK_LEFT_TO_RIGHT(normal_dot_flux(
-            make_not_null(
-                &get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_aux_fluxes)),
-            face_normal, get<AuxiliaryFluxesVars>(fluxes_on_face)));
+        if constexpr (all_aux_vars_are_derivs) {
+          data_on_slice(make_not_null(&primal_vars_on_face), primal_vars,
+                        mesh.extents(), direction.dimension(), slice_index);
+          normal_times_flux(make_not_null(&n_dot_aux_fluxes), face_normal,
+                            primal_vars_on_face);
+        } else {
+          auxiliary_fluxes_on_face.initialize(face_num_points);
+          n_times_aux_on_face.initialize(face_num_points);
+          data_on_slice(make_not_null(&auxiliary_fluxes_on_face),
+                        auxiliary_fluxes, mesh.extents(), direction.dimension(),
+                        slice_index);
+          normal_times_flux(make_not_null(&n_times_aux_on_face), face_normal,
+                            auxiliary_fluxes_on_face);
+          std::apply(
+              [&n_dot_aux_fluxes,
+               &n_times_aux_on_face](const auto&... expanded_fluxes_args) {
+                FluxesComputer::apply(
+                    make_not_null(&get<::Tags::NormalDotFlux<AuxiliaryFields>>(
+                        n_dot_aux_fluxes))...,
+                    expanded_fluxes_args...,
+                    get<tmpl::conditional_t<
+                        is_deriv_tag_v<AuxiliaryFields, PrimalFields, Dim>,
+                        AuxiliaryFields,
+                        ::Tags::deriv<AuxFluxTag<AuxiliaryFields>,
+                                      tmpl::size_t<Dim>, Frame::Inertial>>>(
+                        n_times_aux_on_face)...);
+              },
+              fluxes_args_on_face);
+        }
         std::apply(
             [&boundary_data,
              &n_dot_aux_fluxes](const auto&... expanded_fluxes_args_on_face) {
@@ -485,13 +559,12 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         // to the auxiliary variables. The reason is essentially that the
         // internal penalty flux uses average(grad(u)) in place of average(v),
         // i.e. the raw primal field derivatives without boundary corrections.
-        fluxes_on_face.assign_subset(
-            data_on_slice(*primal_fluxes, mesh.extents(), direction.dimension(),
-                          slice_index));
+        data_on_slice(make_not_null(&primal_fluxes_on_face), *primal_fluxes,
+                      mesh.extents(), direction.dimension(), slice_index);
         EXPAND_PACK_LEFT_TO_RIGHT(normal_dot_flux(
             make_not_null(&get<::Tags::NormalDotFlux<PrimalMortarVars>>(
                 boundary_data.field_data)),
-            face_normal, get<PrimalFluxesVars>(fluxes_on_face)));
+            face_normal, get<PrimalFluxesVars>(primal_fluxes_on_face)));
         // Compute n.F_u(n.F_v) for jump term, re-using the memory buffer from
         // above
         EXPAND_PACK_LEFT_TO_RIGHT(normal_dot_flux(
@@ -558,10 +631,10 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         // the boundary conditions is taken from the "interior" side of the
         // boundary, i.e. with a normal vector that points _out_ of the
         // computational domain.
-        Variables<tmpl::list<PrimalVars...>> dirichlet_vars{face_num_points};
+        auto& dirichlet_vars = primal_vars_on_face;
         if constexpr (AllDataIsZero) {
           dirichlet_vars.initialize(face_num_points, 0.);
-        } else {
+        } else if (dirichlet_vars.size() == 0) {
           data_on_slice(make_not_null(&dirichlet_vars), primal_vars,
                         mesh.extents(), direction.dimension(), slice_index);
         }
@@ -573,21 +646,42 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
         // The n.F_u (Neumann-type conditions) are done, but we have to compute
         // the n.F_v (Dirichlet-type conditions) from the Dirichlet fields. We
         // re-use the memory buffer from above.
-        fluxes_on_face.initialize(face_num_points);
         n_dot_aux_fluxes.initialize(face_num_points);
-        std::apply(
-            [&fluxes_on_face,
-             &dirichlet_vars](const auto&... expanded_fluxes_args_on_face) {
-              FluxesComputer::apply(
-                  make_not_null(&get<AuxiliaryFluxesVars>(fluxes_on_face))...,
-                  expanded_fluxes_args_on_face...,
-                  get<PrimalVars>(dirichlet_vars)...);
-            },
-            fluxes_args_on_face);
-        EXPAND_PACK_LEFT_TO_RIGHT(normal_dot_flux(
-            make_not_null(
-                &get<::Tags::NormalDotFlux<AuxiliaryFields>>(n_dot_aux_fluxes)),
-            face_normal, get<AuxiliaryFluxesVars>(fluxes_on_face)));
+        if constexpr (all_aux_vars_are_derivs) {
+          normal_times_flux(make_not_null(&n_dot_aux_fluxes), face_normal,
+                            dirichlet_vars);
+        } else {
+          auxiliary_fluxes_on_face.initialize(face_num_points);
+          n_times_aux_on_face.initialize(face_num_points);
+          std::apply(
+              [&auxiliary_fluxes_on_face,
+               &dirichlet_vars](const auto&... expanded_fluxes_args) {
+                FluxesComputer::apply(
+                    make_not_null(&get<make_aux_flux_tag_t<AuxiliaryFields,
+                                                           PrimalFields, Dim>>(
+                        auxiliary_fluxes_on_face))...,
+                    expanded_fluxes_args...,
+                    get<PrimalVars>(dirichlet_vars)...);
+              },
+              fluxes_args_on_face);
+          normal_times_flux(make_not_null(&n_times_aux_on_face), face_normal,
+                            auxiliary_fluxes_on_face);
+          std::apply(
+              [&n_dot_aux_fluxes,
+               &n_times_aux_on_face](const auto&... expanded_fluxes_args) {
+                FluxesComputer::apply(
+                    make_not_null(&get<::Tags::NormalDotFlux<AuxiliaryFields>>(
+                        n_dot_aux_fluxes))...,
+                    expanded_fluxes_args...,
+                    get<tmpl::conditional_t<
+                        is_deriv_tag_v<AuxiliaryFields, PrimalFields, Dim>,
+                        AuxiliaryFields,
+                        ::Tags::deriv<AuxFluxTag<AuxiliaryFields>,
+                                      tmpl::size_t<Dim>, Frame::Inertial>>>(
+                        n_times_aux_on_face)...);
+              },
+              fluxes_args_on_face);
+        }
         std::apply(
             [&boundary_data,
              &n_dot_aux_fluxes](const auto&... expanded_fluxes_args_on_face) {
@@ -979,7 +1073,6 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
                                                                   0.};
     Variables<tmpl::list<PrimalFluxes...>> primal_fluxes_buffer{num_points};
     Variables<tmpl::list<AuxiliaryFields...>> unused_aux_vars_buffer{};
-    Variables<tmpl::list<AuxiliaryFluxes...>> unused_aux_fluxes_buffer{};
     Variables<tmpl::list<FixedSourcesTags...>> operator_applied_to_zero_vars{
         num_points};
     // Set up data on mortars. We only need them at external boundaries.
@@ -990,7 +1083,6 @@ struct DgOperatorImpl<System, Linearized, tmpl::list<PrimalFields...>,
     // Apply the operator to the zero variables, skipping internal boundaries
     prepare_mortar_data<true>(
         make_not_null(&unused_aux_vars_buffer),
-        make_not_null(&unused_aux_fluxes_buffer),
         make_not_null(&primal_fluxes_buffer), make_not_null(&all_mortar_data),
         zero_primal_vars, element, mesh, inv_jacobian, face_normals,
         face_normal_magnitudes, all_mortar_meshes, all_mortar_sizes,
