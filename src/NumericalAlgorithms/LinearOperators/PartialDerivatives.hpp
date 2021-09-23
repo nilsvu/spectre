@@ -162,23 +162,20 @@ auto logical_partial_derivative(
 ///
 /// \tparam DerivativeTags the subset of `VariableTags` for which derivatives
 /// are computed.
-template <typename DerivativeTags, size_t Dim, typename DerivativeFrame>
+template <typename ResultTags, typename DerivativeTags, size_t Dim,
+          typename DerivativeFrame>
 void partial_derivatives(
-    gsl::not_null<Variables<db::wrap_tags_in<
-        Tags::deriv, DerivativeTags, tmpl::size_t<Dim>, DerivativeFrame>>*>
-        du,
+    gsl::not_null<Variables<ResultTags>*> du,
     const std::array<Variables<DerivativeTags>, Dim>&
         logical_partial_derivatives_of_u,
     const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
                           DerivativeFrame>& inverse_jacobian);
 
-template <typename DerivativeTags, typename VariableTags, size_t Dim,
+template <typename ResultTags, typename VariableTags, size_t Dim,
           typename DerivativeFrame>
 void partial_derivatives(
-    gsl::not_null<Variables<db::wrap_tags_in<
-        Tags::deriv, DerivativeTags, tmpl::size_t<Dim>, DerivativeFrame>>*>
-        du,
-    const Variables<VariableTags>& u, const Mesh<Dim>& mesh,
+    gsl::not_null<Variables<ResultTags>*> du, const Variables<VariableTags>& u,
+    const Mesh<Dim>& mesh,
     const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
                           DerivativeFrame>& inverse_jacobian);
 
