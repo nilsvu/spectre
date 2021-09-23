@@ -373,7 +373,6 @@ struct SubdomainOperator
         [this, &operand](const auto&... args) noexcept {
           elliptic::dg::prepare_mortar_data<System, linearized>(
               make_not_null(&central_auxiliary_vars_),
-              make_not_null(&central_auxiliary_fluxes_),
               make_not_null(&central_primal_fluxes_),
               make_not_null(&central_mortar_data_), operand.element_data,
               args...);
@@ -486,7 +485,6 @@ struct SubdomainOperator
             [this, &overlap_id](const auto&... args) noexcept {
               elliptic::dg::prepare_mortar_data<System, linearized>(
                   make_not_null(&neighbors_auxiliary_vars_[overlap_id]),
-                  make_not_null(&neighbors_auxiliary_fluxes_[overlap_id]),
                   make_not_null(&neighbors_primal_fluxes_[overlap_id]),
                   make_not_null(&neighbors_mortar_data_[overlap_id]),
                   extended_operand_vars_[overlap_id], args...);
@@ -689,17 +687,12 @@ struct SubdomainOperator
   mutable Variables<typename System::auxiliary_fields>
       central_auxiliary_vars_{};
   mutable Variables<typename System::primal_fluxes> central_primal_fluxes_{};
-  mutable Variables<typename System::auxiliary_fluxes>
-      central_auxiliary_fluxes_{};
   mutable LinearSolver::Schwarz::OverlapMap<
       Dim, Variables<typename System::auxiliary_fields>>
       neighbors_auxiliary_vars_{};
   mutable LinearSolver::Schwarz::OverlapMap<
       Dim, Variables<typename System::primal_fluxes>>
       neighbors_primal_fluxes_{};
-  mutable LinearSolver::Schwarz::OverlapMap<
-      Dim, Variables<typename System::auxiliary_fluxes>>
-      neighbors_auxiliary_fluxes_{};
   mutable LinearSolver::Schwarz::OverlapMap<
       Dim, Variables<typename System::primal_fields>>
       extended_operand_vars_{};

@@ -92,8 +92,6 @@ struct FirstOrderSystem {
   // particular meaning.
   using primal_fluxes =
       tmpl::list<::Tags::Flux<field, tmpl::size_t<Dim>, Frame::Inertial>>;
-  using auxiliary_fluxes = tmpl::list<
-      ::Tags::Flux<field_gradient, tmpl::size_t<Dim>, Frame::Inertial>>;
 
   // The variable-independent background fields in the equations
   using background_fields =
