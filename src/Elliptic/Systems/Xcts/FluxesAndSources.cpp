@@ -11,6 +11,7 @@
 #include "Elliptic/Systems/Poisson/Equations.hpp"
 #include "Elliptic/Systems/Xcts/Equations.hpp"
 #include "Elliptic/Systems/Xcts/Geometry.hpp"
+#include "PointwiseFunctions/GeneralRelativity/IndexManipulation.hpp"
 #include "PointwiseFunctions/Xcts/LongitudinalOperator.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/Gsl.hpp"
@@ -26,29 +27,12 @@ void Fluxes<Equations::Hamiltonian, Geometry::FlatCartesian>::apply(
                                  conformal_factor_gradient);
 }
 
-void Fluxes<Equations::Hamiltonian, Geometry::FlatCartesian>::apply(
-    const gsl::not_null<tnsr::Ij<DataVector, 3>*>
-        flux_for_conformal_factor_gradient,
-    const Scalar<DataVector>& conformal_factor) {
-  Poisson::auxiliary_fluxes(flux_for_conformal_factor_gradient,
-                            conformal_factor);
-}
-
 void Fluxes<Equations::Hamiltonian, Geometry::Curved>::apply(
     const gsl::not_null<tnsr::I<DataVector, 3>*> flux_for_conformal_factor,
     const tnsr::II<DataVector, 3>& inv_conformal_metric,
     const tnsr::i<DataVector, 3>& conformal_factor_gradient) {
   Poisson::curved_fluxes(flux_for_conformal_factor, inv_conformal_metric,
                          conformal_factor_gradient);
-}
-
-void Fluxes<Equations::Hamiltonian, Geometry::Curved>::apply(
-    const gsl::not_null<tnsr::Ij<DataVector, 3>*>
-        flux_for_conformal_factor_gradient,
-    const tnsr::II<DataVector, 3>& /*inv_conformal_metric*/,
-    const Scalar<DataVector>& conformal_factor) {
-  Poisson::auxiliary_fluxes(flux_for_conformal_factor_gradient,
-                            conformal_factor);
 }
 
 void Fluxes<Equations::HamiltonianAndLapse, Geometry::FlatCartesian>::apply(
@@ -61,19 +45,6 @@ void Fluxes<Equations::HamiltonianAndLapse, Geometry::FlatCartesian>::apply(
       flux_for_conformal_factor, conformal_factor_gradient);
   Poisson::flat_cartesian_fluxes(flux_for_lapse_times_conformal_factor,
                                  lapse_times_conformal_factor_gradient);
-}
-
-void Fluxes<Equations::HamiltonianAndLapse, Geometry::FlatCartesian>::apply(
-    const gsl::not_null<tnsr::Ij<DataVector, 3>*>
-        flux_for_conformal_factor_gradient,
-    const gsl::not_null<tnsr::Ij<DataVector, 3>*>
-        flux_for_lapse_times_conformal_factor_gradient,
-    const Scalar<DataVector>& conformal_factor,
-    const Scalar<DataVector>& lapse_times_conformal_factor) {
-  Fluxes<Equations::Hamiltonian, Geometry::FlatCartesian>::apply(
-      flux_for_conformal_factor_gradient, conformal_factor);
-  Poisson::auxiliary_fluxes(flux_for_lapse_times_conformal_factor_gradient,
-                            lapse_times_conformal_factor);
 }
 
 void Fluxes<Equations::HamiltonianAndLapse, Geometry::Curved>::apply(
@@ -89,21 +60,6 @@ void Fluxes<Equations::HamiltonianAndLapse, Geometry::Curved>::apply(
   Poisson::curved_fluxes(flux_for_lapse_times_conformal_factor,
                          inv_conformal_metric,
                          lapse_times_conformal_factor_gradient);
-}
-
-void Fluxes<Equations::HamiltonianAndLapse, Geometry::Curved>::apply(
-    const gsl::not_null<tnsr::Ij<DataVector, 3>*>
-        flux_for_conformal_factor_gradient,
-    const gsl::not_null<tnsr::Ij<DataVector, 3>*>
-        flux_for_lapse_times_conformal_factor_gradient,
-    const tnsr::II<DataVector, 3>& inv_conformal_metric,
-    const Scalar<DataVector>& conformal_factor,
-    const Scalar<DataVector>& lapse_times_conformal_factor) {
-  Fluxes<Equations::Hamiltonian, Geometry::Curved>::apply(
-      flux_for_conformal_factor_gradient, inv_conformal_metric,
-      conformal_factor);
-  Poisson::auxiliary_fluxes(flux_for_lapse_times_conformal_factor_gradient,
-                            lapse_times_conformal_factor);
 }
 
 void Fluxes<Equations::HamiltonianLapseAndShift, Geometry::FlatCartesian>::
@@ -123,19 +79,20 @@ void Fluxes<Equations::HamiltonianLapseAndShift, Geometry::FlatCartesian>::
 }
 
 void Fluxes<Equations::HamiltonianLapseAndShift, Geometry::FlatCartesian>::
-    apply(const gsl::not_null<tnsr::Ij<DataVector, 3>*>
+    apply(const gsl::not_null<Scalar<DataVector>*>
               flux_for_conformal_factor_gradient,
-          const gsl::not_null<tnsr::Ij<DataVector, 3>*>
+          const gsl::not_null<Scalar<DataVector>*>
               flux_for_lapse_times_conformal_factor_gradient,
-          const gsl::not_null<tnsr::Ijj<DataVector, 3>*> flux_for_shift_strain,
+          const gsl::not_null<tnsr::i<DataVector, 3>*> flux_for_shift_strain,
           const Scalar<DataVector>& conformal_factor,
           const Scalar<DataVector>& lapse_times_conformal_factor,
-          const tnsr::I<DataVector, 3>& shift) {
-  Fluxes<Equations::HamiltonianAndLapse, Geometry::FlatCartesian>::apply(
-      flux_for_conformal_factor_gradient,
-      flux_for_lapse_times_conformal_factor_gradient, conformal_factor,
-      lapse_times_conformal_factor);
-  Elasticity::auxiliary_fluxes(flux_for_shift_strain, shift);
+          const tnsr::I<DataVector, 3>& shift_excess) {
+  *flux_for_conformal_factor_gradient = conformal_factor;
+  *flux_for_lapse_times_conformal_factor_gradient =
+      lapse_times_conformal_factor;
+  for (size_t d = 0; d < 3; ++d) {
+    flux_for_shift_strain->get(d) = shift_excess.get(d);
+  }
 }
 
 void Fluxes<Equations::HamiltonianLapseAndShift, Geometry::Curved>::apply(
@@ -157,22 +114,19 @@ void Fluxes<Equations::HamiltonianLapseAndShift, Geometry::Curved>::apply(
 }
 
 void Fluxes<Equations::HamiltonianLapseAndShift, Geometry::Curved>::apply(
-    const gsl::not_null<tnsr::Ij<DataVector, 3>*>
-        flux_for_conformal_factor_gradient,
-    const gsl::not_null<tnsr::Ij<DataVector, 3>*>
+    const gsl::not_null<Scalar<DataVector>*> flux_for_conformal_factor_gradient,
+    const gsl::not_null<Scalar<DataVector>*>
         flux_for_lapse_times_conformal_factor_gradient,
-    const gsl::not_null<tnsr::Ijj<DataVector, 3>*> flux_for_shift_strain,
+    const gsl::not_null<tnsr::i<DataVector, 3>*> flux_for_shift_strain,
     const tnsr::ii<DataVector, 3>& conformal_metric,
-    const tnsr::II<DataVector, 3>& inv_conformal_metric,
+    const tnsr::II<DataVector, 3>& /* inv_conformal_metric */,
     const Scalar<DataVector>& conformal_factor,
     const Scalar<DataVector>& lapse_times_conformal_factor,
     const tnsr::I<DataVector, 3>& shift_excess) {
-  Fluxes<Equations::HamiltonianAndLapse, Geometry::Curved>::apply(
-      flux_for_conformal_factor_gradient,
-      flux_for_lapse_times_conformal_factor_gradient, inv_conformal_metric,
-      conformal_factor, lapse_times_conformal_factor);
-  Elasticity::curved_auxiliary_fluxes(flux_for_shift_strain, conformal_metric,
-                                      shift_excess);
+  *flux_for_conformal_factor_gradient = conformal_factor;
+  *flux_for_lapse_times_conformal_factor_gradient =
+      lapse_times_conformal_factor;
+  raise_or_lower_index(flux_for_shift_strain, shift_excess, conformal_metric);
 }
 
 template <int ConformalMatterScale>
@@ -192,19 +146,6 @@ void Sources<Equations::Hamiltonian, Geometry::FlatCartesian,
       hamiltonian_constraint,
       longitudinal_shift_minus_dt_conformal_metric_over_lapse_square,
       conformal_factor);
-}
-
-template <int ConformalMatterScale>
-void Sources<Equations::Hamiltonian, Geometry::FlatCartesian,
-             ConformalMatterScale>::
-    apply(const gsl::not_null<tnsr::i<DataVector, 3>*>
-          /*equation_for_conformal_factor_gradient*/,
-          const Scalar<DataVector>& /*conformal_energy_density*/,
-          const Scalar<DataVector>& /*extrinsic_curvature_trace*/,
-          const Scalar<DataVector>&
-          /*longitudinal_shift_minus_dt_conformal_metric_over_lapse_square*/,
-          const Scalar<DataVector>& /*conformal_factor*/) {
-  // Nothing to do. The auxiliary equation has no sources.
 }
 
 template <int ConformalMatterScale>
@@ -229,22 +170,6 @@ void Sources<Equations::Hamiltonian, Geometry::Curved, ConformalMatterScale>::
   Poisson::add_curved_sources(hamiltonian_constraint,
                               conformal_christoffel_contracted,
                               conformal_factor_flux);
-}
-
-template <int ConformalMatterScale>
-void Sources<Equations::Hamiltonian, Geometry::Curved, ConformalMatterScale>::
-    apply(const gsl::not_null<tnsr::i<DataVector, 3>*>
-          /*equation_for_conformal_factor_gradient*/,
-          const Scalar<DataVector>& /*conformal_energy_density*/,
-          const Scalar<DataVector>& /*extrinsic_curvature_trace*/,
-          const Scalar<DataVector>&
-          /*longitudinal_shift_minus_dt_conformal_metric_over_lapse_square*/,
-          const tnsr::i<DataVector, 3>& /*conformal_christoffel_contracted*/,
-          const Scalar<DataVector>& /*conformal_ricci_scalar*/,
-          const Scalar<DataVector>& /*conformal_factor*/) {
-  // Nothing to do. The auxiliary equation has no sources and the covariant
-  // derivative of a scalar is just a partial derivative, so no
-  // Christoffel-symbol terms need to be added here.
 }
 
 template <int ConformalMatterScale>
@@ -276,26 +201,6 @@ void Sources<Equations::HamiltonianAndLapse, Geometry::FlatCartesian,
       hamiltonian_constraint, lapse_equation,
       longitudinal_shift_minus_dt_conformal_metric_square, conformal_factor,
       lapse_times_conformal_factor);
-}
-
-template <int ConformalMatterScale>
-void Sources<Equations::HamiltonianAndLapse, Geometry::FlatCartesian,
-             ConformalMatterScale>::
-    apply(
-        const gsl::not_null<tnsr::i<DataVector, 3>*>
-        /*equation_for_conformal_factor_gradient*/,
-        const gsl::not_null<tnsr::i<DataVector, 3>*>
-        /*equation_for_lapse_times_conformal_factor_gradient*/,
-        const Scalar<DataVector>& /*conformal_energy_density*/,
-        const Scalar<DataVector>& /*conformal_stress_trace*/,
-        const Scalar<DataVector>& /*extrinsic_curvature_trace*/,
-        const Scalar<DataVector>& /*dt_extrinsic_curvature_trace*/,
-        const Scalar<DataVector>&
-        /*longitudinal_shift_minus_dt_conformal_metric_square*/,
-        const Scalar<DataVector>& /*shift_dot_deriv_extrinsic_curvature_trace*/,
-        const Scalar<DataVector>& /*conformal_factor*/,
-        const Scalar<DataVector>& /*lapse_times_conformal_factor*/) {
-  // Nothing to do. The auxiliary equation has no sources.
 }
 
 template <int ConformalMatterScale>
@@ -334,30 +239,6 @@ void Sources<Equations::HamiltonianAndLapse, Geometry::Curved,
       lapse_equation, conformal_ricci_scalar, lapse_times_conformal_factor);
   Poisson::add_curved_sources(lapse_equation, conformal_christoffel_contracted,
                               lapse_times_conformal_factor_flux);
-}
-
-template <int ConformalMatterScale>
-void Sources<Equations::HamiltonianAndLapse, Geometry::Curved,
-             ConformalMatterScale>::
-    apply(
-        const gsl::not_null<tnsr::i<DataVector, 3>*>
-        /*equation_for_conformal_factor_gradient*/,
-        const gsl::not_null<tnsr::i<DataVector, 3>*>
-        /*equation_for_lapse_times_conformal_factor_gradient*/,
-        const Scalar<DataVector>& /*conformal_energy_density*/,
-        const Scalar<DataVector>& /*conformal_stress_trace*/,
-        const Scalar<DataVector>& /*extrinsic_curvature_trace*/,
-        const Scalar<DataVector>& /*dt_extrinsic_curvature_trace*/,
-        const Scalar<DataVector>&
-        /*longitudinal_shift_minus_dt_conformal_metric_square*/,
-        const Scalar<DataVector>& /*shift_dot_deriv_extrinsic_curvature_trace*/,
-        const tnsr::i<DataVector, 3>& /*conformal_christoffel_contracted*/,
-        const Scalar<DataVector>& /*conformal_ricci_scalar*/,
-        const Scalar<DataVector>& /*conformal_factor*/,
-        const Scalar<DataVector>& /*lapse_times_conformal_factor*/) {
-  // Nothing to do. The auxiliary equation has no sources and the covariant
-  // derivative of a scalar is just a partial derivative, so no
-  // Christoffel-symbol terms need to be added here.
 }
 
 template <int ConformalMatterScale>
@@ -567,20 +448,6 @@ void LinearizedSources<Equations::Hamiltonian, Geometry::FlatCartesian,
 }
 
 template <int ConformalMatterScale>
-void LinearizedSources<Equations::Hamiltonian, Geometry::FlatCartesian,
-                       ConformalMatterScale>::
-    apply(const gsl::not_null<tnsr::i<DataVector, 3>*>
-          /*source_for_conformal_factor_gradient_correction*/,
-          const Scalar<DataVector>& /*conformal_energy_density*/,
-          const Scalar<DataVector>& /*extrinsic_curvature_trace*/,
-          const Scalar<DataVector>&
-          /*longitudinal_shift_minus_dt_conformal_metric_over_lapse_square*/,
-          const Scalar<DataVector>& /*conformal_factor*/,
-          const Scalar<DataVector>& /*conformal_factor_correction*/) {
-  // Nothing to do. The auxiliary equation has no sources.
-}
-
-template <int ConformalMatterScale>
 void LinearizedSources<Equations::Hamiltonian, Geometry::Curved,
                        ConformalMatterScale>::
     apply(const gsl::not_null<Scalar<DataVector>*>
@@ -607,24 +474,6 @@ void LinearizedSources<Equations::Hamiltonian, Geometry::Curved,
   Poisson::add_curved_sources(linearized_hamiltonian_constraint,
                               conformal_christoffel_contracted,
                               conformal_factor_flux_correction);
-}
-
-template <int ConformalMatterScale>
-void LinearizedSources<Equations::Hamiltonian, Geometry::Curved,
-                       ConformalMatterScale>::
-    apply(const gsl::not_null<tnsr::i<DataVector, 3>*>
-          /*equation_for_conformal_factor_gradient_correction*/,
-          const Scalar<DataVector>& /*conformal_energy_density*/,
-          const Scalar<DataVector>& /*extrinsic_curvature_trace*/,
-          const Scalar<DataVector>&
-          /*longitudinal_shift_minus_dt_conformal_metric_over_lapse_square*/,
-          const tnsr::i<DataVector, 3>& /*conformal_christoffel_contracted*/,
-          const Scalar<DataVector>& /*conformal_ricci_scalar*/,
-          const Scalar<DataVector>& /*conformal_factor*/,
-          const Scalar<DataVector>& /*conformal_factor_correction*/) {
-  // Nothing to do. The auxiliary equation has no sources and the covariant
-  // derivative of a scalar is just a partial derivative, so no
-  // Christoffel-symbol terms need to be added here.
 }
 
 template <int ConformalMatterScale>
@@ -661,28 +510,6 @@ void LinearizedSources<Equations::HamiltonianAndLapse, Geometry::FlatCartesian,
       longitudinal_shift_minus_dt_conformal_metric_square, conformal_factor,
       lapse_times_conformal_factor, conformal_factor_correction,
       lapse_times_conformal_factor_correction);
-}
-
-template <int ConformalMatterScale>
-void LinearizedSources<Equations::HamiltonianAndLapse, Geometry::FlatCartesian,
-                       ConformalMatterScale>::
-    apply(
-        const gsl::not_null<tnsr::i<DataVector, 3>*>
-        /*equation_for_conformal_factor_gradient_correction*/,
-        const gsl::not_null<tnsr::i<DataVector, 3>*>
-        /*equation_for_lapse_times_conformal_factor_gradient_correction*/,
-        const Scalar<DataVector>& /*conformal_energy_density*/,
-        const Scalar<DataVector>& /*conformal_stress_trace*/,
-        const Scalar<DataVector>& /*extrinsic_curvature_trace*/,
-        const Scalar<DataVector>& /*dt_extrinsic_curvature_trace*/,
-        const Scalar<DataVector>&
-        /*longitudinal_shift_minus_dt_conformal_metric_square*/,
-        const Scalar<DataVector>& /*shift_dot_deriv_extrinsic_curvature_trace*/,
-        const Scalar<DataVector>& /*conformal_factor*/,
-        const Scalar<DataVector>& /*lapse_times_conformal_factor*/,
-        const Scalar<DataVector>& /*conformal_factor_correction*/,
-        const Scalar<DataVector>& /*lapse_times_conformal_factor_correction*/) {
-  // Nothing to do. The auxiliary equation has no sources.
 }
 
 template <int ConformalMatterScale>
@@ -730,32 +557,6 @@ void LinearizedSources<Equations::HamiltonianAndLapse, Geometry::Curved,
   Poisson::add_curved_sources(linearized_lapse_equation,
                               conformal_christoffel_contracted,
                               lapse_times_conformal_factor_flux_correction);
-}
-
-template <int ConformalMatterScale>
-void LinearizedSources<Equations::HamiltonianAndLapse, Geometry::Curved,
-                       ConformalMatterScale>::
-    apply(
-        const gsl::not_null<tnsr::i<DataVector, 3>*>
-        /*equation_for_conformal_factor_gradient_correction*/,
-        const gsl::not_null<tnsr::i<DataVector, 3>*>
-        /*equation_for_lapse_times_conformal_factor_gradient_correction*/,
-        const Scalar<DataVector>& /*conformal_energy_density*/,
-        const Scalar<DataVector>& /*conformal_stress_trace*/,
-        const Scalar<DataVector>& /*extrinsic_curvature_trace*/,
-        const Scalar<DataVector>& /*dt_extrinsic_curvature_trace*/,
-        const Scalar<DataVector>&
-        /*longitudinal_shift_minus_dt_conformal_metric_square*/,
-        const Scalar<DataVector>& /*shift_dot_deriv_extrinsic_curvature_trace*/,
-        const tnsr::i<DataVector, 3>& /*conformal_christoffel_contracted*/,
-        const Scalar<DataVector>& /*conformal_ricci_scalar*/,
-        const Scalar<DataVector>& /*conformal_factor*/,
-        const Scalar<DataVector>& /*lapse_times_conformal_factor*/,
-        const Scalar<DataVector>& /*conformal_factor_correction*/,
-        const Scalar<DataVector>& /*lapse_times_conformal_factor_correction*/) {
-  // Nothing to do. The auxiliary equation has no sources and the covariant
-  // derivative of a scalar is just a partial derivative, so no
-  // Christoffel-symbol terms need to be added here.
 }
 
 template <int ConformalMatterScale>

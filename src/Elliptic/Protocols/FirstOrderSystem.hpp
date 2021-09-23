@@ -16,17 +16,15 @@ namespace elliptic::protocols {
 
 namespace FirstOrderSystem_detail {
 template <size_t Dim, typename PrimalFields, typename AuxiliaryFields,
-          typename PrimalFluxes, typename AuxiliaryFluxes>
+          typename PrimalFluxes>
 struct test_primal_and_auxiliary_fields_and_fluxes;
 template <size_t Dim, typename... PrimalFields, typename... AuxiliaryFields,
-          typename... PrimalFluxes, typename... AuxiliaryFluxes>
+          typename... PrimalFluxes>
 struct test_primal_and_auxiliary_fields_and_fluxes<
     Dim, tmpl::list<PrimalFields...>, tmpl::list<AuxiliaryFields...>,
-    tmpl::list<PrimalFluxes...>, tmpl::list<AuxiliaryFluxes...>>
-    : std::true_type {
+    tmpl::list<PrimalFluxes...>> : std::true_type {
   static_assert(sizeof...(PrimalFields) == sizeof...(AuxiliaryFields) and
-                    sizeof...(PrimalFluxes) == sizeof...(PrimalFields) and
-                    sizeof...(AuxiliaryFluxes) == sizeof...(PrimalFields),
+                    sizeof...(PrimalFluxes) == sizeof...(PrimalFields),
                 "The system must have the same number of primal and auxiliary "
                 "fields and fluxes.");
   static_assert(
@@ -46,18 +44,6 @@ struct test_primal_and_auxiliary_fields_and_fluxes<
       "Primal fluxes and primal fields must correspond to each "
       "other. In particular, each primal flux must have one "
       "index more than its corresponding primal field and an upper-spatial "
-      "first index.");
-  static_assert(
-      ((tmpl::size<typename AuxiliaryFluxes::type::index_list>::value ==
-        tmpl::size<typename AuxiliaryFields::type::index_list>::value + 1) and
-       ...) and
-          (std::is_same_v<
-               tmpl::front<typename AuxiliaryFluxes::type::index_list>,
-               SpatialIndex<Dim, UpLo::Up, Frame::Inertial>> and
-           ...),
-      "Auxiliary fluxes and auxiliary fields must correspond to each "
-      "other. In particular, each auxiliary flux must have one "
-      "index more than its corresponding auxiliary field and an upper-spatial "
       "first index.");
 };
 }  // namespace FirstOrderSystem_detail
@@ -179,11 +165,9 @@ struct FirstOrderSystem {
     using primal_fields = typename ConformingType::primal_fields;
     using auxiliary_fields = typename ConformingType::auxiliary_fields;
     using primal_fluxes = typename ConformingType::primal_fluxes;
-    using auxiliary_fluxes = typename ConformingType::auxiliary_fluxes;
     static_assert(
         FirstOrderSystem_detail::test_primal_and_auxiliary_fields_and_fluxes<
-            volume_dim, primal_fields, auxiliary_fields, primal_fluxes,
-            auxiliary_fluxes>::value);
+            volume_dim, primal_fields, auxiliary_fields, primal_fluxes>::value);
 
     using background_fields = typename ConformingType::background_fields;
     static_assert(tt::is_a_v<tmpl::list, background_fields>);

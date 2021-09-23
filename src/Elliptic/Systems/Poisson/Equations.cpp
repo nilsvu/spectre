@@ -67,21 +67,6 @@ void Fluxes<Dim, Geometry::Curved>::apply(
 }
 
 template <size_t Dim>
-void Fluxes<Dim, Geometry::FlatCartesian>::apply(
-    const gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
-    const Scalar<DataVector>& field) {
-  auxiliary_fluxes(flux_for_gradient, field);
-}
-
-template <size_t Dim>
-void Fluxes<Dim, Geometry::Curved>::apply(
-    const gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
-    const tnsr::II<DataVector, Dim>& /*inv_spatial_metric*/,
-    const Scalar<DataVector>& field) {
-  auxiliary_fluxes(flux_for_gradient, field);
-}
-
-template <size_t Dim>
 void Sources<Dim, Geometry::FlatCartesian>::apply(
     const gsl::not_null<Scalar<DataVector>*> /*equation_for_field*/,
     const Scalar<DataVector>& /*field*/,
@@ -95,19 +80,6 @@ void Sources<Dim, Geometry::Curved>::apply(
     const tnsr::I<DataVector, Dim>& field_flux) {
   add_curved_sources(equation_for_field, christoffel_contracted, field_flux);
 }
-
-template <size_t Dim>
-void Sources<Dim, Geometry::FlatCartesian>::apply(
-    const gsl::not_null<
-        tnsr::i<DataVector, Dim>*> /*equation_for_field_gradient*/,
-    const Scalar<DataVector>& /*field*/) {}
-
-template <size_t Dim>
-void Sources<Dim, Geometry::Curved>::apply(
-    const gsl::not_null<
-        tnsr::i<DataVector, Dim>*> /*equation_for_field_gradient*/,
-    const tnsr::i<DataVector, Dim>& /*christoffel_contracted*/,
-    const Scalar<DataVector>& /*field*/) {}
 
 }  // namespace Poisson
 
