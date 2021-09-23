@@ -78,12 +78,6 @@ struct Fluxes {
       const tnsr::i<DataVector, Dim>& field_gradient) {
     curved_fluxes(flux_for_field, inv_spatial_metric, field_gradient);
   }
-  static void apply(
-      const gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
-      const tnsr::II<DataVector, Dim>& /*inv_spatial_metric*/,
-      const Scalar<DataVector>& field) {
-    auxiliary_fluxes(flux_for_gradient, field);
-  }
 };
 
 /*!
@@ -100,11 +94,6 @@ struct Fluxes<Dim, void> {
       const gsl::not_null<tnsr::I<DataVector, Dim>*> flux_for_field,
       const tnsr::i<DataVector, Dim>& field_gradient) {
     flat_cartesian_fluxes(flux_for_field, field_gradient);
-  }
-  static void apply(
-      const gsl::not_null<tnsr::Ij<DataVector, Dim>*> flux_for_gradient,
-      const Scalar<DataVector>& field) {
-    auxiliary_fluxes(flux_for_gradient, field);
   }
 };
 
@@ -123,11 +112,6 @@ struct Sources {
                     const tnsr::I<DataVector, Dim>& field_flux) {
     add_curved_sources(equation_for_field, christoffel_contracted, field_flux);
   }
-  static void apply(
-      const gsl::not_null<
-          tnsr::i<DataVector, Dim>*> /*equation_for_field_gradient*/,
-      const tnsr::i<DataVector, Dim>& /*christoffel_contracted*/,
-      const Scalar<DataVector>& /*field*/) {}
 };
 
 /*!
@@ -143,10 +127,6 @@ struct Sources<Dim, void> {
       const gsl::not_null<Scalar<DataVector>*> /*equation_for_field*/,
       const Scalar<DataVector>& /*field*/,
       const tnsr::I<DataVector, Dim>& /*field_flux*/) {}
-  static void apply(
-      const gsl::not_null<
-          tnsr::i<DataVector, Dim>*> /*equation_for_field_gradient*/,
-      const Scalar<DataVector>& /*field*/) {}
 };
 
 }  // namespace Poisson

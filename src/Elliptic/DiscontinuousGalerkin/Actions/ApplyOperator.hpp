@@ -237,8 +237,6 @@ struct PrepareAndSendMortarData<
     // inactive.
     Variables<typename System::auxiliary_fields> auxiliary_fields_buffer{
         num_points};
-    Variables<typename System::auxiliary_fluxes> auxiliary_fluxes_buffer{
-        num_points};
     using fluxes_args_tags = typename System::fluxes_computer::argument_tags;
     using fluxes_args_volume_tags =
         typename System::fluxes_computer::volume_tags;
@@ -252,8 +250,7 @@ struct PrepareAndSendMortarData<
                          fluxes_args_volume_tags>(get_items, box, direction));
     }
     elliptic::dg::prepare_mortar_data<System, Linearized>(
-        make_not_null(&auxiliary_fields_buffer),
-        make_not_null(&auxiliary_fluxes_buffer), make_not_null(&primal_fluxes),
+        make_not_null(&auxiliary_fields_buffer), make_not_null(&primal_fluxes),
         make_not_null(&all_mortar_data), db::get<PrimalFieldsTag>(box), element,
         db::get<domain::Tags::Mesh<Dim>>(box),
         db::get<domain::Tags::InverseJacobian<Dim, Frame::ElementLogical,

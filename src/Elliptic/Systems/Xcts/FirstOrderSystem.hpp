@@ -191,8 +191,6 @@ struct FirstOrderSystem
       tmpl::conditional_t<EnabledEquations ==
                               Equations::HamiltonianLapseAndShift,
                           longitudinal_shift_excess, tmpl::list<>>>>;
-  using auxiliary_fluxes = db::wrap_tags_in<::Tags::Flux, auxiliary_fields,
-                                            tmpl::size_t<3>, Frame::Inertial>;
 
   using background_fields = tmpl::flatten<tmpl::list<
       // Quantities for Hamiltonian constraint

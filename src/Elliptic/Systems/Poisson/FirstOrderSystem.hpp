@@ -80,8 +80,6 @@ struct FirstOrderSystem
   // symmetries and we don't need to give them a particular meaning.
   using primal_fluxes =
       tmpl::list<::Tags::Flux<field, tmpl::size_t<Dim>, Frame::Inertial>>;
-  using auxiliary_fluxes = tmpl::list<
-      ::Tags::Flux<field_gradient, tmpl::size_t<Dim>, Frame::Inertial>>;
 
   using background_fields =
       tmpl::conditional_t<std::is_same_v<InvMetricTag, void>, tmpl::list<>,
