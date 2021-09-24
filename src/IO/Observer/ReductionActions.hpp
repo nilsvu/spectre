@@ -128,6 +128,10 @@ struct ContributeReductionData {
                                         Tags::ReductionDataNames<Ts...>> and
                   tmpl::list_contains_v<DbTagsList,
                                         Tags::ContributorsOfReductionData>) {
+      ASSERT(reduction_names.size() == sizeof...(Ts),
+             "Unexpected number of legend entries. Expected "
+                 << sizeof...(Ts) << " (size of the reduction data), but got "
+                 << reduction_names.size() << ".");
       db::mutate<Tags::ReductionData<Ts...>, Tags::ReductionDataNames<Ts...>,
                  Tags::ContributorsOfReductionData>(
           make_not_null(&box),
