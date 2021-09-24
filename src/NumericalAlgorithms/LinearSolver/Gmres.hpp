@@ -259,6 +259,13 @@ class Gmres final : public PreconditionedLinearSolver<Preconditioner,
     }
   }
 
+  template <typename LinearOperator, typename UsedForSize,
+            typename... OperatorArgs>
+  void prepare(const LinearOperator& linear_operator,
+               const UsedForSize& used_for_size,
+               const std::tuple<OperatorArgs...>& operator_args =
+                   std::tuple{}) const noexcept;
+
   template <typename LinearOperator, typename SourceType,
             typename... OperatorArgs,
             typename IterationCallback = NoIterationCallback>
@@ -355,6 +362,21 @@ Gmres<VarsType, Preconditioner, LinearSolverRegistrars>::Gmres(
     CkMigrateMessage* m) noexcept
     : Base(m) {}
 /// \endcond
+
+template <typename VarsType, typename Preconditioner,
+          typename LinearSolverRegistrars>
+template <typename LinearOperator, typename UsedForSize,
+          typename... OperatorArgs>
+void Gmres<VarsType, Preconditioner, LinearSolverRegistrars>::prepare(
+    const LinearOperator& linear_operator, const UsedForSize& used_for_size,
+    const std::tuple<OperatorArgs...>& operator_args) const noexcept {
+  if constexpr (not std::is_same_v<Preconditioner, NoPreconditioner>) {
+    if (this->has_preconditioner()) {
+      this->preconditioner().prepare(linear_operator, used_for_size,
+                                     operator_args);
+    }
+  }
+}
 
 template <typename VarsType, typename Preconditioner,
           typename LinearSolverRegistrars>

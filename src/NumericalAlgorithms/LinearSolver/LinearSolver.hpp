@@ -59,6 +59,12 @@ class LinearSolver : public PUP::able {
   virtual std::unique_ptr<LinearSolver<LinearSolverRegistrars>> get_clone()
       const = 0;
 
+  template <typename LinearOperator, typename UsedForSize,
+            typename... OperatorArgs>
+  void prepare(const LinearOperator& linear_operator,
+               const UsedForSize& used_for_size,
+               const std::tuple<OperatorArgs...>& operator_args) const noexcept;
+
   /*!
    * \brief Solve the linear equation \f$Ax=b\f$ where \f$A\f$ is the
    * `linear_operator` and \f$b\f$ is the `source`.
@@ -93,6 +99,20 @@ template <typename LinearSolverRegistrars>
 LinearSolver<LinearSolverRegistrars>::LinearSolver(CkMigrateMessage* m) noexcept
     : PUP::able(m) {}
 /// \endcond
+
+template <typename LinearSolverRegistrars>
+template <typename LinearOperator, typename UsedForSize,
+          typename... OperatorArgs>
+void LinearSolver<LinearSolverRegistrars>::prepare(
+    const LinearOperator& linear_operator, const UsedForSize& used_for_size,
+    const std::tuple<OperatorArgs...>& operator_args) const noexcept {
+  return call_with_dynamic_type<void, creatable_classes>(
+      this, [&linear_operator, &used_for_size,
+             &operator_args](auto* const linear_solver) noexcept {
+        return linear_solver->prepare(linear_operator, used_for_size,
+                                      operator_args);
+      });
+}
 
 template <typename LinearSolverRegistrars>
 template <typename LinearOperator, typename VarsType, typename SourceType,
