@@ -158,6 +158,12 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
   WRAPPED_PUPable_decl_template(ExplicitInverse);  // NOLINT
   /// \endcond
 
+  template <typename LinearOperator, typename UsedForSize,
+            typename... OperatorArgs>
+  void prepare(
+      const LinearOperator& linear_operator, const UsedForSize& used_for_size,
+      const std::tuple<OperatorArgs...>& operator_args = std::tuple{}) const;
+
   /*!
    * \brief Solve the equation \f$Ax=b\f$ by explicitly constructing the
    * operator matrix \f$A\f$ and its inverse. The first solve is computationally
@@ -225,22 +231,20 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
 };
 
 template <typename LinearSolverRegistrars>
-template <typename LinearOperator, typename VarsType, typename SourceType,
+template <typename LinearOperator, typename UsedForSize,
           typename... OperatorArgs>
-Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
-    const gsl::not_null<VarsType*> solution,
-    const LinearOperator& linear_operator, const SourceType& source,
+void ExplicitInverse<LinearSolverRegistrars>::prepare(
+    const LinearOperator& linear_operator, const UsedForSize& used_for_size,
     const std::tuple<OperatorArgs...>& operator_args) const {
   if (UNLIKELY(size_ == std::numeric_limits<size_t>::max())) {
-    const auto& used_for_size = source;
     size_ = used_for_size.size();
     source_workspace_.resize(static_cast<Eigen::Index>(size_));
     solution_workspace_.resize(static_cast<Eigen::Index>(size_));
     // operator_matrix_.resize(size_, size_);
     // Construct explicit matrix representation by "sniffing out" the operator,
     // i.e. feeding it unit vectors
-    auto operand_buffer = make_with_value<VarsType>(used_for_size, 0.);
-    auto result_buffer = make_with_value<SourceType>(used_for_size, 0.);
+    auto operand_buffer = make_with_value<UsedForSize>(used_for_size, 0.);
+    auto result_buffer = make_with_value<UsedForSize>(used_for_size, 0.);
     Eigen::SparseMatrix<double> operator_matrix{
         static_cast<Eigen::Index>(size_), static_cast<Eigen::Index>(size_)};
     build_matrix(make_not_null(&operator_matrix),
@@ -258,6 +262,15 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
     // We could free the operator matrix at this point, if we could serialize
     // and copy the ILU class directly.
   }
+}
+
+template <typename LinearSolverRegistrars>
+template <typename LinearOperator, typename VarsType, typename SourceType,
+          typename... OperatorArgs>
+Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
+    const gsl::not_null<VarsType*> solution,
+    const LinearOperator& /* linear_operator */, const SourceType& source,
+    const std::tuple<OperatorArgs...>& /* operator_args */) const {
   // Copy source into contiguous workspace. In cases where the source and
   // solution data are already stored contiguously we might avoid the copy and
   // the associated workspace memory. However, compared to the cost of building
