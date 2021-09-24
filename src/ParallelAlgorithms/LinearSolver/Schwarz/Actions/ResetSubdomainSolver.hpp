@@ -15,6 +15,8 @@
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
 
+#include "ParallelAlgorithms/LinearSolver/Schwarz/ElementActions.hpp"
+
 /// \cond
 namespace Parallel {
 template <typename Metavariables>
@@ -54,8 +56,17 @@ namespace LinearSolver::Schwarz::Actions {
  * optimization would be to decide at runtime whether or not to reset the
  * subdomain solver.
  */
-template <typename OptionsGroup>
+template <typename FieldsTag, typename OptionsGroup, typename SubdomainOperator>
 struct ResetSubdomainSolver {
+ private:
+  using fields_tag = FieldsTag;
+  using residual_tag =
+      db::add_tag_prefix<LinearSolver::Tags::Residual, fields_tag>;
+  static constexpr size_t Dim = SubdomainOperator::volume_dim;
+  using SubdomainData =
+      ElementCenteredSubdomainData<Dim, typename residual_tag::tags_list>;
+
+ public:
   using const_global_cache_tags = tmpl::list<
       LinearSolver::Schwarz::Tags::SkipSubdomainSolverResets<OptionsGroup>,
       logging::Tags::Verbosity<OptionsGroup>>;
@@ -87,6 +98,36 @@ struct ResetSubdomainSolver {
             (*subdomain_solver)->reset();
           });
     }
+
+    // Allocate workspace memory for repeatedly applying the subdomain operator
+    const SubdomainOperator subdomain_operator{};
+    auto& subdomain_data_buffer = db::get_mutable_reference<
+        LinearSolver::Schwarz::detail::SubdomainDataBufferTag<SubdomainData,
+                                                              OptionsGroup>>(
+        make_not_null(&box));
+    const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
+    const auto& element = db::get<domain::Tags::Element<Dim>>(box);
+    const auto& overlap_extents = db::get<LinearSolver::Schwarz::Tags::Overlaps<
+        elliptic::dg::subdomain_operator::Tags::ExtrudingExtent, Dim,
+        OptionsGroup>>(box);
+    const auto& overlap_meshes =
+        db::get<LinearSolver::Schwarz::Tags::Overlaps<domain::Tags::Mesh<Dim>,
+                                                      Dim, OptionsGroup>>(box);
+    subdomain_data_buffer.element_data.initialize(mesh.number_of_grid_points());
+    for (const auto& [overlap_id, extent] : overlap_extents) {
+      const auto& orientation =
+          element.neighbors().at(overlap_id.first).orientation();
+      const auto direction_from_neighbor =
+          orientation(overlap_id.first.opposite());
+      subdomain_data_buffer.overlap_data[overlap_id].initialize(
+          overlap_num_points(overlap_meshes.at(overlap_id).extents(), extent,
+                             direction_from_neighbor.dimension()));
+    }
+    // Prepare the subdomain solver for the new linear operator
+    const auto& subdomain_solver =
+        get<Tags::SubdomainSolverBase<OptionsGroup>>(box);
+    subdomain_solver.prepare(subdomain_operator, subdomain_data_buffer,
+                             std::forward_as_tuple(box));
     return {std::move(box)};
   }
 };

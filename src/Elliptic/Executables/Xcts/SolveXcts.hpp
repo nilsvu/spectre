@@ -315,7 +315,8 @@ struct Metavariables {
                   volume_dim, communicated_overlap_tags,
                   typename schwarz_smoother::options_group>,
               LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
-                  typename schwarz_smoother::options_group>,
+                  typename schwarz_smoother::fields_tag,
+                  typename schwarz_smoother::options_group, subdomain_operator>,
               typename linear_solver::template solve<tmpl::list<
                   // Don't compute the operator applied to the initial guess for
                   // the preconditioner, because we only ever run 1 multigrid

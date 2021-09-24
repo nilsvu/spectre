@@ -166,6 +166,14 @@ class MinusLaplacian
     }
   }
 
+  template <typename System, typename UsedForSize,
+            typename... SubdomainOperatorParams, typename... OperatorArgs>
+  void prepare(
+      const elliptic::dg::subdomain_operator::SubdomainOperator<
+          System, OptionsGroup, SubdomainOperatorParams...>& subdomain_operator,
+      const UsedForSize& used_for_size,
+      const std::tuple<OperatorArgs...>& operator_args) const;
+
   /// Solve the equation \f$Ax=b\f$ by approximating \f$A\f$ with a Laplace
   /// operator with homogeneous Dirichlet or Neumann boundary conditions for
   /// every tensor component in \f$x\f$.
@@ -399,6 +407,32 @@ void assign_component(
   }
 }
 }  // namespace detail
+
+template <typename PoissonSystem, typename OptionsGroup, typename Solver,
+          typename LinearSolverRegistrars>
+template <typename System, typename UsedForSize,
+          typename... SubdomainOperatorParams, typename... OperatorArgs>
+void MinusLaplacian<PoissonSystem, OptionsGroup, Solver,
+                    LinearSolverRegistrars>::
+    prepare(const elliptic::dg::subdomain_operator::SubdomainOperator<
+                System, OptionsGroup,
+                SubdomainOperatorParams...>& /* subdomain_operator */,
+            const UsedForSize& used_for_size,
+            const std::tuple<OperatorArgs...>& operator_args) const {
+  static constexpr size_t num_components = Variables<
+      typename System::primal_fields>::number_of_independent_components;
+  source_.destructive_resize(used_for_size);
+  initial_guess_in_solution_out_.destructive_resize(used_for_size);
+  const std::vector<BoundaryConditionsSignature>& bc_signatures =
+      get_cached_boundary_conditions_signatures<System>(get<0>(operator_args));
+  for (size_t component = 0; component < num_components; ++component) {
+    const auto& [solver, boundary_conditions] =
+        get_cached_solver_and_boundary_conditions(bc_signatures, component);
+    solver.prepare(subdomain_operator_, source_,
+                   std::tuple_cat(operator_args,
+                                  std::forward_as_tuple(boundary_conditions)));
+  }
+}
 
 template <typename PoissonSystem, typename OptionsGroup, typename Solver,
           typename LinearSolverRegistrars>
