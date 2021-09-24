@@ -192,6 +192,12 @@ class MinusLaplacian
   /// only exposed to allow verifying their consistency.
   const auto& cached_solvers() const { return solvers_; }
 
+  template <typename LinearOperator, typename UsedForSize,
+            typename... OperatorArgs>
+  void prepare(const LinearOperator& linear_operator,
+               const UsedForSize& used_for_size,
+               const std::tuple<OperatorArgs...>& operator_args) const;
+
   /// Solve the equation \f$Ax=b\f$ by approximating \f$A\f$ with a Laplace
   /// operator for every tensor component in \f$x\f$.
   template <typename LinearOperator, typename VarsType, typename SourceType,
@@ -437,6 +443,29 @@ void assign_component(
   }
 }
 }  // namespace detail
+
+template <size_t Dim, typename OptionsGroup, typename Solver,
+          typename LinearSolverRegistrars>
+template <typename LinearOperator, typename UsedForSize,
+          typename... OperatorArgs>
+void MinusLaplacian<Dim, OptionsGroup, Solver, LinearSolverRegistrars>::prepare(
+    const LinearOperator& /*linear_operator*/, const UsedForSize& used_for_size,
+    const std::tuple<OperatorArgs...>& operator_args) const {
+  const auto& box = get<0>(operator_args);
+  static constexpr size_t num_components =
+      UsedForSize::ElementData::number_of_independent_components;
+  source_.destructive_resize(used_for_size);
+  initial_guess_in_solution_out_.destructive_resize(used_for_size);
+  const std::vector<BoundaryConditionsSignature>& bc_signatures =
+      get_cached_boundary_conditions_signatures(box);
+  for (size_t component = 0; component < num_components; ++component) {
+    const auto& [solver, boundary_conditions] =
+        get_cached_solver_and_boundary_conditions(bc_signatures, component);
+    solver.prepare(subdomain_operator_, source_,
+                   std::tuple_cat(operator_args,
+                                  std::forward_as_tuple(boundary_conditions)));
+  }
+}
 
 template <size_t Dim, typename OptionsGroup, typename Solver,
           typename LinearSolverRegistrars>
