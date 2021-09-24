@@ -288,9 +288,9 @@ struct Metavariables {
                  Parallel::Actions::TerminatePhase>;
 
   template <typename Label>
-  using smooth_actions = tmpl::list<build_operator_actions<true>,
-                                    typename schwarz_smoother::template solve<
-                                        build_operator_actions<true>, Label>>;
+  using smooth_actions =
+      typename schwarz_smoother::template solve<build_operator_actions<true>,
+                                                Label>;
 
   using solve_actions = tmpl::list<
       typename nonlinear_solver::template solve<
@@ -311,7 +311,11 @@ struct Metavariables {
               LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
                   typename schwarz_smoother::options_group>,
               typename linear_solver::template solve<tmpl::list<
+                  // Don't compute the operator applied to the initial guess for
+                  // the preconditioner, because we only ever run 1 multigrid
+                  // iteration and that starts at an initial guess of zero.
                   typename multigrid::template solve<
+                      build_operator_actions<true>,
                       smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
                       smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
                   ::LinearSolver::Actions::make_identity_if_skipped<
