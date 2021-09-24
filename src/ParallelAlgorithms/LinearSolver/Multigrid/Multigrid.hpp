@@ -8,6 +8,7 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "IO/Observer/Actions/RegisterWithObservers.hpp"
 #include "IO/Observer/Helpers.hpp"
+#include "Parallel/Actions/Goto.hpp"
 #include "ParallelAlgorithms/LinearSolver/AsynchronousSolvers/ElementActions.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/ElementActions.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/ObserveVolumeData.hpp"
@@ -132,8 +133,8 @@ struct Multigrid {
                  observers::Actions::RegisterWithObservers<
                      detail::RegisterWithVolumeObserver<OptionsGroup>>>;
 
-  template <typename PreSmootherActions, typename PostSmootherActions,
-            typename Label = OptionsGroup>
+  template <typename ApplyOperatorActions, typename PreSmootherActions,
+            typename PostSmootherActions, typename Label = OptionsGroup>
   using solve = tmpl::list<
       async_solvers::PrepareSolve<FieldsTag, OptionsGroup, SourceTag, Label,
                                   Tags::IsFinestGrid, false>,
@@ -146,6 +147,7 @@ struct Multigrid {
                                         ResidualIsMassiveTag, SourceTag>,
       detail::ReceiveCorrectionFromCoarserGrid<Dim, FieldsTag, OptionsGroup,
                                                SourceTag>,
+      ApplyOperatorActions, ::Actions::Label<detail::PostSmoothingBeginLabel>,
       PostSmootherActions,
       detail::SendCorrectionToFinerGrid<FieldsTag, OptionsGroup, SourceTag>,
       detail::ObserveVolumeData<FieldsTag, OptionsGroup, SourceTag>,

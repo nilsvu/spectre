@@ -43,6 +43,27 @@ struct OutputVolumeData {
   static bool suggested_value() noexcept { return false; }
 };
 
+template <typename OptionsGroup>
+struct SkipPreSmoothing {
+  using type = bool;
+  static constexpr Options::String help =
+      "Skip pre-smoothing altogether (\"cascading multigrid\"). Note that "
+      "pre-smoothing can be necessary to remove high-frequency modes in the "
+      "data that get restricted to coarser grids, since such high-frequency "
+      "modes can introduce aliasing. However, when running only a single "
+      "V-cycle as preconditioner, the initial field is typically zero, so the "
+      "pre-smoother may not be necessary.";
+  using group = OptionsGroup;
+};
+
+template <typename OptionsGroup>
+struct SkipPostSmoothingAtBottom {
+  using type = bool;
+  static constexpr Options::String help =
+      "Skip post-smoothing on the coarsest level";
+  using group = OptionsGroup;
+};
+
 }  // namespace OptionTags
 
 /// DataBox tags for the `LinearSolver::multigrid::Multigrid` linear solver
@@ -97,6 +118,30 @@ struct OutputVolumeData : db::SimpleTag {
   static type create_from_options(const type value) noexcept { return value; };
   static std::string name() noexcept {
     return "OutputVolumeData(" + Options::name<OptionsGroup>() + ")";
+  }
+};
+
+template <typename OptionsGroup>
+struct SkipPreSmoothing : db::SimpleTag {
+  using type = bool;
+  static constexpr bool pass_metavariables = false;
+  using option_tags =
+      tmpl::list<OptionTags::SkipPreSmoothing<OptionsGroup>>;
+  static type create_from_options(const type value) noexcept { return value; };
+  static std::string name() noexcept {
+    return "SkipPreSmoothing(" + Options::name<OptionsGroup>() + ")";
+  }
+};
+
+template <typename OptionsGroup>
+struct SkipPostSmoothingAtBottom : db::SimpleTag {
+  using type = bool;
+  static constexpr bool pass_metavariables = false;
+  using option_tags =
+      tmpl::list<OptionTags::SkipPostSmoothingAtBottom<OptionsGroup>>;
+  static type create_from_options(const type value) noexcept { return value; };
+  static std::string name() noexcept {
+    return "SkipPostSmoothingAtBottom(" + Options::name<OptionsGroup>() + ")";
   }
 };
 
