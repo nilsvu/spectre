@@ -271,20 +271,300 @@ void general_test(const size_t number_of_blocks, const size_t number_of_procs,
 }
 
 SPECTRE_TEST_CASE("Unit.Domain.ElementDistribution", "[Domain][Unit]") {
-  {
-    INFO("Single block domain");
-    test_single_block_domain<1>();
-    test_single_block_domain<2>();
-    test_single_block_domain<3>();
-  }
-  for (const size_t number_of_blocks : {2_st, 6_st}) {
-    for (const size_t number_of_procs : {2_st, 7_st}) {
-      for (const bool uneven_domain : {true, false}) {
-        general_test<1>(number_of_blocks, number_of_procs, uneven_domain);
-        general_test<2>(number_of_blocks, number_of_procs, uneven_domain);
-        general_test<3>(number_of_blocks, number_of_procs, uneven_domain);
-      }
+  // std::vector<std::array<size_t, 3>> initial_refinement_levels{
+  //     // ObjectAShell
+  //     {{1, 1, 1}},
+  //     {{1, 1, 1}},
+  //     {{1, 1, 1}},
+  //     {{1, 1, 1}},
+  //     {{1, 1, 1}},
+  //     {{1, 1, 1}},
+  //     // ObjectBShell
+  //     {{1, 1, 1}},
+  //     {{1, 1, 1}},
+  //     {{1, 1, 1}},
+  //     {{1, 1, 1}},
+  //     {{1, 1, 1}},
+  //     {{1, 1, 1}},
+  //     // ObjectACube
+  //     {{1, 1, 0}},
+  //     {{1, 1, 0}},
+  //     {{1, 1, 0}},
+  //     {{1, 1, 0}},
+  //     {{1, 1, 0}},
+  //     {{1, 1, 0}},
+  //     // ObjectBCube
+  //     {{1, 1, 0}},
+  //     {{1, 1, 0}},
+  //     {{1, 1, 0}},
+  //     {{1, 1, 0}},
+  //     {{1, 1, 0}},
+  //     {{1, 1, 0}},
+  //     // EnvelopingCubeLeftUpperZ
+  //     {{1, 1, 0}},
+  //     // EnvelopingCubeLeftLowerZ
+  //     {{1, 1, 0}},
+  //     // EnvelopingCubeLeftUpperY
+  //     {{1, 1, 0}},
+  //     // EnvelopingCubeLeftLowerY
+  //     {{1, 1, 0}},
+  //     // EnvelopingCubeLeftLowerX
+  //     {{1, 1, 0}},
+  //     // EnvelopingCubeRightUpperZ
+  //     {{1, 1, 0}},
+  //     // EnvelopingCubeRightLowerZ
+  //     {{1, 1, 0}},
+  //     // EnvelopingCubeRightUpperY
+  //     {{1, 1, 0}},
+  //     // EnvelopingCubeRightLowerY
+  //     {{1, 1, 0}},
+  //     // EnvelopingCubeRightUpperX
+  //     {{1, 1, 0}},
+  //     // CubedShellLeftUpperZ
+  //     {{0, 1, 0}},
+  //     // CubedShellLeftLowerZ
+  //     {{0, 1, 0}},
+  //     // CubedShellLeftUpperY
+  //     {{0, 1, 0}},
+  //     // CubedShellLeftLowerY
+  //     {{0, 1, 0}},
+  //     // CubedShellLeftLowerX
+  //     {{1, 1, 0}},
+  //     // CubedShellRightUpperZ
+  //     {{0, 1, 0}},
+  //     // CubedShellRightLowerZ
+  //     {{0, 1, 0}},
+  //     // CubedShellRightUpperY
+  //     {{0, 1, 0}},
+  //     // CubedShellRightLowerY
+  //     {{0, 1, 0}},
+  //     // CubedShellRightUpperX
+  //     {{1, 1, 0}},  // 4 on 51
+  //     // OuterShellLeftUpperZ
+  //     {{0, 1, 0}},  // 2 on 52
+  //     // OuterShellLeftLowerZ
+  //     {{0, 1, 0}},  // 1 on 52, 1 on 53
+  //     // OuterShellLeftUpperY
+  //     {{0, 1, 0}},  // 2 on 53
+  //     // OuterShellLeftLowerY
+  //     {{0, 1, 0}},  // 2 on 54
+  //     // OuterShellLeftLowerX
+  //     {{1, 1, 0}},  // 1 on 54, 3 on 55
+  //     // OuterShellRightUpperZ
+  //     {{0, 1, 0}},  // 2 on 56
+  //     // OuterShellRightLowerZ
+  //     {{0, 1, 0}},  // 1 on 56, 1 on 57
+  //     // OuterShellRightUpperY
+  //     {{0, 1, 0}},  // 2 on 57
+  //     // OuterShellRightLowerY
+  //     {{0, 1, 0}},  // 2 on 58
+  //     // OuterShellRightUpperX
+  //     {{1, 1, 0}}};  // 1 on 58, 3 on 59
+  std::vector<std::array<size_t, 3>> initial_refinement_levels{
+      // ObjectAShell
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      // ObjectBShell
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      // ObjectACube
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      // ObjectBCube
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      {{0, 0, 0}},
+      // EnvelopingCubeLeftUpperZ
+      {{0, 0, 0}},
+      // EnvelopingCubeLeftLowerZ
+      {{0, 0, 0}},
+      // EnvelopingCubeLeftUpperY
+      {{0, 0, 0}},
+      // EnvelopingCubeLeftLowerY
+      {{0, 0, 0}},
+      // EnvelopingCubeLeftLowerX
+      {{0, 0, 0}},
+      // EnvelopingCubeRightUpperZ
+      {{0, 0, 0}},
+      // EnvelopingCubeRightLowerZ
+      {{0, 0, 0}},
+      // EnvelopingCubeRightUpperY
+      {{0, 0, 0}},
+      // EnvelopingCubeRightLowerY
+      {{0, 0, 0}},
+      // EnvelopingCubeRightUpperX
+      {{0, 0, 0}},
+      // CubedShellLeftUpperZ
+      {{0, 0, 0}},
+      // CubedShellLeftLowerZ
+      {{0, 0, 0}},
+      // CubedShellLeftUpperY
+      {{0, 0, 0}},
+      // CubedShellLeftLowerY
+      {{0, 0, 0}},
+      // CubedShellLeftLowerX
+      {{0, 0, 0}},
+      // CubedShellRightUpperZ
+      {{0, 0, 0}},
+      // CubedShellRightLowerZ
+      {{0, 0, 0}},
+      // CubedShellRightUpperY
+      {{0, 0, 0}},
+      // CubedShellRightLowerY
+      {{0, 0, 0}},
+      // CubedShellRightUpperX
+      {{0, 0, 0}},  // 4 on 50
+      // OuterShellLeftUpperZ
+      {{0, 0, 0}},  // 2 on 52
+      // OuterShellLeftLowerZ
+      {{0, 0, 0}},  // 0 on 52, 0 on 53
+      // OuterShellLeftUpperY
+      {{0, 0, 0}},  // 2 on 53
+      // OuterShellLeftLowerY
+      {{0, 0, 0}},  // 2 on 54
+      // OuterShellLeftLowerX
+      {{0, 0, 0}},  // 0 on 54, 3 on 55
+      // OuterShellRightUpperZ
+      {{0, 0, 0}},  // 2 on 56
+      // OuterShellRightLowerZ
+      {{0, 0, 0}},  // 0 on 56, 0 on 57
+      // OuterShellRightUpperY
+      {{0, 0, 0}},  // 2 on 57
+      // OuterShellRightLowerY
+      {{0, 0, 0}},  // 2 on 58
+      // OuterShellRightUpperX
+      {{0, 0, 0}}};  // 1 on 58, 3 on 59
+  std::vector<std::array<size_t, 3>> initial_num_points{
+      // ObjectAShell
+      {{6, 6, 9}},
+      {{6, 6, 9}},
+      {{6, 6, 9}},
+      {{6, 6, 9}},
+      {{6, 6, 9}},
+      {{6, 6, 9}},
+      // ObjectACube
+      {{6, 6, 7}},
+      {{6, 6, 7}},
+      {{6, 6, 7}},
+      {{6, 6, 7}},
+      {{6, 6, 7}},
+      {{6, 6, 7}},
+      // ObjectBShell
+      {{6, 6, 9}},
+      {{6, 6, 9}},
+      {{6, 6, 9}},
+      {{6, 6, 9}},
+      {{6, 6, 9}},
+      {{6, 6, 9}},
+      // ObjectBCube
+      {{6, 6, 7}},
+      {{6, 6, 7}},
+      {{6, 6, 7}},
+      {{6, 6, 7}},
+      {{6, 6, 7}},
+      {{6, 6, 7}},
+      // EnvelopingCubeLeftUpperZ
+      {{6, 6, 6}},
+      // EnvelopingCubeLeftLowerZ
+      {{6, 6, 6}},
+      // EnvelopingCubeLeftUpperY
+      {{6, 6, 6}},
+      // EnvelopingCubeLeftLowerY
+      {{6, 6, 6}},
+      // EnvelopingCubeLeftLowerX
+      {{6, 6, 6}},
+      // EnvelopingCubeRightUpperZ
+      {{6, 6, 6}},
+      // EnvelopingCubeRightLowerZ
+      {{6, 6, 6}},
+      // EnvelopingCubeRightUpperY
+      {{6, 6, 6}},
+      // EnvelopingCubeRightLowerY
+      {{6, 6, 6}},
+      // EnvelopingCubeRightUpperX
+      {{6, 6, 6}},
+      // CubedShellLeftUpperZ
+      {{6, 6, 6}},
+      // CubedShellLeftLowerZ
+      {{6, 6, 6}},
+      // CubedShellLeftUpperY
+      {{6, 6, 6}},
+      // CubedShellLeftLowerY
+      {{6, 6, 6}},
+      // CubedShellLeftLowerX
+      {{6, 6, 6}},
+      // CubedShellRightUpperZ
+      {{6, 6, 6}},
+      // CubedShellRightLowerZ
+      {{6, 6, 6}},
+      // CubedShellRightUpperY
+      {{6, 6, 6}},
+      // CubedShellRightLowerY
+      {{6, 6, 6}},
+      // CubedShellRightUpperX
+      {{6, 6, 6}},  // 4 on 56
+      // OuterShellLeftUpperZ
+      {{6, 6, 5}},  // 6 on 56
+      // OuterShellLeftLowerZ
+      {{6, 6, 5}},  // 6 on 56, 6 on 53
+      // OuterShellLeftUpperY
+      {{6, 6, 5}},  // 6 on 53
+      // OuterShellLeftLowerY
+      {{6, 6, 5}},  // 6 on 54
+      // OuterShellLeftLowerX
+      {{6, 6, 5}},  // 6 on 54, 3 on 55
+      // OuterShellRightUpperZ
+      {{6, 6, 5}},  // 6 on 56
+      // OuterShellRightLowerZ
+      {{6, 6, 5}},  // 6 on 56, 6 on 57
+      // OuterShellRightUpperY
+      {{6, 6, 5}},  // 6 on 57
+      // OuterShellRightLowerY
+      {{6, 6, 5}},  // 6 on 58
+      // OuterShellRightUpperX
+      {{6, 6, 5}}};  // 2 on 58, 3 on 59
+  std::vector<size_t> load_weights{};
+  for (size_t i = 0; i < 54; ++i) {
+    if (i < 6 or (i >= 12 and i < 18)) {
+      load_weights.emplace_back(2);
+    } else {
+      load_weights.emplace_back(1);
     }
   }
+  const domain::BlockZCurveProcDistribution<3> element_distribution{
+      static_cast<size_t>(5), initial_refinement_levels, initial_num_points,
+      load_weights};
+  element_distribution.get_proc_for_element({0, {{{1, 0}, {1, 0}, {1, 0}}}});
+  element_distribution.get_proc_for_element({53, {{{1, 1}, {1, 1}, {0, 0}}}});
+  // {
+  //   INFO("Single block domain");
+  //   test_single_block_domain<1>();
+  //   test_single_block_domain<2>();
+  //   test_single_block_domain<3>();
+  // }
+  // for (const size_t number_of_blocks : {2_st, 6_st}) {
+  //   for (const size_t number_of_procs : {2_st, 7_st}) {
+  //     for (const bool uneven_domain : {true, false}) {
+  //       general_test<1>(number_of_blocks, number_of_procs, uneven_domain);
+  //       general_test<2>(number_of_blocks, number_of_procs, uneven_domain);
+  //       general_test<3>(number_of_blocks, number_of_procs, uneven_domain);
+  //     }
+  //   }
+  // }
 }
 }  // namespace
