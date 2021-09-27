@@ -55,7 +55,8 @@ struct DefaultElementsAllocator
     const auto& initial_refinement_levels =
         get<domain::Tags::InitialRefinementLevels<Dim>>(initialization_items);
     const domain::BlockZCurveProcDistribution<Dim> element_distribution{
-        static_cast<size_t>(sys::number_of_procs()), initial_refinement_levels};
+        static_cast<size_t>(sys::number_of_procs()), initial_refinement_levels,
+        get<domain::Tags::InitialExtents<Dim>>(initialization_items), false};
     for (const auto& block : domain.blocks()) {
       const std::vector<ElementId<Dim>> element_ids = initial_element_ids(
           block.id(), initial_refinement_levels[block.id()]);
