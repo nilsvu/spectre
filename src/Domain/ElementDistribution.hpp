@@ -89,9 +89,11 @@ namespace domain {
  */
 template <size_t Dim>
 struct BlockZCurveProcDistribution {
-  BlockZCurveProcDistribution(size_t number_of_procs,
-                              const std::vector<std::array<size_t, Dim>>&
-                                  refinements_by_block) noexcept;
+  BlockZCurveProcDistribution(
+      size_t number_of_procs,
+      const std::vector<std::array<size_t, Dim>>& refinements_by_block,
+      const std::vector<std::array<size_t, Dim>>& num_points_by_block,
+      const std::vector<size_t>& block_weights) noexcept;
 
   /// Gets the suggested processor number for a particular element,
   /// determined by the greedy block assignment and Morton curve element

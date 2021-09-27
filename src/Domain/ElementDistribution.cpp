@@ -12,6 +12,7 @@
 
 #include "Domain/Structure/ElementId.hpp"
 #include "Utilities/Algorithm.hpp"
+#include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 
 namespace domain {
@@ -94,49 +95,115 @@ size_t z_curve_index(const ElementId<Dim>& element_id) noexcept {
 template <size_t Dim>
 BlockZCurveProcDistribution<Dim>::BlockZCurveProcDistribution(
     size_t number_of_procs,
-    const std::vector<std::array<size_t, Dim>>& refinements_by_block) noexcept {
+    const std::vector<std::array<size_t, Dim>>& refinements_by_block,
+    const std::vector<std::array<size_t, Dim>>& num_points_by_block,
+    const std::vector<size_t>& block_weights) noexcept {
+  ASSERT(not refinements_by_block.empty(),
+         "`refinements_by_block` must be non-empty.");
+  ASSERT(refinements_by_block.size() == num_points_by_block.size(),
+         "refinement and num_points must have same size.");
   block_element_distribution_ =
       std::vector<std::vector<std::pair<size_t, size_t>>>(
           refinements_by_block.size());
-  auto add_number_of_elements_for_refinement =
-      [](size_t lhs, const std::array<size_t, Dim>& rhs) {
-        size_t value = 1;
-        for (size_t i = 0; i < Dim; ++i) {
-          value *= two_to_the(gsl::at(rhs, i));
-        }
-        return lhs + value;
-      };
-  const size_t number_of_elements =
-      std::accumulate(refinements_by_block.begin(), refinements_by_block.end(),
-                      0_st, add_number_of_elements_for_refinement);
-  ASSERT(not refinements_by_block.empty(),
-         "`refinements_by_block` must be non-empty.");
-  // currently, we just assign uniform weight to elements. In future, it will
-  // probably be better to take into account p-refinement, but then the z-curve
-  // method will also require weighting.
-  size_t remaining_elements_in_block =
-      add_number_of_elements_for_refinement(0_st, refinements_by_block[0]);
+  auto num_elements = [](const std::array<size_t, Dim>& refinement) {
+    size_t value = 1;
+    for (size_t i = 0; i < Dim; ++i) {
+      value *= two_to_the(gsl::at(refinement, i));
+    }
+    return value;
+  };
+  auto weight = [](const std::array<size_t, Dim>& num_points,
+                   const size_t block_weight) {
+    size_t value = 1;
+    for (size_t i = 0; i < Dim; ++i) {
+      value *= gsl::at(num_points, i);
+    }
+    return value * block_weight;
+  };
+  size_t total_weight = 0;
+  for (size_t i = 0; i < refinements_by_block.size(); ++i) {
+    total_weight += num_elements(refinements_by_block[i]) *
+                    weight(num_points_by_block[i], block_weights[i]);
+  }
+  double avg_weight_per_proc =
+      static_cast<double>(total_weight) / static_cast<double>(number_of_procs);
+  size_t remaining_elements_in_block = num_elements(refinements_by_block[0]);
   size_t current_block = 0;
+  size_t weight_of_elements_in_block =
+      weight(num_points_by_block[0], block_weights[0]);
+  double remaining_weight_on_proc = 0.;
+  size_t skipped_procs = 0;
+  size_t proc = 0;
   for (size_t i = 0; i < number_of_procs; ++i) {
-    size_t remaining_elements_on_proc =
-        (number_of_elements / number_of_procs) +
-        (i < (number_of_elements % number_of_procs) ? 1 : 0);
-    while (remaining_elements_on_proc > 0) {
-      block_element_distribution_.at(current_block)
-          .emplace_back(
-              std::make_pair(i, std::min(remaining_elements_in_block,
-                                         remaining_elements_on_proc)));
+    remaining_weight_on_proc += avg_weight_per_proc;
+    if (remaining_weight_on_proc /
+            static_cast<double>(weight_of_elements_in_block) <
+        0.5) {
+      // In this case the statement below rounds _down_ to zero, even though
+      // we're on a fresh core, meaning that the core will be empty. This can
+      // happen when the weights are very uneven.
+      ++skipped_procs;
+      continue;
+    }
+    while (remaining_weight_on_proc > 0) {
+      const size_t remaining_elements_on_proc =
+          round(remaining_weight_on_proc /
+                static_cast<double>(weight_of_elements_in_block));
+      if (remaining_elements_on_proc > 0) {
+        const size_t allocate_elements_this_proc =
+            std::min(remaining_elements_in_block, remaining_elements_on_proc);
+        block_element_distribution_.at(current_block)
+            .emplace_back(std::make_pair(proc, allocate_elements_this_proc));
+        remaining_weight_on_proc -=
+            allocate_elements_this_proc * weight_of_elements_in_block;
+      }
       if (remaining_elements_in_block <= remaining_elements_on_proc) {
-        remaining_elements_on_proc -= remaining_elements_in_block;
+        // Elements from this block don't fill up the proc completely. Increment
+        // the block and continue the while-loop to see if elements from the new
+        // block fit on this proc.
         ++current_block;
         if (current_block < refinements_by_block.size()) {
-          remaining_elements_in_block = add_number_of_elements_for_refinement(
-              0_st, gsl::at(refinements_by_block, current_block));
+          remaining_elements_in_block =
+              num_elements(gsl::at(refinements_by_block, current_block));
+          weight_of_elements_in_block =
+              weight(gsl::at(num_points_by_block, current_block),
+                     block_weights[current_block]);
+        } else {
+          break;
         }
       } else {
+        // Proc is filled up by elements of this block
         remaining_elements_in_block -= remaining_elements_on_proc;
-        remaining_elements_on_proc = 0;
+        break;
       }
+      if (remaining_weight_on_proc > 0 and skipped_procs > 0) {
+        --skipped_procs;
+        break;
+      }
+    }
+    if (current_block == refinements_by_block.size()) {
+      skipped_procs += i - proc;
+      break;
+    }
+    ++proc;
+  }
+  size_t prev_proc = std::numeric_limits<size_t>::max();
+  for (size_t i = 0; i < skipped_procs; ++i) {
+    bool advance_proc = false;
+    for (size_t block_i = 0; block_i < refinements_by_block.size(); ++block_i) {
+      for (size_t j = 0; j < block_element_distribution_[block_i].size(); ++j) {
+        if (not advance_proc and
+            block_element_distribution_[block_i][j].first == prev_proc) {
+          advance_proc = true;
+        }
+        prev_proc = block_element_distribution_[block_i][j].first;
+        if (advance_proc) {
+          ++block_element_distribution_[block_i][j].first;
+        }
+      }
+    }
+    if (not advance_proc) {
+      break;
     }
   }
 }
@@ -146,13 +213,13 @@ size_t BlockZCurveProcDistribution<Dim>::get_proc_for_element(
     const ElementId<Dim>& element_id) const noexcept {
   const size_t element_order_index = z_curve_index(element_id);
   size_t total_so_far = 0;
-  for (const std::pair<size_t, size_t>& element_info :
+  for (const auto& [proc, elements_on_this_proc] :
        gsl::at(block_element_distribution_, element_id.block_id())) {
     if (total_so_far <= element_order_index and
-        element_info.second + total_so_far > element_order_index) {
-      return element_info.first;
+        elements_on_this_proc + total_so_far > element_order_index) {
+      return proc;
     }
-    total_so_far += element_info.second;
+    total_so_far += elements_on_this_proc;
   }
   ERROR(
       "Processor not successfully chosen. This indicates a flaw in the logic "

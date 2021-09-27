@@ -124,13 +124,19 @@ struct ElementsAllocator
       }
       // Create element IDs for all elements on this level
       std::vector<ElementId<Dim>> element_ids{};
+      std::vector<size_t> load_weights{};
       for (const auto& block : domain.blocks()) {
         const std::vector<ElementId<Dim>> block_element_ids =
             initial_element_ids(block.id(),
                                 initial_refinement_levels[block.id()],
                                 multigrid_level);
-        element_ids.insert(element_ids.begin(), block_element_ids.begin(),
+        element_ids.insert(element_ids.end(), block_element_ids.begin(),
                            block_element_ids.end());
+        // if (block.id() < 6 or (block.id() >= 12 and block.id() < 18)) {
+        //     load_weights.emplace_back(2);
+        // } else {
+            load_weights.emplace_back(1);
+        // }
       }
       // Create an array section for this refinement level
       std::vector<CkArrayIndex> array_indices(element_ids.size());
@@ -160,10 +166,13 @@ struct ElementsAllocator
       // processors
       const int number_of_procs = sys::number_of_procs();
       const domain::BlockZCurveProcDistribution<Dim> element_distribution{
-          static_cast<size_t>(number_of_procs), initial_refinement_levels};
+          static_cast<size_t>(number_of_procs), initial_refinement_levels,
+          get<domain::Tags::InitialExtents<Dim>>(initialization_items),
+          load_weights};
       for (const auto& element_id : element_ids) {
         const size_t target_proc =
             element_distribution.get_proc_for_element(element_id);
+        Parallel::printf("Element %s -> proc %zu\n", element_id, target_proc);
         element_array(element_id)
             .insert(global_cache, initialization_items, target_proc);
       }
