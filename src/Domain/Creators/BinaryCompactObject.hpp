@@ -385,6 +385,14 @@ class BinaryCompactObject : public DomainCreator<3> {
         "Use projective scaling on the frustal cloak."};
   };
 
+  struct FrustumSphericity {
+    using group = EnvelopingCube;
+    static std::string name() { return "Sphericity"; }
+    using type = double;
+    static constexpr Options::String help = {
+        "Sphericity of the enveloping cube."};
+  };
+
   struct RadialDistributionOuterShell {
     using group = OuterShell;
     static std::string name() { return "RadialDistribution"; }
@@ -575,7 +583,8 @@ class BinaryCompactObject : public DomainCreator<3> {
   using time_independent_options = tmpl::append<
       tmpl::list<ObjectA, ObjectB, RadiusEnvelopingCube, OuterRadius,
                  InitialRefinement, InitialGridPoints, UseProjectiveMap,
-                 RadiusEnvelopingSphere, RadialDistributionOuterShell>,
+                 FrustumSphericity, RadiusEnvelopingSphere,
+                 RadialDistributionOuterShell>,
       tmpl::conditional_t<
           domain::BoundaryConditions::has_boundary_conditions_base_v<
               typename Metavariables::system>,
@@ -651,7 +660,7 @@ class BinaryCompactObject : public DomainCreator<3> {
       double outer_radius_domain,
       const typename InitialRefinement::type& initial_refinement,
       const typename InitialGridPoints::type& initial_number_of_grid_points,
-      bool use_projective_map = true,
+      bool use_projective_map = true, double frustum_sphericity = 0.0,
       const std::optional<double>& radius_enveloping_sphere = std::nullopt,
       CoordinateMaps::Distribution radial_distribution_outer_shell =
           CoordinateMaps::Distribution::Linear,
@@ -680,7 +689,7 @@ class BinaryCompactObject : public DomainCreator<3> {
       double outer_radius_domain,
       const typename InitialRefinement::type& initial_refinement,
       const typename InitialGridPoints::type& initial_number_of_grid_points,
-      bool use_projective_map = true,
+      bool use_projective_map = true, double frustum_sphericity = 0.0,
       const std::optional<double>& radius_enveloping_sphere = std::nullopt,
       CoordinateMaps::Distribution radial_distribution_outer_shell =
           CoordinateMaps::Distribution::Linear,
@@ -730,6 +739,7 @@ class BinaryCompactObject : public DomainCreator<3> {
   static constexpr bool use_equiangular_map_ =
       false;  // Doesn't work properly yet
   bool use_projective_map_ = true;
+  double frustum_sphericity_{};
   CoordinateMaps::Distribution radial_distribution_outer_shell_ =
       CoordinateMaps::Distribution::Linear;
   double projective_scale_factor_{};
