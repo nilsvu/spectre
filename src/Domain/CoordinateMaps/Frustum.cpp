@@ -13,10 +13,13 @@
 #include "Domain/Structure/Direction.hpp"
 #include "Domain/Structure/OrientationMap.hpp"
 #include "Domain/Structure/Side.hpp"
+#include "IO/Logging/Verbosity.hpp"
+#include "NumericalAlgorithms/RootFinding/GslMultiRoot.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/DereferenceWrapper.hpp"
 #include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/ErrorHandling/Assert.hpp"
+#include "Utilities/ErrorHandling/Exceptions.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/MakeWithValue.hpp"
 
@@ -27,7 +30,8 @@ Frustum::Frustum(const std::array<std::array<double, 2>, 4>& face_vertices,
                  OrientationMap<3> orientation_of_frustum,
                  const bool with_equiangular_map,
                  const double projective_scale_factor,
-                 const bool auto_projective_scale_factor)
+                 const bool auto_projective_scale_factor,
+                 const double sphericity)
     // clang-tidy: trivially copyable
     : orientation_of_frustum_(std::move(orientation_of_frustum)),  // NOLINT
       with_equiangular_map_(with_equiangular_map),
@@ -39,7 +43,8 @@ Frustum::Frustum(const std::array<std::array<double, 2>, 4>& face_vertices,
                    lower_bound == -1.0 and upper_bound == 1.0 and
                    orientation_of_frustum_ == OrientationMap<3>{} and
                    not with_equiangular_map and projective_scale_factor == 1.0),
-      with_projective_map_(projective_scale_factor != 1.0) {
+      with_projective_map_(projective_scale_factor != 1.0),
+      sphericity_(sphericity) {
   ASSERT(projective_scale_factor != 0.0,
          "A projective scale factor of zero maps all coordinates to zero! Set "
          "projective_scale_factor to unity to turn off projective scaling.");
@@ -91,6 +96,12 @@ Frustum::Frustum(const std::array<std::array<double, 2>, 4>& face_vertices,
   delta_z_zeta_ = 0.5 * (upper_bound - lower_bound);
   w_plus_ = projective_scale_factor + 1.0;
   w_minus_ = projective_scale_factor - 1.0;
+  radius_ = std::max({abs(upper_x_upper_base), abs(upper_y_upper_base),
+                      abs(upper_x_lower_base), abs(upper_y_lower_base),
+                      abs(lower_x_upper_base), abs(lower_y_upper_base),
+                      abs(lower_x_lower_base), abs(lower_y_lower_base),
+                      abs(upper_bound), abs(lower_bound)}) *
+            sqrt(3.0);
   if (auto_projective_scale_factor) {
     with_projective_map_ = true;
     const double w_delta = sqrt(((upper_x_lower_base - lower_x_lower_base) *
@@ -116,13 +127,32 @@ std::array<tt::remove_cvref_wrap_t<T>, 3> Frustum::operator()(
           : zeta;
   const ReturnType cap_xi = with_equiangular_map_ ? tan(M_PI_4 * xi) : xi;
   const ReturnType cap_eta = with_equiangular_map_ ? tan(M_PI_4 * eta) : eta;
-  ReturnType physical_x =
+  const ReturnType flat_frustum_x =
       sigma_x_ + delta_x_xi_ * cap_xi +
       (delta_x_zeta_ + delta_x_xi_zeta_ * cap_xi) * cap_zeta;
-  ReturnType physical_y =
+  const ReturnType flat_frustum_y =
       sigma_y_ + delta_y_eta_ * cap_eta +
       (delta_y_zeta_ + delta_y_eta_zeta_ * cap_eta) * cap_zeta;
-  ReturnType physical_z = sigma_z_ + delta_z_zeta_ * cap_zeta;
+  const ReturnType flat_frustum_z = sigma_z_ + delta_z_zeta_ * cap_zeta;
+  const ReturnType upper_surface_x =
+      sigma_x_ + delta_x_xi_ * cap_xi +
+      (delta_x_zeta_ + delta_x_xi_zeta_ * cap_xi);
+  const ReturnType upper_surface_y =
+      sigma_y_ + delta_y_eta_ * cap_eta +
+      (delta_y_zeta_ + delta_y_eta_zeta_ * cap_eta);
+  const double upper_surface_z = sigma_z_ + delta_z_zeta_;
+  const ReturnType upper_surface_r =
+      sqrt(square(upper_surface_x) + square(upper_surface_y) +
+           (square(upper_surface_z)));
+  const ReturnType correction_coefficient =
+      0.5 * sphericity_ * (1.0 + cap_zeta) * (radius_ / upper_surface_r - 1.0);
+  ReturnType physical_x =
+      flat_frustum_x + correction_coefficient * upper_surface_x;
+  ReturnType physical_y =
+      flat_frustum_y + correction_coefficient * upper_surface_y;
+  ReturnType physical_z =
+      flat_frustum_z + correction_coefficient * upper_surface_z;
+
   std::array<ReturnType, 3> physical_coords{
       {std::move(physical_x), std::move(physical_y), std::move(physical_z)}};
   return discrete_rotation(orientation_of_frustum_, std::move(physical_coords));
@@ -160,6 +190,46 @@ std::optional<std::array<double, 3>> Frustum::inverse(
     logical_coords[2] = (-w_minus_ + w_plus_ * logical_coords[2]) /
                         (w_plus_ - w_minus_ * logical_coords[2]);
   }
+  if (sphericity_ > 0.0) {
+    if (equal_within_roundoff(square(physical_coords[0]) +
+                                  square(physical_coords[1]) +
+                                  square(physical_coords[2]),
+                              0.0)) {
+      return std::nullopt;
+    }
+    const double absolute_tolerance = 1.0e-12;
+    const double max_absolute_tolerance = 1.0e-10;
+    const int maximum_iterations = 20;
+    const Verbosity verbosity = Verbosity::Silent;
+    const auto method = RootFinder::Method::Newton;
+    const double relative_tolerance = 1.0e-12;
+    const auto condition = RootFinder::StoppingCondition::AbsoluteAndRelative;
+    struct {
+      std::array<double, 3> operator()(
+          const std::array<double, 3>& source_coords) const {
+        return map->operator()(source_coords) - target_coords;
+      }
+      std::array<std::array<double, 3>, 3> jacobian(
+          const std::array<double, 3>& source_coords) const {
+        std::array<std::array<double, 3>, 3> jacobian_matrix_array{};
+        const auto jacobian_matrix_tnsr = map->jacobian(source_coords);
+        for (size_t i = 0; i < 3; i++) {
+          for (size_t j = 0; j < 3; j++) {
+            gsl::at(gsl::at(jacobian_matrix_array, i), j) =
+                jacobian_matrix_tnsr.get(i, j);
+          }
+        }
+        return jacobian_matrix_array;
+      }
+      const Frustum* map;
+      const std::array<double, 3> target_coords;
+    } const rootfunction{this, target_coords};
+    logical_coords = RootFinder::gsl_multiroot(
+        rootfunction, logical_coords, absolute_tolerance, maximum_iterations,
+        relative_tolerance, verbosity, max_absolute_tolerance, method,
+        condition);
+  }
+
   return logical_coords;
 }
 
@@ -192,50 +262,146 @@ tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame> Frustum::jacobian(
       make_with_value<tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame>>(
           dereference_wrapper(source_coords[0]), 0.0);
 
-  // dX_dxi
-  const auto mapped_xi =
-      orientation_of_frustum_.inverse_map()(Direction<3>::upper_xi());
-  const size_t mapped_dim_0 = orientation_of_frustum_.inverse_map()(0);
-  jacobian_matrix.get(mapped_dim_0, 0) =
-      delta_x_xi_ + delta_x_xi_zeta_ * cap_zeta;
-  if (with_equiangular_map_) {
-    jacobian_matrix.get(mapped_dim_0, 0) *= cap_xi_deriv;
-  }
-  if (mapped_xi.side() == Side::Lower) {
-    jacobian_matrix.get(mapped_dim_0, 0) *= -1.0;
-  }
+  if (sphericity_ > 0.0) {
+    const ReturnType flat_frustum_x = sigma_x_ + delta_x_xi_ * cap_xi +
+                                      delta_x_zeta_ + delta_x_xi_zeta_ * cap_xi;
 
-  // dX_deta
-  const auto mapped_eta =
-      orientation_of_frustum_.inverse_map()(Direction<3>::upper_eta());
-  const size_t mapped_dim_1 = orientation_of_frustum_.inverse_map()(1);
-  jacobian_matrix.get(mapped_dim_1, 1) =
-      delta_y_eta_ + delta_y_eta_zeta_ * cap_zeta;
-  if (with_equiangular_map_) {
-    jacobian_matrix.get(mapped_dim_1, 1) *= cap_eta_deriv;
+    const ReturnType flat_frustum_y = sigma_y_ + delta_y_eta_ * cap_eta +
+                                      delta_y_zeta_ +
+                                      delta_y_eta_zeta_ * cap_eta;
+
+    const double flat_frustum_z = sigma_z_ + delta_z_zeta_;
+
+    const ReturnType one_over_mag_flat =
+        1.0 / sqrt(square(flat_frustum_x) + square(flat_frustum_y) +
+                   square(flat_frustum_z));
+
+    const ReturnType flat_frustum_x_hat = flat_frustum_x * one_over_mag_flat;
+
+    const ReturnType flat_frustum_y_hat = flat_frustum_y * one_over_mag_flat;
+
+    const ReturnType flat_frustum_z_hat = flat_frustum_z * one_over_mag_flat;
+
+    const ReturnType r_over_mag_flat = radius_ * one_over_mag_flat;
+
+    const double s_over_two = 0.5 * sphericity_;
+
+    // dX_dxi
+    const ReturnType xi_column_prefactor =
+        s_over_two * (1.0 + cap_zeta) * (delta_x_xi_ + delta_x_xi_zeta_);
+    std::array<ReturnType, 3> dX_dxi = discrete_rotation(
+        orientation_of_frustum_,
+        std::array<ReturnType, 3>{
+            {delta_x_xi_ + delta_x_xi_zeta_ * cap_zeta +
+                 xi_column_prefactor *
+                     (r_over_mag_flat * (1.0 - square(flat_frustum_x_hat)) -
+                      1.0),
+             xi_column_prefactor * -1.0 * r_over_mag_flat * flat_frustum_y_hat *
+                 flat_frustum_x_hat,
+             xi_column_prefactor * -1.0 * r_over_mag_flat * flat_frustum_z_hat *
+                 flat_frustum_x_hat}});
+
+    if (with_equiangular_map_) {
+      dX_dxi[0] *= cap_xi_deriv;
+      dX_dxi[1] *= cap_xi_deriv;
+      dX_dxi[2] *= cap_xi_deriv;
+    }
+
+    get<0, 0>(jacobian_matrix) = dX_dxi[0];
+    get<1, 0>(jacobian_matrix) = dX_dxi[1];
+    get<2, 0>(jacobian_matrix) = dX_dxi[2];
+
+    // dX_deta
+    const ReturnType eta_column_prefactor =
+        s_over_two * (1.0 + cap_zeta) * (delta_y_eta_ + delta_y_eta_zeta_);
+    std::array<ReturnType, 3> dX_deta = discrete_rotation(
+        orientation_of_frustum_,
+        std::array<ReturnType, 3>{
+            {eta_column_prefactor * -1.0 * r_over_mag_flat *
+                 flat_frustum_x_hat * flat_frustum_y_hat,
+             delta_y_eta_ + delta_y_eta_zeta_ * cap_zeta +
+                 eta_column_prefactor *
+                     (r_over_mag_flat * (1.0 - square(flat_frustum_y_hat)) -
+                      1.0),
+             eta_column_prefactor * -1.0 * r_over_mag_flat *
+                 flat_frustum_z_hat * flat_frustum_y_hat}});
+
+    if (with_equiangular_map_) {
+      dX_deta[0] *= cap_eta_deriv;
+      dX_deta[1] *= cap_eta_deriv;
+      dX_deta[2] *= cap_eta_deriv;
+    }
+
+    get<0, 1>(jacobian_matrix) = dX_deta[0];
+    get<1, 1>(jacobian_matrix) = dX_deta[1];
+    get<2, 1>(jacobian_matrix) = dX_deta[2];
+
+    // dX_dzeta
+    const ReturnType zeta_column_prefactor =
+        s_over_two * (r_over_mag_flat - 1.0);
+    std::array<ReturnType, 3> dX_dzeta = discrete_rotation(
+        orientation_of_frustum_,
+        std::array<ReturnType, 3>{
+            {delta_x_zeta_ + delta_x_xi_zeta_ * cap_xi +
+                 zeta_column_prefactor * flat_frustum_x,
+             delta_y_zeta_ + delta_y_eta_zeta_ * cap_eta +
+                 zeta_column_prefactor * flat_frustum_y,
+             delta_z_zeta_ + zeta_column_prefactor * flat_frustum_z}});
+
+    if (with_projective_map_) {
+      dX_dzeta[0] *= cap_zeta_deriv;
+      dX_dzeta[1] *= cap_zeta_deriv;
+      dX_dzeta[2] *= cap_zeta_deriv;
+    }
+
+    get<0, 2>(jacobian_matrix) = dX_dzeta[0];
+    get<1, 2>(jacobian_matrix) = dX_dzeta[1];
+    get<2, 2>(jacobian_matrix) = dX_dzeta[2];
+  } else {
+    // dX_dxi
+    const auto mapped_xi =
+        orientation_of_frustum_.inverse_map()(Direction<3>::upper_xi());
+    const size_t mapped_dim_0 = orientation_of_frustum_.inverse_map()(0);
+    jacobian_matrix.get(mapped_dim_0, 0) =
+        delta_x_xi_ + delta_x_xi_zeta_ * cap_zeta;
+    if (with_equiangular_map_) {
+      jacobian_matrix.get(mapped_dim_0, 0) *= cap_xi_deriv;
+    }
+    if (mapped_xi.side() == Side::Lower) {
+      jacobian_matrix.get(mapped_dim_0, 0) *= -1.0;
+    }
+
+    // dX_deta
+    const auto mapped_eta =
+        orientation_of_frustum_.inverse_map()(Direction<3>::upper_eta());
+    const size_t mapped_dim_1 = orientation_of_frustum_.inverse_map()(1);
+    jacobian_matrix.get(mapped_dim_1, 1) =
+        delta_y_eta_ + delta_y_eta_zeta_ * cap_zeta;
+    if (with_equiangular_map_) {
+      jacobian_matrix.get(mapped_dim_1, 1) *= cap_eta_deriv;
+    }
+    if (mapped_eta.side() == Side::Lower) {
+      jacobian_matrix.get(mapped_dim_1, 1) *= -1.0;
+    }
+
+    // dX_dzeta
+    std::array<ReturnType, 3> dX_dzeta = discrete_rotation(
+        orientation_of_frustum_,
+        std::array<ReturnType, 3>{
+            {delta_x_zeta_ + delta_x_xi_zeta_ * cap_xi,
+             delta_y_zeta_ + delta_y_eta_zeta_ * cap_eta,
+             make_with_value<ReturnType>(zeta, delta_z_zeta_)}});
+
+    if (with_projective_map_) {
+      dX_dzeta[0] *= cap_zeta_deriv;
+      dX_dzeta[1] *= cap_zeta_deriv;
+      dX_dzeta[2] *= cap_zeta_deriv;
+    }
+
+    get<0, 2>(jacobian_matrix) = dX_dzeta[0];
+    get<1, 2>(jacobian_matrix) = dX_dzeta[1];
+    get<2, 2>(jacobian_matrix) = dX_dzeta[2];
   }
-  if (mapped_eta.side() == Side::Lower) {
-    jacobian_matrix.get(mapped_dim_1, 1) *= -1.0;
-  }
-
-  // dX_dzeta
-  std::array<ReturnType, 3> dX_dzeta = discrete_rotation(
-      orientation_of_frustum_,
-      std::array<ReturnType, 3>{
-          {delta_x_zeta_ + delta_x_xi_zeta_ * cap_xi,
-           delta_y_zeta_ + delta_y_eta_zeta_ * cap_eta,
-           make_with_value<ReturnType>(zeta, delta_z_zeta_)}});
-
-  if (with_projective_map_) {
-    dX_dzeta[0] *= cap_zeta_deriv;
-    dX_dzeta[1] *= cap_zeta_deriv;
-    dX_dzeta[2] *= cap_zeta_deriv;
-  }
-
-  get<0, 2>(jacobian_matrix) = dX_dzeta[0];
-  get<1, 2>(jacobian_matrix) = dX_dzeta[1];
-  get<2, 2>(jacobian_matrix) = dX_dzeta[2];
-
   return jacobian_matrix;
 }
 
@@ -263,6 +429,8 @@ void Frustum::pup(PUP::er& p) {
   p | delta_z_zeta_;
   p | w_plus_;
   p | w_minus_;
+  p | sphericity_;
+  p | radius_;
 }
 
 bool operator==(const Frustum& lhs, const Frustum& rhs) {
@@ -280,7 +448,8 @@ bool operator==(const Frustum& lhs, const Frustum& rhs) {
          lhs.delta_y_eta_zeta_ == lhs.delta_y_eta_zeta_ and
          lhs.sigma_z_ == rhs.sigma_z_ and
          lhs.delta_z_zeta_ == rhs.delta_z_zeta_ and
-         lhs.w_plus_ == rhs.w_plus_ and lhs.w_minus_ == rhs.w_minus_;
+         lhs.w_plus_ == rhs.w_plus_ and lhs.w_minus_ == rhs.w_minus_ and
+         lhs.sphericity_ == rhs.sphericity_ and lhs.radius_ == rhs.radius_;
 }
 
 bool operator!=(const Frustum& lhs, const Frustum& rhs) {

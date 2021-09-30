@@ -55,7 +55,8 @@ void test_suite_for_frustum(const bool with_equiangular_map) {
          {{lower_x_upper_base, lower_y_upper_base}},
          {{upper_x_upper_base, upper_y_upper_base}}}};
     const CoordinateMaps::Frustum frustum_map(face_vertices, -1.0, 2.0, map_i(),
-                                              with_equiangular_map, 1.01);
+                                              with_equiangular_map, 1.01, false,
+                                              0.5);
     test_suite_for_map_on_unit_cube(frustum_map);
   }
 }
@@ -245,6 +246,60 @@ void test_is_identity() {
       -1.0, 1.0, OrientationMap<3>{}, false, 1.5}
                 .is_identity());
 }
+
+void test_frustum_jacobian() {
+  INFO("Frustum jacobian");
+  const std::array<std::array<double, 2>, 4> face_vertices{
+      {{{-2.0, -2.0}}, {{2.0, 2.0}}, {{-4.0, -4.0}}, {{4.0, 4.0}}}};
+  const CoordinateMaps::Frustum map(
+      face_vertices, 2.0, 5.0, OrientationMap<3>{}, false, 1.0, false, 1.0);
+
+  const std::array<double, 3> test_point1{{-1.0, 0.25, 0.0}};
+  const std::array<double, 3> test_point2{{1.0, 1.0, -0.5}};
+  const std::array<double, 3> test_point3{{0.7, -0.2, 0.4}};
+  const std::array<double, 3> test_point4{{0.0, 0.0, 0.0}};
+
+  test_jacobian(map, test_point1);
+  test_jacobian(map, test_point2);
+  test_jacobian(map, test_point3);
+  test_jacobian(map, test_point4);
+}
+
+void test_frustum_inv_jacobian() {
+  INFO("Frustum inverse jacobian");
+  const std::array<std::array<double, 2>, 4> face_vertices{
+      {{{-2.0, -2.0}}, {{2.0, 2.0}}, {{-4.0, -4.0}}, {{4.0, 4.0}}}};
+  const CoordinateMaps::Frustum map(
+      face_vertices, 2.0, 5.0, OrientationMap<3>{}, false, 1.0, false, 1.0);
+
+  const std::array<double, 3> test_point1{{-1.0, 0.25, 0.0}};
+  const std::array<double, 3> test_point2{{1.0, 1.0, -0.5}};
+  const std::array<double, 3> test_point3{{0.7, -0.2, 0.4}};
+  const std::array<double, 3> test_point4{{0.0, 0.0, 0.0}};
+
+  test_inv_jacobian(map, test_point1);
+  test_inv_jacobian(map, test_point2);
+  test_inv_jacobian(map, test_point3);
+  test_inv_jacobian(map, test_point4);
+}
+
+void test_frustum_inv_map() {
+  INFO("Frustum inverse map");
+  const std::array<std::array<double, 2>, 4> face_vertices{
+      {{{-2.0, -2.0}}, {{2.0, 2.0}}, {{-4.0, -4.0}}, {{4.0, 4.0}}}};
+  const CoordinateMaps::Frustum map(
+      face_vertices, 2.0, 5.0, OrientationMap<3>{}, false, 1.0, false, 1.0);
+
+  const std::array<double, 3> test_point1{{-1.0, 0.25, 0.0}};
+  const std::array<double, 3> test_point2{{1.0, 1.0, -0.5}};
+  const std::array<double, 3> test_point3{{0.7, -0.2, 0.4}};
+  const std::array<double, 3> test_point4{{0.0, 0.0, 0.01}};
+
+  test_inverse_map(map, test_point1);
+  test_inverse_map(map, test_point2);
+  test_inverse_map(map, test_point3);
+  test_inverse_map(map, test_point4);
+}
 }  // namespace
 
 SPECTRE_TEST_CASE("Unit.Domain.CoordinateMaps.Frustum", "[Domain][Unit]") {
@@ -254,6 +309,21 @@ SPECTRE_TEST_CASE("Unit.Domain.CoordinateMaps.Frustum", "[Domain][Unit]") {
   test_alignment();
   test_auto_projective_scale_factor();
   test_is_identity();
+}
+
+SPECTRE_TEST_CASE("Unit.Domain.CoordinateMaps.Frustum.Jacobian",
+                  "[Domain][Unit]") {
+  test_frustum_jacobian();
+}
+
+SPECTRE_TEST_CASE("Unit.Domain.CoordinateMaps.Frustum.InvJacobian",
+                  "[Domain][Unit]") {
+  test_frustum_inv_jacobian();
+}
+
+SPECTRE_TEST_CASE("Unit.Domain.CoordinateMaps.Frustum.Inverse",
+                  "[Domain][Unit]") {
+  test_frustum_inv_map();
 }
 
 // [[OutputRegex, A projective scale factor of zero maps all coordinates to
