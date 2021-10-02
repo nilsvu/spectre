@@ -202,9 +202,15 @@ struct Metavariables {
   using constraint_fields =
       tmpl::list<gr::Tags::HamiltonianConstraint<DataVector>,
                  gr::Tags::MomentumConstraint<3, Frame::Inertial, DataVector>>;
+  using observe_derived_fields = tmpl::append<
+      tmpl::list<gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>,
+                 gr::Tags::Lapse<DataVector>,
+                 gr::Tags::Shift<3, Frame::Inertial, DataVector>,
+                 gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector>>,
+      constraint_fields>;
   using observe_fields =
       tmpl::append<analytic_solution_fields, typename system::background_fields,
-                   constraint_fields>;
+                   observe_derived_fields>;
 
   // Collect all items to store in the cache.
   using const_global_cache_tags =
@@ -254,8 +260,8 @@ struct Metavariables {
       elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
           system, background_tag, typename schwarz_smoother::options_group>,
       ::Initialization::Actions::AddComputeTags<tmpl::list<
-          // Constraint norms
-          Xcts::Tags::SpacetimeQuantitiesCompute<constraint_fields>,
+          // Derived fields for observations
+          Xcts::Tags::SpacetimeQuantitiesCompute<observe_derived_fields>,
           // For linearized boundary conditions
           elliptic::Tags::BoundaryFieldsCompute<volume_dim, fields_tag>,
           elliptic::Tags::BoundaryFluxesCompute<volume_dim, fields_tag,

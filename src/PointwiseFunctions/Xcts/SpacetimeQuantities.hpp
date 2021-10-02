@@ -45,9 +45,6 @@ using SpacetimeQuantities = CachedTempBuffer<
     gr::Tags::SpatialRicci<3, Frame::Inertial, DataVector>,
     gr::Tags::Lapse<DataVector>,
     gr::Tags::Shift<3, Frame::Inertial, DataVector>,
-    ::Tags::deriv<gr::Tags::Shift<3, Frame::Inertial, DataVector>,
-                  tmpl::size_t<3>, Frame::Inertial>,
-    ::Tags::dt<gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>>,
     gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector>,
     detail::ExtrinsicCurvatureSquare<DataVector>,
     ::Tags::deriv<gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector>,
@@ -94,15 +91,6 @@ struct SpacetimeQuantitiesComputer {
   void operator()(
       gsl::not_null<tnsr::I<DataVector, 3>*> shift, gsl::not_null<Cache*> cache,
       gr::Tags::Shift<3, Frame::Inertial, DataVector> /*meta*/) const;
-  void operator()(
-      gsl::not_null<tnsr::iJ<DataVector, 3>*> deriv_shift,
-      gsl::not_null<Cache*> cache,
-      ::Tags::deriv<gr::Tags::Shift<3, Frame::Inertial, DataVector>,
-                    tmpl::size_t<3>, Frame::Inertial> /*meta*/) const;
-  void operator()(gsl::not_null<tnsr::ii<DataVector, 3>*> dt_spatial_metric,
-                  gsl::not_null<Cache*> cache,
-                  ::Tags::dt<gr::Tags::SpatialMetric<
-                      3, Frame::Inertial, DataVector>> /*meta*/) const;
   void operator()(gsl::not_null<tnsr::ii<DataVector, 3>*> extrinsic_curvature,
                   gsl::not_null<Cache*> cache,
                   gr::Tags::ExtrinsicCurvature<3, Frame::Inertial,
@@ -124,12 +112,25 @@ struct SpacetimeQuantitiesComputer {
                   gr::Tags::MomentumConstraint<3, Frame::Inertial,
                                                DataVector> /*meta*/) const;
 
+  // XCTS variables
   const Scalar<DataVector>& conformal_factor;
   const Scalar<DataVector>& lapse_times_conformal_factor;
   const tnsr::I<DataVector, 3>& shift_excess;
+  // Derivatives of XCTS variables. Only using the longitudinal shift excess
+  // here to compute the extrinsic curvature. We don't use derivatives of the
+  // XCTS variables to compute the Ricci scalar for the Hamiltonian constraint,
+  // because that's one of the discretized equations we are solving for.
+  // Instead, we compute numerical derivatives of the spatial metric, which
+  // introduces the discretization error we are looking for in the Hamiltonian
+  // constraint.
+  const tnsr::II<DataVector, 3>& longitudinal_shift_excess;
+  // Background quantities
   const tnsr::ii<DataVector, 3>& conformal_metric;
   const tnsr::II<DataVector, 3>& inv_conformal_metric;
   const tnsr::I<DataVector, 3>& shift_background;
+  const tnsr::II<DataVector, 3>&
+      longitudinal_shift_background_minus_dt_conformal_metric;
+  const Scalar<DataVector>& extrinsic_curvature_trace;
   const Mesh<3>& mesh;
   const InverseJacobian<DataVector, 3, Frame::ElementLogical, Frame::Inertial>&
       inv_jacobian;
@@ -145,9 +146,13 @@ struct SpacetimeQuantitiesCompute : ::Tags::Variables<Tags>, db::ComputeTag {
       domain::Tags::Mesh<3>, ConformalFactor<DataVector>,
       LapseTimesConformalFactor<DataVector>,
       ShiftExcess<DataVector, 3, Frame::Inertial>,
+      LongitudinalShiftExcess<DataVector, 3, Frame::Inertial>,
       ConformalMetric<DataVector, 3, Frame::Inertial>,
       InverseConformalMetric<DataVector, 3, Frame::Inertial>,
-      ShiftBackground<DataVector, 3, Frame::Inertial>, domain::Tags::Mesh<3>,
+      ShiftBackground<DataVector, 3, Frame::Inertial>,
+      LongitudinalShiftBackgroundMinusDtConformalMetric<DataVector, 3,
+                                                        Frame::Inertial>,
+      gr::Tags::TraceExtrinsicCurvature<DataVector>, domain::Tags::Mesh<3>,
       domain::Tags::InverseJacobian<3, Frame::ElementLogical, Frame::Inertial>>;
   template <typename... Args>
   static void function(const gsl::not_null<typename base::type*> result,
