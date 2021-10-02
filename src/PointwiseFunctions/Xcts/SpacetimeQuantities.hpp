@@ -50,9 +50,6 @@ using SpacetimeQuantities = CachedTempBuffer<
     gr::Tags::SpatialRicci<3, Frame::Inertial, DataVector>,
     gr::Tags::Lapse<DataVector>,
     gr::Tags::Shift<3, Frame::Inertial, DataVector>,
-    ::Tags::deriv<gr::Tags::Shift<3, Frame::Inertial, DataVector>,
-                  tmpl::size_t<3>, Frame::Inertial>,
-    ::Tags::dt<gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>>,
     gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector>,
     detail::ExtrinsicCurvatureSquare<DataVector>,
     ::Tags::deriv<gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector>,
@@ -100,21 +97,14 @@ struct SpacetimeQuantitiesComputer {
       gsl::not_null<tnsr::I<DataVector, 3>*> shift, gsl::not_null<Cache*> cache,
       gr::Tags::Shift<3, Frame::Inertial, DataVector> /*meta*/) const;
   void operator()(
-      gsl::not_null<tnsr::iJ<DataVector, 3>*> deriv_shift,
+      gsl::not_null<tnsr::ii<DataVector, 3>*> extrinsic_curvature,
       gsl::not_null<Cache*> cache,
-      ::Tags::deriv<gr::Tags::Shift<3, Frame::Inertial, DataVector>,
-                    tmpl::size_t<3>, Frame::Inertial> /*meta*/) const;
-  void operator()(gsl::not_null<tnsr::ii<DataVector, 3>*> dt_spatial_metric,
-                  gsl::not_null<Cache*> cache,
-                  ::Tags::dt<gr::Tags::SpatialMetric<
-                      3, Frame::Inertial, DataVector>> /*meta*/) const;
-  void operator()(gsl::not_null<tnsr::ii<DataVector, 3>*> extrinsic_curvature,
-                  gsl::not_null<Cache*> cache,
-                  gr::Tags::ExtrinsicCurvature<3, Frame::Inertial,
-                                               DataVector> /*meta*/) const;
-  void operator()(gsl::not_null<Scalar<DataVector>*> extrinsic_curvature_square,
-                  gsl::not_null<Cache*> cache,
-                  detail::ExtrinsicCurvatureSquare<DataVector> /*meta*/) const;
+      gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector> /*meta*/)
+      const;
+  void operator()(
+      gsl::not_null<Scalar<DataVector>*> extrinsic_curvature_square,
+      gsl::not_null<Cache*> cache,
+      detail::ExtrinsicCurvatureSquare<DataVector> /*meta*/) const;
   void operator()(
       gsl::not_null<tnsr::ijj<DataVector, 3>*> deriv_extrinsic_curvature,
       gsl::not_null<Cache*> cache,
@@ -129,12 +119,25 @@ struct SpacetimeQuantitiesComputer {
                   gr::Tags::MomentumConstraint<3, Frame::Inertial,
                                                DataVector> /*meta*/) const;
 
+  // XCTS variables
   const Scalar<DataVector>& conformal_factor;
   const Scalar<DataVector>& lapse_times_conformal_factor;
   const tnsr::I<DataVector, 3>& shift_excess;
+  // Derivatives of XCTS variables. Only using the longitudinal shift excess
+  // here to compute the extrinsic curvature. We don't use derivatives of the
+  // XCTS variables to compute the Ricci scalar for the Hamiltonian constraint,
+  // because that's one of the discretized equations we are solving for.
+  // Instead, we compute numerical derivatives of the spatial metric, which
+  // introduces the discretization error we are looking for in the Hamiltonian
+  // constraint.
+  const tnsr::II<DataVector, 3>& longitudinal_shift_excess;
+  // Background quantities
   const tnsr::ii<DataVector, 3>& conformal_metric;
   const tnsr::II<DataVector, 3>& inv_conformal_metric;
   const tnsr::I<DataVector, 3>& shift_background;
+  const tnsr::II<DataVector, 3>&
+      longitudinal_shift_background_minus_dt_conformal_metric;
+  const Scalar<DataVector>& extrinsic_curvature_trace;
   const Mesh<3>& mesh;
   const InverseJacobian<DataVector, 3, Frame::ElementLogical, Frame::Inertial>&
       inv_jacobian;
@@ -173,17 +176,22 @@ struct SpacetimeQuantitiesCompute : ::Tags::Variables<Tags>, db::ComputeTag {
   using background_tags =
       tmpl::list<ConformalMetric<DataVector, 3, Frame::Inertial>,
                  InverseConformalMetric<DataVector, 3, Frame::Inertial>,
-                 ShiftBackground<DataVector, 3, Frame::Inertial>>;
+                 ShiftBackground<DataVector, 3, Frame::Inertial>,
+                 LongitudinalShiftBackgroundMinusDtConformalMetric<
+                     DataVector, 3, Frame::Inertial>,
+                 gr::Tags::TraceExtrinsicCurvature<DataVector>>;
 
  public:
   using base = ::Tags::Variables<Tags>;
   using argument_tags =
-      tmpl::list<::Tags::Variables<vars_tags>, domain::Tags::Mesh<3>,
-                 domain::Tags::ElementMap<3>, ConstraintsOversampleMesh<3>,
-                 BackgroundTag>;
+      tmpl::list<::Tags::Variables<vars_tags>,
+                 LongitudinalShiftExcess<DataVector, 3, Frame::Inertial>,
+                 domain::Tags::Mesh<3>, domain::Tags::ElementMap<3>,
+                 ConstraintsOversampleMesh<3>, BackgroundTag>;
   template <typename Background>
   static void function(const gsl::not_null<typename base::type*> result,
                        const ::Variables<vars_tags>& original_vars,
+                       const tnsr::II<DataVector, 3>& longitudinal_shift_excess,
                        const Mesh<3>& original_mesh,
                        const ElementMap<3, Frame::Inertial>& element_map,
                        const std::optional<Mesh<3>>& oversample_mesh,
@@ -208,11 +216,16 @@ struct SpacetimeQuantitiesCompute : ::Tags::Variables<Tags>, db::ComputeTag {
         {get<ConformalFactor<DataVector>>(vars),
          get<LapseTimesConformalFactor<DataVector>>(vars),
          get<ShiftExcess<DataVector, 3, Frame::Inertial>>(vars),
+         longitudinal_shift_excess,
          get<ConformalMetric<DataVector, 3, Frame::Inertial>>(
              background_quantities),
          get<InverseConformalMetric<DataVector, 3, Frame::Inertial>>(
              background_quantities),
          get<ShiftBackground<DataVector, 3, Frame::Inertial>>(
+             background_quantities),
+         get<LongitudinalShiftBackgroundMinusDtConformalMetric<
+             DataVector, 3, Frame::Inertial>>(background_quantities),
+         get<gr::Tags::TraceExtrinsicCurvature<DataVector>>(
              background_quantities),
          mesh, inv_jacobian}};
     tmpl::for_each<Tags>(

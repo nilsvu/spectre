@@ -129,46 +129,35 @@ void SpacetimeQuantitiesComputer::operator()(
 }
 
 void SpacetimeQuantitiesComputer::operator()(
-    const gsl::not_null<tnsr::iJ<DataVector, 3>*> deriv_shift,
-    const gsl::not_null<Cache*> cache,
-    ::Tags::deriv<gr::Tags::Shift<3, Frame::Inertial, DataVector>,
-                  tmpl::size_t<3>, Frame::Inertial> /*meta*/) const {
-  const auto& shift =
-      cache->get_var(gr::Tags::Shift<3, Frame::Inertial, DataVector>{});
-  detail::deriv_tensor(deriv_shift, shift, mesh, inv_jacobian);
-}
-
-void SpacetimeQuantitiesComputer::operator()(
-    const gsl::not_null<tnsr::ii<DataVector, 3>*> dt_spatial_metric,
-    const gsl::not_null<Cache*> /*cache*/,
-    ::Tags::dt<gr::Tags::SpatialMetric<3, Frame::Inertial,
-                                       DataVector>> /*meta*/) const {
-  for (auto& dt_spatial_metric_component : *dt_spatial_metric) {
-    dt_spatial_metric_component = 0.;
-  }
-}
-
-void SpacetimeQuantitiesComputer::operator()(
     const gsl::not_null<tnsr::ii<DataVector, 3>*> extrinsic_curvature,
     const gsl::not_null<Cache*> cache,
     gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector> /*meta*/)
     const {
+  // Compute the extrinsic curvature from XCTS quantities (see e.g.
+  // \cite BaumgarteShapiro, Eq. (3.113)):
+  // K_{ij} = \psi^4 / (2 \alpha) * (\bar{L}\beta_{ij} - \bar{u}_{ij}) + 1/3
+  // \gamma_{ij} K
   const auto& lapse = cache->get_var(gr::Tags::Lapse<DataVector>{});
-  const auto& shift =
-      cache->get_var(gr::Tags::Shift<3, Frame::Inertial, DataVector>{});
-  const auto& deriv_shift = cache->get_var(
-      ::Tags::deriv<gr::Tags::Shift<3, Frame::Inertial, DataVector>,
-                    tmpl::size_t<3>, Frame::Inertial>{});
   const auto& spatial_metric =
       cache->get_var(gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>{});
-  const auto& dt_spatial_metric = cache->get_var(
-      ::Tags::dt<gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>>{});
-  const auto& deriv_spatial_metric = cache->get_var(
-      ::Tags::deriv<gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>,
-                    tmpl::size_t<3>, Frame::Inertial>{});
-  gr::extrinsic_curvature(extrinsic_curvature, lapse, shift, deriv_shift,
-                          spatial_metric, dt_spatial_metric,
-                          deriv_spatial_metric);
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j <= i; ++j) {
+      extrinsic_curvature->get(i, j) = 0.;
+      for (size_t k = 0; k < 3; ++k) {
+        for (size_t l = 0; l < 3; ++l) {
+          extrinsic_curvature->get(i, j) +=
+              conformal_metric.get(i, k) * conformal_metric.get(j, l) *
+              (longitudinal_shift_excess.get(k, l) +
+               longitudinal_shift_background_minus_dt_conformal_metric.get(k,
+                                                                           l));
+        }
+      }
+      extrinsic_curvature->get(i, j) *=
+          0.5 * pow<4>(get(conformal_factor)) / get(lapse);
+      extrinsic_curvature->get(i, j) +=
+          spatial_metric.get(i, j) * get(extrinsic_curvature_trace) / 3.;
+    }
+  }
 }
 
 void SpacetimeQuantitiesComputer::operator()(
