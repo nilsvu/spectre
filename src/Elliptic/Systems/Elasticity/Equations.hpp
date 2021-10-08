@@ -5,6 +5,7 @@
 
 #include <cstddef>
 
+#include "DataStructures/Tensor/EagerMath/Symmetrize.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
@@ -111,11 +112,23 @@ struct Fluxes {
           constitutive_relation,
       const tnsr::I<DataVector, Dim>& coordinates,
       const tnsr::ii<DataVector, Dim>& strain);
-  static void apply(gsl::not_null<tnsr::Ijj<DataVector, Dim>*> flux_for_strain,
+  static void apply(gsl::not_null<tnsr::i<DataVector, Dim>*> flux_for_strain,
                     const ConstitutiveRelations::ConstitutiveRelation<Dim>&
                         constitutive_relation,
                     const tnsr::I<DataVector, Dim>& coordinates,
-                    const tnsr::I<DataVector, Dim>& displacement);
+                    const tnsr::I<DataVector, Dim>& displacement) {
+    for (size_t i = 0; i < Dim; ++i) {
+      flux_for_strain->get(i) = displacement.get(i);
+    }
+  }
+  static void apply(
+      gsl::not_null<tnsr::ii<DataVector, Dim>*> equation_for_strain,
+      const ConstitutiveRelations::ConstitutiveRelation<Dim>&
+      /* constitutive_relation */,
+      const tnsr::I<DataVector, Dim>& /* coordinates */,
+      const tnsr::ij<DataVector, Dim>& deriv_shift) {
+    symmetrize(equation_for_strain, deriv_shift);
+  }
 };
 
 /*!

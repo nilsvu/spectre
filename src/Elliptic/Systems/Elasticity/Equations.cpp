@@ -107,16 +107,6 @@ void Fluxes<Dim>::apply(
 }
 
 template <size_t Dim>
-void Fluxes<Dim>::apply(
-    const gsl::not_null<tnsr::Ijj<DataVector, Dim>*> flux_for_strain,
-    const ConstitutiveRelations::ConstitutiveRelation<
-        Dim>& /*constitutive_relation*/,
-    const tnsr::I<DataVector, Dim>& /*coordinates*/,
-    const tnsr::I<DataVector, Dim>& displacement) {
-  auxiliary_fluxes(flux_for_strain, displacement);
-}
-
-template <size_t Dim>
 void Sources<Dim>::apply(
     const gsl::not_null<
         tnsr::I<DataVector, Dim>*> /*equation_for_displacement*/,

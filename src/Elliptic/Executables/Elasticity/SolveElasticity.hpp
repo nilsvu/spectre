@@ -23,6 +23,7 @@
 #include "Elliptic/SubdomainPreconditioners/RegisterDerived.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
+#include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Elliptic/Triggers/Factory.hpp"
 #include "IO/Observer/Actions/RegisterEvents.hpp"
@@ -53,6 +54,7 @@
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/ElementsAllocator.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Multigrid.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/Actions/ResetSubdomainSolver.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticData/AnalyticData.hpp"
@@ -161,7 +163,8 @@ struct Metavariables {
           tmpl::list<Elasticity::Tags::ConstitutiveRelation<Dim>>>;
   using subdomain_preconditioners = tmpl::list<
       elliptic::subdomain_preconditioners::Registrars::MinusLaplacian<
-          Dim, SolveElasticity::OptionTags::SchwarzSmootherGroup>>;
+          Poisson::FirstOrderSystem<volume_dim, void, void>,
+          SolveElasticity::OptionTags::SchwarzSmootherGroup>>;
   using schwarz_smoother = LinearSolver::Schwarz::Schwarz<
       typename multigrid::smooth_fields_tag,
       SolveElasticity::OptionTags::SchwarzSmootherGroup, subdomain_operator,
@@ -257,14 +260,18 @@ struct Metavariables {
                  Parallel::Actions::TerminatePhase>;
 
   template <typename Label>
-  using smooth_actions = tmpl::list<build_linear_operator_actions,
-                                    typename schwarz_smoother::template solve<
-                                        build_linear_operator_actions, Label>>;
+  using smooth_actions =
+      typename schwarz_smoother::template solve<build_linear_operator_actions,
+                                                Label>;
 
   using solve_actions = tmpl::list<
+      LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
+          typename schwarz_smoother::fields_tag,
+          typename schwarz_smoother::options_group, subdomain_operator>,
       typename linear_solver::template solve<tmpl::list<
           Actions::RunEventsAndTriggers,
           typename multigrid::template solve<
+              build_linear_operator_actions,
               smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
               smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
           ::LinearSolver::Actions::make_identity_if_skipped<

@@ -72,6 +72,8 @@ LinearSolver:
   Multigrid:
     Iterations: 1
     MaxLevels: Auto
+    SkipPreSmoothing: False
+    SkipPostSmoothingAtBottom: False
     Verbosity: Quiet
     OutputVolumeData: False
 
@@ -89,8 +91,12 @@ LinearSolver:
         Restart: None
         Preconditioner:
           MinusLaplacian:
-            Solver: ExplicitInverse
+            Solver:
+              ExplicitInverse:
+                Verbosity: Silent
+                BoundaryConditions: Auto
     ObservePerCoreReductions: False
+    SkipResets: True
 
 EventsAndTriggers:
   ? HasConverged

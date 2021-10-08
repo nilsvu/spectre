@@ -65,8 +65,6 @@ struct FirstOrderSystem
   using auxiliary_fields = tmpl::list<strain>;
 
   using primal_fluxes = tmpl::list<minus_stress>;
-  using auxiliary_fluxes =
-      tmpl::list<::Tags::Flux<strain, tmpl::size_t<Dim>, Frame::Inertial>>;
 
   using background_fields = tmpl::list<>;
   using inv_metric_tag = void;

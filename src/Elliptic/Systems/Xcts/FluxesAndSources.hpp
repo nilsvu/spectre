@@ -5,6 +5,7 @@
 
 #include <cstddef>
 
+#include "DataStructures/Tensor/EagerMath/Symmetrize.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Elliptic/Systems/Xcts/Geometry.hpp"
 #include "Elliptic/Systems/Xcts/Tags.hpp"
@@ -18,17 +19,6 @@
 /// \cond
 class DataVector;
 /// \endcond
-
-template <size_t Dim>
-void symmetrize(const gsl::not_null<tnsr::ii<DataVector, Dim>*> result,
-                const tnsr::ij<DataVector, Dim>& tensor) {
-  for (size_t i = 0; i < Dim; ++i) {
-    result->get(i, i) = tensor.get(i, i);
-    for (size_t j = 0; j < i; ++j) {
-      result->get(i, j) = 0.5 * (tensor.get(i, j) + tensor.get(j, i));
-    }
-  }
-}
 
 namespace Xcts {
 
