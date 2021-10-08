@@ -96,7 +96,8 @@ LinearSolver:
             Solver:
               ExplicitInverse:
                 Verbosity: Silent
-                BoundaryConditions: Auto
+                FillFactor: 1
+            BoundaryConditions: Auto
     ObservePerCoreReductions: False
     SkipResets: True
 
