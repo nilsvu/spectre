@@ -96,9 +96,13 @@ LinearSolver:
         Restart: None
         Preconditioner:
           MinusLaplacian:
-            Solver: ExplicitInverse
+            Solver:
+              ExplicitInverse:
+                FillFactor: 1
+                Verbosity: Silent
             BoundaryConditions: Auto
     ObservePerCoreReductions: False
+    SkipResets: True
 
 EventsAndTriggers:
   - - HasConverged

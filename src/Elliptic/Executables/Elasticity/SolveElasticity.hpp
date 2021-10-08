@@ -25,6 +25,7 @@
 #include "Elliptic/Systems/Elasticity/BoundaryConditions/Factory.hpp"
 #include "Elliptic/Systems/Elasticity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Elasticity/Tags.hpp"
+#include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
 #include "Elliptic/Tags.hpp"
 #include "Elliptic/Triggers/Factory.hpp"
 #include "IO/Observer/Actions/RegisterEvents.hpp"
@@ -54,6 +55,7 @@
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/ElementsAllocator.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Multigrid.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/Actions/ResetSubdomainSolver.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
 #include "ParallelAlgorithms/LinearSolver/Tags.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Elasticity/Factory.hpp"
@@ -257,6 +259,8 @@ struct Metavariables {
                                                 Label>;
 
   using solve_actions = tmpl::list<
+      LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
+          typename schwarz_smoother::options_group>,
       typename linear_solver::template solve<tmpl::list<
           Actions::RunEventsAndTriggers,
           typename multigrid::template solve<
