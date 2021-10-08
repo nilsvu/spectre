@@ -94,9 +94,9 @@ struct ObservePerLayer {
 
     // Compute integrals over the element
     const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
-    const auto& det_inv_jacobian =
-        db::get<domain::Tags::DetInvJacobian<Frame::Logical, Frame::Inertial>>(
-            box);
+    const auto& det_inv_jacobian = db::get<
+        domain::Tags::DetInvJacobian<Frame::ElementLogical, Frame::Inertial>>(
+        box);
     const auto& observation_value = db::get<ObservationValueTag>(box);
     const auto& potential_energy_density =
         db::get<Elasticity::Tags::PotentialEnergyDensity<Dim>>(box);
