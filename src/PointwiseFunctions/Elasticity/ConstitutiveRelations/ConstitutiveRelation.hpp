@@ -21,6 +21,7 @@ struct CubicCrystal;  // IWYU pragma: keep
 
 template <size_t Dim>
 struct IsotropicHomogeneous;  // IWYU pragma: keep
+struct Layered;  // IWYU pragma: keep
 }  // namespace ConstitutiveRelations
 }  // namespace Elasticity
 /// \endcond
@@ -60,7 +61,7 @@ class ConstitutiveRelation : public PUP::able {
 
   using creatable_classes = tmpl::append<
       tmpl::list<IsotropicHomogeneous<Dim>>,
-      tmpl::conditional_t<Dim == 3, tmpl::list<CubicCrystal>, tmpl::list<>>>;
+      tmpl::conditional_t<Dim == 3, tmpl::list<CubicCrystal, Layered>, tmpl::list<>>>;
 
   ConstitutiveRelation() = default;
   ConstitutiveRelation(const ConstitutiveRelation&) = default;
@@ -96,3 +97,4 @@ class ConstitutiveRelation : public PUP::able {
 
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/CubicCrystal.hpp"  // IWYU pragma: keep
 #include "PointwiseFunctions/Elasticity/ConstitutiveRelations/IsotropicHomogeneous.hpp"  // IWYU pragma: keep
+#include "PointwiseFunctions/Elasticity/ConstitutiveRelations/Layered.hpp"  // IWYU pragma: keep

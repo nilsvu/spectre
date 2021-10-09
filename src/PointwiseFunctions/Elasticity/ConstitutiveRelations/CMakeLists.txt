@@ -11,6 +11,7 @@ spectre_target_sources(
   ConstitutiveRelation.cpp
   CubicCrystal.cpp
   IsotropicHomogeneous.cpp
+  Layered.cpp
   )
 
 spectre_target_headers(
@@ -21,6 +22,7 @@ spectre_target_headers(
   CubicCrystal.hpp
   IsotropicHomogeneous.hpp
   Tags.hpp
+  Layered.hpp
   )
 
 target_link_libraries(
