@@ -172,7 +172,8 @@ struct ElementsAllocator
       for (const auto& element_id : element_ids) {
         const size_t target_proc =
             element_distribution.get_proc_for_element(element_id);
-        Parallel::printf("Element %s -> proc %zu\n", element_id, target_proc);
+        // Parallel::printf("Element %s -> proc %zu\n", element_id,
+        // target_proc);
         element_array(element_id)
             .insert(global_cache, initialization_items, target_proc);
       }
