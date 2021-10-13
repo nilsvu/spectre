@@ -269,6 +269,7 @@ struct FirstOrderSystem
   using sources_computer_linearized =
       LinearizedSources<EnabledEquations, ConformalGeometry,
                         ConformalMatterScale>;
+  static constexpr bool fluxes_are_discontinuous = false;
 
   using boundary_conditions_base =
       elliptic::BoundaryConditions::BoundaryCondition<3>;

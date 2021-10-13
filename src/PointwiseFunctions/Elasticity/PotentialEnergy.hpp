@@ -49,6 +49,27 @@ namespace Tags {
 /// material.
 /// \see `Elasticity::Tags::PotentialEnergyDensity`
 template <size_t Dim>
+struct StressCompute : Elasticity::Tags::MinusStress<Dim>, db::ComputeTag {
+  using base = Elasticity::Tags::MinusStress<Dim>;
+  using return_type = tnsr::II<DataVector, Dim>;
+  using argument_tags =
+      tmpl::list<Elasticity::Tags::Strain<Dim>,
+                 domain::Tags::Coordinates<Dim, Frame::Inertial>,
+                 Elasticity::Tags::ConstitutiveRelation<Dim>>;
+  static void function(const gsl::not_null<tnsr::II<DataVector, Dim>*> stress,
+                       const tnsr::ii<DataVector, Dim>& strain,
+                       const tnsr::I<DataVector, Dim>& coordinates,
+                       const ConstitutiveRelations::ConstitutiveRelation<Dim>&
+                           constitutive_relation) {
+    destructive_resize_components(stress, coordinates.begin()->size());
+    constitutive_relation.stress(stress, strain, coordinates);
+    for (size_t i = 0; i < stress->size(); ++i) {
+      (*stress)[i] *= -1.;
+    }
+  }
+};
+
+template <size_t Dim>
 struct PotentialEnergyDensityCompute
     : Elasticity::Tags::PotentialEnergyDensity<Dim>,
       db::ComputeTag {

@@ -172,6 +172,7 @@ struct Metavariables {
   using observe_fields = tmpl::append<
       analytic_solution_fields, error_tags,
       tmpl::list<Elasticity::Tags::Strain<volume_dim>,
+                 Elasticity::Tags::MinusStress<volume_dim>,
                  Elasticity::Tags::PotentialEnergyDensity<volume_dim>,
                  domain::Tags::Coordinates<volume_dim, Frame::Inertial>>>;
   using observer_compute_tags =
@@ -243,6 +244,7 @@ struct Metavariables {
           elliptic::analytic_data::AnalyticSolution>,
       ::Initialization::Actions::AddComputeTags<tmpl::list<
           Elasticity::Tags::StrainCompute<volume_dim>,
+          Elasticity::Tags::StressCompute<volume_dim>,
           Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>>>,
       elliptic::dg::Actions::initialize_operator<system>,
       elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
@@ -252,7 +254,7 @@ struct Metavariables {
       // Apply the DG operator to the initial guess
       elliptic::dg::Actions::apply_operator<
           system, true, linear_solver_iteration_id, fields_tag, fluxes_vars_tag,
-          operator_applied_to_fields_tag, vars_tag, fluxes_vars_tag>,
+          operator_applied_to_fields_tag, vars_tag>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
   using build_linear_operator_actions = elliptic::dg::Actions::apply_operator<

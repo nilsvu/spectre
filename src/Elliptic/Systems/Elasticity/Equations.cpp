@@ -101,10 +101,10 @@ void Fluxes<Dim>::apply(
     const std::vector<
         std::unique_ptr<ConstitutiveRelations::ConstitutiveRelation<Dim>>>&
         constitutive_relation_per_block,
-    const Element<Dim>& element, const tnsr::I<DataVector, Dim>& coordinates,
-    const tnsr::ii<DataVector, Dim>& strain) {
+    const tnsr::I<DataVector, Dim>& coordinates,
+    const ElementId<Dim>& element_id, const tnsr::ii<DataVector, Dim>& strain) {
   primal_fluxes(flux_for_displacement, strain,
-                *constitutive_relation_per_block.at(element.id().block_id()),
+                *constitutive_relation_per_block.at(element_id.block_id()),
                 coordinates);
 }
 

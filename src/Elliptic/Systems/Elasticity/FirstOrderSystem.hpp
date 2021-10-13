@@ -67,6 +67,7 @@ struct FirstOrderSystem
 
   using fluxes_computer = Fluxes<Dim>;
   using sources_computer = Sources<Dim>;
+  static constexpr bool fluxes_are_discontinuous = true;
 
   using boundary_conditions_base =
       elliptic::BoundaryConditions::BoundaryCondition<Dim>;
