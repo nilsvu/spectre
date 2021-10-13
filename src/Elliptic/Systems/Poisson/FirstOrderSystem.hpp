@@ -88,6 +88,7 @@ struct FirstOrderSystem
 
   using fluxes_computer = Fluxes<Dim, InvMetricTag>;
   using sources_computer = Sources<Dim, ChristoffelContractedTag>;
+  static constexpr bool fluxes_are_discontinuous = false;
 
   using boundary_conditions_base =
       elliptic::BoundaryConditions::BoundaryCondition<

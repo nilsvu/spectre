@@ -51,15 +51,15 @@ namespace detail {
 
 // This tag is used to communicate mortar data across neighbors
 template <size_t Dim, typename TemporalIdTag, typename PrimalFields,
-          typename PrimalFluxes>
+          typename AuxiliaryFields>
 struct MortarDataInboxTag
-    : public Parallel::InboxInserters::Map<
-          MortarDataInboxTag<Dim, TemporalIdTag, PrimalFields, PrimalFluxes>> {
+    : public Parallel::InboxInserters::Map<MortarDataInboxTag<
+          Dim, TemporalIdTag, PrimalFields, AuxiliaryFields>> {
   using temporal_id = typename TemporalIdTag::type;
   using type = std::map<
       temporal_id,
       FixedHashMap<maximum_number_of_neighbors(Dim), ::dg::MortarId<Dim>,
-                   elliptic::dg::BoundaryData<PrimalFields, PrimalFluxes>,
+                   elliptic::dg::BoundaryData<PrimalFields, AuxiliaryFields>,
                    boost::hash<::dg::MortarId<Dim>>>>;
 };
 
@@ -134,7 +134,7 @@ struct InitializeFacesMortarsAndBackground {
 template <typename System, bool Linearized, typename TemporalIdTag,
           typename PrimalFieldsTag, typename PrimalFluxesTag,
           typename OperatorAppliedToFieldsTag, typename PrimalMortarFieldsTag,
-          typename PrimalMortarFluxesTag,
+          typename AuxiliaryMortarFieldsTag,
           typename FluxesArgsTags =
               typename System::fluxes_computer::argument_tags,
           typename SourcesArgsTags = typename elliptic::get_sources_computer<
@@ -144,23 +144,24 @@ struct PrepareAndSendMortarData;
 template <typename System, bool Linearized, typename TemporalIdTag,
           typename PrimalFieldsTag, typename PrimalFluxesTag,
           typename OperatorAppliedToFieldsTag, typename PrimalMortarFieldsTag,
-          typename PrimalMortarFluxesTag, typename... FluxesArgsTags,
+          typename AuxiliaryMortarFieldsTag, typename... FluxesArgsTags,
           typename... SourcesArgsTags>
 struct PrepareAndSendMortarData<
     System, Linearized, TemporalIdTag, PrimalFieldsTag, PrimalFluxesTag,
-    OperatorAppliedToFieldsTag, PrimalMortarFieldsTag, PrimalMortarFluxesTag,
+    OperatorAppliedToFieldsTag, PrimalMortarFieldsTag, AuxiliaryMortarFieldsTag,
     tmpl::list<FluxesArgsTags...>, tmpl::list<SourcesArgsTags...>> {
  private:
   static constexpr size_t Dim = System::volume_dim;
-  using all_mortar_data_tag = ::Tags::Mortars<
-      elliptic::dg::Tags::MortarData<typename TemporalIdTag::type,
-                                     typename PrimalMortarFieldsTag::tags_list,
-                                     typename PrimalMortarFluxesTag::tags_list>,
-      Dim>;
+  using all_mortar_data_tag =
+      ::Tags::Mortars<elliptic::dg::Tags::MortarData<
+                          typename TemporalIdTag::type,
+                          typename PrimalMortarFieldsTag::tags_list,
+                          typename AuxiliaryMortarFieldsTag::tags_list>,
+                      Dim>;
   using mortar_data_inbox_tag =
       MortarDataInboxTag<Dim, TemporalIdTag,
                          typename PrimalMortarFieldsTag::tags_list,
-                         typename PrimalMortarFluxesTag::tags_list>;
+                         typename AuxiliaryMortarFieldsTag::tags_list>;
   using BoundaryConditionsBase = typename System::boundary_conditions_base;
 
  public:
@@ -312,7 +313,7 @@ struct PrepareAndSendMortarData<
 template <typename System, bool Linearized, typename TemporalIdTag,
           typename PrimalFieldsTag, typename PrimalFluxesTag,
           typename OperatorAppliedToFieldsTag, typename PrimalMortarFieldsTag,
-          typename PrimalMortarFluxesTag,
+          typename AuxiliaryMortarFieldsTag,
           typename FluxesArgsTags =
               typename System::fluxes_computer::argument_tags,
           typename SourcesArgsTags = typename elliptic::get_sources_computer<
@@ -322,23 +323,24 @@ struct ReceiveMortarDataAndApplyOperator;
 template <typename System, bool Linearized, typename TemporalIdTag,
           typename PrimalFieldsTag, typename PrimalFluxesTag,
           typename OperatorAppliedToFieldsTag, typename PrimalMortarFieldsTag,
-          typename PrimalMortarFluxesTag, typename... FluxesArgsTags,
+          typename AuxiliaryMortarFieldsTag, typename... FluxesArgsTags,
           typename... SourcesArgsTags>
 struct ReceiveMortarDataAndApplyOperator<
     System, Linearized, TemporalIdTag, PrimalFieldsTag, PrimalFluxesTag,
-    OperatorAppliedToFieldsTag, PrimalMortarFieldsTag, PrimalMortarFluxesTag,
+    OperatorAppliedToFieldsTag, PrimalMortarFieldsTag, AuxiliaryMortarFieldsTag,
     tmpl::list<FluxesArgsTags...>, tmpl::list<SourcesArgsTags...>> {
  private:
   static constexpr size_t Dim = System::volume_dim;
-  using all_mortar_data_tag = ::Tags::Mortars<
-      elliptic::dg::Tags::MortarData<typename TemporalIdTag::type,
-                                     typename PrimalMortarFieldsTag::tags_list,
-                                     typename PrimalMortarFluxesTag::tags_list>,
-      Dim>;
+  using all_mortar_data_tag =
+      ::Tags::Mortars<elliptic::dg::Tags::MortarData<
+                          typename TemporalIdTag::type,
+                          typename PrimalMortarFieldsTag::tags_list,
+                          typename AuxiliaryMortarFieldsTag::tags_list>,
+                      Dim>;
   using mortar_data_inbox_tag =
       MortarDataInboxTag<Dim, TemporalIdTag,
                          typename PrimalMortarFieldsTag::tags_list,
-                         typename PrimalMortarFluxesTag::tags_list>;
+                         typename AuxiliaryMortarFieldsTag::tags_list>;
 
  public:
   using const_global_cache_tags =
@@ -355,6 +357,9 @@ struct ReceiveMortarDataAndApplyOperator<
       const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) {
     const auto& temporal_id = get<TemporalIdTag>(box);
+    const auto get_items = [](const auto&... args) {
+      return std::forward_as_tuple(args...);
+    };
 
     if (not ::dg::has_received_from_all_mortars<mortar_data_inbox_tag>(
             temporal_id, get<domain::Tags::Element<Dim>>(box), inboxes)) {
@@ -379,6 +384,18 @@ struct ReceiveMortarDataAndApplyOperator<
     }
 
     // Apply DG operator
+    using fluxes_args_tags = typename System::fluxes_computer::argument_tags;
+    using fluxes_args_volume_tags =
+        typename System::fluxes_computer::volume_tags;
+    DirectionMap<Dim, std::tuple<decltype(db::get<FluxesArgsTags>(box))...>>
+        fluxes_args_on_faces{};
+    for (const auto& direction : Direction<Dim>::all_directions()) {
+      fluxes_args_on_faces.emplace(
+          direction, elliptic::util::apply_at<
+                         domain::make_faces_tags<Dim, fluxes_args_tags,
+                                                 fluxes_args_volume_tags>,
+                         fluxes_args_volume_tags>(get_items, box, direction));
+    }
     db::mutate<OperatorAppliedToFieldsTag, all_mortar_data_tag>(
         make_not_null(&box),
         [](const auto&... args) {
@@ -397,7 +414,9 @@ struct ReceiveMortarDataAndApplyOperator<
         db::get<::Tags::Mortars<::Tags::MortarSize<Dim - 1>, Dim>>(box),
         db::get<elliptic::dg::Tags::PenaltyParameter>(box),
         db::get<elliptic::dg::Tags::Massive>(box), temporal_id,
-        std::forward_as_tuple(db::get<SourcesArgsTags>(box)...));
+        std::forward_as_tuple(db::get<FluxesArgsTags>(box)...),
+        std::forward_as_tuple(db::get<SourcesArgsTags>(box)...),
+        fluxes_args_on_faces);
 
     return {std::move(box), Parallel::AlgorithmExecution::Continue};
   }
@@ -462,26 +481,27 @@ using initialize_operator = tmpl::list<
  * intermediate result. The auxiliary fields and fluxes are discarded to avoid
  * inflating the memory usage.
  *
- * You can specify the `PrimalMortarFieldsTag` and the `PrimalMortarFluxesTag`
- * to re-use mortar-data memory buffers from other operator applications, for
- * example when applying the nonlinear and linearized operator. They default to
- * the `PrimalFieldsTag` and the `PrimalFluxesTag`, meaning memory buffers
- * corresponding to these tags are set up in the DataBox.
+ * You can specify the `PrimalMortarFieldsTag` and the
+ * `AuxiliaryMortarFieldsTag` to re-use mortar-data memory buffers from other
+ * operator applications, for example when applying the nonlinear and linearized
+ * operator. They default to the `PrimalFieldsTag` and the `PrimalFluxesTag`,
+ * meaning memory buffers corresponding to these tags are set up in the DataBox.
  */
 template <typename System, bool Linearized, typename TemporalIdTag,
           typename PrimalFieldsTag, typename PrimalFluxesTag,
           typename OperatorAppliedToFieldsTag,
           typename PrimalMortarFieldsTag = PrimalFieldsTag,
-          typename PrimalMortarFluxesTag = PrimalFluxesTag>
+          typename AuxiliaryMortarFieldsTag =
+              ::Tags::Variables<typename System::auxiliary_fields>>
 using apply_operator =
     tmpl::list<detail::PrepareAndSendMortarData<
                    System, Linearized, TemporalIdTag, PrimalFieldsTag,
                    PrimalFluxesTag, OperatorAppliedToFieldsTag,
-                   PrimalMortarFieldsTag, PrimalMortarFluxesTag>,
+                   PrimalMortarFieldsTag, AuxiliaryMortarFieldsTag>,
                detail::ReceiveMortarDataAndApplyOperator<
                    System, Linearized, TemporalIdTag, PrimalFieldsTag,
                    PrimalFluxesTag, OperatorAppliedToFieldsTag,
-                   PrimalMortarFieldsTag, PrimalMortarFluxesTag>>;
+                   PrimalMortarFieldsTag, AuxiliaryMortarFieldsTag>>;
 
 /*!
  * \brief For linear systems, impose inhomogeneous boundary conditions as

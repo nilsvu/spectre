@@ -187,6 +187,7 @@ struct Metavariables {
   using observe_fields = tmpl::append<
       analytic_solution_fields,
       tmpl::list<Elasticity::Tags::Strain<volume_dim>,
+                 Elasticity::Tags::MinusStress<volume_dim>,
                  Elasticity::Tags::PotentialEnergyDensity<volume_dim>>>;
 
   // Set up the action to observe reductions per-layer
@@ -241,6 +242,7 @@ struct Metavariables {
           Elasticity::Solutions::AnalyticSolution<Dim, background_registrars>>,
       Initialization::Actions::AddComputeTags<tmpl::list<
           Elasticity::Tags::StrainCompute<volume_dim>,
+          Elasticity::Tags::StressCompute<volume_dim>,
           Elasticity::Tags::PotentialEnergyDensityCompute<volume_dim>>>,
       elliptic::Actions::InitializeOptionalAnalyticSolution<
           background_tag,
@@ -255,7 +257,7 @@ struct Metavariables {
       // Apply the DG operator to the initial guess
       elliptic::dg::Actions::apply_operator<
           system, true, linear_solver_iteration_id, fields_tag, fluxes_vars_tag,
-          operator_applied_to_fields_tag, vars_tag, fluxes_vars_tag>,
+          operator_applied_to_fields_tag, vars_tag>,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
   using build_linear_operator_actions = elliptic::dg::Actions::apply_operator<

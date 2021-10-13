@@ -106,24 +106,23 @@ template <size_t Dim>
 struct Fluxes {
   using argument_tags =
       tmpl::list<Tags::ConstitutiveRelationPerBlockBase,
-                 domain::Tags::Element<Dim>,
                  domain::Tags::Coordinates<Dim, Frame::Inertial>>;
-  using volume_tags = tmpl::list<Tags::ConstitutiveRelationPerBlockBase,
-                                 domain::Tags::Element<Dim>>;
+  using volume_tags = tmpl::list<Tags::ConstitutiveRelationPerBlockBase>;
   static void apply(
       gsl::not_null<tnsr::II<DataVector, Dim>*> flux_for_displacement,
       const std::vector<
           std::unique_ptr<ConstitutiveRelations::ConstitutiveRelation<Dim>>>&
           constitutive_relation_per_block,
-      const Element<Dim>& element, const tnsr::I<DataVector, Dim>& coordinates,
+      const tnsr::I<DataVector, Dim>& coordinates,
+      const ElementId<Dim>& element_id,
       const tnsr::ii<DataVector, Dim>& strain);
   static void apply(
       gsl::not_null<tnsr::i<DataVector, Dim>*> flux_for_strain,
       const std::vector<
           std::unique_ptr<ConstitutiveRelations::ConstitutiveRelation<Dim>>>&
       /* constitutive_relation_per_block */,
-      const Element<Dim>& /* element */,
       const tnsr::I<DataVector, Dim>& /* coordinates */,
+      const ElementId<Dim>& /* element_id */,
       const tnsr::I<DataVector, Dim>& displacement) {
     for (size_t i = 0; i < Dim; ++i) {
       flux_for_strain->get(i) = displacement.get(i);
@@ -134,8 +133,8 @@ struct Fluxes {
       const std::vector<
           std::unique_ptr<ConstitutiveRelations::ConstitutiveRelation<Dim>>>&
       /* constitutive_relation_per_block */,
-      const Element<Dim>& /* element */,
       const tnsr::I<DataVector, Dim>& /* coordinates */,
+      const ElementId<Dim>& /* element_id */,
       const tnsr::ij<DataVector, Dim>& deriv_shift) {
     symmetrize(equation_for_strain, deriv_shift);
   }
