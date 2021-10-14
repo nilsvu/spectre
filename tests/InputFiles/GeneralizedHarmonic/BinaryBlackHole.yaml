@@ -28,24 +28,58 @@ DomainCreator:
           Outflow:
       UseLogarithmicMap: false
     EnvelopingCube:
-      Radius: 100.0
+      Radius: 55.
       UseProjectiveMap: true
     OuterShell:
-      InnerRadius: Auto
+      InnerRadius: 60.
       OuterRadius: 1493.0
-      RadialDistribution: Linear
+      RadialDistribution: Inverse
       BoundaryCondition:
         ConstraintPreservingBjorhus:
           Type: ConstraintPreservingPhysical
     InitialRefinement:
-      ObjectAShell:   [2, 2, 3]
-      ObjectACube:    [2, 2, 2]
-      ObjectBShell:   [2, 2, 3]
-      ObjectBCube:    [2, 2, 2]
-      EnvelopingCube: [2, 2, 2]
-      CubedShell:     [2, 2, 2]
-      OuterShell:     [2, 2, 5]
-    InitialGridPoints: 11
+      ObjectAShell:              [1, 1, 1]
+      ObjectBShell:              [1, 1, 1]
+      ObjectACube:               [1, 1, 0]
+      ObjectBCube:               [1, 1, 0]
+      EnvelopingCubeUpperZLeft:  [1, 1, 0]
+      EnvelopingCubeLowerZLeft:  [1, 1, 0]
+      EnvelopingCubeUpperYLeft:  [1, 1, 0]
+      EnvelopingCubeLowerYLeft:  [1, 1, 0]
+      EnvelopingCubeLowerX:      [1, 1, 0]
+      EnvelopingCubeUpperZRight: [1, 1, 0]
+      EnvelopingCubeLowerZRight: [1, 1, 0]
+      EnvelopingCubeUpperYRight: [1, 1, 0]
+      EnvelopingCubeLowerYRight: [1, 1, 0]
+      EnvelopingCubeUpperX:      [1, 1, 0]
+      CubedShellUpperZLeft:      [0, 1, 0]
+      CubedShellLowerZLeft:      [0, 1, 0]
+      CubedShellUpperYLeft:      [0, 1, 0]
+      CubedShellLowerYLeft:      [0, 1, 0]
+      CubedShellLowerX:          [1, 1, 0]
+      CubedShellUpperZRight:     [0, 1, 0]
+      CubedShellLowerZRight:     [0, 1, 0]
+      CubedShellUpperYRight:     [0, 1, 0]
+      CubedShellLowerYRight:     [0, 1, 0]
+      CubedShellUpperX:          [1, 1, 0]
+      OuterShellUpperZLeft:      [0, 1, 0]
+      OuterShellLowerZLeft:      [0, 1, 0]
+      OuterShellUpperYLeft:      [0, 1, 0]
+      OuterShellLowerYLeft:      [0, 1, 0]
+      OuterShellLowerX:          [1, 1, 0]
+      OuterShellUpperZRight:     [0, 1, 0]
+      OuterShellLowerZRight:     [0, 1, 0]
+      OuterShellUpperYRight:     [0, 1, 0]
+      OuterShellLowerYRight:     [0, 1, 0]
+      OuterShellUpperX:          [1, 1, 0]
+    InitialGridPoints:
+      ObjectAShell:   [4, 4, 7]
+      ObjectBShell:   [4, 4, 7]
+      ObjectACube:    [4, 4, 5]
+      ObjectBCube:    [4, 4, 5]
+      EnvelopingCube: [4, 4, 4]
+      CubedShell:     [4, 4, 4]
+      OuterShell:     [4, 4, 4]
     TimeDependentMaps:
       InitialTime: 0.0
       InitialExpirationDeltaT: Auto
@@ -203,9 +237,9 @@ Observers:
 # on the same grid as specified by the domain given above
 Importers:
   NumericInitialData:
-    FileName: "/path/to/initial_data" # Can be a prefix now
-    Subgroup: "element_data"
-    ObservationValue: 0.0
+    FileName: /path/to/BbhVolume # Can be a prefix now
+    Subgroup: VolumeData
+    ObservationValue: 5  # set to last iteration number of nonlinear solver
 
 # control.h5 should contain data for FunctionsOfTime that can be
 # read by ReadSpecPiecewisePolynomial.

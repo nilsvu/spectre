@@ -1,0 +1,191 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveXcts
+# Check: parse
+
+Background: &background
+  Binary:
+    XCoords: [&x_left -7.683, &x_right 7.683]
+    ObjectA:
+      Kerr: &kerr_left
+        Mass: 0.5 # probably needs update
+        Spin: [0., 0., 0.]
+        Center: [0., 0., 0.]
+    ObjectB:
+      Kerr: &kerr_right
+        Mass: 0.5  # probably needs update
+        Spin: [0., 0., 0.]
+        Center: [0., 0., 0.]
+    AngularVelocity: 0.0144  # probably needs update
+    FalloffWidths: [4.8, 4.8]  # probably needs update
+
+InitialGuess: *background
+
+DomainCreator:
+  BinaryCompactObject:
+    ObjectA:
+      InnerRadius: 0.7925
+      OuterRadius: 6.683
+      XCoord: *x_left
+      Interior:
+        ExciseWithBoundaryCondition:
+          ApparentHorizon:
+            Center: [*x_left, 0., 0.]
+            Rotation: [0., 0., 0.]
+            Lapse: *kerr_left
+            NegativeExpansion: *kerr_left
+      UseLogarithmicMap: True
+    ObjectB:
+      InnerRadius: 0.7925
+      OuterRadius: 6.683
+      XCoord: *x_right
+      Interior:
+        ExciseWithBoundaryCondition:
+          ApparentHorizon:
+            Center: [*x_right, 0., 0.]
+            Rotation: [0., 0., 0.]
+            Lapse: *kerr_right
+            NegativeExpansion: *kerr_right
+      UseLogarithmicMap: True
+    EnvelopingCube:
+      Radius: 55.
+      UseProjectiveMap: True
+    OuterShell:
+      InnerRadius: 60.
+      OuterRadius: 1493.0
+      RadialDistribution: Inverse
+      BoundaryCondition: Flatness
+    InitialRefinement:
+      ObjectAShell:              [1, 1, 1]
+      ObjectBShell:              [1, 1, 1]
+      ObjectACube:               [1, 1, 0]
+      ObjectBCube:               [1, 1, 0]
+      EnvelopingCubeUpperZLeft:  [1, 1, 0]
+      EnvelopingCubeLowerZLeft:  [1, 1, 0]
+      EnvelopingCubeUpperYLeft:  [1, 1, 0]
+      EnvelopingCubeLowerYLeft:  [1, 1, 0]
+      EnvelopingCubeLowerX:      [1, 1, 0]
+      EnvelopingCubeUpperZRight: [1, 1, 0]
+      EnvelopingCubeLowerZRight: [1, 1, 0]
+      EnvelopingCubeUpperYRight: [1, 1, 0]
+      EnvelopingCubeLowerYRight: [1, 1, 0]
+      EnvelopingCubeUpperX:      [1, 1, 0]
+      CubedShellUpperZLeft:      [0, 1, 0]
+      CubedShellLowerZLeft:      [0, 1, 0]
+      CubedShellUpperYLeft:      [0, 1, 0]
+      CubedShellLowerYLeft:      [0, 1, 0]
+      CubedShellLowerX:          [1, 1, 0]
+      CubedShellUpperZRight:     [0, 1, 0]
+      CubedShellLowerZRight:     [0, 1, 0]
+      CubedShellUpperYRight:     [0, 1, 0]
+      CubedShellLowerYRight:     [0, 1, 0]
+      CubedShellUpperX:          [1, 1, 0]
+      OuterShellUpperZLeft:      [0, 1, 0]
+      OuterShellLowerZLeft:      [0, 1, 0]
+      OuterShellUpperYLeft:      [0, 1, 0]
+      OuterShellLowerYLeft:      [0, 1, 0]
+      OuterShellLowerX:          [1, 1, 0]
+      OuterShellUpperZRight:     [0, 1, 0]
+      OuterShellLowerZRight:     [0, 1, 0]
+      OuterShellUpperYRight:     [0, 1, 0]
+      OuterShellLowerYRight:     [0, 1, 0]
+      OuterShellUpperX:          [1, 1, 0]
+    InitialGridPoints:
+      ObjectAShell:   [4, 4, 7]
+      ObjectBShell:   [4, 4, 7]
+      ObjectACube:    [4, 4, 5]
+      ObjectBCube:    [4, 4, 5]
+      EnvelopingCube: [4, 4, 4]
+      CubedShell:     [4, 4, 4]
+      OuterShell:     [4, 4, 4]
+
+Discretization:
+  DiscontinuousGalerkin:
+    PenaltyParameter: 1.
+    Massive: True
+
+Observers:
+  VolumeFileName: "BbhVolume"
+  ReductionFileName: "BbhReductions"
+
+NonlinearSolver:
+  NewtonRaphson:
+    ConvergenceCriteria:
+      # These criteria determine the numerical accuracy of the solution we are
+      # aiming for
+      MaxIterations: 20
+      RelativeResidual: 0.
+      AbsoluteResidual: 1.e-10
+    SufficientDecrease: 1.e-4
+    MaxGlobalizationSteps: 40
+    DampingFactor: 1.
+    Verbosity: Verbose
+
+LinearSolver:
+  Gmres:
+    ConvergenceCriteria:
+      # These criteria determine the accuracy of the Newton-Raphson correction.
+      # The linear solver needs to be accurate enough so the Newton-Raphson
+      # algorithm converges in a few (~5) iterations, but any accuracy here that
+      # exceeds the decrease in non-linear residual per step is wasted.
+      MaxIterations: 100
+      RelativeResidual: 1.e-3
+      AbsoluteResidual: 1.e-12
+    Verbosity: Quiet
+
+  Multigrid:
+    Iterations: 1
+    MaxLevels: Auto
+    Verbosity: Silent
+    OutputVolumeData: False
+
+  SchwarzSmoother:
+    MaxOverlap: 2
+    Iterations: 3
+    Verbosity: Silent
+    SubdomainSolver:
+      Gmres:
+        ConvergenceCriteria:
+          # These criteria determine the accuracy of the Schwarz
+          # subdomain-solves. The subdomain solves must be accurate enough so
+          # the Schwarz preconditioner is effective, and hence keeps the number
+          # of linear-solver steps below ~10, but any accuracy here that doesn't
+          # reduce the number of linear-solver steps further is wasted.
+          MaxIterations: 100
+          RelativeResidual: 1.e-4
+          AbsoluteResidual: 1.e-10
+        Verbosity: Silent
+        Restart: None
+        Preconditioner:
+          MinusLaplacian:
+            Solver: ExplicitInverse
+    SkipResets: True
+    ObservePerCoreReductions: False
+
+EventsAndTriggers:
+  ? HasConverged
+  : - ObserveErrorNorms:
+        SubfileName: ErrorNorms
+    - ObserveNorms:
+        SubfileName: ConstraintNorms
+        TensorsToObserve:
+          - Name: HamiltonianConstraint
+            NormType: L2Norm
+            Components: Individual
+          - Name: MomentumConstraint
+            NormType: L2Norm
+            Components: Individual
+    - ObserveFields:
+        SubfileName: VolumeData
+        VariablesToObserve:
+          - ConformalFactor
+          - Lapse
+          - Shift
+          - SpatialMetric
+          - ExtrinsicCurvature
+          - HamiltonianConstraint
+          - MomentumConstraint
+        InterpolateToMesh: None
+        CoordinatesFloatingPointType: Float
+        FloatingPointTypes: [Float]

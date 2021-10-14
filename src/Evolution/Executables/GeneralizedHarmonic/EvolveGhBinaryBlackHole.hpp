@@ -31,6 +31,7 @@
 #include "Evolution/Initialization/Evolution.hpp"
 #include "Evolution/Initialization/NonconservativeSystem.hpp"
 #include "Evolution/NumericInitialData.hpp"
+#include "Evolution/Systems/GeneralizedHarmonic/Actions/SetNumericInitialData.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/BoundaryConditions/Bjorhus.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/BoundaryConditions/Factory.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/BoundaryConditions/Outflow.hpp"
@@ -355,6 +356,12 @@ struct EvolutionMetavars {
       evolution::Actions::InitializeRunEventsAndDenseTriggers,
       Initialization::Actions::RemoveOptionsAndTerminatePhase>;
 
+  using numeric_initial_data_fields =
+      tmpl::list<gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>,
+                 gr::Tags::Lapse<DataVector>,
+                 gr::Tags::Shift<3, Frame::Inertial, DataVector>,
+                 gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector>>;
+
   using gh_dg_element_array = DgElementArray<
       EvolutionMetavars,
       tmpl::flatten<tmpl::list<
@@ -368,9 +375,10 @@ struct EvolutionMetavars {
               Phase, Phase::ImportInitialData,
               tmpl::list<importers::Actions::ReadVolumeData<
                              evolution::OptionTags::NumericInitialData,
-                             typename system::variables_tag::tags_list>,
-                         importers::Actions::ReceiveVolumeData<
+                             numeric_initial_data_fields>,
+                         GeneralizedHarmonic::Actions::SetNumericInitialData<
                              evolution::OptionTags::NumericInitialData,
+                             numeric_initial_data_fields,
                              typename system::variables_tag::tags_list>,
                          Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
