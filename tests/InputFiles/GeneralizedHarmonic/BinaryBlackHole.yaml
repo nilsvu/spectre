@@ -203,7 +203,7 @@ Observers:
 # on the same grid as specified by the domain given above
 Importers:
   NumericInitialData:
-    FileName: "/path/to/initial_data.h5"
+    FileName: "/path/to/initial_data" # Can be a prefix now
     Subgroup: "element_data"
     ObservationValue: 0.0
 
