@@ -8,18 +8,70 @@
 #   ExportCoordinates3DReductions.h5
 
 DomainCreator:
-  Brick:
-    LowerBound: [-0.5, -0.5, -0.5]
-    UpperBound: [0.5, 0.5, 0.5]
-    IsPeriodicIn: [false, false, false]
-    InitialRefinement: [0, 0, 0]
-    InitialGridPoints: [3, 3, 3]
-    TimeDependence:
-      UniformTranslation:
-        InitialTime: 0.0
-        InitialExpirationDeltaT: 5.0
-        Velocity: [0.5, 0.0, 0.0]
-        FunctionOfTimeName: "Translation"
+  BinaryCompactObject:
+    ObjectA:
+      InnerRadius: 0.8458
+      OuterRadius: 5.
+      XCoord: -8.
+      ExciseInterior: True
+      UseLogarithmicMap: True
+    ObjectB:
+      InnerRadius: 0.8458
+      OuterRadius: 5.
+      XCoord: 8.
+      ExciseInterior: True
+      UseLogarithmicMap: True
+    EnvelopingCube:
+      Radius: 55.
+      UseProjectiveMap: True
+      Sphericity: 1.
+    OuterShell:
+      InnerRadius: Auto
+      OuterRadius: 300.
+      RadialDistribution: Inverse
+    InitialRefinement:
+      ObjectAShell:   [1, 1, 1]
+      ObjectBShell:   [1, 1, 1]
+      ObjectACube:   [1, 1, 0]
+      ObjectBCube:   [1, 1, 0]
+      EnvelopingCubeUpperZLeft:  [1, 1, 0]
+      EnvelopingCubeLowerZLeft:  [1, 1, 0]
+      EnvelopingCubeUpperYLeft:  [1, 1, 0]
+      EnvelopingCubeLowerYLeft:  [1, 1, 0]
+      EnvelopingCubeLowerX:  [1, 1, 0]
+      EnvelopingCubeUpperZRight:  [1, 1, 0]
+      EnvelopingCubeLowerZRight:  [1, 1, 0]
+      EnvelopingCubeUpperYRight:  [1, 1, 0]
+      EnvelopingCubeLowerYRight:  [1, 1, 0]
+      EnvelopingCubeUpperX:  [1, 1, 0]
+      # CubedShellUpperZLeft:  [0, 1, 0]
+      # CubedShellLowerZLeft:  [0, 1, 0]
+      # CubedShellUpperYLeft:  [0, 1, 0]
+      # CubedShellLowerYLeft:  [0, 1, 0]
+      # CubedShellLowerX:  [1, 1, 0]
+      # CubedShellUpperZRight:  [0, 1, 0]
+      # CubedShellLowerZRight:  [0, 1, 0]
+      # CubedShellUpperYRight:  [0, 1, 0]
+      # CubedShellLowerYRight:  [0, 1, 0]
+      # CubedShellUpperX:  [1, 1, 0]
+      OuterShellUpperZLeft:  [0, 1, 0]
+      OuterShellLowerZLeft:  [0, 1, 0]
+      OuterShellUpperYLeft:  [0, 1, 0]
+      OuterShellLowerYLeft:  [0, 1, 0]
+      OuterShellLowerX:  [1, 1, 0]
+      OuterShellUpperZRight:  [0, 1, 0]
+      OuterShellLowerZRight:  [0, 1, 0]
+      OuterShellUpperYRight:  [0, 1, 0]
+      OuterShellLowerYRight:  [0, 1, 0]
+      OuterShellUpperX:  [1, 1, 0]
+    InitialGridPoints:
+      ObjectAShell:   [4, 4, 7]
+      ObjectBShell:   [4, 4, 7]
+      ObjectACube:    [4, 4, 5]
+      ObjectBCube:    [4, 4, 5]
+      EnvelopingCube: [4, 4, 4]
+      # CubedShell:     [4, 4, 4]
+      OuterShell:     [4, 4, 3]
 
 SpatialDiscretization:
   DiscontinuousGalerkin:
@@ -35,7 +87,7 @@ Evolution:
 EventsAndTriggers:
   ? TimeCompares:
       Comparison: GreaterThanOrEqualTo
-      Value: 1.0
+      Value: 0.
   : - Completion
 
 Observers:
