@@ -93,6 +93,7 @@ struct BlockZCurveProcDistribution {
       size_t number_of_procs,
       const std::vector<std::array<size_t, Dim>>& refinements_by_block,
       const std::vector<std::array<size_t, Dim>>& num_points_by_block,
+      const bool weight_by_num_points,
       const std::vector<size_t>& block_weights = {});
 
   /// Gets the suggested processor number for a particular element,
