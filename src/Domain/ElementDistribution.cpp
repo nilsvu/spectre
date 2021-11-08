@@ -97,7 +97,7 @@ BlockZCurveProcDistribution<Dim>::BlockZCurveProcDistribution(
     size_t number_of_procs,
     const std::vector<std::array<size_t, Dim>>& refinements_by_block,
     const std::vector<std::array<size_t, Dim>>& num_points_by_block,
-    const std::vector<size_t>& block_weights) {
+    const bool weight_by_num_points, const std::vector<size_t>& block_weights) {
   ASSERT(not refinements_by_block.empty(),
          "`refinements_by_block` must be non-empty.");
   ASSERT(refinements_by_block.size() == num_points_by_block.size(),
@@ -115,11 +115,14 @@ BlockZCurveProcDistribution<Dim>::BlockZCurveProcDistribution(
     }
     return value;
   };
-  auto weight = [](const std::array<size_t, Dim>& num_points,
-                   const size_t block_weight) {
+  auto weight = [&weight_by_num_points](
+                    const std::array<size_t, Dim>& num_points,
+                    const size_t block_weight) {
     size_t value = 1;
-    for (size_t i = 0; i < Dim; ++i) {
-      value *= gsl::at(num_points, i);
+    if (weight_by_num_points) {
+      for (size_t i = 0; i < Dim; ++i) {
+        value *= gsl::at(num_points, i);
+      }
     }
     return value * block_weight;
   };

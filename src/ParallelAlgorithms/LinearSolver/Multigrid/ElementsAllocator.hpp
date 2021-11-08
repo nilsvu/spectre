@@ -66,13 +66,33 @@ namespace LinearSolver::multigrid {
 template <size_t Dim, typename OptionsGroup>
 struct ElementsAllocator
     : tt::ConformsTo<Parallel::protocols::ArrayElementsAllocator> {
+  struct ElementAllocation {
+    static constexpr Options::String help = "Element allocation";
+    using group = OptionsGroup;
+  };
+
+  struct WeightByNumPointsOption {
+    using type = bool;
+    static constexpr Options::String help = "Weight by num points";
+    using group = ElementAllocation;
+    static std::string name() { return "WeightByNumPoints"; }
+  };
+
+  struct WeightByNumPoints : db::SimpleTag {
+    using type = bool;
+    static constexpr bool pass_metavariables = false;
+    using option_tags = tmpl::list<WeightByNumPointsOption>;
+    static type create_from_options(const type value) { return value; };
+  };
+
   template <typename ElementArray>
   using array_allocation_tags =
       tmpl::list<domain::Tags::InitialRefinementLevels<Dim>,
                  Tags::ChildrenRefinementLevels<Dim>,
                  Tags::ParentRefinementLevels<Dim>,
                  Parallel::Tags::Section<ElementArray, Tags::MultigridLevel>,
-                 Parallel::Tags::Section<ElementArray, Tags::IsFinestGrid>>;
+                 Parallel::Tags::Section<ElementArray, Tags::IsFinestGrid>,
+                 WeightByNumPoints>;
 
   template <typename ElementArray, typename Metavariables,
             typename... InitializationTags>
@@ -168,6 +188,7 @@ struct ElementsAllocator
       const domain::BlockZCurveProcDistribution<Dim> element_distribution{
           static_cast<size_t>(number_of_procs), initial_refinement_levels,
           get<domain::Tags::InitialExtents<Dim>>(initialization_items),
+          get<WeightByNumPoints>(initialization_items),
           load_weights};
       for (const auto& element_id : element_ids) {
         const size_t target_proc =
