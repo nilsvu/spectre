@@ -9,6 +9,7 @@ set(LIBRARY_SOURCES
   Test_HarmonicSchwarzschild.cpp
   Test_Kerr.cpp
   Test_Schwarzschild.cpp
+  Test_TovStar.cpp
   )
 
 add_test_library(
