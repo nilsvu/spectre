@@ -149,6 +149,15 @@ struct Metavariables {
       volume_dim, typename linear_solver::operand_tag,
       SolveXcts::OptionTags::MultigridGroup, elliptic::dg::Tags::Massive,
       typename linear_solver::preconditioner_source_tag>;
+  using communicated_multigrid_tags =
+      tmpl::list<fields_tag, fluxes_tag/*,
+                 gr::Tags::Conformal<gr::Tags::EnergyDensity<DataVector>,
+                                     conformal_matter_scale>,
+                 gr::Tags::Conformal<gr::Tags::StressTrace<DataVector>,
+                                     conformal_matter_scale>,
+                 gr::Tags::Conformal<
+                     gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>,
+                     conformal_matter_scale>*/>;
   // Smooth each multigrid level with a number of Schwarz smoothing steps
   using subdomain_operator =
       elliptic::dg::subdomain_operator::SubdomainOperator<
@@ -160,6 +169,13 @@ struct Metavariables {
   using communicated_overlap_tags = tmpl::list<
       // For linearized sources
       fields_tag, fluxes_tag,
+      /*gr::Tags::Conformal<gr::Tags::EnergyDensity<DataVector>,
+                          conformal_matter_scale>,
+      gr::Tags::Conformal<gr::Tags::StressTrace<DataVector>,
+                          conformal_matter_scale>,
+      gr::Tags::Conformal<
+          gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>,
+          conformal_matter_scale>*/
       // For linearized boundary conditions
       domain::Tags::Faces<volume_dim, Xcts::Tags::ConformalFactor<DataVector>>,
       domain::Tags::Faces<volume_dim,
@@ -294,13 +310,22 @@ struct Metavariables {
 
   using solve_actions = tmpl::list<
       typename nonlinear_solver::template solve<
+          // TODO: Update matter sources from injection energy
+          // The dependence of the matter sources on the variables is neglected
+          // in the linearization, so corrections lose some precision. We can
+          // attempt to fix this by building matter sources into the XCTS
+          // equations similar to how boundary conditions are handled.
+          //
+          // For head-on BNS ID: Set h = E / lapse, where E is the injection
+          // energy of the closest star, and h is clamped to max(h) = 1
           build_operator_actions<false>,
           tmpl::list<
+              // TODO: Communicate matter sources to multigrids and overlaps
               LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
-                  volume_dim, tmpl::list<fields_tag, fluxes_tag>,
+                  volume_dim, communicated_multigrid_tags,
                   typename multigrid::options_group>,
               LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
-                  tmpl::list<fields_tag, fluxes_tag>,
+                  communicated_multigrid_tags,
                   typename multigrid::options_group, void>,
               LinearSolver::Schwarz::Actions::SendOverlapFields<
                   communicated_overlap_tags,

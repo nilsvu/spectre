@@ -1,0 +1,180 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveXcts
+# Check: parse;execute_check_output
+# Timeout: 40
+# ExpectedOutput:
+#   TovStarReductions.h5
+#   TovStarVolume0.h5
+# OutputFileChecks:
+#   - Label: Discretization error
+#     Subfile: /ErrorNorms.dat
+#     FileGlob: TovStarReductions.h5
+#     SkipColumns: [0, 1]
+#     AbsoluteTolerance: 0.12
+
+Background: &binary
+  Binary:
+    XCoords: [&x_left -30., &x_right 30.]
+    ObjectA: &star
+      TovStar:
+        # https://arxiv.org/abs/1708.07358
+        CentralDensity: 0.0008087415253997405 # h = 1.2
+        PolytropicConstant: 123.6489
+        PolytropicExponent: 2.
+        Coordinates: Isotropic
+    ObjectB: *star
+    AngularVelocity: 0.
+    Expansion: 0.
+    FalloffWidths: None
+
+InitialGuess: *binary
+
+DomainCreator:
+  BinaryCompactObject:
+    ObjectA:
+      InnerRadius: 4.
+      OuterRadius: &star_radius 9.709353324763269
+      XCoord: *x_left
+      Interior: Auto
+      UseLogarithmicMap: False
+    ObjectB:
+      InnerRadius: 4.
+      OuterRadius: *star_radius
+      XCoord: *x_right
+      Interior: Auto
+      UseLogarithmicMap: False
+    EnvelopingCube:
+      Radius: 220.
+      UseProjectiveMap: True
+      Sphericity: 0.
+    OuterShell:
+      InnerRadius: Auto
+      OuterRadius: 800.
+      RadialDistribution: Inverse
+      BoundaryCondition: Flatness
+    InitialRefinement:
+      ObjectAInterior:            [1, 1, 1]
+      ObjectBInterior:            [1, 1, 1]
+      ObjectAShell:               [1, 1, 1]
+      ObjectBShell:               [1, 1, 1]
+      ObjectACube:                [1, 1, 0]
+      ObjectBCube:                [1, 1, 0]
+      EnvelopingCubeUpperZLeft:   [1, 1, 0]
+      EnvelopingCubeLowerZLeft:   [1, 1, 0]
+      EnvelopingCubeUpperYLeft:   [1, 1, 0]
+      EnvelopingCubeLowerYLeft:   [1, 1, 0]
+      EnvelopingCubeLowerX:       [1, 1, 0]
+      EnvelopingCubeUpperZRight:  [1, 1, 0]
+      EnvelopingCubeLowerZRight:  [1, 1, 0]
+      EnvelopingCubeUpperYRight:  [1, 1, 0]
+      EnvelopingCubeLowerYRight:  [1, 1, 0]
+      EnvelopingCubeUpperX:       [1, 1, 0]
+      CubedShellUpperZLeft:       [0, 1, 0]
+      CubedShellLowerZLeft:       [0, 1, 0]
+      CubedShellUpperYLeft:       [0, 1, 0]
+      CubedShellLowerYLeft:       [0, 1, 0]
+      CubedShellLowerX:           [1, 1, 0]
+      CubedShellUpperZRight:      [0, 1, 0]
+      CubedShellLowerZRight:      [0, 1, 0]
+      CubedShellUpperYRight:      [0, 1, 0]
+      CubedShellLowerYRight:      [0, 1, 0]
+      CubedShellUpperX:           [1, 1, 0]
+      OuterShellUpperZLeft:       [0, 1, 0]
+      OuterShellLowerZLeft:       [0, 1, 0]
+      OuterShellUpperYLeft:       [0, 1, 0]
+      OuterShellLowerYLeft:       [0, 1, 0]
+      OuterShellLowerX:           [1, 1, 0]
+      OuterShellUpperZRight:      [0, 1, 0]
+      OuterShellLowerZRight:      [0, 1, 0]
+      OuterShellUpperYRight:      [0, 1, 0]
+      OuterShellLowerYRight:      [0, 1, 0]
+      OuterShellUpperX:           [1, 1, 0]
+    InitialGridPoints:
+      ObjectAInterior: [6, 6, 9]
+      ObjectBInterior: [6, 6, 9]
+      ObjectAShell:   [4, 4, 7]
+      ObjectBShell:   [4, 4, 7]
+      ObjectACube:    [4, 4, 5]
+      ObjectBCube:    [4, 4, 5]
+      EnvelopingCube: [4, 4, 4]
+      CubedShell:     [4, 4, 4]
+      OuterShell:     [4, 4, 3]
+
+Discretization:
+  DiscontinuousGalerkin:
+    PenaltyParameter: 1.
+    Massive: True
+
+Observers:
+  VolumeFileName: "BnsVolume"
+  ReductionFileName: "BnsReductions"
+
+NonlinearSolver:
+  NewtonRaphson:
+    ConvergenceCriteria:
+      MaxIterations: 10
+      RelativeResidual: 1.e-8
+      AbsoluteResidual: 1.e-10
+    SufficientDecrease: 1.e-4
+    MaxGlobalizationSteps: 40
+    DampingFactor: 1.
+    Verbosity: Quiet
+
+LinearSolver:
+  Gmres:
+    ConvergenceCriteria:
+      MaxIterations: 100
+      RelativeResidual: 1.e-4
+      AbsoluteResidual: 1.e-11
+    Verbosity: Quiet
+
+  Multigrid:
+    Iterations: 1
+    MaxLevels: Auto
+    Verbosity: Verbose
+    OutputVolumeData: False
+
+  SchwarzSmoother:
+    Iterations: 3
+    MaxOverlap: 2
+    Verbosity: Verbose
+    SubdomainSolver:
+      Gmres:
+        ConvergenceCriteria:
+          MaxIterations: 100
+          RelativeResidual: 1.e-4
+          AbsoluteResidual: 1.e-12
+        Verbosity: Silent
+        Restart: None
+        Preconditioner:
+          MinusLaplacian:
+            Solver: ExplicitInverse
+    SkipResets: True
+    ObservePerCoreReductions: False
+
+EventsAndTriggers:
+  ? HasConverged
+  : - ObserveNorms:
+        SubfileName: Norms
+        TensorsToObserve:
+          - Name: HamiltonianConstraint
+            NormType: L2Norm
+            Components: Individual
+          - Name: MomentumConstraint
+            NormType: L2Norm
+            Components: Individual
+    - ObserveFields:
+        SubfileName: VolumeData
+        VariablesToObserve:
+          - ConformalFactor
+          - LapseTimesConformalFactor
+          - ShiftExcess
+          - Conformal(EnergyDensity)
+          - Conformal(StressTrace)
+          - HamiltonianConstraint
+          - MomentumConstraint
+        InterpolateToMesh: None
+        CoordinatesFloatingPointType: Float
+        FloatingPointTypes: [Float]
