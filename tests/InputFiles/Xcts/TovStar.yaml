@@ -1,0 +1,116 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveXcts
+# Check: parse;execute_check_output
+# Timeout: 40
+# ExpectedOutput:
+#   TovStarReductions.h5
+#   TovStarVolume0.h5
+# OutputFileChecks:
+#   - Label: Discretization error
+#     Subfile: /ErrorNorms.dat
+#     FileGlob: TovStarReductions.h5
+#     SkipColumns: [0, 1]
+#     AbsoluteTolerance: 0.12
+
+Background:
+  TovStar:
+    CentralDensity: 1.e-3
+    PolytropicExponent: 2
+    PolytropicConstant: 1.
+    Coordinates: Isotropic
+
+InitialGuess: Flatness
+
+DomainCreator:
+  Sphere:
+    InnerRadius: 0.2
+    OuterRadius: 1.24984447898
+    InitialRefinement: 0
+    InitialGridPoints: [5, 5]
+    UseEquiangularMap: True
+    BoundaryCondition:
+      AnalyticSolution:
+        ConformalFactor: Dirichlet
+        LapseTimesConformalFactor: Dirichlet
+        ShiftExcess: Dirichlet
+
+Discretization:
+  DiscontinuousGalerkin:
+    PenaltyParameter: 1.
+    Massive: True
+
+Observers:
+  VolumeFileName: "TovStarVolume"
+  ReductionFileName: "TovStarReductions"
+
+NonlinearSolver:
+  NewtonRaphson:
+    ConvergenceCriteria:
+      MaxIterations: 10
+      RelativeResidual: 1.e-8
+      AbsoluteResidual: 1.e-12
+    SufficientDecrease: 1.e-4
+    MaxGlobalizationSteps: 40
+    DampingFactor: 1.
+    Verbosity: Quiet
+
+LinearSolver:
+  Gmres:
+    ConvergenceCriteria:
+      MaxIterations: 100
+      RelativeResidual: 1.e-4
+      AbsoluteResidual: 1.e-12
+    Verbosity: Quiet
+
+  Multigrid:
+    Iterations: 1
+    MaxLevels: Auto
+    Verbosity: Verbose
+    OutputVolumeData: False
+
+  SchwarzSmoother:
+    Iterations: 3
+    MaxOverlap: 2
+    Verbosity: Verbose
+    SubdomainSolver:
+      Gmres:
+        ConvergenceCriteria:
+          MaxIterations: 3
+          RelativeResidual: 1.e-4
+          AbsoluteResidual: 1.e-12
+        Verbosity: Silent
+        Restart: None
+        Preconditioner:
+          MinusLaplacian:
+            Solver: ExplicitInverse
+    SkipResets: True
+    ObservePerCoreReductions: False
+
+EventsAndTriggers:
+  ? HasConverged
+  : - ObserveErrorNorms:
+        SubfileName: ErrorNorms
+    - ObserveNorms:
+        SubfileName: Norms
+        TensorsToObserve:
+          - Name: HamiltonianConstraint
+            NormType: L2Norm
+            Components: Individual
+          - Name: MomentumConstraint
+            NormType: L2Norm
+            Components: Individual
+    - ObserveFields:
+        SubfileName: VolumeData
+        VariablesToObserve:
+          - ConformalFactor
+          - LapseTimesConformalFactor
+          - ShiftExcess
+          - Conformal(EnergyDensity)
+          - Conformal(StressTrace)
+          - HamiltonianConstraint
+          - MomentumConstraint
+        InterpolateToMesh: None
+        CoordinatesFloatingPointType: Double
+        FloatingPointTypes: [Double]
