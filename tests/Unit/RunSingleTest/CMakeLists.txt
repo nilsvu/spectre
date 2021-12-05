@@ -35,6 +35,7 @@ add_spectre_executable(
   ../PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Test_Tov.cpp
   ../PointwiseFunctions/AnalyticData/GrMhd/Test_MagnetizedTovStar.cpp
   ../PointwiseFunctions/AnalyticSolutions/RelativisticEuler/Test_TovStar.cpp
+  ../PointwiseFunctions/AnalyticSolutions/Xcts/Test_TovStar.cpp
   )
 
 # Modify which libraries to link for your test case.
@@ -52,6 +53,9 @@ target_link_libraries(
   Utilities
   ValenciaDivClean
   CoordinateMaps
+  Xcts
+  XctsSolutions
+  XctsSolutionsTestHelpers
   )
 
 # Core required libraries
