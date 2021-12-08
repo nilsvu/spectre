@@ -16,9 +16,9 @@
 #include "DataStructures/DataBox/Tag.hpp"
 #include "DataStructures/DataBox/TagName.hpp"
 #include "DataStructures/DataVector.hpp"
-#include "DataStructures/Tensor/EagerMath/Determinant.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
+#include "Domain/CreateInitialElement.hpp"
 #include "Domain/Creators/Brick.hpp"
 #include "Domain/Creators/DomainCreator.hpp"
 #include "Domain/Creators/Interval.hpp"
@@ -34,7 +34,6 @@
 #include "IO/Observer/ObservationId.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
 #include "IO/Observer/Tags.hpp"
-#include "NumericalAlgorithms/LinearOperators/DefiniteIntegral.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
 #include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "Options/Protocols/FactoryCreation.hpp"
@@ -42,8 +41,9 @@
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
 #include "Parallel/Tags/Metavariables.hpp"
-#include "ParallelAlgorithms/Events/ObserveVolumeIntegrals.hpp"
+#include "ParallelAlgorithms/Events/ObserveAtPoint.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/Event.hpp"
+#include "Time/Tags.hpp"
 #include "Utilities/Algorithm.hpp"
 #include "Utilities/ConstantExpressions.hpp"
 #include "Utilities/Gsl.hpp"
@@ -63,10 +63,6 @@ struct ContributeReductionData;
 
 namespace {
 
-struct ObservationTimeTag : db::SimpleTag {
-  using type = double;
-};
-
 struct TestSectionIdTag {};
 
 struct MockContributeReductionData {
@@ -75,8 +71,8 @@ struct MockContributeReductionData {
     std::string subfile_name;
     std::vector<std::string> reduction_names{};
     double time;
-    double volume;
-    std::vector<double> volume_integrals{};
+    size_t num_contributing_elements;
+    std::vector<double> interpolated_data{};
   };
   // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
   static Results results;
@@ -95,8 +91,8 @@ struct MockContributeReductionData {
     results.subfile_name = subfile_name;
     results.reduction_names = reduction_names;
     results.time = std::get<0>(reduction_data.data());
-    results.volume = std::get<1>(reduction_data.data());
-    results.volume_integrals = std::get<2>(reduction_data.data());
+    results.num_contributing_elements = std::get<1>(reduction_data.data());
+    results.interpolated_data = std::get<2>(reduction_data.data());
   }
 };
 
@@ -145,11 +141,6 @@ struct VectorVar : db::SimpleTag {
   using type = tnsr::I<DataVector, SpatialDim>;
 };
 
-template <size_t SpatialDim>
-struct TensorVar : db::SimpleTag {
-  using type = tnsr::Ij<DataVector, SpatialDim>;
-};
-
 struct ScalarVarTimesTwoCompute
     : db::ComputeTag,
       ::Tags::Variables<tmpl::list<ScalarVarTimesTwo>> {
@@ -164,8 +155,8 @@ struct ScalarVarTimesTwoCompute
 };
 
 template <size_t SpatialDim>
-using variables_for_test = tmpl::list<ScalarVar, VectorVar<SpatialDim>,
-                                      TensorVar<SpatialDim>, ScalarVarTimesTwo>;
+using variables_for_test =
+    tmpl::list<ScalarVar, VectorVar<SpatialDim>, ScalarVarTimesTwo>;
 
 template <size_t VolumeDim, typename ArraySectionIdTag>
 struct Metavariables {
@@ -173,8 +164,8 @@ struct Metavariables {
                                     MockObserverComponent<Metavariables>>;
   using const_global_cache_tags = tmpl::list<>;  //  unused
 
-  using ObserveEvent = dg::Events::ObserveVolumeIntegrals<
-      VolumeDim, ObservationTimeTag, variables_for_test<VolumeDim>,
+  using ObserveEvent = dg::Events::ObserveAtPoint<
+      VolumeDim, ::Tags::Time, variables_for_test<VolumeDim>,
       tmpl::list<ScalarVarTimesTwoCompute>, ArraySectionIdTag>;
 
   struct factory_creation
@@ -197,9 +188,14 @@ std::unique_ptr<DomainCreator<1>> domain_creator() {
 
 template <>
 std::unique_ptr<DomainCreator<2>> domain_creator() {
+  // 2D case has time dependence so at t=0 the point (0.25, 0.25) is inside
+  // the domain and at t=2 the point is outside
   return std::make_unique<domain::creators::Rectangle>(
-      domain::creators::Rectangle({{-0.5, -0.5}}, {{0.5, 0.5}}, {{0, 0}},
-                                  {{4, 4}}, {{false, false}}));
+      domain::creators::Rectangle(
+          {{-0.5, -0.5}}, {{0.5, 0.5}}, {{0, 0}}, {{4, 4}}, {{false, false}},
+          std::make_unique<
+              domain::creators::time_dependence::UniformTranslation<2, 0>>(
+              0., std::array<double, 2>{{1., 0.}})));
 }
 
 template <>
@@ -211,7 +207,11 @@ std::unique_ptr<DomainCreator<3>> domain_creator() {
 
 template <size_t VolumeDim, typename ArraySectionIdTag, typename ObserveEvent>
 void test_observe(const std::unique_ptr<ObserveEvent> observe,
+                  const double time, const bool point_is_in_domain,
                   const std::optional<std::string>& section) {
+  CAPTURE(VolumeDim);
+  CAPTURE(time);
+  CAPTURE(point_is_in_domain);
   using metavariables = Metavariables<VolumeDim, ArraySectionIdTag>;
   using element_component = ElementComponent<metavariables>;
   using observer_component = MockObserverComponent<metavariables>;
@@ -219,55 +219,58 @@ void test_observe(const std::unique_ptr<ObserveEvent> observe,
   const typename element_component::array_index array_index(0);
   const ElementId<VolumeDim> element_id{array_index};
 
-  // ObserveVolumeIntegrals requires the domain mesh in the DataBox.
-  // Any domain, mesh and basis should be fine--we'll just check received data
+  // ObserveAtPoint requires the domain in the DataBox
   const auto creator = domain_creator<VolumeDim>();
-  Mesh<VolumeDim> mesh{creator->initial_extents()[0],
-                       Spectral::Basis::Chebyshev,
-                       Spectral::Quadrature::GaussLobatto};
+  auto domain = creator->create_domain();
+  // Only needed for element ID
+  auto element = domain::Initialization::create_initial_element(
+      element_id, domain.blocks()[0], creator->initial_refinement_levels());
+  const Mesh<VolumeDim> mesh{creator->initial_extents()[0],
+                             Spectral::Basis::Legendre,
+                             Spectral::Quadrature::GaussLobatto};
+  auto fot = creator->functions_of_time();
 
-  // Any data held by tensors to integrate should be fine
+  // Any data held by tensors to interpolate should be fine
   MAKE_GENERATOR(gen);
-  using value_type = DataVector::value_type;
-  UniformCustomDistribution<tt::get_fundamental_type_t<value_type>> dist{-10.0,
-                                                                         10.0};
-  const size_t number_of_grid_points = mesh.number_of_grid_points();
-  Variables<variables_for_test<VolumeDim>> vars(number_of_grid_points);
+  UniformCustomDistribution<double> dist{-10.0, 10.0};
+  const size_t num_points = mesh.number_of_grid_points();
+  Variables<variables_for_test<VolumeDim>> vars(num_points);
   fill_with_random_values(make_not_null(&vars), make_not_null(&gen),
                           make_not_null(&dist));
-  auto det_inv_jacobian = make_with_random_values<Scalar<DataVector>>(
-      make_not_null(&gen), make_not_null(&dist), number_of_grid_points);
 
   // Compute expected data for checks
   size_t num_tensor_components = 0;
-  const DataVector det_jacobian = 1.0 / get(det_inv_jacobian);
-  const double expected_volume = definite_integral(det_jacobian, mesh);
-  std::vector<double> expected_volume_integrals{};
+  tnsr::I<DataVector, VolumeDim, Frame::ElementLogical> target_coords{
+      num_points};
+  for (size_t d = 0; d < VolumeDim; ++d) {
+    target_coords.get(d) = 0.5;
+  }
+  const intrp::Irregular<VolumeDim> interpolant{mesh, target_coords};
+  std::vector<double> expected_interpolated_data{};
   std::vector<std::string> expected_reduction_names = {
-      db::tag_name<ObservationTimeTag>(), "Volume"};
+      db::tag_name<::Tags::Time>(), "NumContributingElements"};
   tmpl::for_each<typename std::decay_t<decltype(vars)>::tags_list>(
-      [&num_tensor_components, &vars, &expected_volume_integrals,
-       &expected_reduction_names, &det_jacobian, &mesh](auto tag) {
+      [&num_tensor_components, &vars, &expected_interpolated_data,
+       &expected_reduction_names, &interpolant](auto tag) {
         using tensor_tag = tmpl::type_from<decltype(tag)>;
         const auto& tensor = get<tensor_tag>(vars);
         for (size_t i = 0; i < tensor.size(); ++i) {
-          expected_reduction_names.push_back("VolumeIntegral(" +
-                                             db::tag_name<tensor_tag>() +
-                                             tensor.component_suffix(i) + ")");
-          expected_volume_integrals.push_back(
-              definite_integral(det_jacobian * tensor[i], mesh));
+          expected_reduction_names.push_back(db::tag_name<tensor_tag>() +
+                                             tensor.component_suffix(i));
+          expected_interpolated_data.push_back(
+              interpolant.interpolate(tensor[i])[0]);
           ++num_tensor_components;
         }
       });
 
-  const double observation_time = 2.0;
   const auto box = db::create<db::AddSimpleTags<
-      Parallel::Tags::MetavariablesImpl<metavariables>, ObservationTimeTag,
-      domain::Tags::Mesh<VolumeDim>,
-      domain::Tags::DetInvJacobian<Frame::ElementLogical, Frame::Inertial>,
-      Tags::Variables<typename decltype(vars)::tags_list>,
+      Parallel::Tags::MetavariablesImpl<metavariables>, ::Tags::Time,
+      domain::Tags::Mesh<VolumeDim>, domain::Tags::Domain<VolumeDim>,
+      domain::Tags::Element<VolumeDim>, domain::Tags::FunctionsOfTimeInitialize,
+      Tags::Variables<variables_for_test<VolumeDim>>,
       observers::Tags::ObservationKey<ArraySectionIdTag>>>(
-      metavariables{}, observation_time, mesh, det_inv_jacobian, vars, section);
+      metavariables{}, time, mesh, std::move(domain), std::move(element),
+      std::move(fot), std::move(vars), section);
 
   ActionTesting::MockRuntimeSystem<metavariables> runner{{}};
   ActionTesting::emplace_component<element_component>(make_not_null(&runner),
@@ -277,11 +280,11 @@ void test_observe(const std::unique_ptr<ObserveEvent> observe,
   const auto ids_to_register =
       observers::get_registration_observation_type_and_key(*observe, box);
   const std::string expected_subfile_name{
-      "/volume_integrals" +
+      "/interpolated_data" +
       (std::is_same_v<ArraySectionIdTag, void> ? ""
                                                : section.value_or("Unused"))};
   const observers::ObservationKey expected_observation_key_for_reg(
-      expected_subfile_name);
+      expected_subfile_name + ".dat");
   if (std::is_same_v<ArraySectionIdTag, void> or section.has_value()) {
     CHECK(ids_to_register->first == observers::TypeOfObservation::Reduction);
     CHECK(ids_to_register->second == expected_observation_key_for_reg);
@@ -291,7 +294,7 @@ void test_observe(const std::unique_ptr<ObserveEvent> observe,
 
   observe->run(make_observation_box<db::AddComputeTags<>>(box),
                ActionTesting::cache<element_component>(runner, array_index),
-               array_index, std::add_pointer_t<element_component>{});
+               element_id, std::add_pointer_t<element_component>{});
 
   if (not std::is_same_v<ArraySectionIdTag, void> and not section.has_value()) {
     CHECK(runner.template is_simple_action_queue_empty<observer_component>(0));
@@ -303,15 +306,22 @@ void test_observe(const std::unique_ptr<ObserveEvent> observe,
   CHECK(runner.template is_simple_action_queue_empty<observer_component>(0));
 
   const auto& results = MockContributeReductionData::results;
-  CHECK(results.observation_id.value() == observation_time);
+  CHECK(results.observation_id.value() == time);
   CHECK(results.observation_id.observation_key() ==
         expected_observation_key_for_reg);
   CHECK(results.subfile_name == expected_subfile_name);
   CHECK(results.reduction_names == expected_reduction_names);
-  CHECK(results.time == observation_time);
-  CHECK(results.volume == expected_volume);
-  CHECK(results.volume_integrals.size() == num_tensor_components);
-  CHECK(results.volume_integrals == expected_volume_integrals);
+  CHECK(results.time == time);
+  CHECK(results.num_contributing_elements == 1);
+  CHECK(results.interpolated_data.size() == num_tensor_components);
+  if (point_is_in_domain) {
+    CHECK_ITERABLE_APPROX(results.interpolated_data,
+                          expected_interpolated_data);
+  } else {
+    for (size_t i = 0; i < num_tensor_components; ++i) {
+      CHECK(std::isnan(results.interpolated_data[i]));
+    }
+  }
 
   CHECK(observe->needs_evolved_variables());
 }
@@ -322,27 +332,48 @@ void test_observe_system(
     const std::optional<std::string>& section = std::nullopt) {
   using metavariables = Metavariables<VolumeDim, ArraySectionIdTag>;
   {
-    INFO("Testing observation for Dim = " << VolumeDim);
+    INFO("Testing observation");
     test_observe<VolumeDim, ArraySectionIdTag>(
         std::make_unique<typename metavariables::ObserveEvent>(
-            "volume_integrals"),
-        section);
+            "interpolated_data", make_array<VolumeDim>(0.25),
+            std::vector<std::string>{"ScalarVar", "VectorVar",
+                                     "ScalarVarTimesTwo"}),
+        0., true, section);
+    if constexpr (VolumeDim == 2) {
+      // Time-dependent test in 2D
+      test_observe<VolumeDim, ArraySectionIdTag>(
+          std::make_unique<typename metavariables::ObserveEvent>(
+              "interpolated_data", make_array<VolumeDim>(0.25),
+              std::vector<std::string>{"ScalarVar", "VectorVar",
+                                       "ScalarVarTimesTwo"}),
+          2., false, section);
+    }
   }
   {
-    INFO("Testing create/serialize for Dim = " << VolumeDim);
+    INFO("Testing create/serialize");
     Parallel::register_factory_classes_with_charm<metavariables>();
-    const auto factory_event =
-        TestHelpers::test_creation<std::unique_ptr<Event>, metavariables>(
-            "ObserveVolumeIntegrals:\n"
-            "  SubfileName: volume_integrals");
+    const auto factory_event = TestHelpers::test_creation<
+        std::unique_ptr<Event>, metavariables>(
+        "ObserveAtPoint:\n"
+        "  SubfileName: interpolated_data\n"
+        "  Coordinates: " +
+            []() -> std::string {
+          if constexpr (VolumeDim == 1) {
+            return "[0.25]";
+          } else if constexpr (VolumeDim == 2) {
+            return "[0.25, 0.25]";
+          } else if constexpr (VolumeDim == 3) {
+            return "[0.25, 0.25, 0.25]";
+          }
+        }() + "\n"
+              "  TensorsToObserve: [ScalarVar, VectorVar, ScalarVarTimesTwo]");
     auto serialized_event = serialize_and_deserialize(factory_event);
-    test_observe<VolumeDim, ArraySectionIdTag>(std::move(serialized_event),
-                                               section);
+    test_observe<VolumeDim, ArraySectionIdTag>(std::move(serialized_event), 0.,
+                                               true, section);
   }
 }
 
-SPECTRE_TEST_CASE("Unit.Evolution.dG.ObserveVolumeIntegrals",
-                  "[Unit][Evolution]") {
+SPECTRE_TEST_CASE("Unit.Events.ObserveAtPoint", "[Unit]") {
   test_observe_system<1, void>();
   test_observe_system<1, void>("Section0");
   test_observe_system<1, TestSectionIdTag>(std::nullopt);
