@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <type_traits>
 
+#include "ParallelAlgorithms/Events/ObserveAtPoint.hpp"
 #include "ParallelAlgorithms/Events/ObserveErrorNorms.hpp"
 #include "ParallelAlgorithms/Events/ObserveFields.hpp"
 #include "ParallelAlgorithms/Events/ObserveTimeStep.hpp"
@@ -19,6 +20,8 @@ template <size_t VolumeDim, typename TimeTag, typename Fields,
 using field_observations = tmpl::flatten<tmpl::list<
     ObserveFields<VolumeDim, TimeTag, Fields, NonTensorComputeTagsList,
                   SolutionFields, ArraySectionIdTag>,
+    ObserveAtPoint<VolumeDim, TimeTag, Fields, NonTensorComputeTagsList,
+                   ArraySectionIdTag>,
     tmpl::conditional_t<
         std::is_same_v<SolutionFields, tmpl::list<>>, tmpl::list<>,
         ObserveErrorNorms<TimeTag, SolutionFields, ArraySectionIdTag>>>>;
