@@ -149,6 +149,7 @@ spectre_include_directories(${CMAKE_BINARY_DIR}/src/Parallel)
 
 add_subdirectory(external)
 add_subdirectory(src)
+add_subdirectory(support)
 add_subdirectory(tests)
 
 include(PrintUsefulCMakeInfo)
