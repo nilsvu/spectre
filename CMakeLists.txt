@@ -151,6 +151,7 @@ add_subdirectory(external)
 add_subdirectory(src)
 add_subdirectory(support)
 add_subdirectory(tests)
+add_subdirectory(tools)
 
 include(PrintUsefulCMakeInfo)
 
