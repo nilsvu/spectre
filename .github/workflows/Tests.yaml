@@ -327,6 +327,8 @@ jobs:
           - compiler: gcc-8
             build_type: Debug
             PYTHON_EXECUTABLE: /usr/bin/python2
+            # We make no effort to keep Python bindings compatible with Py2.
+            BUILD_PYTHON_BINDINGS: OFF
           # Test building with static libraries. Do so with clang in release
           # mode because these builds use up little disk space compared to GCC
           # builds or clang Debug builds
