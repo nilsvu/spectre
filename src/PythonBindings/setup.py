@@ -4,6 +4,7 @@
 # See LICENSE.txt for details.
 
 from distutils.core import setup
+from setuptools import find_packages
 
 setup(
     name='spectre',
@@ -12,7 +13,8 @@ setup(
     author="SXS collaboration",
     url="@SPECTRE_HOMEPAGE@",
     license="MIT",
-    packages=['spectre'],
+    packages=find_packages(),
+    entry_points={'console_scripts': ['spectre = spectre.__main__:main']},
     install_requires=['h5py', 'numpy', 'scipy'],
     classifiers=[
         "Programming Language :: Python :: 3",

@@ -20,6 +20,21 @@ if(NOT EXISTS "${SPECTRE_PYTHON_PREFIX}/__init__.py")
     "__all__ = []")
 endif()
 
+# Create the root __main__.py entry point
+configure_file(
+  "${CMAKE_SOURCE_DIR}/support/Python/__main__.py"
+  "${SPECTRE_PYTHON_PREFIX}/__main__.py"
+)
+# Also link the main entry point to bin/
+set(PYTHON_SCRIPT_LOCATION "spectre")
+configure_file(
+  "${CMAKE_SOURCE_DIR}/cmake/SpectrePythonExecutable.sh"
+  "${CMAKE_BINARY_DIR}/tmp/spectre")
+file(COPY "${CMAKE_BINARY_DIR}/tmp/spectre"
+  DESTINATION "${CMAKE_BINARY_DIR}/bin"
+  FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ
+    GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+
 # Write a file for installing the Python modules
 configure_file(
   "${CMAKE_SOURCE_DIR}/src/PythonBindings/setup.py"
@@ -245,6 +260,8 @@ function(SPECTRE_PYTHON_ADD_MODULE MODULE_NAME)
     # Write an executable in `${CMAKE_BINARY_DIR}/bin` that runs the Python
     # script in the correct Python environment
     if(${PYTHON_FILE} IN_LIST ARG_PYTHON_EXECUTABLES)
+      set(PYTHON_SCRIPT_LOCATION
+        "${PYTHON_MODULE_LOCATION}.${PYTHON_FILE_JUST_NAME_WE}")
       configure_file(
         "${CMAKE_SOURCE_DIR}/cmake/SpectrePythonExecutable.sh"
         "${CMAKE_BINARY_DIR}/tmp/${PYTHON_FILE_JUST_NAME_WE}")
