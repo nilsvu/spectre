@@ -1,10 +1,10 @@
 #!/bin/bash -
-#SBATCH -J spectre
-#SBATCH --nodes 2
-#SBATCH -t 24:00:00
-#SBATCH -p nr
-#SBATCH -o spectre.out
-#SBATCH -e spectre.out
+#SBATCH -J {{ job_name }}
+#SBATCH --nodes {{ num_nodes }}
+#SBATCH -t {{ time_limit }}
+#SBATCH -p {{ queue }}
+#SBATCH -o {{ out_file }}
+#SBATCH -e {{ out_file }}
 #SBATCH --ntasks-per-node 16
 #SBATCH --no-requeue
 
@@ -28,14 +28,18 @@
 
 # Replace these paths with the path to your build directory and to the
 # directory where you want the output to appear, i.e. the run directory
-export SPECTRE_BUILD_DIR=/work/nfischer/spectre/build_2021-03-18-Release
-export SPECTRE_RUN_DIR=${PWD}
+export SPECTRE_BUILD_DIR={{ build_dir }}
+export SPECTRE_RUN_DIR={{ run_dir }}
 
 # Choose the executable and input file to run
 # To use an input file in the current directory, set
 # SPECTRE_INPUT_FILE to `${PWD}/InputFileName.yaml` or just `InputFileName.yaml`
-export SPECTRE_EXECUTABLE=SolveXcts
-export SPECTRE_INPUT_FILE=Schwarzschild.yaml
+export SPECTRE_EXECUTABLE={{ executable_name }}
+export SPECTRE_INPUT_FILE={{ input_file_path }}
+
+# Choose the number of threads to use per node. Set to 15 to use the full node
+# (leaving one thread free for communication).
+export SPECTRE_PROCS_PER_NODE={{ procs_per_node }}
 
 # --- You probably don't need to edit anything below this line ---
 
@@ -69,5 +73,5 @@ export PATH=${SPECTRE_BUILD_DIR}/bin:$PATH
 #   uses `-np NUM_NODES` and `--map-by ppr:PROCS_PER_NODE:node`. We are
 #   currently using IntelMPI on Minerva.
 mpirun -n ${SLURM_JOB_NUM_NODES} -ppn 1 \
-  ${SPECTRE_EXECUTABLE} +ppn 15 +pemap 0-14 +commap 15 \
+  ${SPECTRE_EXECUTABLE} +ppn ${SPECTRE_PROCS_PER_NODE} +pemap 0-14 +commap 15 \
     --input-file ${SPECTRE_INPUT_FILE}

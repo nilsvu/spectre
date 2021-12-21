@@ -15,7 +15,7 @@ setup(
     license="MIT",
     packages=find_packages(),
     entry_points={'console_scripts': ['spectre = spectre.__main__:main']},
-    install_requires=['h5py', 'numpy', 'scipy'],
+    install_requires=['h5py', 'Jinja2', 'numpy', 'rich', 'scipy'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
