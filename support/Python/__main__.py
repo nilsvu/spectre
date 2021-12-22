@@ -9,6 +9,7 @@ import rich.traceback
 import subprocess
 from spectre.support.Machines import this_machine, UnknownMachineError
 from spectre.support.Schedule import schedule
+from spectre.support.Collect import collect
 
 SPECTRE_HOME = "@CMAKE_SOURCE_DIR@"
 SPECTRE_BUILD_DIR = "@CMAKE_BINARY_DIR@"
@@ -201,19 +202,35 @@ def main():
             default=machine.Scheduler,
             help=("Scheduler used to submit the job."))
 
+    parser_collect = subparsers.add_parser(
+        'collect',
+        help=("Collect data from multiple runs"),
+        description=(
+            "Collect data from multiple runs. You can also use the "
+            "'spectre.support.Collect.collect' function to do so "
+            "programmatically:\n\nspectre.support.Collect.collect:\n\n" +
+            collect.__doc__),
+        formatter_class=HelpFormatter)
+    parser_collect.set_defaults(subprogram=collect)
+    parser_collect.add_argument('input_files',
+                                nargs='+',
+                                help=("Run directories glob."))
+    parser_collect.add_argument('--subfile-patterns', nargs='+')
+
     args = parser.parse_args()
     subprogram = args.subprogram
     del args.subprogram
     del args.subparser
 
     # Parse additional parameters
-    args.num_procs = _parse_param(args.num_procs)
-    args.num_nodes = _parse_param(args.num_nodes)
-    args.procs_per_node = _parse_param(args.procs_per_node)
-    params = args.params
-    del args.params
-    for key, value in params:
-        setattr(args, key, _parse_param(value))
+    if subprogram == schedule:
+        args.num_procs = _parse_param(args.num_procs)
+        args.num_nodes = _parse_param(args.num_nodes)
+        args.procs_per_node = _parse_param(args.procs_per_node)
+        params = args.params
+        del args.params
+        for key, value in params:
+            setattr(args, key, _parse_param(value))
 
     subprogram(**vars(args))
 
