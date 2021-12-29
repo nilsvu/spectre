@@ -1,0 +1,33 @@
+From 7cd62950e7c6a34cda8ffe8de9ea658bc019bc86 Mon Sep 17 00:00:00 2001
+From: Nils Leif Fischer <nils.fischer@aei.mpg.de>
+Date: Thu, 30 Dec 2021 15:38:28 +0100
+Subject: [PATCH] Work around an issue with upstream repos
+
+When an upstream repo defines a package, it is not available locally.
+This leads to an UnknownPackageError during concretization.
+---
+ lib/spack/spack/spec.py | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/lib/spack/spack/spec.py b/lib/spack/spack/spec.py
+index 8523dd6838..dff6218e55 100644
+--- a/lib/spack/spack/spec.py
++++ b/lib/spack/spack/spec.py
+@@ -2531,7 +2531,13 @@ def inject_patches_variant(root):
+         # depends_on(..., patch=...)
+         for dspec in root.traverse_edges(deptype=all,
+                                          cover='edges', root=False):
+-            pkg_deps = dspec.parent.package_class.dependencies
++            try:
++                pkg_deps = dspec.parent.package_class.dependencies
++            except spack.repo.UnknownPackageError:
++                # The package may not be available if it is defined in an
++                # upstream repo
++                continue
++
+             if dspec.spec.name not in pkg_deps:
+                 continue
+
+--
+2.34.1
+
