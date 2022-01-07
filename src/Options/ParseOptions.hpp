@@ -281,6 +281,11 @@ class Parser {
   /// Parse a YAML node containing options
   void parse(const YAML::Node& node);
 
+  /// Parse a YAML file containing multiple documents. Supported is either a
+  /// single document with all options, or two documents of which the first is
+  /// treated as a header and discarded.
+  void parse(const std::vector<YAML::Node>& documents);
+
   /// Overlay data from a YAML node
   template <typename OverlayOptions>
   void overlay(const YAML::Node& node);
@@ -416,7 +421,7 @@ void Parser<OptionList, Group>::parse_file(const std::string& file_name) {
   auto input = Options_detail::open_file(file_name);
   input_source_.push_back(std::string(std::istreambuf_iterator(input), {}));
   try {
-    parse(YAML::Load(input_source_.back()));
+    parse(YAML::LoadAll(input_source_.back()));
   } catch (const YAML::Exception& e) {
     parser_error(e);
   }
@@ -769,6 +774,24 @@ void Parser<OptionList, Group>::parse(const YAML::Node& node) {
   if (std::is_same_v<Group, NoSuchType> and context_.top_level) {
     Parallel::printf_error(
         "The following options differ from their suggested values:\n");
+  }
+}
+
+template <typename OptionList, typename Group>
+void Parser<OptionList, Group>::parse(
+    const std::vector<YAML::Node>& documents) {
+  if (documents.size() == 1) {
+    parse(documents[0]);
+  } else if (documents.size() == 2) {
+    // Treat YAML documents in the same file as header and body. Parse options
+    // from the body, discarding the header.
+    parse(documents[1]);
+  } else {
+    throw std::runtime_error(
+        "The input file must contain either one YAML document with all "
+        "options, or two YAML documents separated by a '---' line. If it "
+        "contains two documents, the first is treated as a header and is "
+        "discarded, and the second is parsed for all options.");
   }
 }
 
