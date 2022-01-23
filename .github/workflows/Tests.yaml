@@ -26,9 +26,9 @@ on:
   # unit tests) also on `push` events. This setup tests merge commits into
   # `develop` and also builds up caches on `develop` that can be re-used by PRs.
   # It also runs the jobs on forks if they have GitHub Actions enabled.
-  push:
-    branches-ignore:
-      - gh-pages
+  # push:
+  #   branches-ignore:
+  #     - gh-pages
   # Allow running the workflow manually to run tests and optionally release a
   # version on success (see the dev guide on "Automatic versioning")
   workflow_dispatch:
