@@ -32,7 +32,9 @@ add_spectre_executable(
 
   # The following lines list the source files with tests in them to be
   # compiled into the executable.
-  ../DataStructures/Test_DataVector.cpp
+  ../PointwiseFunctions/AnalyticSolutions/GeneralRelativity/Test_Tov.cpp
+  ../PointwiseFunctions/AnalyticData/GrMhd/Test_MagnetizedTovStar.cpp
+  ../PointwiseFunctions/AnalyticSolutions/RelativisticEuler/Test_TovStar.cpp
   )
 
 # Modify which libraries to link for your test case.
@@ -40,6 +42,16 @@ target_link_libraries(
   ${EXECUTABLE}
   PRIVATE
   DataStructures
+  Domain
+  DomainCreators
+  Hydro
+  RelativisticEulerSolutions
+  GrMhdAnalyticData
+  Options
+  Spectral
+  Utilities
+  ValenciaDivClean
+  CoordinateMaps
   )
 
 # Core required libraries
