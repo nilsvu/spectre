@@ -161,6 +161,7 @@ ${{ env.CACHE_KEY_SUFFIX }}"
         if: github.ref != 'refs/heads/develop'
         run: |
           rm -rf $HOME/dependencies
+          ccache --clear
           rm -rf $CCACHE_DIR
       - name: Update dependency cache
         if: github.ref == 'refs/heads/develop'
