@@ -36,6 +36,17 @@ template <typename System, size_t Dim = System::volume_dim,
 struct AnalyticSolution;
 /// \endcond
 
+namespace detail {
+template <typename... FieldTags>
+struct BoundaryConditionTypes
+    : tuples::TaggedTuple<elliptic::Tags::BoundaryConditionType<FieldTags>...> {
+  using options =
+      tmpl::list<elliptic::OptionTags::BoundaryConditionType<FieldTags>...>;
+  static constexpr Options::String help =
+      "Type of boundary conditions to impose on each variable";
+};
+}  // namespace detail
+
 /*!
  * \brief Impose the analytic solution on the boundary. Works only if an
  * analytic solution exists.
@@ -59,10 +70,25 @@ class AnalyticSolution<System, Dim, tmpl::list<FieldTags...>,
   using Base = BoundaryCondition<Dim>;
 
  public:
-  using options =
-      tmpl::list<elliptic::OptionTags::BoundaryConditionType<FieldTags>...>;
+  static std::string name() { return "Analytic"; }
+
+  struct Solution {
+    using type = std::unique_ptr<elliptic::analytic_data::AnalyticSolution>;
+    static constexpr Options::String help =
+        "The analytic solution to impose at this boundary";
+  };
+
+  struct BoundaryConditionTypes {
+    static std::string name() { return "Type"; }
+    using type = std::variant<elliptic::BoundaryConditionType,
+                              detail::BoundaryConditionTypes<FieldTags...>>;
+    static constexpr Options::String help =
+        "The analytic solution to impose at this boundary";
+  };
+
+  using options = tmpl::list<Solution, BoundaryConditionTypes>;
   static constexpr Options::String help =
-      "Boundary conditions from the analytic solution";
+      "Boundary conditions from an analytic solution";
 
   AnalyticSolution() = default;
   AnalyticSolution(const AnalyticSolution&) = default;
@@ -77,13 +103,34 @@ class AnalyticSolution<System, Dim, tmpl::list<FieldTags...>,
   WRAPPED_PUPable_decl_template(AnalyticSolution);
   /// \endcond
 
-  /// Select which `elliptic::BoundaryConditionType` to apply for each field
-  explicit AnalyticSolution(
-      // This pack expansion repeats the type `elliptic::BoundaryConditionType`
-      // for each system field
-      const typename elliptic::OptionTags::BoundaryConditionType<
-          FieldTags>::type... boundary_condition_types)
-      : boundary_condition_types_{boundary_condition_types...} {}
+  AnalyticSolution(
+      std::unique_ptr<elliptic::analytic_data::AnalyticSolution> solution,
+      tuples::TaggedTuple<elliptic::Tags::BoundaryConditionType<FieldTags>...>
+          boundary_condition_types)
+      : solution_(std::move(solution)),
+        boundary_condition_types_(std::move(boundary_condition_types)) {}
+
+  AnalyticSolution(
+      std::unique_ptr<elliptic::analytic_data::AnalyticSolution> solution,
+      const typename BoundaryConditionTypes::type& boundary_condition_types)
+      : solution_(std::move(solution)) {
+    std::visit(
+        make_overloader(
+            [this](const elliptic::BoundaryConditionType local_bc_type) {
+              expand_pack(
+                  (get<elliptic::Tags::BoundaryConditionType<FieldTags>>(
+                       boundary_condition_types_) = local_bc_type)...);
+            },
+            [this](const detail::BoundaryConditionTypes<FieldTags...>&
+                       local_bc_types) {
+              expand_pack(
+                  (get<elliptic::Tags::BoundaryConditionType<FieldTags>>(
+                       boundary_condition_types_) =
+                       get<elliptic::Tags::BoundaryConditionType<FieldTags>>(
+                           local_bc_types))...);
+            }),
+        boundary_condition_types);
+  }
 
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition> get_clone()
       const override {
@@ -102,7 +149,6 @@ class AnalyticSolution<System, Dim, tmpl::list<FieldTags...>,
   using volume_tags =
       tmpl::list<::Tags::AnalyticSolutionsBase, domain::Tags::Mesh<Dim>>;
 
-  template <typename OptionalAnalyticSolutions>
   void apply(const gsl::not_null<typename FieldTags::type*>... fields,
              const gsl::not_null<typename FieldTags::type*>... n_dot_fluxes,
              const OptionalAnalyticSolutions& optional_analytic_solutions,
@@ -206,6 +252,7 @@ class AnalyticSolution<System, Dim, tmpl::list<FieldTags...>,
     return not(lhs == rhs);
   }
 
+  std::unique_ptr<elliptic::analytic_data::AnalyticSolution> solution_;
   tuples::TaggedTuple<elliptic::Tags::BoundaryConditionType<FieldTags>...>
       boundary_condition_types_{};
 };

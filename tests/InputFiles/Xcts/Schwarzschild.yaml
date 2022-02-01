@@ -14,7 +14,7 @@
 #     SkipColumns: [0, 1]
 #     AbsoluteTolerance: 0.12
 
-Background:
+Background: &background
   Schwarzschild:
     Mass: 1.
     Coordinates: Isotropic
@@ -35,10 +35,9 @@ DomainCreator:
     TimeDependence: None
     BoundaryConditions:
       InnerBoundary:
-        AnalyticSolution:
-          ConformalFactor: Dirichlet
-          LapseTimesConformalFactor: Dirichlet
-          ShiftExcess: Dirichlet
+        Analytic:
+          Solution: *background
+          Type: Dirichlet
       OuterBoundary:
         AnalyticSolution:
           ConformalFactor: Dirichlet
