@@ -231,6 +231,10 @@ Importers:
     FileGlob: "/path/to/initial_data.h5"
     Subgroup: "element_data"
     ObservationValue: Last
+    Variables:
+      SpacetimeMetric: SpacetimeMetric
+      Pi: Pi
+      Phi: Phi
 
 # control.h5 should contain data for FunctionsOfTime that can be
 # read by ReadSpecPiecewisePolynomial.
