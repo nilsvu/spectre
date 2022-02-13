@@ -4,10 +4,11 @@
 #pragma once
 
 #include <algorithm>
+#include <blaze/math/CompressedMatrix.h>
 #include <cstddef>
 #include <tuple>
 
-#include "DataStructures/DenseMatrix.hpp"
+#include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TypeTraits/CreateIsCallable.hpp"
 
@@ -38,14 +39,16 @@ CREATE_IS_CALLABLE_V(reset)
  * \param operator_args These arguments are passed along to the
  * `linear_operator` when it is applied to an operand.
  */
-template <typename LinearOperator, typename OperandType, typename ResultType,
-          typename... OperatorArgs>
+template <bool SO, typename BlazeGroup, typename LinearOperator,
+          typename OperandType, typename ResultType, typename... OperatorArgs>
 void build_matrix(
-    const gsl::not_null<DenseMatrix<double, blaze::columnMajor>*> matrix,
+    const gsl::not_null<blaze::CompressedMatrix<double, SO, BlazeGroup>*>
+        matrix,
     const gsl::not_null<OperandType*> operand_buffer,
     const gsl::not_null<ResultType*> result_buffer,
     const LinearOperator& linear_operator,
     const std::tuple<OperatorArgs...>& operator_args = {}) {
+  matrix->clear();
   size_t i = 0;
   // Re-using the iterators for all operator invocations
   auto result_iterator_begin = result_buffer->begin();
@@ -70,8 +73,12 @@ void build_matrix(
       result_iterator_end = result_buffer->end();
     }
     // Store the result in column i of the matrix
-    std::copy(result_iterator_begin, result_iterator_end,
-              column(*matrix, i).begin());
+    for (size_t j = 0; j < matrix->rows(); ++j) {
+      if (not equal_within_roundoff(*result_iterator_begin, 0.)) {
+        matrix->set(j, i, *result_iterator_begin);
+      }
+      ++result_iterator_begin;
+    }
     ++i;
   }
 }

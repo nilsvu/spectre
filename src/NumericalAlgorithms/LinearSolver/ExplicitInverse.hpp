@@ -4,14 +4,15 @@
 #pragma once
 
 #include <algorithm>
+#include <blaze/math/CompressedMatrix.h>
+#include <blaze/math/DynamicVector.h>
 #include <cstddef>
 #include <tuple>
 #include <vector>
 
-#include "DataStructures/DenseMatrix.hpp"
-#include "DataStructures/DenseVector.hpp"
 #include "NumericalAlgorithms/Convergence/HasConverged.hpp"
 #include "NumericalAlgorithms/LinearSolver/BuildMatrix.hpp"
+#include "NumericalAlgorithms/LinearSolver/IncompleteLU.hpp"
 #include "NumericalAlgorithms/LinearSolver/LinearSolver.hpp"
 #include "Options/Options.hpp"
 #include "Parallel/CharmPupable.hpp"
@@ -121,14 +122,10 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
   /// Size of the operator. The stored matrix will have `size^2` entries.
   size_t size() const { return size_; }
 
-  /// The matrix representation of the solver. This matrix approximates the
-  /// inverse of the subdomain operator.
-  const DenseMatrix<double>& matrix_representation() const { return inverse_; }
-
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p) override {
     p | size_;
-    p | inverse_;
+    p | ilu_;
     if (p.isUnpacking() and size_ != std::numeric_limits<size_t>::max()) {
       source_workspace_.resize(size_);
       solution_workspace_.resize(size_);
@@ -142,11 +139,11 @@ class ExplicitInverse : public LinearSolver<LinearSolverRegistrars> {
  private:
   // Caches for successive solves of the same operator
   mutable size_t size_ = std::numeric_limits<size_t>::max();
-  mutable DenseMatrix<double, blaze::columnMajor> inverse_{};
+  mutable IncompleteLU<double> ilu_{};
 
   // Buffers to avoid re-allocating memory for applying the operator
-  mutable DenseVector<double> source_workspace_{};
-  mutable DenseVector<double> solution_workspace_{};
+  mutable blaze::DynamicVector<double> source_workspace_{};
+  mutable blaze::DynamicVector<double> solution_workspace_{};
 };
 
 template <typename LinearSolverRegistrars>
@@ -161,28 +158,25 @@ Convergence::HasConverged ExplicitInverse<LinearSolverRegistrars>::solve(
     size_ = used_for_size.size();
     source_workspace_.resize(size_);
     solution_workspace_.resize(size_);
-    inverse_.resize(size_, size_);
     // Construct explicit matrix representation by "sniffing out" the operator,
     // i.e. feeding it unit vectors
+    blaze::CompressedMatrix<double, blaze::rowMajor> operator_matrix{size_,
+                                                                     size_};
     auto operand_buffer = make_with_value<VarsType>(used_for_size, 0.);
     auto result_buffer = make_with_value<SourceType>(used_for_size, 0.);
-    build_matrix(make_not_null(&inverse_), make_not_null(&operand_buffer),
-                 make_not_null(&result_buffer), linear_operator, operator_args);
-    // Directly invert the matrix
-    try {
-      blaze::invert(inverse_);
-    } catch (const std::invalid_argument& e) {
-      ERROR("Could not invert subdomain matrix (size " << size_
-                                                       << "): " << e.what());
-    }
+    build_matrix(make_not_null(&operator_matrix),
+                 make_not_null(&operand_buffer), make_not_null(&result_buffer),
+                 linear_operator, operator_args);
+    // Compute ILU factorization
+    ilu_.compute(operator_matrix);
   }
   // Copy source into contiguous workspace. In cases where the source and
   // solution data are already stored contiguously we might avoid the copy and
   // the associated workspace memory. However, compared to the cost of building
   // and storing the matrix this is likely insignificant.
   std::copy(source.begin(), source.end(), source_workspace_.begin());
-  // Apply inverse
-  solution_workspace_ = inverse_ * source_workspace_;
+  // Apply (approximate) inverse
+  ilu_.solve(solution_workspace_, source_workspace_);
   // Reconstruct solution data from contiguous workspace
   std::copy(solution_workspace_.begin(), solution_workspace_.end(),
             solution->begin());
