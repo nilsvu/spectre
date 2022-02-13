@@ -67,7 +67,11 @@ target_link_libraries(
   Utilities
   )
 
+add_subdirectory(CompressedMatrix)
+add_subdirectory(CompressedVector)
 add_subdirectory(DataBox)
+add_subdirectory(DynamicMatrix)
+add_subdirectory(DynamicVector)
 add_subdirectory(Python)
 add_subdirectory(Tags)
 add_subdirectory(Tensor)
