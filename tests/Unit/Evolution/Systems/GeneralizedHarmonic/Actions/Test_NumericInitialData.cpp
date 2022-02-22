@@ -90,6 +90,18 @@ struct MockReadVolumeData {
                 selected_fields) == "CustomPi");
       CHECK(get<importers::Tags::Selected<Tags::Phi<3, Frame::Inertial>>>(
                 selected_fields) == "CustomPhi");
+      CHECK_FALSE(get<importers::Tags::Selected<
+                      gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>>>(
+          selected_fields));
+      CHECK_FALSE(get<importers::Tags::Selected<gr::Tags::Lapse<DataVector>>>(
+          selected_fields));
+      CHECK_FALSE(get<importers::Tags::Selected<
+                      gr::Tags::Shift<3, Frame::Inertial, DataVector>>>(
+          selected_fields));
+      CHECK_FALSE(
+          get<importers::Tags::Selected<
+              gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector>>>(
+              selected_fields));
     } else if (std::holds_alternative<detail::Adm>(selected_vars)) {
       CHECK(get<importers::Tags::Selected<
                 gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>>>(
@@ -102,6 +114,14 @@ struct MockReadVolumeData {
       CHECK(get<importers::Tags::Selected<
                 gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector>>>(
                 selected_fields) == "CustomExtrinsicCurvature");
+      CHECK_FALSE(
+          get<importers::Tags::Selected<
+              gr::Tags::SpacetimeMetric<3, Frame::Inertial, DataVector>>>(
+              selected_fields));
+      CHECK_FALSE(get<importers::Tags::Selected<Tags::Pi<3, Frame::Inertial>>>(
+          selected_fields));
+      CHECK_FALSE(get<importers::Tags::Selected<Tags::Phi<3, Frame::Inertial>>>(
+          selected_fields));
     } else {
       REQUIRE(false);
     }
@@ -234,7 +254,8 @@ void test_numeric_initial_data(
   // SetNumericInitialData
   ActionTesting::next_action<element_array>(make_not_null(&runner), element_id);
 
-  // Check result
+  // Check result. These variables are not particularly precise because we are
+  // taking numerical derivatives on a fairly coarse wedge-shaped grid.
   Approx custom_approx = Approx::custom().epsilon(1.e-3).scale(1.0);
   CHECK_ITERABLE_CUSTOM_APPROX(
       get_element_tag(

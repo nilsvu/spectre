@@ -82,9 +82,9 @@ struct GeneralizedHarmonic
   using Base::TaggedTuple;
 };
 
-// Collect all variables that we support loading from volume data files
-using all_numeric_vars =
-    tmpl::remove_duplicates<tmpl::append<adm_vars, gh_vars>>;
+// Collect all variables that we support loading from volume data files.
+// Remember to `tmpl::remove_duplicates` when adding overlapping sets of vars.
+using all_numeric_vars = tmpl::append<adm_vars, gh_vars>;
 
 namespace OptionTags {
 template <typename ImporterOptionsGroup>
