@@ -32,15 +32,18 @@ PhaseChangeAndTriggers:
 DomainCreator:
   Shell:
     InnerRadius: 1.9
-    OuterRadius: 2.3
+    OuterRadius: 10.
     InitialRefinement: 0
-    InitialGridPoints: [5, 5]
+    InitialGridPoints: [8, 8]
     UseEquiangularMap: true
     EquatorialCompression: None
     RadialPartitioning: []
     RadialDistribution: [Logarithmic]
     WhichWedges: All
-    TimeDependence: None
+    TimeDependence:
+      UniformRotationAboutZAxis:
+        InitialTime: 0.
+        AngularVelocity: 0.
     BoundaryConditions:
       InnerBoundary: DirichletAnalytic
       OuterBoundary: DirichletAnalytic
@@ -50,6 +53,17 @@ AnalyticSolution:
     Mass: 1.0
     Spin: [0.0, 0.0, 0.0]
     Center: [0.0, 0.0, 0.0]
+
+Importers:
+  NumericInitialData:
+    FileName: KerrVolume*.h5
+    Subgroup: VolumeData
+    ObservationValue: Last
+    Variables:
+      Lapse: Lapse
+      Shift: ShiftExcess
+      SpatialMetric: SpatialMetric
+      ExtrinsicCurvature: ExtrinsicCurvature
 
 EvolutionSystem:
   GeneralizedHarmonic:

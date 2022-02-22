@@ -1,0 +1,117 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveXcts
+# Check: parse
+
+Background: &background
+  Kerr:
+    Mass: 1.
+    Spin: [0., 0., 0.]
+    Center: [0., 0., 0.]
+
+InitialGuess: *background
+
+DomainCreator:
+  Shell:
+    InnerRadius: 1.9
+    OuterRadius: 10.
+    InitialRefinement: 0
+    InitialGridPoints: [8, 8]
+    UseEquiangularMap: True
+    EquatorialCompression: None
+    WhichWedges: All
+    RadialPartitioning: []
+    RadialDistribution: [Logarithmic]
+    TimeDependence: None
+    BoundaryConditions:
+      InnerBoundary:
+        AnalyticSolution:
+          ConformalFactor: Dirichlet
+          LapseTimesConformalFactor: Dirichlet
+          ShiftExcess: Dirichlet
+      OuterBoundary:
+        AnalyticSolution:
+          ConformalFactor: Dirichlet
+          LapseTimesConformalFactor: Dirichlet
+          ShiftExcess: Dirichlet
+
+Discretization:
+  DiscontinuousGalerkin:
+    PenaltyParameter: 1.
+    Massive: True
+
+Observers:
+  VolumeFileName: "KerrVolume"
+  ReductionFileName: "KerrReductions"
+
+NonlinearSolver:
+  NewtonRaphson:
+    ConvergenceCriteria:
+      MaxIterations: 20
+      RelativeResidual: 1.e-10
+      AbsoluteResidual: 1.e-12
+    SufficientDecrease: 1.e-4
+    MaxGlobalizationSteps: 40
+    DampingFactor: 1.
+    Verbosity: Quiet
+
+LinearSolver:
+  Gmres:
+    ConvergenceCriteria:
+      MaxIterations: 100
+      RelativeResidual: 1.e-4
+      AbsoluteResidual: 1.e-12
+    Verbosity: Quiet
+
+  Multigrid:
+    Iterations: 1
+    MaxLevels: Auto
+    PreSmoothing: True
+    PostSmoothingAtBottom: False
+    Verbosity: Silent
+    OutputVolumeData: False
+
+  SchwarzSmoother:
+    Iterations: 3
+    MaxOverlap: 2
+    Verbosity: Silent
+    SubdomainSolver:
+      Gmres:
+        ConvergenceCriteria:
+          MaxIterations: 3
+          RelativeResidual: 1.e-4
+          AbsoluteResidual: 1.e-12
+        Verbosity: Silent
+        Restart: None
+        Preconditioner:
+          MinusLaplacian:
+            Solver: ExplicitInverse
+            BoundaryConditions: Auto
+    SkipResets: True
+    ObservePerCoreReductions: False
+
+EventsAndTriggers:
+  ? HasConverged
+  : - ObserveErrorNorms:
+        SubfileName: ErrorNorms
+    - ObserveNorms:
+        SubfileName: Norms
+        TensorsToObserve:
+          - Name: HamiltonianConstraint
+            NormType: L2Norm
+            Components: Individual
+          - Name: MomentumConstraint
+            NormType: L2Norm
+            Components: Individual
+    - ObserveFields:
+        SubfileName: VolumeData
+        VariablesToObserve:
+          - ConformalFactor
+          - Lapse
+          - Shift
+          - SpatialMetric
+          - ExtrinsicCurvature
+        InterpolateToMesh: None
+        CoordinatesFloatingPointType: Double
+        FloatingPointTypes: [Double]
