@@ -141,6 +141,8 @@ endif()
 include(CodeCoverageDetection)
 include(SpectreAddLibraries)
 
+include(InstallMissingPyDeps)
+
 include(SpectreSetupTesting)
 if(BUILD_TESTING)
   include(SetupCatch)

@@ -10,9 +10,12 @@ set(_TEST_ENV_VARS "")
 # - Disable ASAN's leak sanitizer because Charm++ has false positives
 list(APPEND _TEST_ENV_VARS "ASAN_OPTIONS=detect_leaks=0")
 # - Set PYTHONPATH to find Python modules
+set(_PYTHONPATH "${SPECTRE_PYTHON_PREFIX_PARENT}:\
+${SPECTRE_PYTHON_SITE_PACKAGES}")
 if(DEFINED ENV{PYTHONPATH})
-  list(APPEND _TEST_ENV_VARS "PYTHONPATH=$ENV{PYTHONPATH}")
+  set(_PYTHONPATH "${_PYTHONPATH}:$ENV{PYTHONPATH}")
 endif()
+list(APPEND _TEST_ENV_VARS "PYTHONPATH=${_PYTHONPATH}")
 
 function(add_single_input_file_test INPUT_FILE EXECUTABLE COMMAND_LINE_ARGS
                                     CHECK_TYPE TIMEOUT)
