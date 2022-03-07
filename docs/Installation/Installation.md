@@ -109,6 +109,17 @@ all of these dependencies.
   graph partition based load balancer in charm++.
 * [ffmpeg](https://www.ffmpeg.org/) - for animating 1d simulations with matplotlib
 
+### Python packages:
+
+You can set `INSTALL_PY_DEPS=ON` in the CMake configuration to install these
+Python packages in the build directory automatically,
+or run `pip install -e BUILD_DIR/bin/python` to install the SpECTRE Python
+package and its dependencies in your
+[Python environment](https://docs.python.org/3/library/venv.html).
+
+- [click](https://click.palletsprojects.com) - to compose our Python CLI,
+  load subcommands lazily, and for autocompletion
+
 ## Clone the SpECTRE repository
 
 First, clone the [SpECTRE repository](https://github.com/sxs-collaboration/spectre)
