@@ -119,6 +119,7 @@ package and its dependencies in your
 
 - [click](https://click.palletsprojects.com) - to compose our Python CLI,
   load subcommands lazily, and for autocompletion
+- [rich](https://rich.readthedocs.io) - to format CLI output and tracebacks
 
 ## Clone the SpECTRE repository
 
