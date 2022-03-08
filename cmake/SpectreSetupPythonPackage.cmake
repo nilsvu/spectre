@@ -25,6 +25,9 @@ get_filename_component(
   SPECTRE_PYTHON_PREFIX_PARENT
   "${SPECTRE_PYTHON_PREFIX}/.." ABSOLUTE)
 
+message(STATUS "Configure Python package in: ${SPECTRE_PYTHON_PREFIX_PARENT}")
+message(STATUS "Install it with: pip install -e ${SPECTRE_PYTHON_PREFIX_PARENT}")
+
 # Create the root __init__.py file
 if(NOT EXISTS "${SPECTRE_PYTHON_PREFIX}/__init__.py")
   file(WRITE
