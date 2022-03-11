@@ -49,6 +49,20 @@ Shape::Shape(
                              << l_max << ", m_max = " << m_max);
 }
 
+Shape& Shape::operator=(const Shape& rhs) {
+  if (*this != rhs) {
+    f_of_t_name_ = rhs.f_of_t_name_;
+    center_ = rhs.center_;
+    l_max_ = rhs.l_max_;
+    m_max_ = rhs.m_max_;
+    ylm_ = rhs.ylm_;
+    transition_func_ = rhs.transition_func_->get_clone();
+  }
+  return *this;
+}
+
+Shape::Shape(const Shape& rhs) { *this = rhs; }
+
 template <typename T>
 std::array<tt::remove_cvref_wrap_t<T>, 3> Shape::operator()(
     const std::array<T, 3>& source_coords, const double time,
