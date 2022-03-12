@@ -15,7 +15,7 @@ namespace domain::CoordinateMaps {
 
 /*!
  * \brief Distorts cartesian coordinates \f$x^i\f$ such that a coordinate sphere
- * \f$\delta_{ij}x^ix^j=C\f$ is mapped to an ellipsoid of constant
+ * \f$\delta_{ij}x^ix^j=C^2\f$ is mapped to an ellipsoid of constant
  * Kerr-Schild radius \f$r=C\f$.
  *
  * The Kerr-Schild radius \f$r\f$ is defined as the largest positive
@@ -69,7 +69,10 @@ class KerrHorizonConforming {
   static constexpr size_t dim = 3;
   /*!
    * constructs a Kerr horizon conforming map.
-   * \param spin : the dimensionless spin
+   * \param spin The spin parameter $\vec{a} = \frac{\vec{S}}{M} =
+   * M \vec{\chi}$, where $M$ is the Kerr mass parameter, $\vec{S}$ is the
+   * angular momentum or quasilocal spin, and $\vec{\chi}$ is the
+   * dimensionless spin.
    */
   explicit KerrHorizonConforming(std::array<double, 3> spin);
 
