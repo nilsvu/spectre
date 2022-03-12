@@ -241,11 +241,12 @@ void generate_random_map_time_and_f_of_time(
 }
 
 template <typename TransitionFunction>
-void test_map_helpers(const TransitionFunction& transition_func, size_t l_max,
-                      size_t m_max, gsl::not_null<std::mt19937*> generator) {
-  std::uniform_real_distribution dist{-10., 10.};
+void test_map_helpers(const TransitionFunction& transition_func,
+                      std::uniform_real_distribution<double> dist_coords,
+                      size_t l_max, size_t m_max,
+                      gsl::not_null<std::mt19937*> generator) {
   const auto center =
-      make_with_random_values<std::array<double, 3>>(generator, dist, 3);
+      make_with_random_values<std::array<double, 3>>(generator, dist_coords, 3);
 
   FunctionsOfTimeMap functions_of_time{};
   double time{};
@@ -259,7 +260,8 @@ void test_map_helpers(const TransitionFunction& transition_func, size_t l_max,
       spherepack_coefs, false, generator);
 
   const auto random_point =
-      make_with_random_values<std::array<double, 3>>(generator, dist, 3);
+      center +
+      make_with_random_values<std::array<double, 3>>(generator, dist_coords, 3);
 
   // Check map against a suite of functions in
   // tests/Unit/Helpers/Domain/CoordinateMaps/TestMapHelpers.hpp
@@ -301,14 +303,15 @@ std::array<DataVector, 3> calculate_analytical_map(
 }
 
 template <typename TransitionFunction>
-void test_analytical_solution(const TransitionFunction& transition_func,
-                              size_t l_max, size_t m_max, size_t num_points,
-                              gsl::not_null<std::mt19937*> generator) {
-  std::uniform_real_distribution dist{-10., 10.};
+void test_analytical_solution(
+    const TransitionFunction& transition_func,
+    std::uniform_real_distribution<double> dist_coords, size_t l_max,
+    size_t m_max, size_t num_points, gsl::not_null<std::mt19937*> generator) {
   const auto center =
-      make_with_random_values<std::array<double, 3>>(generator, dist, 3);
-  const auto target_data = make_with_random_values<std::array<DataVector, 3>>(
-      generator, dist, num_points);
+      make_with_random_values<std::array<double, 3>>(generator, dist_coords, 3);
+  const auto target_data =
+      center + make_with_random_values<std::array<DataVector, 3>>(
+                   generator, dist_coords, num_points);
 
   const auto random_coefs = generate_random_coefs(l_max, m_max, generator);
 
@@ -384,14 +387,15 @@ tnsr::Ij<DataVector, 3, Frame::NoFrame> calculate_analytical_jacobian(
 }
 
 template <typename TransitionFunction>
-void test_analytical_jacobian(const TransitionFunction& transition_func,
-                              size_t l_max, size_t m_max, size_t num_points,
-                              gsl::not_null<std::mt19937*> generator) {
-  std::uniform_real_distribution dist{-10., 10.};
+void test_analytical_jacobian(
+    const TransitionFunction& transition_func,
+    std::uniform_real_distribution<double> dist_coords, size_t l_max,
+    size_t m_max, size_t num_points, gsl::not_null<std::mt19937*> generator) {
   const auto center =
-      make_with_random_values<std::array<double, 3>>(generator, dist, 3);
-  auto target_data = make_with_random_values<std::array<DataVector, 3>>(
-      generator, dist, num_points);
+      make_with_random_values<std::array<double, 3>>(generator, dist_coords, 3);
+  auto target_data =
+      center + make_with_random_values<std::array<DataVector, 3>>(
+                   generator, dist_coords, num_points);
 
   // the analytical solution divides by sin(theta), so it might get into
   // trouble at the poles, although it appeared fine without this safety
@@ -431,38 +435,35 @@ SPECTRE_TEST_CASE("Unit.Domain.CoordinateMaps.TimeDependent.Shape",
   domain::CoordinateMaps::ShapeMapTransitionFunctions::
       register_derived_with_charm();
 
+  const CoordinateMaps::ShapeMapTransitionFunctions::SphereTransition
+      sphere_transition{2., 100.};
   MAKE_GENERATOR(generator);
+  std::uniform_real_distribution<double> dist_coords{2., 10.};
   {
-    const CoordinateMaps::ShapeMapTransitionFunctions::SphereTransition
-        sphere_transition{1e-7, 100.};
     INFO("Testing MapHelpers");
     for (size_t l_max = 2; l_max < 12; ++l_max) {
       for (size_t m_max = 2; m_max <= l_max; ++m_max) {
         CAPTURE(l_max, m_max);
-        test_map_helpers(sphere_transition, l_max, m_max,
+        test_map_helpers(sphere_transition, dist_coords, l_max, m_max,
                          make_not_null(&generator));
       }
     }
   }
   {
     INFO("Testing analytical solution");
-    const CoordinateMaps::ShapeMapTransitionFunctions::SphereTransition
-        sphere_transition{1e-7, 100.};
     for (size_t l_max = 2; l_max <= 3; ++l_max) {
       for (size_t m_max = 2; m_max <= l_max; ++m_max) {
         CAPTURE(l_max, m_max);
-        test_analytical_solution(sphere_transition, l_max, m_max, 1000,
-                                 make_not_null(&generator));
+        test_analytical_solution(sphere_transition, dist_coords, l_max, m_max,
+                                 1000, make_not_null(&generator));
       }
     }
   }
   {
     INFO("Testing analytical gradient");
-    const CoordinateMaps::ShapeMapTransitionFunctions::SphereTransition
-        sphere_transition{1e-7, 100.};
     const size_t l_max = 2;
     const size_t m_max = 2;
-    test_analytical_jacobian(sphere_transition, l_max, m_max, 1000,
+    test_analytical_jacobian(sphere_transition, dist_coords, l_max, m_max, 1000,
                              make_not_null(&generator));
   }
 }
