@@ -29,7 +29,7 @@ class SphereTransition final : public ShapeMapTransitionFunction {
 
   std::optional<double> original_radius_over_radius(
       const std::array<double, 3>& target_coords,
-      double distorted_radius) const override;
+      double radial_distortion) const override;
 
   double map_over_radius(
       const std::array<double, 3>& source_coords) const override;
