@@ -310,6 +310,11 @@ class Wedge {
   Wedge& operator=(const Wedge&) = default;
   Wedge& operator=(Wedge&&) = default;
 
+  double radius_inner() const { return radius_inner_; }
+  double radius_outer() const { return radius_outer_; }
+  double sphericity_inner() const { return sphericity_inner_; }
+  double sphericity_outer() const { return sphericity_outer_; }
+
   template <typename T>
   std::array<tt::remove_cvref_wrap_t<T>, Dim> operator()(
       const std::array<T, Dim>& source_coords) const;
