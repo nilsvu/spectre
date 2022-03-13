@@ -36,6 +36,8 @@
 #include "Domain/CoordinateMaps/TimeDependent/ProductMaps.hpp"
 #include "Domain/CoordinateMaps/TimeDependent/ProductMaps.tpp"
 #include "Domain/CoordinateMaps/TimeDependent/Rotation.hpp"
+#include "Domain/CoordinateMaps/TimeDependent/Shape.hpp"
+#include "Domain/CoordinateMaps/TimeDependent/ShapeMapTransitionFunctions/SphereTransition.hpp"
 #include "Domain/CoordinateMaps/TimeDependent/SphericalCompression.hpp"
 #include "Domain/CoordinateMaps/Wedge.hpp"
 #include "Domain/Creators/DomainCreator.hpp"  // IWYU pragma: keep
@@ -358,14 +360,43 @@ Domain<3> BinaryCompactObject::create_domain() const {
       Affine{-1.0, 1.0, -1.0 + object_B_.x_coord, 1.0 + object_B_.x_coord},
       Identity2D{}};
 
-  Maps maps_center_A =
-      domain::make_vector_coordinate_map_base<Frame::BlockLogical,
-                                              Frame::Inertial, 3>(
-          sph_wedge_coordinate_maps(object_A_.inner_radius,
-                                    object_A_.outer_radius, inner_sphericity_A,
-                                    1.0, use_equiangular_map_, false, {},
-                                    object_A_radial_distribution),
-          translation_A);
+  const auto make_center_maps = [](std::vector<CoordinateMaps::Wedge<3>>
+                                       local_wedges,
+                                   const Translation& local_translation,
+                                   const Object& local_object) {
+    if (local_object.shape.has_value()) {
+      const auto& kerr_horizon = local_object.shape.value();
+      const size_t l_max = kerr_horizon.modes[0];
+      const size_t m_max = kerr_horizon.modes[1];
+      const YlmSpherepack ylm{l_max, m_max};
+      const DataVector radial_distortion =
+          1. - get(gr::Solutions::kerr_horizon_radius(
+                   ylm.theta_phi_points(), kerr_horizon.mass,
+                   kerr_horizon.dimensionless_spin)) /
+                   local_object.inner_radius;
+      auto radial_distortion_coefs = ylm.phys_to_spec(radial_distortion);
+      const domain::CoordinateMaps::TimeDependent::Shape shape_map{
+          {{local_object.x_coord, 0., 0.}},
+          l_max,
+          m_max,
+          std::make_unique<domain::CoordinateMaps::ShapeMapTransitionFunctions::
+                               SphereTransition>(local_object.inner_radius,
+                                                 local_object.outer_radius),
+          std::move(radial_distortion_coefs)};
+      return domain::make_vector_coordinate_map_base<Frame::BlockLogical,
+                                                     Frame::Inertial, 3>(
+          std::move(local_wedges), local_translation, shape_map);
+    } else {
+      return domain::make_vector_coordinate_map_base<Frame::BlockLogical,
+                                                     Frame::Inertial, 3>(
+          std::move(local_wedges), local_translation);
+    }
+  };
+  Maps maps_center_A = make_center_maps(
+      sph_wedge_coordinate_maps(object_A_.inner_radius, object_A_.outer_radius,
+                                inner_sphericity_A, 1.0, use_equiangular_map_,
+                                false, {}, object_A_radial_distribution),
+      translation_A, object_A_);
   Maps maps_cube_A =
       domain::make_vector_coordinate_map_base<Frame::BlockLogical,
                                               Frame::Inertial, 3>(
@@ -373,14 +404,11 @@ Domain<3> BinaryCompactObject::create_domain() const {
                                     sqrt(3.0) * 0.5 * length_inner_cube_, 1.0,
                                     0.0, use_equiangular_map_),
           translation_A);
-  Maps maps_center_B =
-      domain::make_vector_coordinate_map_base<Frame::BlockLogical,
-                                              Frame::Inertial, 3>(
-          sph_wedge_coordinate_maps(object_B_.inner_radius,
-                                    object_B_.outer_radius, inner_sphericity_B,
-                                    1.0, use_equiangular_map_, false, {},
-                                    object_B_radial_distribution),
-          translation_B);
+  Maps maps_center_B = make_center_maps(
+      sph_wedge_coordinate_maps(object_B_.inner_radius, object_B_.outer_radius,
+                                inner_sphericity_B, 1.0, use_equiangular_map_,
+                                false, {}, object_B_radial_distribution),
+      translation_B, object_B_);
   Maps maps_cube_B =
       domain::make_vector_coordinate_map_base<Frame::BlockLogical,
                                               Frame::Inertial, 3>(

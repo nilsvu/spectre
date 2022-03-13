@@ -62,7 +62,6 @@ target_link_libraries(
   INTERFACE
   FunctionsOfTime
   Time
-  DomainCreators
   Spectral
   )
 
