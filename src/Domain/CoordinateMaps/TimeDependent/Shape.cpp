@@ -320,7 +320,11 @@ void Shape::check_coefficients([[maybe_unused]] const DataVector& coefs) const {
 bool operator==(const Shape& lhs, const Shape& rhs) {
   return lhs.f_of_t_name_ == rhs.f_of_t_name_ and lhs.center_ == rhs.center_ and
          lhs.l_max_ == rhs.l_max_ and lhs.m_max_ == rhs.m_max_ and
-         *lhs.transition_func_ == *rhs.transition_func_;
+         (lhs.transition_func_.get() == nullptr) ==
+             (rhs.transition_func_.get() == nullptr) and
+         ((lhs.transition_func_.get() == nullptr and
+           rhs.transition_func_.get() == nullptr) or
+          *lhs.transition_func_ == *rhs.transition_func_);
 }
 
 bool operator!=(const Shape& lhs, const Shape& rhs) { return not(lhs == rhs); }
