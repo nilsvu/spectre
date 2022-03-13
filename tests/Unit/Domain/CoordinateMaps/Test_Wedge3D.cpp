@@ -60,6 +60,15 @@ void test_wedge3d_all_directions() {
                   ? outer_sphericity
                   : 1.0,
               orientation, with_equiangular_map, halves, radial_distribution);
+          CHECK(wedge_map.radius_inner() == inner_radius);
+          CHECK(wedge_map.radius_outer() == outer_radius);
+          if (radial_distribution == CoordinateMaps::Distribution::Linear) {
+            CHECK(wedge_map.sphericity_inner() == inner_sphericity);
+            CHECK(wedge_map.sphericity_outer() == outer_sphericity);
+          } else {
+            CHECK(wedge_map.sphericity_inner() == 1.0);
+            CHECK(wedge_map.sphericity_outer() == 1.0);
+          }
           test_suite_for_map_on_unit_cube(wedge_map);
         }
       }
