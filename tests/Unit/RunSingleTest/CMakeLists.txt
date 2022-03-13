@@ -34,6 +34,9 @@ add_spectre_executable(
   # compiled into the executable.
   ../PointwiseFunctions/AnalyticSolutions/Xcts/Test_Schwarzschild.cpp
   ../PointwiseFunctions/AnalyticSolutions/Xcts/Test_Kerr.cpp
+  ../Elliptic/Systems/Xcts/BoundaryConditions/Test_ApparentHorizon.cpp
+  ../Domain/CoordinateMaps/TimeDependent/Test_Shape.cpp
+  ../Domain/CoordinateMaps/TimeDependent/ShapeMapTransitionFunctions/Test_SphereTransition.cpp
   )
 
 # Modify which libraries to link for your test case.
@@ -48,6 +51,9 @@ target_link_libraries(
   Xcts
   XctsSolutions
   XctsSolutionsTestHelpers
+  DomainStructure
+  Elliptic
+  XctsBoundaryConditions
   )
 
 # Core required libraries

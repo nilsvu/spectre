@@ -16,16 +16,17 @@
 
 Background: &kerr
   KerrSchild:
-    Mass: 1.
-    Spin: [0., 0., 0.]
+    Mass: &kerr_mass 0.4229
+    Spin: &kerr_spin [0., 0., 0.9]
     Center: [0., 0., 0.]
 
-InitialGuess: *kerr
+InitialGuess: *background
 
 DomainCreator:
   Shell:
-    InnerRadius: 2.
-    OuterRadius: 10.
+    # r_+ = mass * (1. + sqrt(1. - dot(dimensionless_spin, dimensionless_spin)))
+    InnerRadius: 0.6072378363223351
+    OuterRadius: 5.
     InitialRefinement: 0
     InitialGridPoints: [8, 8]
     UseEquiangularMap: True
@@ -34,11 +35,16 @@ DomainCreator:
     RadialPartitioning: []
     RadialDistribution: [Logarithmic]
     TimeDependence: None
+    Shape:
+      Mass: *kerr_mass
+      Spin: *kerr_spin
+      Modes: [5, 5]
     BoundaryConditions:
       InnerBoundary:
         ApparentHorizon:
           Center: [0., 0., 0.]
-          Rotation: [0., 0., 0.]
+          # -0.5 * dimensionless_spin / r_+
+          Rotation: [0., 0., -0.74106054]
           Lapse: *kerr
           NegativeExpansion: None
       OuterBoundary:
@@ -106,7 +112,7 @@ LinearSolver:
     ObservePerCoreReductions: False
 
 EventsAndTriggers:
-  ? HasConverged
+  ? Always
   : - ObserveNorms:
         SubfileName: ErrorNorms
         TensorsToObserve:
@@ -154,5 +160,5 @@ EventsAndTriggers:
           - Error(LongitudinalShiftExcess)
           # - MomentumConstraint
         InterpolateToMesh: None
-        CoordinatesFloatingPointType: Double
-        FloatingPointTypes: [Double]
+        CoordinatesFloatingPointType: Float
+        FloatingPointTypes: [Float]

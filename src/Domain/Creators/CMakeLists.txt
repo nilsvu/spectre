@@ -57,6 +57,7 @@ target_link_libraries(
   ${LIBRARY}
   PRIVATE
   DomainStructure
+  GeneralRelativitySolutions
   PUBLIC
   CoordinateMaps
   DataStructures

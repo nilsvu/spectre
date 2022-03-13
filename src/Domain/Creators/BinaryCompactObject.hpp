@@ -23,6 +23,7 @@
 #include "Domain/Domain.hpp"
 #include "Options/Auto.hpp"
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrHorizon.hpp"
 #include "Utilities/ErrorHandling/Assert.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -51,6 +52,7 @@ template <bool InteriorMap>
 class SphericalCompression;
 template <typename Map1, typename Map2>
 class ProductOf2Maps;
+class Shape;
 }  // namespace TimeDependent
 }  // namespace CoordinateMaps
 
@@ -181,6 +183,9 @@ class BinaryCompactObject : public DomainCreator<3> {
                             CoordinateMaps::Wedge<3>>,
       domain::CoordinateMap<Frame::BlockLogical, Frame::Inertial,
                             CoordinateMaps::Wedge<3>, Translation>,
+      domain::CoordinateMap<Frame::BlockLogical, Frame::Inertial,
+                            CoordinateMaps::Wedge<3>, Translation,
+                            CoordinateMaps::TimeDependent::Shape>,
       domain::CoordinateMap<
           Frame::Grid, Frame::Inertial,
           domain::CoordinateMaps::TimeDependent::CubicScale<3>, RotationZ>,
@@ -229,6 +234,12 @@ class BinaryCompactObject : public DomainCreator<3> {
       using type = double;
       static constexpr Options::String help = {"x-coordinate of center."};
     };
+    struct Shape {
+      using type =
+          Options::Auto<gr::Solutions::KerrHorizon, Options::AutoLabel::None>;
+      static constexpr Options::String help = {
+          "Deform to conform to a Kerr-Schild horizon"};
+    };
     struct Interior {
       using type = Options::Auto<Excision>;
       static constexpr Options::String help = {
@@ -249,7 +260,7 @@ class BinaryCompactObject : public DomainCreator<3> {
     };
     template <typename Metavariables>
     using options = tmpl::list<
-        InnerRadius, OuterRadius, XCoord,
+        InnerRadius, OuterRadius, XCoord, Shape,
         tmpl::conditional_t<
             domain::BoundaryConditions::has_boundary_conditions_base_v<
                 typename Metavariables::system>,
@@ -257,22 +268,26 @@ class BinaryCompactObject : public DomainCreator<3> {
         UseLogarithmicMap>;
     Object() = default;
     Object(double local_inner_radius, double local_outer_radius,
-           double local_x_coord, std::optional<Excision> interior,
-           bool local_use_logarithmic_map)
+           double local_x_coord,
+           std::optional<gr::Solutions::KerrHorizon> local_shape,
+           std::optional<Excision> interior, bool local_use_logarithmic_map)
         : inner_radius(local_inner_radius),
           outer_radius(local_outer_radius),
           x_coord(local_x_coord),
+          shape(std::move(local_shape)),
           inner_boundary_condition(
               interior.has_value()
                   ? std::make_optional(std::move(interior->boundary_condition))
                   : std::nullopt),
           use_logarithmic_map(local_use_logarithmic_map) {}
     Object(double local_inner_radius, double local_outer_radius,
-           double local_x_coord, bool local_excise_interior,
-           bool local_use_logarithmic_map)
+           double local_x_coord,
+           std::optional<gr::Solutions::KerrHorizon> local_shape,
+           bool local_excise_interior, bool local_use_logarithmic_map)
         : inner_radius(local_inner_radius),
           outer_radius(local_outer_radius),
           x_coord(local_x_coord),
+          shape(std::move(local_shape)),
           inner_boundary_condition(
               local_excise_interior
                   ? std::optional<std::unique_ptr<
@@ -289,6 +304,7 @@ class BinaryCompactObject : public DomainCreator<3> {
     double inner_radius;
     double outer_radius;
     double x_coord;
+    std::optional<gr::Solutions::KerrHorizon> shape;
     std::optional<
         std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>>
         inner_boundary_condition;
