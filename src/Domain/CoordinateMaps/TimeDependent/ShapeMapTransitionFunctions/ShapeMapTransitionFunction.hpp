@@ -79,14 +79,14 @@ class ShapeMapTransitionFunction : public PUP::able {
   /*!
    * Given the mapped coordinates `target_coords` and the corresponding
    * spherical harmonic expansion \f$\sum_{lm} \lambda_{lm}(t)Y_{lm}\f$,
-   * `distorted_radius`, this method evaluates the original radius from the
+   * `radial_distortion`, this method evaluates the original radius from the
    * mapped radius by inverting the domain::CoordinateMaps::TimeDependent::Shape
    * map. It also divides by the mapped radius to simplify calculations in the
    * shape map.
    */
   virtual std::optional<double> original_radius_over_radius(
       const std::array<double, 3>& target_coords,
-      double distorted_radius) const = 0;
+      double radial_distortion) const = 0;
   /*!
    * Evaluate the transition function at the Cartesian coordinates divided by
    * the radius. All divisions over the radius which could potentially be zero
