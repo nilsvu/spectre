@@ -14,6 +14,7 @@
 #include "Domain/Domain.hpp"
 #include "Domain/DomainHelpers.hpp"
 #include "Options/Options.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrHorizon.hpp"
 #include "Utilities/TMPL.hpp"
 
 /// \cond
@@ -22,6 +23,9 @@ namespace CoordinateMaps {
 class EquatorialCompression;
 template <size_t Dim>
 class Wedge;
+namespace TimeDependent {
+class Shape;
+}  // namespace TimeDependent
 }  // namespace CoordinateMaps
 
 template <typename SourceFrame, typename TargetFrame, typename... Maps>
@@ -41,7 +45,11 @@ class Shell : public DomainCreator<3> {
   using maps_list =
       tmpl::list<domain::CoordinateMap<Frame::BlockLogical, Frame::Inertial,
                                        CoordinateMaps::Wedge<3>,
-                                       CoordinateMaps::EquatorialCompression>>;
+                                       CoordinateMaps::EquatorialCompression>,
+                 domain::CoordinateMap<Frame::BlockLogical, Frame::Inertial,
+                                       CoordinateMaps::Wedge<3>,
+                                       CoordinateMaps::EquatorialCompression,
+                                       CoordinateMaps::TimeDependent::Shape>>;
 
   /// Options for the EquatorialCompression map
   struct EquatorialCompressionOptions {
@@ -90,6 +98,13 @@ class Shell : public DomainCreator<3> {
     using type = std::array<size_t, 2>;
     static constexpr Options::String help = {
         "Initial number of grid points in [r,angular]."};
+  };
+
+  struct Shape {
+    using type =
+        Options::Auto<gr::Solutions::KerrHorizon, Options::AutoLabel::None>;
+    static constexpr Options::String help = {
+        "Deform inner surface to conform to a Kerr-Schild horizon"};
   };
 
   struct TimeDependence {
@@ -163,7 +178,7 @@ class Shell : public DomainCreator<3> {
   using basic_options =
       tmpl::list<InnerRadius, OuterRadius, InitialRefinement, InitialGridPoints,
                  UseEquiangularMap, EquatorialCompression, RadialPartitioning,
-                 RadialDistribution, WhichWedges, TimeDependence>;
+                 RadialDistribution, WhichWedges, TimeDependence, Shape>;
 
   template <typename Metavariables>
   using options = tmpl::conditional_t<
@@ -212,6 +227,7 @@ class Shell : public DomainCreator<3> {
         ShellWedges = ShellWedges::All,
         std::unique_ptr<domain::creators::time_dependence::TimeDependence<3>>
             time_dependence = nullptr,
+        std::optional<gr::Solutions::KerrHorizon> shape = std::nullopt,
         std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
             inner_boundary_condition = nullptr,
         std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
@@ -250,6 +266,7 @@ class Shell : public DomainCreator<3> {
   ShellWedges which_wedges_ = ShellWedges::All;
   std::unique_ptr<domain::creators::time_dependence::TimeDependence<3>>
       time_dependence_;
+  std::optional<gr::Solutions::KerrHorizon> shape_;
   size_t number_of_layers_{};
   std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
       inner_boundary_condition_;

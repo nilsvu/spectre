@@ -14,32 +14,39 @@
 #     SkipColumns: [0, 1, 2]
 #     AbsoluteTolerance: 0.08
 
-Background:
-  KerrSchild:
-    Mass: 1.
-    Spin: [0., 0., 0.]
+Background: &background
+  KerrSchild: &kerr
+    Mass: &kerr_mass 0.4229
+    Spin: &kerr_spin [0., 0., 0.9]
     Center: [0., 0., 0.]
 
-InitialGuess: Flatness
+InitialGuess: *background
 
 DomainCreator:
   Shell:
-    InnerRadius: 1.9
-    OuterRadius: 10.
+    # r_+ = mass * (1. + sqrt(1. - dot(dimensionless_spin, dimensionless_spin)))
+    InnerRadius: 0.6072378363223351
+    OuterRadius: 5.
     InitialRefinement: 0
-    InitialGridPoints: [4, 4]
+    InitialGridPoints: [8, 8]
     UseEquiangularMap: True
     EquatorialCompression: None
     WhichWedges: All
     RadialPartitioning: []
     RadialDistribution: [Logarithmic]
     TimeDependence: None
+    Shape:
+      Mass: *kerr_mass
+      Spin: *kerr_spin
+      Modes: [5, 5]
     BoundaryConditions:
       InnerBoundary:
-        AnalyticSolution:
-          ConformalFactor: Dirichlet
-          LapseTimesConformalFactor: Dirichlet
-          ShiftExcess: Dirichlet
+        ApparentHorizon:
+          Center: [0., 0., 0.]
+          # -0.5 * dimensionless_spin / r_+
+          Rotation: [0., 0., -0.74106054]
+          Lapse: *kerr
+          NegativeExpansion: None
       OuterBoundary:
         AnalyticSolution:
           ConformalFactor: Dirichlet
@@ -61,7 +68,7 @@ NonlinearSolver:
       # Stop after 1 iteration so this test runs quickly. Set MaxIterations to
       # ~20 for runs at higher resolution (most nonlinear problems need ~5
       # iterations, so 20 is a safe setting).
-      MaxIterations: 1
+      MaxIterations: 10
       RelativeResidual: 0.
       AbsoluteResidual: 1.e-10
     SufficientDecrease: 1.e-4
@@ -105,7 +112,7 @@ LinearSolver:
     ObservePerCoreReductions: False
 
 EventsAndTriggers:
-  ? HasConverged
+  ? Always
   : - ObserveNorms:
         SubfileName: ErrorNorms
         TensorsToObserve:
@@ -147,5 +154,5 @@ EventsAndTriggers:
           - HamiltonianConstraint
           - MomentumConstraint
         InterpolateToMesh: None
-        CoordinatesFloatingPointType: Double
-        FloatingPointTypes: [Double]
+        CoordinatesFloatingPointType: Float
+        FloatingPointTypes: [Float]

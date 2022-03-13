@@ -6,9 +6,32 @@
 #include <array>
 
 #include "DataStructures/Tensor/TypeAliases.hpp"
+#include "Options/Options.hpp"
 
 namespace gr {
 namespace Solutions {
+
+struct KerrHorizon {
+  static constexpr Options::String help = {
+      "Shape of a Kerr horizon in Kerr-Schild coordinates"};
+  struct Mass {
+    using type = double;
+    static constexpr Options::String help = {"Kerr mass parameter"};
+  };
+  struct Spin {
+    using type = std::array<double, 3>;
+    static constexpr Options::String help = {"Dimensionless spin"};
+  };
+  struct Modes {
+    using type = std::array<double, 2>;
+    static constexpr Options::String help = {"L_max and M_max"};
+  };
+  template <typename Metavariables>
+  using options = tmpl::list<Mass, Spin, Modes>;
+  double mass;
+  std::array<double, 3> dimensionless_spin;
+  std::array<double, 2> modes;
+};
 
 /*!
  * \brief Radius of Kerr horizon in Kerr-Schild coordinates.
