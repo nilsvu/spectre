@@ -13,6 +13,8 @@
 #include "Domain/CoordinateMaps/CoordinateMap.hpp"
 #include "Domain/CoordinateMaps/CoordinateMap.tpp"
 #include "Domain/CoordinateMaps/EquatorialCompression.hpp"
+#include "Domain/CoordinateMaps/TimeDependent/Shape.hpp"
+#include "Domain/CoordinateMaps/TimeDependent/ShapeMapTransitionFunctions/SphereTransition.hpp"
 #include "Domain/CoordinateMaps/Wedge.hpp"
 #include "Domain/Creators/DomainCreator.hpp"  // IWYU pragma: keep
 #include "Domain/Creators/TimeDependence/None.hpp"
@@ -41,6 +43,7 @@ Shell::Shell(
     ShellWedges which_wedges,
     std::unique_ptr<domain::creators::time_dependence::TimeDependence<3>>
         time_dependence,
+    std::optional<gr::Solutions::KerrHorizon> shape,
     std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
         inner_boundary_condition,
     std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
@@ -55,6 +58,7 @@ Shell::Shell(
       radial_distribution_(std::move(radial_distribution)),
       which_wedges_(which_wedges),
       time_dependence_(std::move(time_dependence)),
+      shape_(std::move(shape)),
       inner_boundary_condition_(std::move(inner_boundary_condition)),
       outer_boundary_condition_(std::move(outer_boundary_condition)) {
   number_of_layers_ = radial_partitioning_.size() + 1;
@@ -136,15 +140,39 @@ Shell::Shell(
 }
 
 Domain<3> Shell::create_domain() const {
-  const domain::CoordinateMaps::EquatorialCompression compression{
-      aspect_ratio_, index_polar_axis_};
-
-  auto coord_maps = domain::make_vector_coordinate_map_base<Frame::BlockLogical,
-                                                            Frame::Inertial, 3>(
-      sph_wedge_coordinate_maps(
-          inner_radius_, outer_radius_, 1.0, 1.0, use_equiangular_map_, false,
-          radial_partitioning_, radial_distribution_, which_wedges_),
-      compression);
+  auto coord_maps = [this]() {
+    auto wedge_maps = sph_wedge_coordinate_maps(
+        inner_radius_, outer_radius_, 1.0, 1.0, use_equiangular_map_, false,
+        radial_partitioning_, radial_distribution_, which_wedges_);
+    const domain::CoordinateMaps::EquatorialCompression compression{
+        aspect_ratio_, index_polar_axis_};
+    if (shape_.has_value()) {
+      const auto& kerr_horizon = shape_.value();
+      const size_t l_max = kerr_horizon.modes[0];
+      const size_t m_max = kerr_horizon.modes[1];
+      const YlmSpherepack ylm{l_max, m_max};
+      const DataVector radial_distortion =
+          1. - get(gr::Solutions::kerr_horizon_radius(
+                   ylm.theta_phi_points(), kerr_horizon.mass,
+                   kerr_horizon.dimensionless_spin)) /
+                   inner_radius_;
+      auto radial_distortion_coefs = ylm.phys_to_spec(radial_distortion);
+      const domain::CoordinateMaps::TimeDependent::Shape shape_map{
+          {{0., 0., 0.}},
+          l_max,
+          m_max,
+          std::make_unique<domain::CoordinateMaps::ShapeMapTransitionFunctions::
+                               SphereTransition>(inner_radius_, outer_radius_),
+          std::move(radial_distortion_coefs)};
+      return domain::make_vector_coordinate_map_base<Frame::BlockLogical,
+                                                     Frame::Inertial, 3>(
+          std::move(wedge_maps), compression, shape_map);
+    } else {
+      return domain::make_vector_coordinate_map_base<Frame::BlockLogical,
+                                                     Frame::Inertial, 3>(
+          std::move(wedge_maps), compression);
+    }
+  }();
 
   std::vector<DirectionMap<
       3, std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>>>
