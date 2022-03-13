@@ -16,14 +16,26 @@
 
 #include "ApparentHorizons/Tags.hpp"
 #include "DataStructures/DataVector.hpp"
+#include "DataStructures/Tensor/EagerMath/DotProduct.hpp"
+#include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
+#include "DataStructures/Tensor/Tensor.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.hpp"
+#include "Domain/CoordinateMaps/CoordinateMap.tpp"
+#include "Domain/CoordinateMaps/KerrHorizonConforming.hpp"
 #include "Domain/CoordinateMaps/TimeDependent/Shape.hpp"
 #include "Domain/CoordinateMaps/TimeDependent/ShapeMapTransitionFunctions/RegisterDerivedWithCharm.hpp"
 #include "Domain/CoordinateMaps/TimeDependent/ShapeMapTransitionFunctions/ShapeMapTransitionFunction.hpp"
 #include "Domain/CoordinateMaps/TimeDependent/ShapeMapTransitionFunctions/SphereTransition.hpp"
+#include "Domain/CoordinateMaps/Wedge.hpp"
 #include "Domain/FunctionsOfTime/PiecewisePolynomial.hpp"
+#include "Domain/LogicalCoordinates.hpp"
 #include "Helpers/DataStructures/MakeWithRandomValues.hpp"
 #include "Helpers/Domain/CoordinateMaps/TestMapHelpers.hpp"
+#include "NumericalAlgorithms/Spectral/Mesh.hpp"
+#include "NumericalAlgorithms/Spectral/Spectral.hpp"
 #include "NumericalAlgorithms/SphericalHarmonics/SpherepackIterator.hpp"
+#include "NumericalAlgorithms/SphericalHarmonics/YlmSpherepack.hpp"
+#include "PointwiseFunctions/AnalyticSolutions/GeneralRelativity/KerrHorizon.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/StdArrayHelpers.hpp"
 
@@ -424,6 +436,109 @@ void test_analytical_jacobian(
   CHECK_ITERABLE_APPROX(mapped_jacobian, analytical_jacobian);
 }
 
+void test_with_kerr_horizon(const double mass,
+                            const std::array<double, 3>& dimensionless_spin) {
+  CAPTURE(mass);
+  CAPTURE(dimensionless_spin);
+
+  const size_t l_max = 6;
+  const size_t m_max = l_max;
+  // This is the precision we use below, which is limited by l_max
+  Approx custom_approx = Approx::custom().epsilon(1.e-5).scale(1.0);
+
+  // [shape_map_coefs_kerr_horizon]
+  const YlmSpherepack ylm{l_max, m_max};
+  // This is r_+, the Boyer-Lindquist radius of the outer horizon
+  const double horizon_kerrschild_radius =
+      mass * (1. + sqrt(1. - dot(dimensionless_spin, dimensionless_spin)));
+  CAPTURE(horizon_kerrschild_radius);
+  // Radial distortion from a sphere of constant Boyer-Lindquist radius r_+ to
+  // an ellipsoid in Kerr-Schild coordinates
+  const DataVector radial_distortion =
+      1. - get(gr::Solutions::kerr_horizon_radius(ylm.theta_phi_points(), mass,
+                                                  dimensionless_spin)) /
+               horizon_kerrschild_radius;
+  // Spherical harmonic modes of the radial distortion
+  const auto distortion_modes = ylm.phys_to_spec(radial_distortion);
+  // [shape_map_coefs_kerr_horizon]
+
+  // Print modes, sorted by l and m for readability
+  SpherepackIterator iter{l_max, m_max};
+  std::vector<std::vector<double>> modes{};
+  modes.reserve(l_max);
+  for (size_t l = 0; l <= l_max; ++l) {
+    const size_t num_m = std::min(m_max, l);
+    std::vector<double> modes_m(2 * num_m + 1);
+    iter.set(l, 0);
+    modes_m[num_m] = distortion_modes[iter()];
+    for (size_t m = 1; m <= num_m; ++m) {
+      iter.set(l, -m);
+      modes_m[num_m - m] = distortion_modes[iter()];
+      iter.set(l, m);
+      modes_m[num_m + m] = distortion_modes[iter()];
+    }
+    modes.push_back(std::move(modes_m));
+  }
+  CAPTURE(modes);
+
+  // Set up a wedge with with a shape map that transforms it to conform to a
+  // Kerr horizon at the inner surface, and that keeps the outer surface
+  // unchanged (spherical).
+  const domain::CoordinateMaps::Wedge<3> wedge_map{
+      horizon_kerrschild_radius,
+      2. * horizon_kerrschild_radius,
+      1.,
+      1.,
+      {},
+      false};
+  const domain::CoordinateMaps::TimeDependent::Shape shape_map{
+      {{0., 0., 0.}},
+      l_max,
+      m_max,
+      std::make_unique<domain::CoordinateMaps::ShapeMapTransitionFunctions::
+                           SphereTransition>(wedge_map.radius_inner(),
+                                             wedge_map.radius_outer()),
+      distortion_modes};
+  const auto coord_map =
+      domain::make_coordinate_map_base<Frame::ElementLogical, Frame::Inertial>(
+          wedge_map, shape_map);
+
+  const Mesh<2> face_mesh{12, Spectral::Basis::Legendre,
+                          Spectral::Quadrature::GaussLobatto};
+  {
+    INFO("Inner face is Kerr horizon conforming");
+
+    // Get some coordinates on the inner face
+    const auto logical_coords =
+        interface_logical_coordinates(face_mesh, Direction<3>::lower_zeta());
+    const tnsr::I<DataVector, 3> x = (*coord_map)(logical_coords);
+
+    // Check the coordinates on the inner face are on the same Kerr horizon that
+    // we used to generate spherical harmonic modes above
+    const std::array<DataVector, 2> theta_phi{
+        {atan2(sqrt(square(get<0>(x)) + square(get<1>(x))), get<2>(x)),
+         atan2(get<1>(x), get<0>(x))}};
+    const DataVector expected_horizon_radii =
+        get(gr::Solutions::kerr_horizon_radius(theta_phi, mass,
+                                               dimensionless_spin));
+    CHECK_ITERABLE_CUSTOM_APPROX(get(magnitude(x)), expected_horizon_radii,
+                                 custom_approx);
+  }
+  {
+    INFO("Outer face is spherical");
+
+    // Get some coordinates on the outer face
+    const auto logical_coords =
+        interface_logical_coordinates(face_mesh, Direction<3>::upper_zeta());
+    const tnsr::I<DataVector, 3> x = (*coord_map)(logical_coords);
+
+    // Check the coordinates on the outer face are unchanged (spherical)
+    CHECK_ITERABLE_APPROX(get(magnitude(x)),
+                          DataVector(face_mesh.number_of_grid_points(),
+                                     wedge_map.radius_outer()));
+  }
+}
+
 }  // namespace
 
 SPECTRE_TEST_CASE("Unit.Domain.CoordinateMaps.TimeDependent.Shape",
@@ -462,5 +577,7 @@ SPECTRE_TEST_CASE("Unit.Domain.CoordinateMaps.TimeDependent.Shape",
     test_analytical_jacobian(sphere_transition, dist_coords, l_max, m_max, 1000,
                              make_not_null(&generator));
   }
+
+  test_with_kerr_horizon(0.45, {{0., 0., 0.8}});
 }
 }  // namespace domain
