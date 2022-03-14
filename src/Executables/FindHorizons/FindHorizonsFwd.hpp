@@ -7,7 +7,7 @@
 
 /// \cond
 namespace FindHorizons {
-template <size_t Dim>
+template <size_t Dim, bool TwoHorizons>
 struct Metavariables;
 }  // namespace FindHorizons
 /// \endcond

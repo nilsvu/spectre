@@ -6,6 +6,7 @@
 #include <pup.h>
 #include <string>
 
+#include "ApparentHorizons/ObjectLabel.hpp"
 #include "ApparentHorizons/StrahlkorperGr.hpp"
 #include "ApparentHorizons/Tags.hpp"
 #include "DataStructures/DataBox/DataBox.hpp"
@@ -202,8 +203,8 @@ struct ComputeHorizonVolumeQuantities {
   }
 };
 
-template <size_t Dim>
-struct AhA {
+template <size_t Dim, ah::ObjectLabel Label>
+struct ApparentHorizon {
  private:
   using tags_to_observe = tmpl::list<
       StrahlkorperGr::Tags::AreaCompute<Frame::Inertial>,
@@ -214,15 +215,17 @@ struct AhA {
       StrahlkorperGr::Tags::DimensionlessSpinMagnitudeCompute<Frame::Inertial>>;
 
  public:
+  static std::string name() { return "Ah" + ah::name(Label); }
   using temporal_id = ::Tags::Time;
   using compute_target_points =
-      intrp::TargetPoints::ApparentHorizon<AhA, Frame::Inertial>;
+      intrp::TargetPoints::ApparentHorizon<ApparentHorizon, Frame::Inertial>;
   using post_interpolation_callback =
-      intrp::callbacks::FindApparentHorizon<AhA, Frame::Inertial>;
+      intrp::callbacks::FindApparentHorizon<ApparentHorizon, Frame::Inertial>;
   using horizon_find_failure_callback =
       intrp::callbacks::ErrorOnFailedApparentHorizon;
-  using post_horizon_find_callbacks = tmpl::list<
-      intrp::callbacks::ObserveTimeSeriesOnSurface<tags_to_observe, AhA>>;
+  using post_horizon_find_callbacks =
+      tmpl::list<intrp::callbacks::ObserveTimeSeriesOnSurface<tags_to_observe,
+                                                              ApparentHorizon>>;
 
   using vars_to_interpolate_to_target =
       tmpl::list<gr::Tags::SpatialMetric<Dim, Frame::Inertial>,
@@ -254,7 +257,7 @@ struct AhA {
       tags_to_observe>;
 };
 
-template <size_t Dim>
+template <size_t Dim, bool TwoHorizons>
 struct Metavariables {
   static constexpr size_t volume_dim = Dim;
 
@@ -263,6 +266,10 @@ struct Metavariables {
 
   // A placeholder system for the domain creators
   struct system {};
+
+  using AhA = ApparentHorizon<Dim, ah::ObjectLabel::A>;
+  using AhB = ApparentHorizon<Dim, ah::ObjectLabel::B>;
+  static constexpr bool two_horizons = TwoHorizons;
 
   struct domain : tt::ConformsTo<::domain::protocols::Metavariables> {
     static constexpr bool enable_time_dependent_maps = false;
@@ -278,7 +285,8 @@ struct Metavariables {
 
   using interpolator_source_vars =
       typename ComputeHorizonVolumeQuantities<Dim>::required_src_tags;
-  using interpolation_target_tags = tmpl::list<AhA<Dim>>;
+  using interpolation_target_tags = tmpl::flatten<
+      tmpl::list<AhA, tmpl::conditional_t<two_horizons, AhB, tmpl::list<>>>>;
   using temporal_id = ::Tags::Time;
 
   struct factory_creation
@@ -307,19 +315,26 @@ struct Metavariables {
                          Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
               typename Metavariables::Phase, Metavariables::Phase::FindHorizons,
-              tmpl::list<importers::Actions::ReadVolumeData<
-                             OptionTags::VolumeDataGroup, adm_vars>,
-                         importers::Actions::ReceiveVolumeData<
-                             OptionTags::VolumeDataGroup, adm_vars>,
-                         Actions::DispatchApparentHorizonFinder<AhA<Dim>>,
-                         Parallel::Actions::TerminatePhase>>>>;
+              tmpl::list<
+                  importers::Actions::ReadVolumeData<
+                      OptionTags::VolumeDataGroup, adm_vars>,
+                  importers::Actions::ReceiveVolumeData<
+                      OptionTags::VolumeDataGroup, adm_vars>,
+                  Actions::DispatchApparentHorizonFinder<AhA>,
+                  tmpl::conditional_t<
+                      two_horizons, Actions::DispatchApparentHorizonFinder<AhB>,
+                      tmpl::list<>>,
+                  Parallel::Actions::TerminatePhase>>>>;
 
-  using component_list =
-      tmpl::list<element_array, importers::ElementDataReader<Metavariables>,
-                 intrp::Interpolator<Metavariables>,
-                 intrp::InterpolationTarget<Metavariables, AhA<Dim>>,
-                 observers::Observer<Metavariables>,
-                 observers::ObserverWriter<Metavariables>>;
+  using component_list = tmpl::flatten<tmpl::list<
+      element_array, importers::ElementDataReader<Metavariables>,
+      intrp::Interpolator<Metavariables>,
+      intrp::InterpolationTarget<Metavariables, AhA>,
+      tmpl::conditional_t<two_horizons,
+                          intrp::InterpolationTarget<Metavariables, AhB>,
+                          tmpl::list<>>,
+      observers::Observer<Metavariables>,
+      observers::ObserverWriter<Metavariables>>>;
 
   using observed_reduction_data_tags = tmpl::list<>;
 
