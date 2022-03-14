@@ -6,6 +6,7 @@
 #include <pup.h>
 #include <string>
 
+#include "ApparentHorizons/ObjectLabel.hpp"
 #include "ApparentHorizons/StrahlkorperGr.hpp"
 #include "ApparentHorizons/Tags.hpp"
 #include "DataStructures/DataBox/DataBox.hpp"
@@ -202,8 +203,8 @@ struct ComputeHorizonVolumeQuantities {
   }
 };
 
-template <size_t Dim>
-struct AhA {
+template <size_t Dim, ah::ObjectLabel Label>
+struct ApparentHorizon {
  private:
   using tags_to_observe = tmpl::list<
       StrahlkorperGr::Tags::AreaCompute<Frame::Inertial>,
@@ -216,13 +217,16 @@ struct AhA {
  public:
   using temporal_id = ::Tags::Time;
   using compute_target_points =
-      intrp::TargetPoints::ApparentHorizon<AhA, Frame::Inertial>;
+      intrp::TargetPoints::ApparentHorizon<ApparentHorizon, Frame::Inertial>;
   using post_interpolation_callback =
-      intrp::callbacks::FindApparentHorizon<AhA, Frame::Inertial>;
+      intrp::callbacks::FindApparentHorizon<ApparentHorizon, Frame::Inertial>;
   using horizon_find_failure_callback =
       intrp::callbacks::ErrorOnFailedApparentHorizon;
   using post_horizon_find_callback =
-      intrp::callbacks::ObserveTimeSeriesOnSurface<tags_to_observe, AhA, AhA>;
+      intrp::callbacks::ObserveTimeSeriesOnSurface<
+          tags_to_observe, ApparentHorizon, ApparentHorizon>;
+
+  static std::string name() { return "Ah" + ah::name(Label); }
 
   using vars_to_interpolate_to_target =
       tmpl::list<gr::Tags::SpatialMetric<Dim, Frame::Inertial>,
@@ -264,6 +268,9 @@ struct Metavariables {
   // A placeholder system for the domain creators
   struct system {};
 
+  using AhA = ApparentHorizon<Dim, ah::ObjectLabel::A>;
+  using AhB = ApparentHorizon<Dim, ah::ObjectLabel::B>;
+
   struct domain : tt::ConformsTo<::domain::protocols::Metavariables> {
     static constexpr bool enable_time_dependent_maps = false;
   };
@@ -278,7 +285,7 @@ struct Metavariables {
 
   using interpolator_source_vars =
       typename ComputeHorizonVolumeQuantities<Dim>::required_src_tags;
-  using interpolation_target_tags = tmpl::list<AhA<Dim>>;
+  using interpolation_target_tags = tmpl::list<AhA, AhB>;
   using temporal_id = ::Tags::Time;
 
   struct factory_creation
@@ -311,18 +318,21 @@ struct Metavariables {
                              OptionTags::VolumeDataGroup, adm_vars>,
                          importers::Actions::ReceiveVolumeData<
                              OptionTags::VolumeDataGroup, adm_vars>,
-                         Actions::DispatchApparentHorizonFinder<AhA<Dim>>,
+                         Actions::DispatchApparentHorizonFinder<AhA>,
+                         Actions::DispatchApparentHorizonFinder<AhB>,
                          Parallel::Actions::TerminatePhase>>>>;
 
   using component_list =
       tmpl::list<element_array, importers::ElementDataReader<Metavariables>,
                  intrp::Interpolator<Metavariables>,
-                 intrp::InterpolationTarget<Metavariables, AhA<Dim>>,
+                 intrp::InterpolationTarget<Metavariables, AhA>,
+                 intrp::InterpolationTarget<Metavariables, AhB>,
                  observers::Observer<Metavariables>,
                  observers::ObserverWriter<Metavariables>>;
 
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
-      tmpl::list<typename AhA<Dim>::post_horizon_find_callback>>;
+      tmpl::list<typename AhA::post_horizon_find_callback,
+                 typename AhB::post_horizon_find_callback>>;
 
   template <typename... Tags>
   static Phase determine_next_phase(

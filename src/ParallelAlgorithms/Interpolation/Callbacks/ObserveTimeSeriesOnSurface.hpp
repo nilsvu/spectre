@@ -116,7 +116,7 @@ struct ObserveTimeSeriesOnSurface {
             InterpolationTarget_detail::get_temporal_id_value(temporal_id),
             pretty_type::get_name<ObservationType>()),
         static_cast<size_t>(Parallel::my_node(*my_proxy.ckLocal())),
-        std::string{"/" + pretty_type::short_name<InterpolationTargetTag>()},
+        std::string{"/" + Options::name<InterpolationTargetTag>()},
         detail::make_legend(TagsToObserve{}),
         detail::make_reduction_data(
             box, InterpolationTarget_detail::get_temporal_id_value(temporal_id),
