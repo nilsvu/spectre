@@ -8,16 +8,18 @@
 #   ExportCoordinates3DReductions.h5
 
 DomainCreator:
-  Brick:
-    LowerBound: [-0.5, -0.5, -0.5]
-    UpperBound: [0.5, 0.5, 0.5]
-    IsPeriodicIn: [false, false, false]
-    InitialRefinement: [0, 0, 0]
-    InitialGridPoints: [3, 3, 3]
-    TimeDependence:
-      UniformTranslation:
-        InitialTime: 0.0
-        Velocity: [0.5, 0.0, 0.0]
+  Shell:
+    InnerRadius: 2.
+    OuterRadius: 10.
+    InitialRefinement: 0
+    InitialGridPoints: [6, 6]
+    UseEquiangularMap: True
+    EquatorialCompression: None
+    WhichWedges: All
+    RadialPartitioning: []
+    RadialDistribution: [Logarithmic]
+    TimeDependence: None
+    Shape: None
 
 SpatialDiscretization:
   DiscontinuousGalerkin:
@@ -25,12 +27,17 @@ SpatialDiscretization:
 
 Evolution:
   InitialTime: 0.0
-  InitialTimeStep: 0.01
+  InitialTimeStep: 0.1
   TimeStepper:
     AdamsBashforthN:
       Order: 1
 
 EventsAndTriggers:
+  ? TimeCompares:
+      Comparison: GreaterThanOrEqualTo
+      Value: 0.0
+  : - ObserveExcisions:
+        SubfileName: Unused
   ? TimeCompares:
       Comparison: GreaterThanOrEqualTo
       Value: 1.0

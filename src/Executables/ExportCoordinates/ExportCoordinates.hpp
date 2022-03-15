@@ -40,6 +40,7 @@
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
+#include "ParallelAlgorithms/Events/ObserveExcisions.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/Actions/RunEventsAndTriggers.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/Completion.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/Event.hpp"
@@ -203,20 +204,24 @@ struct Metavariables {
       "diagnostic of Domain quality: values far from unity indicate "
       "compression or expansion of the grid."};
 
+  using observe_excisions = Events::ObserveExcisions<
+      Dim, ::Tags::TimeStepId, ::Tags::Time, tmpl::list<>, tmpl::list<>,
+      tmpl::list<>>;
+
   struct factory_creation
       : tt::ConformsTo<Options::protocols::FactoryCreation> {
     using factory_classes = tmpl::map<
         tmpl::pair<DomainCreator<volume_dim>, domain_creators<volume_dim>>,
         tmpl::pair<StepChooser<StepChooserUse::LtsStep>, tmpl::list<>>,
         tmpl::pair<StepChooser<StepChooserUse::Slab>, tmpl::list<>>,
-        tmpl::pair<Event, tmpl::list<Events::Completion>>,
+        tmpl::pair<Event, tmpl::list<Events::Completion, observe_excisions>>,
         tmpl::pair<Trigger,
                    tmpl::list<Triggers::SlabCompares, Triggers::TimeCompares>>>;
   };
 
   enum class Phase { Initialization, RegisterWithObserver, Export, Exit };
 
-  using component_list = tmpl::list<
+  using component_list = tmpl::flatten<tmpl::list<
       DgElementArray<
           Metavariables,
           tmpl::list<
@@ -247,10 +252,14 @@ struct Metavariables {
                              Actions::FindGlobalMinimumGridSpacing,
                              Actions::RunEventsAndTriggers>>>>,
       observers::Observer<Metavariables>,
-      observers::ObserverWriter<Metavariables>>;
+      observers::ObserverWriter<Metavariables>,
+      typename observe_excisions::template parallel_components<Metavariables>>>;
 
-  using observed_reduction_data_tags = observers::make_reduction_data_tags<
-      tmpl::list<MinGridSpacingReductionData>>;
+  using observed_reduction_data_tags = tmpl::append<
+      observers::collect_reduction_data_tags<tmpl::flatten<tmpl::list<
+          tmpl::at<typename factory_creation::factory_classes, Event>>>>,
+      observers::make_reduction_data_tags<
+          tmpl::list<MinGridSpacingReductionData>>>;
 
   template <typename... Tags>
   static Phase determine_next_phase(
