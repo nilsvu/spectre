@@ -80,4 +80,10 @@ template <typename... Ts>
 void operator|(er& p, std::variant<Ts...>& t) {  // NOLINT
   pup(p, t);
 }
+
+template <typename T, typename Hash>
+inline void operator|(er& p, typename std::unordered_set<T, Hash>& m) {
+  PUP_stl_container<std::unordered_set<T, Hash>, T>(p, m);
+}
+
 }  // namespace PUP

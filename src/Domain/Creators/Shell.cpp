@@ -203,7 +203,14 @@ Domain<3> Shell::create_domain() const {
       {},
       std::move(boundary_conditions_all_blocks),
       {{"CentralExcisionSphere",
-        ExcisionSphere<3>{inner_radius_, {{0.0, 0.0, 0.0}}}}}};
+        ExcisionSphere<3>{inner_radius_,
+                          {{0.0, 0.0, 0.0}},
+                          {{0, Direction<3>::lower_zeta()},
+                           {1, Direction<3>::lower_zeta()},
+                           {2, Direction<3>::lower_zeta()},
+                           {3, Direction<3>::lower_zeta()},
+                           {4, Direction<3>::lower_zeta()},
+                           {5, Direction<3>::lower_zeta()}}}}}};
 
   if (not time_dependence_->is_none()) {
     const size_t number_of_blocks = domain.blocks().size();

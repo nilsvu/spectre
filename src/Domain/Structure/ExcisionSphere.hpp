@@ -7,10 +7,16 @@
 #pragma once
 
 #include <array>
+#include <boost/functional/hash.hpp>
 #include <cstddef>
 #include <iosfwd>
 #include <limits>
+#include <optional>
+#include <unordered_set>
+#include <utility>
 
+#include "Domain/Structure/Direction.hpp"
+#include "Domain/Structure/ElementId.hpp"
 #include "Utilities/MakeArray.hpp"
 
 /// \cond
@@ -27,6 +33,9 @@ class er;
 /// \tparam VolumeDim the volume dimension.
 template <size_t VolumeDim>
 class ExcisionSphere {
+ private:
+  using BlockId = std::pair<size_t, Direction<VolumeDim>>;
+
  public:
   /// Constructor
   ///
@@ -34,7 +43,9 @@ class ExcisionSphere {
   /// computational domain.
   /// \param center the coordinate center of the excision sphere
   /// in the computational domain.
-  ExcisionSphere(double radius, std::array<double, VolumeDim> center);
+  ExcisionSphere(
+      double radius, std::array<double, VolumeDim> center,
+      std::unordered_set<BlockId, boost::hash<BlockId>> block_neighbors);
 
   /// Default constructor needed for Charm++ serialization.
   ExcisionSphere() = default;
@@ -52,6 +63,13 @@ class ExcisionSphere {
   /// The coodinate center of the ExcisionSphere.
   const std::array<double, VolumeDim>& center() const { return center_; }
 
+  const auto& block_neighbors() const { return block_neighbors_; }
+
+  std::optional<Direction<VolumeDim>> radial_direction(
+      const size_t block_id) const;
+  std::optional<Direction<VolumeDim>> radial_direction(
+      const ElementId<VolumeDim>& element_id) const;
+
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p);
 
@@ -59,6 +77,7 @@ class ExcisionSphere {
   double radius_{std::numeric_limits<double>::signaling_NaN()};
   std::array<double, VolumeDim> center_{
       make_array<VolumeDim>(std::numeric_limits<double>::signaling_NaN())};
+  std::unordered_set<BlockId, boost::hash<BlockId>> block_neighbors_{};
 };
 
 template <size_t VolumeDim>

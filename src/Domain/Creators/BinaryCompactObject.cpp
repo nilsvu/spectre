@@ -555,10 +555,22 @@ Domain<3> BinaryCompactObject::create_domain() const {
       std::move(boundary_conditions_all_blocks),
       {{"ObjectAExcisionSphere",
         ExcisionSphere<3>{object_A_.inner_radius,
-                          {{object_A_.x_coord, 0.0, 0.0}}}},
+                          {{object_A_.x_coord, 0.0, 0.0}},
+                          {{0, Direction<3>::lower_zeta()},
+                           {1, Direction<3>::lower_zeta()},
+                           {2, Direction<3>::lower_zeta()},
+                           {3, Direction<3>::lower_zeta()},
+                           {4, Direction<3>::lower_zeta()},
+                           {5, Direction<3>::lower_zeta()}}}},
        {"ObjectBExcisionSphere",
         ExcisionSphere<3>{object_B_.inner_radius,
-                          {{object_B_.x_coord, 0.0, 0.0}}}}}};
+                          {{object_B_.x_coord, 0.0, 0.0}},
+                          {{12, Direction<3>::lower_zeta()},
+                           {13, Direction<3>::lower_zeta()},
+                           {14, Direction<3>::lower_zeta()},
+                           {15, Direction<3>::lower_zeta()},
+                           {16, Direction<3>::lower_zeta()},
+                           {17, Direction<3>::lower_zeta()}}}}}};
 
   // Inject the hard-coded time-dependence
   if (enable_time_dependence_) {

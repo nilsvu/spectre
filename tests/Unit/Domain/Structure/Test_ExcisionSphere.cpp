@@ -15,7 +15,7 @@ namespace {
 template <size_t VolumeDim>
 void check_excision_sphere_work(const double radius,
                                 const std::array<double, VolumeDim> center) {
-  const ExcisionSphere<VolumeDim> excision_sphere(radius, center);
+  const ExcisionSphere<VolumeDim> excision_sphere(radius, center, {});
 
   CHECK(excision_sphere.radius() == radius);
   CHECK(excision_sphere.center() == center);
@@ -24,7 +24,7 @@ void check_excision_sphere_work(const double radius,
 
   const double diff_radius = 0.001;
   const ExcisionSphere<VolumeDim> excision_sphere_diff_radius(diff_radius,
-                                                              center);
+                                                              center, {});
   CHECK(excision_sphere != excision_sphere_diff_radius);
   CHECK_FALSE(excision_sphere == excision_sphere_diff_radius);
 
@@ -70,7 +70,7 @@ SPECTRE_TEST_CASE("Unit.Domain.Structure.ExcisionSphere", "[Domain][Unit]") {
                                "[Domain][Unit]") {
   ASSERTION_TEST();
 #ifdef SPECTRE_DEBUG
-  auto failed_excision_sphere = ExcisionSphere<3>(-2.0, {{3.4, 1.2, -0.9}});
+  auto failed_excision_sphere = ExcisionSphere<3>(-2.0, {{3.4, 1.2, -0.9}}, {});
   static_cast<void>(failed_excision_sphere);
   ERROR("Failed to trigger ASSERT in an assertion test");
 #endif

@@ -312,10 +312,22 @@ void test_connectivity() {
                 std::unordered_map<std::string, ExcisionSphere<3>>{
                     {"ObjectAExcisionSphere",
                      ExcisionSphere<3>{inner_radius_objectA,
-                                       {{xcoord_objectA, 0.0, 0.0}}}},
+                                       {{xcoord_objectA, 0.0, 0.0}},
+                                       {{0, Direction<3>::lower_zeta()},
+                                        {1, Direction<3>::lower_zeta()},
+                                        {2, Direction<3>::lower_zeta()},
+                                        {3, Direction<3>::lower_zeta()},
+                                        {4, Direction<3>::lower_zeta()},
+                                        {5, Direction<3>::lower_zeta()}}}},
                     {"ObjectBExcisionSphere",
                      ExcisionSphere<3>{inner_radius_objectB,
-                                       {{xcoord_objectB, 0.0, 0.0}}}}});
+                                       {{xcoord_objectB, 0.0, 0.0}},
+                                       {{12, Direction<3>::lower_zeta()},
+                                        {13, Direction<3>::lower_zeta()},
+                                        {14, Direction<3>::lower_zeta()},
+                                        {15, Direction<3>::lower_zeta()},
+                                        {16, Direction<3>::lower_zeta()},
+                                        {17, Direction<3>::lower_zeta()}}}}});
 
           test_binary_compact_object_construction(
               binary_compact_object,
