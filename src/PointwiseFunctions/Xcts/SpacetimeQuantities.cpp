@@ -139,6 +139,7 @@ void SpacetimeQuantitiesComputer::operator()(
                   tmpl::size_t<3>, Frame::Inertial> /*meta*/) const {
   const auto& shift =
       cache->get_var(*this, gr::Tags::Shift<3, Frame::Inertial, DataVector>{});
+  // TODO: this is bad
   detail::deriv_tensor(deriv_shift, shift, mesh, inv_jacobian);
 }
 

@@ -187,12 +187,7 @@ struct Metavariables {
   using analytic_solution_fields = tmpl::append<typename system::primal_fields,
                                                 typename system::primal_fluxes>;
   using spacetime_quantities_compute = Xcts::Tags::SpacetimeQuantitiesCompute<
-      tmpl::list<gr::Tags::HamiltonianConstraint<DataVector>,
-                 gr::Tags::MomentumConstraint<3, Frame::Inertial, DataVector>,
-                 gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>,
-                 gr::Tags::Lapse<DataVector>,
-                 gr::Tags::Shift<3, Frame::Inertial, DataVector>,
-                 gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataVector>>>;
+      typename Xcts::SpacetimeQuantities::tags_list>;
   using error_compute = ::Tags::ErrorsCompute<analytic_solution_fields>;
   using error_tags = db::wrap_tags_in<Tags::Error, analytic_solution_fields>;
   using observe_fields = tmpl::append<
