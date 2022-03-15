@@ -680,4 +680,31 @@ struct WriteReductionData {
   }
 };
 }  // namespace ThreadedActions
+
+namespace Actions {
+
+struct WriteSingletonReductionData {
+  template <
+      typename ParallelComponent, typename DbTagsList, typename Metavariables,
+      typename ArrayIndex, typename... Ts,
+      typename DataBox = db::DataBox<DbTagsList>,
+      Requires<db::tag_is_retrievable_v<Tags::H5FileLock, DataBox>> = nullptr>
+  static void apply(db::DataBox<DbTagsList>& box,
+                    Parallel::GlobalCache<Metavariables>& cache,
+                    const ArrayIndex& /*array_index*/,
+                    const std::string& subfile_name,
+                    std::vector<std::string>&& legend,
+                    std::tuple<Ts...>&& reduction_data) {
+    auto& reduction_file_lock =
+        db::get_mutable_reference<Tags::H5FileLock>(make_not_null(&box));
+    reduction_file_lock.lock();
+    ThreadedActions::ReductionActions_detail::write_data(
+        subfile_name, std::move(legend), std::move(reduction_data),
+        Parallel::get<Tags::ReductionFileName>(cache),
+        std::make_index_sequence<sizeof...(Ts)>{});
+    reduction_file_lock.unlock();
+  }
+};
+
+}  // namespace Actions
 }  // namespace observers
