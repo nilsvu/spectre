@@ -11,5 +11,5 @@
 
 namespace Xcts::Solutions {
 using all_analytic_solutions =
-    tmpl::list<Flatness, WrappedGr<gr::Solutions::KerrSchild>, Schwarzschild>;
+    tmpl::list<Flatness, WrappedGr<gr::Solutions::KerrSchild>>;
 }  // namespace Xcts::Solutions

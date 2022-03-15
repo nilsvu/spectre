@@ -90,6 +90,26 @@ void WrappedGrVariables<DataType>::operator()(
 
 template <typename DataType>
 void WrappedGrVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::ii<DataType, Dim>*> spatial_metric,
+    const gsl::not_null<Cache*> /*cache*/,
+    gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataType> /*meta*/) const {
+  *spatial_metric =
+      get<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataType>>(gr_solution);
+}
+
+template <typename DataType>
+void WrappedGrVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::ijj<DataType, Dim>*> deriv_spatial_metric,
+    const gsl::not_null<Cache*> /*cache*/,
+    ::Tags::deriv<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataType>,
+                  tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const {
+  *deriv_spatial_metric =
+      get<::Tags::deriv<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataType>,
+                        tmpl::size_t<Dim>, Frame::Inertial>>(gr_solution);
+}
+
+template <typename DataType>
+void WrappedGrVariables<DataType>::operator()(
     const gsl::not_null<Scalar<DataType>*> trace_extrinsic_curvature,
     const gsl::not_null<Cache*> /*cache*/,
     gr::Tags::TraceExtrinsicCurvature<DataType> /*meta*/) const {

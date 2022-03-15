@@ -98,13 +98,16 @@ class Flatness : public elliptic::analytic_data::AnalyticSolution {
             gr::Tags::MomentumDensity<3, Frame::Inertial, DataType>, 8>,
         ::Tags::FixedSource<Tags::ConformalFactor<DataType>>,
         ::Tags::FixedSource<Tags::LapseTimesConformalFactor<DataType>>,
-        ::Tags::FixedSource<Tags::ShiftExcess<DataType, 3, Frame::Inertial>>>;
+        ::Tags::FixedSource<Tags::ShiftExcess<DataType, 3, Frame::Inertial>>,
+        ::Tags::deriv<gr::Tags::SpatialMetric<3, Frame::Inertial, DataType>,
+                      tmpl::size_t<3>, Frame::Inertial>>;
     using supported_tags_one =
         tmpl::list<Tags::ConformalFactor<DataType>,
                    Tags::LapseTimesConformalFactor<DataType>>;
     using supported_tags_metric =
         tmpl::list<Tags::ConformalMetric<DataType, 3, Frame::Inertial>,
-                   Tags::InverseConformalMetric<DataType, 3, Frame::Inertial>>;
+                   Tags::InverseConformalMetric<DataType, 3, Frame::Inertial>,
+                   gr::Tags::SpatialMetric<3, Frame::Inertial, DataType>>;
     using supported_tags = tmpl::append<supported_tags_zero, supported_tags_one,
                                         supported_tags_metric>;
     static_assert(

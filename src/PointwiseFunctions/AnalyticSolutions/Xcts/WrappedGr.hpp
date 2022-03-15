@@ -44,6 +44,9 @@ template <typename DataType>
 using WrappedGrVariablesCache =
     cached_temp_buffer_from_typelist<tmpl::push_back<
         common_tags<DataType>,
+        gr::Tags::SpatialMetric<3, Frame::Inertial, DataType>,
+        ::Tags::deriv<gr::Tags::SpatialMetric<3, Frame::Inertial, DataType>,
+                      tmpl::size_t<3>, Frame::Inertial>,
         gr::Tags::Conformal<gr::Tags::EnergyDensity<DataType>, 0>,
         gr::Tags::Conformal<gr::Tags::StressTrace<DataType>, 0>,
         gr::Tags::Conformal<
@@ -89,6 +92,15 @@ struct WrappedGrVariables
       ::Tags::deriv<Tags::ConformalMetric<DataType, Dim, Frame::Inertial>,
                     tmpl::size_t<Dim>, Frame::Inertial> /*meta*/)
       const override;
+  void operator()(
+      gsl::not_null<tnsr::ii<DataType, Dim>*> spatial_metric,
+      gsl::not_null<Cache*> cache,
+      gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataType> /*meta*/) const;
+  void operator()(
+      gsl::not_null<tnsr::ijj<DataType, Dim>*> deriv_spatial_metric,
+      gsl::not_null<Cache*> cache,
+      ::Tags::deriv<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataType>,
+                    tmpl::size_t<Dim>, Frame::Inertial> /*meta*/) const;
   void operator()(
       gsl::not_null<Scalar<DataType>*> trace_extrinsic_curvature,
       gsl::not_null<Cache*> cache,

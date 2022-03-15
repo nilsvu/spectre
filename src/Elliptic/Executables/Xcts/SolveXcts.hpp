@@ -30,6 +30,7 @@
 #include "IO/Observer/Helpers.hpp"
 #include "IO/Observer/ObserverComponent.hpp"
 #include "NumericalAlgorithms/Convergence/Tags.hpp"
+#include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "Options/Options.hpp"
 #include "Options/Protocols/FactoryCreation.hpp"
 #include "Parallel/Actions/SetupDataBox.hpp"
@@ -184,19 +185,24 @@ struct Metavariables {
   using correction_fluxes_tag =
       db::add_tag_prefix<NonlinearSolver::Tags::Correction, fluxes_tag>;
 
-  using analytic_solution_fields = tmpl::append<typename system::primal_fields,
-                                                typename system::primal_fluxes>;
+  using analytic_solution_fields = tmpl::append<
+      typename system::primal_fields, typename system::primal_fluxes,
+      tmpl::list<
+          gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>,
+          ::Tags::deriv<gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>,
+                        tmpl::size_t<3>, Frame::Inertial>>>;
   using spacetime_quantities_compute = Xcts::Tags::SpacetimeQuantitiesCompute<
       typename Xcts::SpacetimeQuantities::tags_list>;
   using error_compute = ::Tags::ErrorsCompute<analytic_solution_fields>;
   using error_tags = db::wrap_tags_in<Tags::Error, analytic_solution_fields>;
-  using observe_fields = tmpl::append<
+  using observe_fields = tmpl::remove_duplicates<tmpl::append<
       analytic_solution_fields, typename system::background_fields,
       typename spacetime_quantities_compute::tags_list, error_tags,
-      tmpl::list<domain::Tags::Coordinates<volume_dim, Frame::Inertial>,
-                 ::Tags::NonEuclideanMagnitude<
-                     Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
-                     gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>>>>;
+      tmpl::list<
+          domain::Tags::Coordinates<volume_dim, Frame::Inertial>,
+          ::Tags::NonEuclideanMagnitude<
+              Xcts::Tags::ShiftExcess<DataVector, 3, Frame::Inertial>,
+              gr::Tags::SpatialMetric<3, Frame::Inertial, DataVector>>>>>;
   using observer_compute_tags =
       tmpl::list<::Events::Tags::ObserverMeshCompute<volume_dim>,
                  spacetime_quantities_compute, error_compute>;

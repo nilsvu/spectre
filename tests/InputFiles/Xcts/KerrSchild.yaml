@@ -16,8 +16,8 @@
 
 Background: &background
   KerrSchild: &kerr
-    Mass: &kerr_mass 0.4229
-    Spin: &kerr_spin [0., 0., 0.9]
+    Mass: &kerr_mass 1.
+    Spin: &kerr_spin [0., 0., 0.]
     Center: [0., 0., 0.]
 
 InitialGuess: *background
@@ -25,8 +25,8 @@ InitialGuess: *background
 DomainCreator:
   Shell:
     # r_+ = mass * (1. + sqrt(1. - dot(dimensionless_spin, dimensionless_spin)))
-    InnerRadius: 0.6072378363223351
-    OuterRadius: 5.
+    InnerRadius: 2.
+    OuterRadius: 10.
     InitialRefinement: 0
     InitialGridPoints: [8, 8]
     UseEquiangularMap: True
@@ -35,16 +35,13 @@ DomainCreator:
     RadialPartitioning: []
     RadialDistribution: [Logarithmic]
     TimeDependence: None
-    Shape:
-      Mass: *kerr_mass
-      Spin: *kerr_spin
-      Modes: [5, 5]
+    Shape: None
     BoundaryConditions:
       InnerBoundary:
         ApparentHorizon:
           Center: [0., 0., 0.]
           # -0.5 * dimensionless_spin / r_+
-          Rotation: [0., 0., -0.74106054]
+          Rotation: [0., 0., 0.]
           Lapse: *kerr
           NegativeExpansion: None
       OuterBoundary:
@@ -137,6 +134,15 @@ EventsAndTriggers:
     - ObserveNorms:
         SubfileName: Norms
         TensorsToObserve:
+          - Name: ConformalFactor
+            NormType: Max
+            Components: Individual
+          - Name: Lapse
+            NormType: Min
+            Components: Individual
+          - Name: Magnitude(ShiftExcess)
+            NormType: Max
+            Components: Individual
           - Name: HamiltonianConstraint
             NormType: L2Norm
             Components: Individual
@@ -147,12 +153,28 @@ EventsAndTriggers:
         SubfileName: VolumeData
         VariablesToObserve:
           - ConformalFactor
+          - LapseTimesConformalFactor
           - Lapse
           - Shift
+          - ShiftExcess
+          - Magnitude(ShiftExcess)
           - SpatialMetric
           - ExtrinsicCurvature
           - HamiltonianConstraint
           - MomentumConstraint
+          - SpatialRicci
+          - deriv(SpatialMetric)
+          - Error(SpatialMetric)
+          - Error(deriv(SpatialMetric))
+          - SpatialChristoffelSecondKind
+          - deriv(SpatialChristoffelSecondKind)
+          - deriv(Shift)
+          - Error(ConformalFactor)
+          - Error(LapseTimesConformalFactor)
+          - Error(ShiftExcess)
+          - Error(Flux(ConformalFactor))
+          - Error(Flux(LapseTimesConformalFactor))
+          - Error(LongitudinalShiftExcess)
         InterpolateToMesh: None
-        CoordinatesFloatingPointType: Float
-        FloatingPointTypes: [Float]
+        CoordinatesFloatingPointType: Double
+        FloatingPointTypes: [Double]
