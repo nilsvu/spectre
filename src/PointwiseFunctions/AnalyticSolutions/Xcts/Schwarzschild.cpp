@@ -616,6 +616,14 @@ void SchwarzschildVariables<DataType>::operator()(
 
 template <typename DataType>
 void SchwarzschildVariables<DataType>::operator()(
+    const gsl::not_null<tnsr::ii<DataType, 3>*> extrinsic_curvature,
+    const gsl::not_null<Cache*> /*cache*/,
+    gr::Tags::ExtrinsicCurvature<3, Frame::Inertial, DataType> /*meta*/) const {
+  std::fill(extrinsic_curvature->begin(), extrinsic_curvature->end(), 0.);
+}
+
+template <typename DataType>
+void SchwarzschildVariables<DataType>::operator()(
     const gsl::not_null<Scalar<DataType>*> energy_density,
     const gsl::not_null<Cache*> /*cache*/,
     gr::Tags::Conformal<gr::Tags::EnergyDensity<DataType>,
