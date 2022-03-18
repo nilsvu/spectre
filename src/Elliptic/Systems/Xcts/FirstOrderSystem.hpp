@@ -206,7 +206,8 @@ struct FirstOrderSystem
                                          DataVector, 3, Frame::Inertial>,
                                      Tags::ConformalRicciScalar<DataVector>,
                                      Tags::ConformalChristoffelContracted<
-                                         DataVector, 3, Frame::Inertial>>,
+                                         DataVector, 3, Frame::Inertial>,
+                                         ::Tags::deriv<Tags::ConformalMetric<DataVector, 3, Frame::Inertial>, tmpl::size_t<3>, Frame::Inertial>>,
                           tmpl::list<>>,
       tmpl::conditional_t<
           EnabledEquations == Equations::Hamiltonian,

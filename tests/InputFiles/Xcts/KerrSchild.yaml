@@ -14,20 +14,20 @@
 #     SkipColumns: [0, 1]
 #     AbsoluteTolerance: 0.08
 
-Background:
+Background: &kerr
   KerrSchild:
     Mass: 1.
     Spin: [0., 0., 0.]
     Center: [0., 0., 0.]
 
-InitialGuess: Flatness
+InitialGuess: *kerr
 
 DomainCreator:
   Shell:
-    InnerRadius: 1.9
+    InnerRadius: 2.
     OuterRadius: 10.
     InitialRefinement: 0
-    InitialGridPoints: [4, 4]
+    InitialGridPoints: [8, 8]
     UseEquiangularMap: True
     EquatorialCompression: None
     WhichWedges: All
@@ -36,10 +36,11 @@ DomainCreator:
     TimeDependence: None
     BoundaryConditions:
       InnerBoundary:
-        AnalyticSolution:
-          ConformalFactor: Dirichlet
-          LapseTimesConformalFactor: Dirichlet
-          ShiftExcess: Dirichlet
+        ApparentHorizon:
+          Center: [0., 0., 0.]
+          Rotation: [0., 0., 0.]
+          Lapse: *kerr
+          NegativeExpansion: None
       OuterBoundary:
         AnalyticSolution:
           ConformalFactor: Dirichlet
@@ -61,7 +62,7 @@ NonlinearSolver:
       # Stop after 1 iteration so this test runs quickly. Set MaxIterations to
       # ~20 for runs at higher resolution (most nonlinear problems need ~5
       # iterations, so 20 is a safe setting).
-      MaxIterations: 1
+      MaxIterations: 10
       RelativeResidual: 0.
       AbsoluteResidual: 1.e-10
     SufficientDecrease: 1.e-4
@@ -133,9 +134,9 @@ EventsAndTriggers:
           - Name: HamiltonianConstraint
             NormType: L2Norm
             Components: Individual
-          - Name: MomentumConstraint
-            NormType: L2Norm
-            Components: Individual
+          # - Name: MomentumConstraint
+          #   NormType: L2Norm
+          #   Components: Individual
     - ObserveFields:
         SubfileName: VolumeData
         VariablesToObserve:
@@ -145,7 +146,13 @@ EventsAndTriggers:
           - SpatialMetric
           - ExtrinsicCurvature
           - HamiltonianConstraint
-          - MomentumConstraint
+          - Error(ConformalFactor)
+          - Error(LapseTimesConformalFactor)
+          - Error(ShiftExcess)
+          - Error(Flux(ConformalFactor))
+          - Error(Flux(LapseTimesConformalFactor))
+          - Error(LongitudinalShiftExcess)
+          # - MomentumConstraint
         InterpolateToMesh: None
         CoordinatesFloatingPointType: Double
         FloatingPointTypes: [Double]
