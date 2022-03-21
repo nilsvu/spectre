@@ -141,7 +141,18 @@ std::optional<std::array<double, 3>> Shape::inverse(
   const std::array<double, 2> theta_phis =
       cartesian_to_spherical(centered_coords);
   check_coefficients(coefs);
-  const double distorted_radii = ylm_.interpolate_from_coefs(coefs, theta_phis);
+
+  // doesn't work:
+  // const double distorted_radii =
+  //   ylm_.interpolate_from_coefs(coefs, theta_phis);
+
+  // works:
+  YlmSpherepack new_ylm(ylm_.l_max(), ylm_.m_max());
+  const auto interpolation_info = new_ylm.set_up_interpolation_info(theta_phis);
+  double distorted_radii{};
+  new_ylm.interpolate_from_coefs(make_not_null(&distorted_radii), coefs,
+                                 interpolation_info);
+
   const std::optional<double> original_radius_over_radius =
       transition_func_->original_radius_over_radius(centered_coords,
                                                     distorted_radii);
