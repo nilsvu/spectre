@@ -742,7 +742,8 @@ frustum_coordinate_maps(const double length_inner_cube,
         use_equiangular_map,
         projective_scale_factor,
         false,
-        sphericity});
+        sphericity,
+        -1.});
     // frustums on the right
     frustums.push_back(FrustumMap{{{{{-displacement_from_origin[0],
                                       -lower - displacement_from_origin[1]}},
@@ -756,7 +757,8 @@ frustum_coordinate_maps(const double length_inner_cube,
                                   use_equiangular_map,
                                   projective_scale_factor,
                                   false,
-                                  sphericity});
+                                  sphericity,
+                                  1.});
   }
   // end cap frustum on the right
   std::array<double, 3> displacement_from_origin =

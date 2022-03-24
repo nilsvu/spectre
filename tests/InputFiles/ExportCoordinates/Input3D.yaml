@@ -8,16 +8,30 @@
 #   ExportCoordinates3DReductions.h5
 
 DomainCreator:
-  Brick:
-    LowerBound: [-0.5, -0.5, -0.5]
-    UpperBound: [0.5, 0.5, 0.5]
-    IsPeriodicIn: [false, false, false]
-    InitialRefinement: [0, 0, 0]
-    InitialGridPoints: [3, 3, 3]
-    TimeDependence:
-      UniformTranslation:
-        InitialTime: 0.0
-        Velocity: [0.5, 0.0, 0.0]
+  BinaryCompactObject:
+    ObjectA:
+      InnerRadius: 1.
+      OuterRadius: 5.
+      XCoord: -8.
+      ExciseInterior: True
+      UseLogarithmicMap: true
+    ObjectB:
+      InnerRadius: 1.
+      OuterRadius: 5.
+      XCoord: 8.
+      ExciseInterior: True
+      UseLogarithmicMap: true
+    EnvelopingCube:
+      Radius: 60.
+      UseProjectiveMap: true
+      Sphericity: 1.
+    OuterShell:
+      InnerRadius: Auto
+      OuterRadius: 300.
+      RadialDistribution: Logarithmic
+    UseEquiangularMap: True
+    InitialRefinement: 0
+    InitialGridPoints: 5
 
 SpatialDiscretization:
   DiscontinuousGalerkin:
@@ -25,7 +39,7 @@ SpatialDiscretization:
 
 Evolution:
   InitialTime: 0.0
-  InitialTimeStep: 0.01
+  InitialTimeStep: 0.1
   TimeStepper:
     AdamsBashforthN:
       Order: 1
@@ -33,7 +47,7 @@ Evolution:
 EventsAndTriggers:
   ? TimeCompares:
       Comparison: GreaterThanOrEqualTo
-      Value: 1.0
+      Value: 0.
   : - Completion
 
 Observers:
