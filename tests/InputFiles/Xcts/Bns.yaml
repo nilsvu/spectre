@@ -1,0 +1,202 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: SolveXcts
+# Check: parse;execute_check_output
+
+Background: &binary
+  Binary:
+    XCoords: [&x_left -20., &x_right 20.]
+    ObjectA: &star
+      TovStar:
+        # https://arxiv.org/abs/1708.07358
+        CentralDensity: &central_density 0.0008087415253997405 # h = 1.2
+        PolytropicConstant: &polytropic_constant 123.6489
+        PolytropicExponent: &polytropic_exponent 2.
+        Coordinates: Isotropic
+    ObjectB: *star
+    AngularVelocity: 0.
+    Expansion: 0.
+    FalloffWidths: None
+
+Injections:
+  - Position: [*x_left, 0, 0]
+    CentralDensity: *central_density
+  - Position: [*x_right, 0, 0]
+    CentralDensity: *central_density
+
+EquationOfState:
+  PolytropicConstant: *polytropic_constant
+  PolytropicExponent: *polytropic_exponent
+
+InitialGuess: *binary
+
+DomainCreator:
+  BinaryCompactObject:
+    ObjectA:
+      InnerRadius: 4.
+      OuterRadius: &star_radius 9.709353324763269
+      XCoord: *x_left
+      Interior: Auto
+      UseLogarithmicMap: False
+    ObjectB:
+      InnerRadius: 4.
+      OuterRadius: *star_radius
+      XCoord: *x_right
+      Interior: Auto
+      UseLogarithmicMap: False
+    EnvelopingCube:
+      Radius: 120.
+      UseProjectiveMap: True
+      Sphericity: 1.
+    OuterShell:
+      InnerRadius: Auto
+      OuterRadius: 600.
+      RadialDistribution: Inverse
+      BoundaryCondition: Flatness
+    InitialRefinement:
+      ObjectAInterior:            [1, 1, 1]
+      ObjectBInterior:            [1, 1, 1]
+      ObjectAShell:               [1, 1, 1]
+      ObjectBShell:               [1, 1, 1]
+      ObjectACube:                [1, 1, 0]
+      ObjectBCube:                [1, 1, 0]
+      EnvelopingCubeUpperZLeft:   [1, 1, 0]
+      EnvelopingCubeLowerZLeft:   [1, 1, 0]
+      EnvelopingCubeUpperYLeft:   [1, 1, 0]
+      EnvelopingCubeLowerYLeft:   [1, 1, 0]
+      EnvelopingCubeLowerX:       [1, 1, 0]
+      EnvelopingCubeUpperZRight:  [1, 1, 0]
+      EnvelopingCubeLowerZRight:  [1, 1, 0]
+      EnvelopingCubeUpperYRight:  [1, 1, 0]
+      EnvelopingCubeLowerYRight:  [1, 1, 0]
+      EnvelopingCubeUpperX:       [1, 1, 0]
+      CubedShellUpperZLeft:       [0, 1, 0]
+      CubedShellLowerZLeft:       [0, 1, 0]
+      CubedShellUpperYLeft:       [0, 1, 0]
+      CubedShellLowerYLeft:       [0, 1, 0]
+      CubedShellLowerX:           [1, 1, 0]
+      CubedShellUpperZRight:      [0, 1, 0]
+      CubedShellLowerZRight:      [0, 1, 0]
+      CubedShellUpperYRight:      [0, 1, 0]
+      CubedShellLowerYRight:      [0, 1, 0]
+      CubedShellUpperX:           [1, 1, 0]
+      OuterShellUpperZLeft:       [0, 1, 0]
+      OuterShellLowerZLeft:       [0, 1, 0]
+      OuterShellUpperYLeft:       [0, 1, 0]
+      OuterShellLowerYLeft:       [0, 1, 0]
+      OuterShellLowerX:           [1, 1, 0]
+      OuterShellUpperZRight:      [0, 1, 0]
+      OuterShellLowerZRight:      [0, 1, 0]
+      OuterShellUpperYRight:      [0, 1, 0]
+      OuterShellLowerYRight:      [0, 1, 0]
+      OuterShellUpperX:           [1, 1, 0]
+    InitialGridPoints:
+      ObjectAInterior: [6, 6, 9]
+      ObjectBInterior: [6, 6, 9]
+      ObjectAShell:   [4, 4, 7]
+      ObjectBShell:   [4, 4, 7]
+      ObjectACube:    [4, 4, 5]
+      ObjectBCube:    [4, 4, 5]
+      EnvelopingCube: [4, 4, 4]
+      CubedShell:     [4, 4, 4]
+      OuterShell:     [4, 4, 3]
+
+Discretization:
+  DiscontinuousGalerkin:
+    PenaltyParameter: 1.
+    Massive: True
+
+Observers:
+  VolumeFileName: "BnsVolume"
+  ReductionFileName: "BnsReductions"
+
+NonlinearSolver:
+  NewtonRaphson:
+    ConvergenceCriteria:
+      MaxIterations: 20
+      RelativeResidual: 1.e-8
+      AbsoluteResidual: 1.e-10
+    SufficientDecrease: 1.e-4 # increase to encourage globalization
+    MaxGlobalizationSteps: 40
+    DampingFactor: 1.
+    Verbosity: Verbose
+
+LinearSolver:
+  Gmres:
+    ConvergenceCriteria:
+      MaxIterations: 100
+      RelativeResidual: 1.e-4
+      AbsoluteResidual: 1.e-11
+    Verbosity: Quiet
+
+  Multigrid:
+    Iterations: 1
+    MaxLevels: Auto
+    PreSmoothing: True
+    PostSmoothingAtBottom: True
+    Verbosity: Silent
+    OutputVolumeData: False
+
+  SchwarzSmoother:
+    Iterations: 3
+    MaxOverlap: 2
+    Verbosity: Silent
+    SubdomainSolver:
+      Gmres:
+        ConvergenceCriteria:
+          MaxIterations: 3
+          RelativeResidual: 1.e-4
+          AbsoluteResidual: 1.e-12
+        Verbosity: Silent
+        Restart: None
+        Preconditioner:
+          MinusLaplacian:
+            Solver: ExplicitInverse
+            BoundaryConditions: Auto
+    SkipResets: True
+    ObservePerCoreReductions: False
+
+EventsAndTriggers:
+  ? Always
+  : - ObserveNorms:
+        SubfileName: Norms
+        TensorsToObserve:
+          - Name: ConformalFactor
+            NormType: Max
+            Components: Individual
+          - Name: Lapse
+            NormType: Min
+            Components: Individual
+          - Name: Magnitude(ShiftExcess)
+            NormType: Max
+            Components: Individual
+          - Name: Conformal(EnergyDensity)
+            NormType: Max
+            Components: Individual
+          - Name: Conformal(StressTrace)
+            NormType: Max
+            Components: Individual
+          - Name: HamiltonianConstraint
+            NormType: L2Norm
+            Components: Individual
+          - Name: MomentumConstraint
+            NormType: L2Norm
+            Components: Individual
+    - ObserveFields:
+        SubfileName: VolumeData
+        VariablesToObserve:
+          - ConformalFactor
+          - Lapse
+          - Shift
+          - ShiftExcess
+          - Magnitude(ShiftExcess)
+          - SpatialMetric
+          - ExtrinsicCurvature
+          - HamiltonianConstraint
+          - MomentumConstraint
+          - Conformal(EnergyDensity)
+          - Conformal(StressTrace)
+        InterpolateToMesh: None
+        CoordinatesFloatingPointType: Float
+        FloatingPointTypes: [Float]

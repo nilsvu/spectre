@@ -198,8 +198,6 @@ struct FirstOrderSystem
 
   using background_fields = tmpl::flatten<tmpl::list<
       // Quantities for Hamiltonian constraint
-      gr::Tags::Conformal<gr::Tags::EnergyDensity<DataVector>,
-                          ConformalMatterScale>,
       gr::Tags::TraceExtrinsicCurvature<DataVector>,
       tmpl::conditional_t<
           ConformalGeometry == Geometry::Curved,
@@ -213,7 +211,8 @@ struct FirstOrderSystem
                   tmpl::size_t<3>, Frame::Inertial>>,
           tmpl::list<>>,
       tmpl::conditional_t<
-          EnabledEquations == Equations::Hamiltonian,
+          EnabledEquations ==
+              Equations::Hamiltonian,
           Tags::LongitudinalShiftMinusDtConformalMetricOverLapseSquare<
               DataVector>,
           tmpl::list<>>,
@@ -222,9 +221,7 @@ struct FirstOrderSystem
           EnabledEquations == Equations::HamiltonianAndLapse or
               EnabledEquations ==
                   Equations::HamiltonianLapseAndShift,
-          tmpl::list<gr::Tags::Conformal<gr::Tags::StressTrace<DataVector>,
-                                         ConformalMatterScale>,
-                     ::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataVector>>>,
+          tmpl::list<::Tags::dt<gr::Tags::TraceExtrinsicCurvature<DataVector>>>,
           tmpl::list<>>,
       tmpl::conditional_t<
           EnabledEquations ==
@@ -238,9 +235,6 @@ struct FirstOrderSystem
           EnabledEquations ==
               Equations::HamiltonianLapseAndShift,
           tmpl::list<
-              gr::Tags::Conformal<
-                  gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>,
-                  ConformalMatterScale>,
               ::Tags::deriv<gr::Tags::TraceExtrinsicCurvature<DataVector>,
                             tmpl::size_t<3>, Frame::Inertial>,
               Tags::ShiftBackground<DataVector, 3, Frame::Inertial>,

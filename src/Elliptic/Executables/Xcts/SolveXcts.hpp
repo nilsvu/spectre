@@ -39,6 +39,7 @@
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
+#include "ParallelAlgorithms/Actions/ReceiveBroadcast.hpp"
 #include "ParallelAlgorithms/Events/Factory.hpp"
 #include "ParallelAlgorithms/Events/ObserveNorms.hpp"
 #include "ParallelAlgorithms/Events/Tags.hpp"
@@ -48,6 +49,17 @@
 #include "ParallelAlgorithms/EventsAndTriggers/Trigger.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/CleanUpInterpolator.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/InitializeInterpolationTarget.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/InterpolationTargetReceiveVars.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/InterpolatorReceivePoints.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/InterpolatorReceiveVolumeData.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/InterpolatorRegisterElement.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/TryToInterpolate.hpp"
+#include "ParallelAlgorithms/Interpolation/Interpolate.hpp"
+#include "ParallelAlgorithms/Interpolation/InterpolationTarget.hpp"
+#include "ParallelAlgorithms/Interpolation/Interpolator.hpp"
+#include "ParallelAlgorithms/Interpolation/Tags.hpp"
 #include "ParallelAlgorithms/LinearSolver/Actions/MakeIdentityIfSkipped.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/ElementsAllocator.hpp"
@@ -58,6 +70,7 @@
 #include "ParallelAlgorithms/NonlinearSolver/NewtonRaphson/NewtonRaphson.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/Binary.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Factory.hpp"
+#include "PointwiseFunctions/Hydro/EquationsOfState/PolytropicFluid.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/AnalyticSolution.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/Background.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/InitialGuess.hpp"
@@ -68,6 +81,28 @@
 #include "Utilities/MemoryHelpers.hpp"
 #include "Utilities/ProtocolHelpers.hpp"
 #include "Utilities/TMPL.hpp"
+
+namespace SolveXcts {
+struct Injection {
+  struct Position {
+    using type = std::array<double, 3>;
+    static constexpr Options::String help = "Position of the injection";
+  };
+  struct CentralDensity {
+    using type = double;
+    static constexpr Options::String help =
+        "Rest mass density at the center of the star";
+  };
+  static constexpr Options::String help = "An injection";
+  using options = tmpl::list<Position, CentralDensity>;
+  std::array<double, 3> position;
+  double central_density;
+  void pup(PUP::er& p) {
+    p | position;
+    p | central_density;
+  }
+};
+}  // namespace SolveXcts
 
 namespace SolveXcts::OptionTags {
 struct NonlinearSolverGroup {
@@ -100,7 +135,244 @@ struct MultigridGroup {
   static constexpr Options::String help = "Options for the multigrid";
   using group = LinearSolverGroup;
 };
+
+struct Injections : db::SimpleTag {
+  using type = std::vector<SolveXcts::Injection>;
+  using option_tags = tmpl::list<Injections>;
+  static constexpr Options::String help = "Injection energies";
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type& value) { return value; }
+};
+
+struct EquationOfState : db::SimpleTag {
+  using type = EquationsOfState::PolytropicFluid<true>;
+  using option_tags = tmpl::list<EquationOfState>;
+  static constexpr Options::String help = "Equation of state";
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type& value) { return value; }
+};
 }  // namespace SolveXcts::OptionTags
+
+namespace SolveXcts::Tags {
+struct InjectionEnergies : db::SimpleTag {
+  using type = std::vector<double>;
+};
+struct InterpolationId : db::SimpleTag {
+  using type = size_t;
+};
+}  // namespace SolveXcts::Tags
+
+namespace SolveXcts::InterpolationTargets {
+struct StarCenters {
+  using temporal_id = SolveXcts::Tags::InterpolationId;
+  struct compute_target_points {
+    using is_sequential = std::true_type;
+    using frame = Frame::Inertial;
+    template <typename DbTags, typename Metavariables>
+    static tnsr::I<DataVector, 3> points(
+        const db::DataBox<DbTags>& box,
+        const tmpl::type_<Metavariables>& /*meta*/,
+        const size_t& /*temporal_id*/) {
+      const auto& injections = get<SolveXcts::OptionTags::Injections>(box);
+      const size_t num_points = injections.size();
+      tnsr::I<DataVector, 3> interpolation_points{num_points};
+      for (size_t i = 0; i < num_points; ++i) {
+        const auto& injection = injections.at(i);
+        get<0>(interpolation_points)[i] = injection.position[0];
+        get<1>(interpolation_points)[i] = injection.position[1];
+        get<2>(interpolation_points)[i] = injection.position[2];
+      }
+      return interpolation_points;
+    }
+  };
+  using compute_items_on_source = tmpl::list<>;
+  using vars_to_interpolate_to_target =
+      tmpl::list<Xcts::Tags::ConformalFactor<DataVector>,
+                 Xcts::Tags::LapseTimesConformalFactor<DataVector>>;
+  using compute_items_on_target = tmpl::list<>;
+  struct post_interpolation_callback {
+    using observation_types = tmpl::list<>;
+    using observed_reduction_data_tags = tmpl::list<>;
+    template <typename DbTags, typename Metavariables>
+    static void apply(const db::DataBox<DbTags>& box,
+                      Parallel::GlobalCache<Metavariables>& cache,
+                      const size_t& temporal_id) {
+      using temporal_id_tag = SolveXcts::Tags::InterpolationId;
+      const auto& injections = get<SolveXcts::OptionTags::Injections>(box);
+      const auto& eos = get<SolveXcts::OptionTags::EquationOfState>(box);
+      std::vector<double> injection_energies{};
+      injection_energies.reserve(injections.size());
+      std::vector<std::string> legend{db::tag_name<temporal_id_tag>()};
+      legend.reserve(injections.size());
+      for (size_t i = 0; i < injections.size(); ++i) {
+        const auto& injection = injections.at(i);
+        const double lapse_at_center =
+            get(get<Xcts::Tags::LapseTimesConformalFactor<DataVector>>(
+                box))[i] /
+            get(get<Xcts::Tags::ConformalFactor<DataVector>>(box))[i];
+        const double specific_enthalpy_at_center =
+            get(eos.specific_enthalpy_from_density(
+                Scalar<double>(injection.central_density)));
+        injection_energies.push_back(specific_enthalpy_at_center *
+                                     lapse_at_center);
+        Parallel::printf("lapse at center %zu: %e\n", i, lapse_at_center);
+        Parallel::printf("injection energy %zu: %e\n", i,
+                         injection_energies.at(i));
+        legend.push_back("InjectionEnergy" + get_output(i));
+      }
+
+      Parallel::receive_data<::Tags::BroadcastInbox<
+          SolveXcts::Tags::InjectionEnergies, temporal_id_tag>>(
+          Parallel::get_parallel_component<
+              typename Metavariables::dg_element_array>(cache),
+          temporal_id, injection_energies);
+
+      auto& observer_writer_component = Parallel::get_parallel_component<
+          observers::ObserverWriter<Metavariables>>(cache);
+      Parallel::threaded_action<
+          observers::ThreadedActions::WriteReductionDataRow>(
+          // Node 0 is always the writer, so directly call the component on that
+          // node
+          observer_writer_component[0], std::string{"/hydro"},
+          std::move(legend), std::make_tuple(temporal_id, injection_energies));
+    }
+  };
+  using observed_reduction_data_tags = tmpl::list<>;
+};
+}  // namespace SolveXcts::InterpolationTargets
+
+namespace SolveXcts::Actions {
+struct InterpolateToStarCenters {
+  using simple_tags = tmpl::list<SolveXcts::Tags::InterpolationId>;
+  template <typename DbTagList, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTagList>&&> apply(
+      db::DataBox<DbTagList>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      Parallel::GlobalCache<Metavariables>& cache,
+      const ArrayIndex& array_index, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) {
+    using InterpolationTarget = SolveXcts::InterpolationTargets::StarCenters;
+    using TemporalIdTag = SolveXcts::Tags::InterpolationId;
+    db::mutate<TemporalIdTag>(
+        make_not_null(&box),
+        [](const auto local_temporal_id) { ++(*local_temporal_id); });
+    intrp::interpolate<
+        InterpolationTarget,
+        typename InterpolationTarget::vars_to_interpolate_to_target>(
+        get<TemporalIdTag>(box), get<domain::Tags::Mesh<3>>(box), cache,
+        array_index, get<Xcts::Tags::ConformalFactor<DataVector>>(box),
+        get<Xcts::Tags::LapseTimesConformalFactor<DataVector>>(box));
+    return {std::move(box)};
+  }
+};
+
+template <int ConformalMatterScale>
+struct UpdateMatterSources {
+ private:
+  using matter_sources_tag = ::Tags::Variables<
+      tmpl::list<gr::Tags::Conformal<gr::Tags::EnergyDensity<DataVector>,
+                                     ConformalMatterScale>,
+                 gr::Tags::Conformal<gr::Tags::StressTrace<DataVector>,
+                                     ConformalMatterScale>,
+                 gr::Tags::Conformal<
+                     gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>,
+                     ConformalMatterScale>>>;
+  using argument_tags =
+      tmpl::list<Xcts::Tags::ConformalFactor<DataVector>,
+                 Xcts::Tags::LapseTimesConformalFactor<DataVector>,
+                 SolveXcts::OptionTags::Injections,
+                 SolveXcts::Tags::InjectionEnergies,
+                 SolveXcts::OptionTags::EquationOfState,
+                 domain::Tags::Coordinates<3, Frame::Inertial>>;
+
+ public:
+  using simple_tags = tmpl::list<matter_sources_tag>;
+
+  template <typename DbTags, typename... InboxTags, typename ArrayIndex,
+            typename ActionList, typename ParallelComponent>
+  static std::tuple<db::DataBox<DbTags>&&> apply(
+      db::DataBox<DbTags>& box, tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
+      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) {
+    db::mutate_apply<tmpl::list<matter_sources_tag>, argument_tags>(
+        [](const auto matter_sources,
+           const Scalar<DataVector>& conformal_factor,
+           const Scalar<DataVector>& lapse_times_conformal_factor,
+           const std::vector<SolveXcts::Injection>& injections,
+           const std::vector<double>& injection_energies,
+           const EquationsOfState::PolytropicFluid<true>& eos,
+           const tnsr::I<DataVector, 3>& inertial_coords) {
+          static_assert(ConformalMatterScale == 0, "Check this");
+          const size_t num_points = get(conformal_factor).size();
+          if (UNLIKELY(matter_sources->number_of_grid_points() != num_points)) {
+            *matter_sources = typename matter_sources_tag::type{num_points, 0.};
+          }
+          ASSERT(injections.size() == injection_energies.size(),
+                 "Size mismatch");
+          if (injections.empty()) {
+            return;
+          }
+          auto& conformal_energy_density =
+              get<gr::Tags::Conformal<gr::Tags::EnergyDensity<DataVector>,
+                                      ConformalMatterScale>>(*matter_sources);
+          auto& conformal_stress_trace =
+              get<gr::Tags::Conformal<gr::Tags::StressTrace<DataVector>,
+                                      ConformalMatterScale>>(*matter_sources);
+          auto& conformal_momentum_density = get<gr::Tags::Conformal<
+              gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>,
+              ConformalMatterScale>>(*matter_sources);
+          Scalar<DataVector> specific_enthalpy{num_points, 1.};
+          const auto closest_injection_energy =
+              [&injections,
+               &injection_energies](const std::array<double, 3>& x) {
+                double energy = 0.;
+                double closest_r = std::numeric_limits<double>::infinity();
+                for (size_t i = 0; i < injections.size(); ++i) {
+                  const auto& injection = injections.at(i);
+                  const double r = sqrt(square(injection.position[0] - x[0]) +
+                                        square(injection.position[1] - x[1]) +
+                                        square(injection.position[2] - x[2]));
+                  if (r < closest_r) {
+                    closest_r = r;
+                    energy = injection_energies.at(i);
+                  }
+                }
+                return energy;
+              };
+          for (size_t i = 0; i < num_points; ++i) {
+            const double injection_energy = closest_injection_energy(
+                {{get<0>(inertial_coords)[i], get<1>(inertial_coords)[i],
+                  get<2>(inertial_coords)[i]}});
+            const double lapse =
+                get(lapse_times_conformal_factor)[i] / get(conformal_factor)[i];
+            if (injection_energy > lapse) {
+              get(specific_enthalpy)[i] = injection_energy / lapse;
+            }
+          }
+
+          // rho_0
+          conformal_energy_density =
+              eos.rest_mass_density_from_enthalpy(specific_enthalpy);
+          // P
+          conformal_stress_trace =
+              eos.pressure_from_density(conformal_energy_density);
+          // rho = rho_0 * h - P
+          get(conformal_energy_density) *= get(specific_enthalpy);
+          get(conformal_energy_density) -= get(conformal_stress_trace);
+          // S = 3 * P
+          get(conformal_stress_trace) *= 3.;
+          // S^i = 0
+          std::fill(conformal_momentum_density.begin(),
+                    conformal_momentum_density.end(), 0.);
+        },
+        make_not_null(&box));
+    return {std::move(box)};
+  }
+};
+}  // namespace SolveXcts::Actions
 
 /// \cond
 struct Metavariables {
@@ -123,6 +395,19 @@ struct Metavariables {
   // These are the fluxes corresponding to the fields, i.e. essentially their
   // first derivatives. These are background fields for the linearized sources.
   using fluxes_tag = ::Tags::Variables<typename system::primal_fluxes>;
+  // These are the matter sources in the XCTS equations. They are updated from
+  // the injection energy by a compute item. The dependence of the matter
+  // sources on the variables is neglected in the linearization, so corrections
+  // lose some precision. We can attempt to fix this by building matter sources
+  // into the XCTS equations similar to how boundary conditions are handled.
+  using matter_sources_tag = ::Tags::Variables<
+      tmpl::list<gr::Tags::Conformal<gr::Tags::EnergyDensity<DataVector>,
+                                     conformal_matter_scale>,
+                 gr::Tags::Conformal<gr::Tags::StressTrace<DataVector>,
+                                     conformal_matter_scale>,
+                 gr::Tags::Conformal<
+                     gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>,
+                     conformal_matter_scale>>>;
   // These are the fixed sources, i.e. the RHS of the equations
   using fixed_sources_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
   using operator_applied_to_fields_tag =
@@ -148,6 +433,8 @@ struct Metavariables {
       volume_dim, typename linear_solver::operand_tag,
       SolveXcts::OptionTags::MultigridGroup, elliptic::dg::Tags::Massive,
       typename linear_solver::preconditioner_source_tag>;
+  using communicated_multigrid_tags =
+      tmpl::list<fields_tag, fluxes_tag, matter_sources_tag>;
   // Smooth each multigrid level with a number of Schwarz smoothing steps
   using subdomain_operator =
       elliptic::dg::subdomain_operator::SubdomainOperator<
@@ -158,7 +445,7 @@ struct Metavariables {
   // This data needs to be communicated on subdomain overlap regions
   using communicated_overlap_tags = tmpl::list<
       // For linearized sources
-      fields_tag, fluxes_tag,
+      fields_tag, fluxes_tag, matter_sources_tag,
       // For linearized boundary conditions
       domain::Tags::Faces<volume_dim, Xcts::Tags::ConformalFactor<DataVector>>,
       domain::Tags::Faces<volume_dim,
@@ -196,6 +483,7 @@ struct Metavariables {
   using error_tags = db::wrap_tags_in<Tags::Error, analytic_solution_fields>;
   using observe_fields = tmpl::append<
       analytic_solution_fields, typename system::background_fields,
+      typename matter_sources_tag::tags_list,
       typename spacetime_quantities_compute::tags_list, error_tags,
       tmpl::list<domain::Tags::Coordinates<volume_dim, Frame::Inertial>,
                  ::Tags::NonEuclideanMagnitude<
@@ -206,7 +494,17 @@ struct Metavariables {
                  spacetime_quantities_compute, error_compute>;
 
   // Collect all items to store in the cache.
-  using const_global_cache_tags = tmpl::list<background_tag, initial_guess_tag>;
+  using const_global_cache_tags =
+      tmpl::list<background_tag, initial_guess_tag,
+                 SolveXcts::OptionTags::Injections,
+                 SolveXcts::OptionTags::EquationOfState>;
+
+  // Interface for interpolations
+  using interpolation_target_tags =
+      tmpl::list<SolveXcts::InterpolationTargets::StarCenters>;
+  using interpolator_source_vars =
+      tmpl::list<Xcts::Tags::ConformalFactor<DataVector>,
+                 Xcts::Tags::LapseTimesConformalFactor<DataVector>>;
 
   struct factory_creation
       : tt::ConformsTo<Options::protocols::FactoryCreation> {
@@ -244,7 +542,7 @@ struct Metavariables {
           linear_solver, multigrid, schwarz_smoother>>>;
 
   // Specify all global synchronization points.
-  enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
+  enum class Phase { Initialization, Register, Solve, Exit };
 
   using initialization_actions = tmpl::list<
       Actions::SetupDataBox,
@@ -279,7 +577,9 @@ struct Metavariables {
                           operator_applied_to_fields_tag>>;
 
   using register_actions =
-      tmpl::list<observers::Actions::RegisterEventsWithObservers,
+      tmpl::list<intrp::Actions::RegisterElementWithInterpolator<
+                     LinearSolver::multigrid::Tags::IsFinestGrid>,
+                 observers::Actions::RegisterEventsWithObservers,
                  typename nonlinear_solver::register_element,
                  typename multigrid::register_element,
                  typename schwarz_smoother::register_element,
@@ -292,13 +592,19 @@ struct Metavariables {
 
   using solve_actions = tmpl::list<
       typename nonlinear_solver::template solve<
-          build_operator_actions<false>,
+          tmpl::list<
+              SolveXcts::Actions::InterpolateToStarCenters,
+              ::Actions::ReceiveBroadcast<
+                  SolveXcts::Tags::InterpolationId,
+                  tmpl::list<SolveXcts::Tags::InjectionEnergies>>,
+              SolveXcts::Actions::UpdateMatterSources<conformal_matter_scale>,
+              build_operator_actions<false>>,
           tmpl::list<
               LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
-                  volume_dim, tmpl::list<fields_tag, fluxes_tag>,
+                  volume_dim, communicated_multigrid_tags,
                   typename multigrid::options_group>,
               LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
-                  tmpl::list<fields_tag, fluxes_tag>,
+                  communicated_multigrid_tags,
                   typename multigrid::options_group, void>,
               LinearSolver::Schwarz::Actions::SendOverlapFields<
                   communicated_overlap_tags,
@@ -320,22 +626,25 @@ struct Metavariables {
 
   using dg_element_array = elliptic::DgElementArray<
       Metavariables,
-      tmpl::list<Parallel::PhaseActions<Phase, Phase::Initialization,
-                                        initialization_actions>,
-                 Parallel::PhaseActions<Phase, Phase::RegisterWithObserver,
-                                        register_actions>,
-                 Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>>,
+      tmpl::list<
+          Parallel::PhaseActions<Phase, Phase::Initialization,
+                                 initialization_actions>,
+          Parallel::PhaseActions<Phase, Phase::Register, register_actions>,
+          Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>>,
       LinearSolver::multigrid::ElementsAllocator<
           volume_dim, typename multigrid::options_group>>;
 
   // Specify all parallel components that will execute actions at some point.
-  using component_list = tmpl::flatten<
-      tmpl::list<dg_element_array, typename nonlinear_solver::component_list,
-                 typename linear_solver::component_list,
-                 typename multigrid::component_list,
-                 typename schwarz_smoother::component_list,
-                 observers::Observer<Metavariables>,
-                 observers::ObserverWriter<Metavariables>>>;
+  using component_list = tmpl::flatten<tmpl::list<
+      dg_element_array, typename nonlinear_solver::component_list,
+      typename linear_solver::component_list,
+      typename multigrid::component_list,
+      typename schwarz_smoother::component_list,
+      observers::Observer<Metavariables>,
+      observers::ObserverWriter<Metavariables>,
+      intrp::Interpolator<Metavariables>,
+      intrp::InterpolationTarget<
+          Metavariables, SolveXcts::InterpolationTargets::StarCenters>>>;
 
   // Specify the transitions between phases.
   template <typename... Tags>
@@ -346,8 +655,8 @@ struct Metavariables {
       const Parallel::CProxy_GlobalCache<Metavariables>& /*cache_proxy*/) {
     switch (current_phase) {
       case Phase::Initialization:
-        return Phase::RegisterWithObserver;
-      case Phase::RegisterWithObserver:
+        return Phase::Register;
+      case Phase::Register:
         return Phase::Solve;
       case Phase::Solve:
         return Phase::Exit;
