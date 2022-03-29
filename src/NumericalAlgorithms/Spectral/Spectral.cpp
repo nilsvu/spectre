@@ -49,6 +49,8 @@ std::ostream& operator<<(std::ostream& os, const Quadrature& quadrature) {
       return os << "CellCentered";
     case Quadrature::FaceCentered:
       return os << "FaceCentered";
+    case Quadrature::SphericalHarmonic:
+      return os << "SphericalHarmonic";
     default:
       ERROR("Invalid quadrature");
   }

@@ -34,12 +34,14 @@ add_test_library(
 target_link_libraries(
   ${LIBRARY}
   PRIVATE
+  ApparentHorizons
   Boost::boost
   DataStructures
   DomainStructure
   EventsAndTriggers
   IO
   Parallel
+  SphericalHarmonics
   Utilities
   )
 
