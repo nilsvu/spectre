@@ -311,7 +311,7 @@ struct Metavariables {
           Parallel::PhaseActions<
               typename Metavariables::Phase, Metavariables::Phase::Register,
               tmpl::list<importers::Actions::RegisterWithElementDataReader,
-                         intrp::Actions::RegisterElementWithInterpolator,
+                         intrp::Actions::RegisterElementWithInterpolator<>,
                          Parallel::Actions::TerminatePhase>>,
           Parallel::PhaseActions<
               typename Metavariables::Phase, Metavariables::Phase::FindHorizons,

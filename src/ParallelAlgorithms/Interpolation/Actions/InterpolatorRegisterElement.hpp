@@ -4,6 +4,7 @@
 #pragma once
 
 #include "DataStructures/DataBox/DataBox.hpp"
+#include "IO/Observer/GetSectionObservationKey.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/Invoke.hpp"
 #include "ParallelAlgorithms/Interpolation/Tags.hpp"  // IWYU pragma: keep
@@ -102,6 +103,7 @@ struct DeregisterElement {
 /// eliminated from a core. The use of separate functions is necessary to
 /// provide an interface usable outside of iterable actions, e.g. in specialized
 /// `pup` functions.
+template <typename ArraySectionIdTag = void>
 struct RegisterElementWithInterpolator {
  private:
   template <typename ParallelComponent, typename RegisterOrDeregisterAction,
@@ -149,6 +151,11 @@ struct RegisterElementWithInterpolator {
       Parallel::GlobalCache<Metavariables>& cache,
       const ArrayIndex& array_index, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) {
+    const std::optional<std::string> section_observation_key =
+        observers::get_section_observation_key<ArraySectionIdTag>(box);
+    if (not section_observation_key.has_value()) {
+      return {std::move(box)};
+    }
     perform_registration<ParallelComponent>(box, cache, array_index);
     return {std::move(box)};
   }
