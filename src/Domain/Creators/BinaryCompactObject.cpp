@@ -398,17 +398,12 @@ Domain<3> BinaryCompactObject::create_domain() const {
       const auto& kerr_horizon = local_object.shape.value();
       const size_t l_max = kerr_horizon.modes[0];
       const size_t m_max = kerr_horizon.modes[1];
-      // This is r_+
-      const double horizon_radius =
-          kerr_horizon.mass *
-          (1. + sqrt(1. - dot(kerr_horizon.dimensionless_spin,
-                              kerr_horizon.dimensionless_spin)));
       const YlmSpherepack ylm{l_max, m_max};
       const DataVector radial_distortion =
-          1. - get(gr::Solutions::kerr_horizon_radius(
-                   ylm.theta_phi_points(), kerr_horizon.mass,
-                   kerr_horizon.dimensionless_spin)) /
-                   horizon_radius;
+          1. - get(gr::Solutions::kerr_radius(
+                   local_object.inner_radius, ylm.theta_phi_points(),
+                   kerr_horizon.mass, kerr_horizon.dimensionless_spin)) /
+                   local_object.inner_radius;
       auto radial_distortion_coefs = ylm.phys_to_spec(radial_distortion);
       const domain::CoordinateMaps::TimeDependent::Shape shape_map{
           {{local_object.x_coord, 0., 0.}},

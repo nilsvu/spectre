@@ -95,6 +95,19 @@ SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.KerrHorizon",
           {{acos(0.3 / sqrt(0.14)) + M_PI_2, atan2(0.2, 0.1)}}, 2.0,
           {{one_minus_eps * 0.1 / sqrt(0.14), one_minus_eps * 0.2 / sqrt(0.14),
             one_minus_eps * 0.3 / sqrt(0.14)}})));
+
+  {
+    const double mass = 0.45;
+    const std::array<double, 3> dimless_spin{{0., 0.3, 0.5}};
+    const double r_plus =
+        mass * (1. + sqrt(1. - dot(dimless_spin, dimless_spin)));
+    const DataVector theta{0., M_PI_4 * 0.34, M_PI_4, M_PI_2 * 0.67, M_PI_2};
+    const DataVector phi{M_PI_2 * 0.4, M_PI * 0.55, M_PI_4, M_PI_4 * 1.2, M_PI};
+    const std::array<DataVector, 2> theta_phi{
+        {std::move(theta), std::move(phi)}};
+    CHECK_ITERABLE_APPROX(kerr_radius(r_plus, theta_phi, mass, dimless_spin),
+                          kerr_horizon_radius(theta_phi, mass, dimless_spin));
+  }
 }
 }  // namespace Solutions
 }  // namespace gr

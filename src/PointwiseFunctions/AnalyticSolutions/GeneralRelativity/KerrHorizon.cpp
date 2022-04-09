@@ -64,6 +64,40 @@ template Scalar<double> kerr_horizon_radius(
     const std::array<double, 2>& theta_phi, const double mass,
     const std::array<double, 3>& dimensionless_spin);
 
+template <typename DataType>
+Scalar<DataType> kerr_radius(const double boyer_lindquist_radius,
+                             const std::array<DataType, 2>& theta_phi,
+                             const double mass,
+                             const std::array<double, 3>& dimensionless_spin) {
+  const double spin_magnitude_squared = square(magnitude(dimensionless_spin));
+  const double mass_squared = square(mass);
+
+  const auto& theta = theta_phi[0];
+  const auto& phi = theta_phi[1];
+  const DataType sin_theta = sin(theta);
+  const DataType cos_theta = cos(theta);
+  const DataType sin_phi = sin(phi);
+  const DataType cos_phi = cos(phi);
+  const DataType spin_dot_unit = dimensionless_spin[0] * sin_theta * cos_phi +
+                                 dimensionless_spin[1] * sin_theta * sin_phi +
+                                 dimensionless_spin[2] * cos_theta;
+
+  return Scalar<DataType>{boyer_lindquist_radius *
+                          sqrt(square(boyer_lindquist_radius) +
+                               mass_squared * spin_magnitude_squared) /
+                          sqrt(square(boyer_lindquist_radius) +
+                               mass_squared * square(spin_dot_unit))};
+}
+
+template Scalar<DataVector> kerr_radius(
+    const double boyer_lindquist_radius,
+    const std::array<DataVector, 2>& theta_phi, const double mass,
+    const std::array<double, 3>& dimensionless_spin);
+
+template Scalar<double> kerr_radius(
+    const double boyer_lindquist_radius, const std::array<double, 2>& theta_phi,
+    const double mass, const std::array<double, 3>& dimensionless_spin);
+
 }  // namespace Solutions
 }  // namespace gr
 

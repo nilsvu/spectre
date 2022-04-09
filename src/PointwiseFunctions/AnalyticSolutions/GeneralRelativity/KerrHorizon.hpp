@@ -85,5 +85,11 @@ Scalar<DataType> kerr_horizon_radius(
     const std::array<DataType, 2>& theta_phi, double mass,
     const std::array<double, 3>& dimensionless_spin);
 
+template <typename DataType>
+Scalar<DataType> kerr_radius(const double boyer_lindquist_radius,
+                             const std::array<DataType, 2>& theta_phi,
+                             double mass,
+                             const std::array<double, 3>& dimensionless_spin);
+
 }  // namespace Solutions
 }  // namespace gr
