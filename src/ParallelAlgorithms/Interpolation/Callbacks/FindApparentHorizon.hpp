@@ -11,8 +11,12 @@
 #include "ApparentHorizons/StrahlkorperInDifferentFrame.hpp"
 #include "ApparentHorizons/Tags.hpp"
 #include "DataStructures/DataBox/DataBox.hpp"
+#include "DataStructures/Tensor/TensorData.hpp"
 #include "DataStructures/VariablesTag.hpp"
 #include "Domain/FunctionsOfTime/Tags.hpp"
+#include "IO/H5/AccessType.hpp"
+#include "IO/H5/File.hpp"
+#include "IO/H5/VolumeData.hpp"
 #include "IO/Logging/Tags.hpp"
 #include "IO/Logging/Verbosity.hpp"
 #include "NumericalAlgorithms/SphericalHarmonics/Strahlkorper.hpp"
@@ -242,6 +246,35 @@ struct FindApparentHorizon {
             InterpolationTarget_detail::get_temporal_id_value(temporal_id),
             info.iteration, info.min_residual, info.max_residual,
             info.residual_ylm, info.residual_mesh, info.r_min, info.r_max);
+      }
+
+      if (has_converged) {
+        // Geometry of the Strahlkorper that we want to dump
+        const auto& strahlkorper =
+            db::get<StrahlkorperTags::Strahlkorper<Frame>>(*box);
+        const YlmSpherepack& ylm = strahlkorper.ylm_spherepack();
+        const std::array<DataVector, 2>& theta_phi = ylm.theta_phi_points();
+        const DataVector radius = ylm.spec_to_phys(strahlkorper.coefficients());
+
+        // Open volume file and dump
+        const std::string filename{pretty_type::name<InterpolationTargetTag>() +
+                                   ".h5"};
+        h5::H5File<h5::AccessType::ReadWrite> h5_file{filename, true};
+        auto& vol = h5_file.insert<h5::VolumeData>("/Surface");
+        std::vector<TensorComponent> components{
+            {"/Surface.vol/0/Strahlkorper/Theta", theta_phi[0]},
+            {"/Surface.vol/0/Strahlkorper/Phi", theta_phi[1]},
+            {"/Surface.vol/0/Strahlkorper/Radius", radius}};
+        const std::vector<ElementVolumeData> voldata{
+            {std::vector<size_t>{ylm.physical_extents()[0],
+                                 ylm.physical_extents()[1]},
+             std::move(components),
+             std::vector<Spectral::Basis>{Spectral::Basis::SphericalHarmonic,
+                                          Spectral::Basis::SphericalHarmonic},
+             std::vector<Spectral::Quadrature>{
+                 Spectral::Quadrature::SphericalHarmonic,
+                 Spectral::Quadrature::SphericalHarmonic}}};
+        vol.write_volume_data(0, 0., voldata);
       }
 
       if (status == FastFlow::Status::SuccessfulIteration) {
