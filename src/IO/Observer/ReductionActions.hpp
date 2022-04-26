@@ -236,6 +236,10 @@ void append_to_reduction_data(
     const gsl::not_null<std::vector<double>*> all_reduction_data,
     const std::vector<double>& t);
 
+void append_to_reduction_data(
+    const gsl::not_null<std::vector<double>*> all_reduction_data,
+    const DataVector& t);
+
 template <typename... Ts, size_t... Is>
 void write_data(const std::string& subfile_name,
                 std::vector<std::string> legend, const std::tuple<Ts...>& data,
