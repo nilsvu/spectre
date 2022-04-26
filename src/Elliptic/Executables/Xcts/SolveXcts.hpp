@@ -20,6 +20,8 @@
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/InitializeSubdomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
+#include "Elliptic/Executables/Xcts/Actions/UpdateMatterSources.hpp"
+#include "Elliptic/Executables/Xcts/InterpolationTargets/StarCenters.hpp"
 #include "Elliptic/SubdomainPreconditioners/MinusLaplacian.hpp"
 #include "Elliptic/SubdomainPreconditioners/RegisterDerived.hpp"
 #include "Elliptic/Systems/Xcts/BoundaryConditions/Factory.hpp"
@@ -39,6 +41,7 @@
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/Reduction.hpp"
 #include "Parallel/RegisterDerivedClassesWithCharm.hpp"
+#include "ParallelAlgorithms/Actions/ReceiveBroadcast.hpp"
 #include "ParallelAlgorithms/Events/Factory.hpp"
 #include "ParallelAlgorithms/Events/ObserveNorms.hpp"
 #include "ParallelAlgorithms/Events/Tags.hpp"
@@ -48,6 +51,16 @@
 #include "ParallelAlgorithms/EventsAndTriggers/Trigger.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Initialization/Actions/RemoveOptionsAndTerminatePhase.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/CleanUpInterpolator.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/InitializeInterpolationTarget.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/InterpolationTargetReceiveVars.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/InterpolatorReceivePoints.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/InterpolatorReceiveVolumeData.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/InterpolatorRegisterElement.hpp"
+#include "ParallelAlgorithms/Interpolation/Actions/TryToInterpolate.hpp"
+#include "ParallelAlgorithms/Interpolation/InterpolationTarget.hpp"
+#include "ParallelAlgorithms/Interpolation/Interpolator.hpp"
+#include "ParallelAlgorithms/Interpolation/Tags.hpp"
 #include "ParallelAlgorithms/LinearSolver/Actions/MakeIdentityIfSkipped.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/ElementsAllocator.hpp"
@@ -103,12 +116,15 @@ struct MultigridGroup {
 }  // namespace SolveXcts::OptionTags
 
 /// \cond
+template <bool FixedMatterSources>
 struct Metavariables {
   static constexpr size_t volume_dim = 3;
   static constexpr int conformal_matter_scale = 0;
+  static constexpr bool fixed_matter_sources = FixedMatterSources;
   using system =
       Xcts::FirstOrderSystem<Xcts::Equations::HamiltonianLapseAndShift,
-                             Xcts::Geometry::Curved, conformal_matter_scale>;
+                             Xcts::Geometry::Curved, conformal_matter_scale,
+                             fixed_matter_sources>;
 
   using background_tag =
       elliptic::Tags::Background<elliptic::analytic_data::Background>;
@@ -123,6 +139,20 @@ struct Metavariables {
   // These are the fluxes corresponding to the fields, i.e. essentially their
   // first derivatives. These are background fields for the linearized sources.
   using fluxes_tag = ::Tags::Variables<typename system::primal_fluxes>;
+  // These are the matter sources in the XCTS equations. They are either fixed,
+  // or updated from the injection energy before every nonlinear operator
+  // application. The dependence of the matter sources on the variables is
+  // neglected in the linearization, so corrections lose some precision. We can
+  // attempt to fix this by building matter sources into the XCTS equations as
+  // factory-creatable sources, similar to how boundary conditions are handled.
+  using matter_sources_tag = ::Tags::Variables<
+      tmpl::list<gr::Tags::Conformal<gr::Tags::EnergyDensity<DataVector>,
+                                     conformal_matter_scale>,
+                 gr::Tags::Conformal<gr::Tags::StressTrace<DataVector>,
+                                     conformal_matter_scale>,
+                 gr::Tags::Conformal<
+                     gr::Tags::MomentumDensity<3, Frame::Inertial, DataVector>,
+                     conformal_matter_scale>>>;
   // These are the fixed sources, i.e. the RHS of the equations
   using fixed_sources_tag = db::add_tag_prefix<::Tags::FixedSource, fields_tag>;
   using operator_applied_to_fields_tag =
@@ -148,6 +178,10 @@ struct Metavariables {
       volume_dim, typename linear_solver::operand_tag,
       SolveXcts::OptionTags::MultigridGroup, elliptic::dg::Tags::Massive,
       typename linear_solver::preconditioner_source_tag>;
+  using communicated_multigrid_tags = tmpl::flatten<
+      tmpl::list<fields_tag, fluxes_tag,
+                 tmpl::conditional_t<fixed_matter_sources, tmpl::list<>,
+                                     matter_sources_tag>>>;
   // Smooth each multigrid level with a number of Schwarz smoothing steps
   using subdomain_operator =
       elliptic::dg::subdomain_operator::SubdomainOperator<
@@ -156,16 +190,18 @@ struct Metavariables {
       elliptic::subdomain_preconditioners::Registrars::MinusLaplacian<
           volume_dim, SolveXcts::OptionTags::SchwarzSmootherGroup>>;
   // This data needs to be communicated on subdomain overlap regions
-  using communicated_overlap_tags = tmpl::list<
+  using communicated_overlap_tags = tmpl::flatten<tmpl::list<
       // For linearized sources
       fields_tag, fluxes_tag,
+      tmpl::conditional_t<fixed_matter_sources, tmpl::list<>,
+                          matter_sources_tag>,
       // For linearized boundary conditions
       domain::Tags::Faces<volume_dim, Xcts::Tags::ConformalFactor<DataVector>>,
       domain::Tags::Faces<volume_dim,
                           Xcts::Tags::LapseTimesConformalFactor<DataVector>>,
       domain::Tags::Faces<volume_dim,
                           ::Tags::NormalDotFlux<Xcts::Tags::ShiftExcess<
-                              DataVector, volume_dim, Frame::Inertial>>>>;
+                              DataVector, volume_dim, Frame::Inertial>>>>>;
   using schwarz_smoother = LinearSolver::Schwarz::Schwarz<
       typename multigrid::smooth_fields_tag,
       SolveXcts::OptionTags::SchwarzSmootherGroup, subdomain_operator,
@@ -196,6 +232,7 @@ struct Metavariables {
   using error_tags = db::wrap_tags_in<Tags::Error, analytic_solution_fields>;
   using observe_fields = tmpl::append<
       analytic_solution_fields, typename system::background_fields,
+      typename matter_sources_tag::tags_list,
       typename spacetime_quantities_compute::tags_list, error_tags,
       tmpl::list<domain::Tags::Coordinates<volume_dim, Frame::Inertial>,
                  ::Tags::NonEuclideanMagnitude<
@@ -207,6 +244,15 @@ struct Metavariables {
 
   // Collect all items to store in the cache.
   using const_global_cache_tags = tmpl::list<background_tag, initial_guess_tag>;
+
+  // Interface for interpolations
+  using interpolation_target_tags = tmpl::conditional_t<
+      fixed_matter_sources, tmpl::list<>,
+      tmpl::list<SolveXcts::InterpolationTargets::StarCenters>>;
+  using interpolator_source_vars = tmpl::conditional_t<
+      fixed_matter_sources, tmpl::list<>,
+      tmpl::list<Xcts::Tags::ConformalFactor<DataVector>,
+                 Xcts::Tags::LapseTimesConformalFactor<DataVector>>>;
 
   struct factory_creation
       : tt::ConformsTo<Options::protocols::FactoryCreation> {
@@ -240,11 +286,11 @@ struct Metavariables {
   // Collect all reduction tags for observers
   using observed_reduction_data_tags =
       observers::collect_reduction_data_tags<tmpl::flatten<tmpl::list<
-          tmpl::at<factory_creation::factory_classes, Event>, nonlinear_solver,
-          linear_solver, multigrid, schwarz_smoother>>>;
+          tmpl::at<typename factory_creation::factory_classes, Event>,
+          nonlinear_solver, linear_solver, multigrid, schwarz_smoother>>>;
 
   // Specify all global synchronization points.
-  enum class Phase { Initialization, RegisterWithObserver, Solve, Exit };
+  enum class Phase { Initialization, Register, Solve, Exit };
 
   using initialization_actions = tmpl::list<
       Actions::SetupDataBox,
@@ -278,12 +324,15 @@ struct Metavariables {
       tmpl::conditional_t<Linearized, operator_applied_to_correction_vars_tag,
                           operator_applied_to_fields_tag>>;
 
-  using register_actions =
-      tmpl::list<observers::Actions::RegisterEventsWithObservers,
-                 typename nonlinear_solver::register_element,
-                 typename multigrid::register_element,
-                 typename schwarz_smoother::register_element,
-                 Parallel::Actions::TerminatePhase>;
+  using register_actions = tmpl::list<
+      observers::Actions::RegisterEventsWithObservers,
+      tmpl::conditional_t<fixed_matter_sources, tmpl::list<>,
+                          intrp::Actions::RegisterElementWithInterpolator<
+                              LinearSolver::multigrid::Tags::IsFinestGrid>>,
+      typename nonlinear_solver::register_element,
+      typename multigrid::register_element,
+      typename schwarz_smoother::register_element,
+      Parallel::Actions::TerminatePhase>;
 
   template <typename Label>
   using smooth_actions =
@@ -292,13 +341,21 @@ struct Metavariables {
 
   using solve_actions = tmpl::list<
       typename nonlinear_solver::template solve<
-          build_operator_actions<false>,
+          tmpl::conditional_t<
+              fixed_matter_sources, build_operator_actions<false>,
+              tmpl::list<SolveXcts::Actions::InterpolateToStarCenters,
+                         ::Actions::ReceiveBroadcast<
+                             SolveXcts::Tags::InterpolationId,
+                             tmpl::list<SolveXcts::Tags::InjectionEnergies>>,
+                         SolveXcts::Actions::UpdateMatterSources<
+                             conformal_matter_scale>,
+                         build_operator_actions<false>>>,
           tmpl::list<
               LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
-                  volume_dim, tmpl::list<fields_tag, fluxes_tag>,
+                  volume_dim, communicated_multigrid_tags,
                   typename multigrid::options_group>,
               LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
-                  tmpl::list<fields_tag, fluxes_tag>,
+                  communicated_multigrid_tags,
                   typename multigrid::options_group, void>,
               LinearSolver::Schwarz::Actions::SendOverlapFields<
                   communicated_overlap_tags,
@@ -323,20 +380,26 @@ struct Metavariables {
       Metavariables,
       tmpl::list<Parallel::PhaseActions<Phase, Phase::Initialization,
                                         initialization_actions>,
-                 Parallel::PhaseActions<Phase, Phase::RegisterWithObserver,
+                 Parallel::PhaseActions<Phase, Phase::Register,
                                         register_actions>,
                  Parallel::PhaseActions<Phase, Phase::Solve, solve_actions>>,
       LinearSolver::multigrid::ElementsAllocator<
           volume_dim, typename multigrid::options_group>>;
 
   // Specify all parallel components that will execute actions at some point.
-  using component_list = tmpl::flatten<
-      tmpl::list<dg_element_array, typename nonlinear_solver::component_list,
-                 typename linear_solver::component_list,
-                 typename multigrid::component_list,
-                 typename schwarz_smoother::component_list,
-                 observers::Observer<Metavariables>,
-                 observers::ObserverWriter<Metavariables>>>;
+  using component_list = tmpl::flatten<tmpl::list<
+      dg_element_array, typename nonlinear_solver::component_list,
+      typename linear_solver::component_list,
+      typename multigrid::component_list,
+      typename schwarz_smoother::component_list,
+      observers::Observer<Metavariables>,
+      observers::ObserverWriter<Metavariables>,
+      tmpl::conditional_t<
+          fixed_matter_sources, tmpl::list<>,
+          tmpl::list<intrp::Interpolator<Metavariables>,
+                     intrp::InterpolationTarget<
+                         Metavariables,
+                         SolveXcts::InterpolationTargets::StarCenters>>>>>;
 
   // Specify the transitions between phases.
   template <typename... Tags>
@@ -347,8 +410,8 @@ struct Metavariables {
       const Parallel::CProxy_GlobalCache<Metavariables>& /*cache_proxy*/) {
     switch (current_phase) {
       case Phase::Initialization:
-        return Phase::RegisterWithObserver;
-      case Phase::RegisterWithObserver:
+        return Phase::Register;
+      case Phase::Register:
         return Phase::Solve;
       case Phase::Solve:
         return Phase::Exit;

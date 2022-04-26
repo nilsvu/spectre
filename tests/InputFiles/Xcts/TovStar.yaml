@@ -14,21 +14,33 @@
 #     SkipColumns: [0, 1, 2]
 #     AbsoluteTolerance: 1e-6
 
-Background:
+# Expected injection energy: 0.86445461877633345
+
+Background: &tov
   TovStar:
-    CentralDensity: 1.e-3
-    PolytropicConstant: 1.
-    PolytropicExponent: 2
+    CentralDensity: &central_density 0.0008087415253997405 # h = 1.2
+    PolytropicConstant: &polytropic_constant 123.6489
+    PolytropicExponent: &polytropic_exponent 2.
     Coordinates: Isotropic
+
+Injections:
+  - Position: [0, 0, 0]
+    CentralDensity: *central_density
+
+EquationOfState:
+  PolytropicConstant: *polytropic_constant
+  PolytropicExponent: *polytropic_exponent
 
 InitialGuess: Flatness
 
 DomainCreator:
   Sphere:
-    InnerRadius: 0.2
-    OuterRadius: 1.24984447898
-    InitialRefinement: 0
-    InitialGridPoints: [5, 5]
+    InnerRadius: 3.
+    OuterRadius: 18.
+    RadialPartitioning: [&star_radius 9.709353324763269]
+    RadialDistribution: [Linear, Linear]
+    InitialRefinement: 1
+    InitialGridPoints: 8
     UseEquiangularMap: True
     BoundaryCondition:
       AnalyticSolution:
@@ -48,20 +60,20 @@ Observers:
 NonlinearSolver:
   NewtonRaphson:
     ConvergenceCriteria:
-      MaxIterations: 10
+      MaxIterations: 20
       RelativeResidual: 1.e-8
       AbsoluteResidual: 1.e-10
-    SufficientDecrease: 1.e-4
+    SufficientDecrease: 1.e-1
     MaxGlobalizationSteps: 40
     DampingFactor: 1.
-    Verbosity: Quiet
+    Verbosity: Verbose
 
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
       MaxIterations: 30
       RelativeResidual: 1.e-4
-      AbsoluteResidual: 1.e-12
+      AbsoluteResidual: 1.e-11
     Verbosity: Quiet
 
   Multigrid:
@@ -69,13 +81,15 @@ LinearSolver:
     MaxLevels: Auto
     PreSmoothing: True
     PostSmoothingAtBottom: False
-    Verbosity: Verbose
+    Verbosity: Silent
     OutputVolumeData: False
+    ElementAllocation:
+      WeightByNumPoints: True
 
   SchwarzSmoother:
     Iterations: 3
     MaxOverlap: 2
-    Verbosity: Verbose
+    Verbosity: Silent
     SubdomainSolver:
       Gmres:
         ConvergenceCriteria:
@@ -86,25 +100,28 @@ LinearSolver:
         Restart: None
         Preconditioner:
           MinusLaplacian:
-            Solver: ExplicitInverse
+            Solver:
+              ExplicitInverse:
+                FillFactor: 1
+                Verbosity: Silent
             BoundaryConditions: Auto
     SkipResets: True
     ObservePerCoreReductions: False
 
 EventsAndTriggers:
-  ? HasConverged
+  ? Always
   : - ObserveNorms:
         SubfileName: ErrorNorms
         TensorsToObserve:
           - Name: Error(ConformalFactor)
             NormType: L2Norm
-            Components: Sum
+            Components: Individual
           - Name: Error(LapseTimesConformalFactor)
             NormType: L2Norm
-            Components: Sum
+            Components: Individual
           - Name: Error(ShiftExcess)
             NormType: L2Norm
-            Components: Sum
+            Components: Individual
     - ObserveNorms:
         SubfileName: Norms
         TensorsToObserve:
@@ -124,6 +141,7 @@ EventsAndTriggers:
           - Conformal(EnergyDensity)
           - Conformal(StressTrace)
           - HamiltonianConstraint
+          - MomentumConstraint
         InterpolateToMesh: None
         CoordinatesFloatingPointType: Float
         FloatingPointTypes: [Float]

@@ -6,5 +6,6 @@
 #include <cstddef>
 
 /// \cond
+template <bool FixedMatterSources>
 struct Metavariables;
 /// \endcond

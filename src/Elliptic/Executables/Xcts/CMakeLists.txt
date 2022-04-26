@@ -37,6 +37,14 @@ add_spectre_parallel_executable(
   SolveXcts
   SolveXcts
   Elliptic/Executables/Xcts
-  "Metavariables"
+  "Metavariables<true>"
   "${LIBS_TO_LINK}"
+  )
+
+add_spectre_parallel_executable(
+  SolveXctsWithMatter
+  SolveXcts
+  Elliptic/Executables/Xcts
+  "Metavariables<false>"
+  "${LIBS_TO_LINK};ParallelInterpolation"
   )
