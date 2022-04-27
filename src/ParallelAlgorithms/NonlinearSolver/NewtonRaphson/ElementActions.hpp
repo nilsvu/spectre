@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -313,7 +314,7 @@ struct PrepareStep {
 
  public:
   using const_global_cache_tags =
-      tmpl::list<NonlinearSolver::Tags::DampingFactor<OptionsGroup>,
+      tmpl::list<NonlinearSolver::Tags::Damping<OptionsGroup>,
                  logging::Tags::Verbosity<OptionsGroup>>;
 
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
@@ -345,7 +346,7 @@ struct PrepareStep {
            const gsl::not_null<size_t*> globalization_iteration_id,
            const gsl::not_null<double*> step_length,
            const auto globalization_fields, const auto& fields,
-           const double damping_factor) {
+           const std::optional<NonlinearSolver::Damping>& damping) {
           ++(*iteration_id);
           // Begin the linear solve with a zero initial guess
           *correction =
@@ -358,11 +359,14 @@ struct PrepareStep {
                                                                         0.);
           // Prepare line search globalization
           *globalization_iteration_id = 0;
-          *step_length = damping_factor;
+          *step_length =
+              (damping.has_value() and *iteration_id <= damping->num_iterations)
+                  ? damping->factor
+                  : 1.;
           *globalization_fields = fields;
         },
         db::get<fields_tag>(box),
-        db::get<NonlinearSolver::Tags::DampingFactor<OptionsGroup>>(box));
+        db::get<NonlinearSolver::Tags::Damping<OptionsGroup>>(box));
     return {std::move(box)};
   }
 };

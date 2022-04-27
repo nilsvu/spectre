@@ -7,11 +7,14 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <string>
 
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Tag.hpp"
+#include "Options/Auto.hpp"
 #include "Options/Options.hpp"
+#include "ParallelAlgorithms/NonlinearSolver/Damping.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/PrettyType.hpp"
 
@@ -63,13 +66,10 @@ struct SufficientDecrease {
  * globalization steps that may further reduce the step length.
  */
 template <typename OptionsGroup>
-struct DampingFactor {
-  using type = double;
-  static constexpr Options::String help = {
-      "Multiply corrections by this factor"};
-  static type lower_bound() { return 0.; }
-  static type upper_bound() { return 1.; }
-  static type suggested_value() { return 1.; }
+struct Damping {
+  using type =
+      Options::Auto<NonlinearSolver::Damping, Options::AutoLabel::None>;
+  static constexpr Options::String help = {"Apply damping to the algorithm"};
   using group = OptionsGroup;
 };
 
@@ -209,13 +209,13 @@ struct SufficientDecrease : db::SimpleTag {
  * \see `NonlinearSolver::OptionTags::DampingFactor`
  */
 template <typename OptionsGroup>
-struct DampingFactor : db::SimpleTag {
+struct Damping : db::SimpleTag {
   static std::string name() {
-    return "DampingFactor(" + pretty_type::name<OptionsGroup>() + ")";
+    return "Damping(" + pretty_type::name<OptionsGroup>() + ")";
   }
-  using type = double;
+  using type = std::optional<NonlinearSolver::Damping>;
   static constexpr bool pass_metavariables = false;
-  using option_tags = tmpl::list<OptionTags::DampingFactor<OptionsGroup>>;
+  using option_tags = tmpl::list<OptionTags::Damping<OptionsGroup>>;
   static type create_from_options(const type& option) { return option; }
 };
 
