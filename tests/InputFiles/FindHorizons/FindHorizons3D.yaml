@@ -9,7 +9,7 @@ ResourceInfo:
   Singletons:
     AhA:
       Proc: Auto
-      Exclusive: true
+      Exclusive: false
 
 DomainCreator:
   Shell:
@@ -29,6 +29,10 @@ Importers:
     FileGlob: "KerrVolume*.h5"
     Subgroup: "VolumeData"
     ObservationValue: Last
+
+SpatialDiscretization:
+  DiscontinuousGalerkin:
+    Quadrature: GaussLobatto
 
 ApparentHorizons:
   AhA:

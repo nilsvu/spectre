@@ -8,6 +8,7 @@
 
 #include "ApparentHorizons/HorizonAliases.hpp"
 #include "ApparentHorizons/ObjectLabel.hpp"
+#include "ApparentHorizons/ObserveCenters.hpp"
 #include "ApparentHorizons/StrahlkorperGr.hpp"
 #include "ApparentHorizons/Tags.hpp"
 #include "DataStructures/DataBox/DataBox.hpp"
@@ -17,8 +18,8 @@
 #include "Domain/Protocols/Metavariables.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
-#include "Elliptic/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
-#include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
+#include "Evolution/DiscontinuousGalerkin/DgElementArray.hpp"
+#include "Evolution/Initialization/DgDomain.hpp"
 #include "IO/Importers/Actions/ReadVolumeData.hpp"
 #include "IO/Importers/Actions/ReceiveVolumeData.hpp"
 #include "IO/Importers/Actions/RegisterWithElementDataReader.hpp"
@@ -61,6 +62,7 @@
 #include "PointwiseFunctions/GeneralRelativity/Christoffel.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Ricci.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
+#include "PointwiseFunctions/GeneralRelativity/Transform.hpp"
 #include "Time/Tags.hpp"
 #include "Utilities/Blas.hpp"
 #include "Utilities/ErrorHandling/FloatingPointExceptions.hpp"
@@ -136,9 +138,7 @@ struct DispatchApparentHorizonFinder {
         cache, element_id,
         db::get<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataVector>>(box),
         db::get<gr::Tags::ExtrinsicCurvature<Dim, Frame::Inertial, DataVector>>(
-            box),
-        db::get<domain::Tags::InverseJacobian<Dim, Frame::ElementLogical,
-                                              Frame::Inertial>>(box));
+            box));
     return {Parallel::AlgorithmExecution::Continue, std::nullopt};
   }
 };
@@ -148,11 +148,9 @@ struct DispatchApparentHorizonFinder {
 template <size_t Dim>
 struct ComputeHorizonVolumeQuantities
     : tt::ConformsTo<intrp::protocols::ComputeVarsToInterpolate> {
-  using allowed_src_tags =
-      tmpl::list<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataVector>,
-                 gr::Tags::ExtrinsicCurvature<Dim, Frame::Inertial, DataVector>,
-                 domain::Tags::InverseJacobian<Dim, Frame::ElementLogical,
-                                               Frame::Inertial>>;
+  using allowed_src_tags = tmpl::list<
+      gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataVector>,
+      gr::Tags::ExtrinsicCurvature<Dim, Frame::Inertial, DataVector>>;
   using required_src_tags = allowed_src_tags;
   template <typename TargetFrame>
   using allowed_dest_tags =
@@ -165,39 +163,50 @@ struct ComputeHorizonVolumeQuantities
   using required_dest_tags = allowed_dest_tags<TargetFrame>;
 
   template <typename SrcTagList, typename DestTagList>
-  static void apply(const gsl::not_null<Variables<DestTagList>*> target_vars,
-                    const Variables<SrcTagList>& src_vars,
-                    const Mesh<Dim>& mesh) {
-    const auto& spatial_metric =
+  static void apply(
+      const gsl::not_null<Variables<DestTagList>*> target_vars,
+      const Variables<SrcTagList>& src_vars, const Mesh<Dim>& mesh,
+      const Jacobian<DataVector, Dim, Frame::Grid, Frame::Inertial>& jacobian,
+      const InverseJacobian<DataVector, 3, Frame::ElementLogical, Frame::Grid>&
+          inv_jacobian) {
+    // Inertial-frame (src) quantities
+    const auto& inertial_spatial_metric =
         get<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataVector>>(
             src_vars);
-    const auto& ext_curvature =
+    const auto& inertial_ext_curvature =
         get<gr::Tags::ExtrinsicCurvature<Dim, Frame::Inertial, DataVector>>(
             src_vars);
-    const auto& inv_jacobian =
-        get<domain::Tags::InverseJacobian<Dim, Frame::ElementLogical,
-                                          Frame::Inertial>>(src_vars);
-    get<gr::Tags::SpatialMetric<Dim, Frame::Inertial, DataVector>>(
-        *target_vars) = spatial_metric;
-    get<gr::Tags::ExtrinsicCurvature<Dim, Frame::Inertial, DataVector>>(
-        *target_vars) = ext_curvature;
-    auto& inv_spatial_metric =
-        get<gr::Tags::InverseSpatialMetric<Dim, Frame::Inertial, DataVector>>(
+    // Grid-frame (target) quantities
+    auto& grid_spatial_metric =
+        get<gr::Tags::SpatialMetric<Dim, Frame::Grid, DataVector>>(
             *target_vars);
+    auto& grid_ext_curvature =
+        get<gr::Tags::ExtrinsicCurvature<Dim, Frame::Grid, DataVector>>(
+            *target_vars);
+    auto& grid_inv_spatial_metric =
+        get<gr::Tags::InverseSpatialMetric<Dim, Frame::Grid, DataVector>>(
+            *target_vars);
+    auto& spatial_christoffel_second_kind = get<
+        gr::Tags::SpatialChristoffelSecondKind<Dim, Frame::Grid, DataVector>>(
+        *target_vars);
+    auto& spatial_ricci =
+        get<gr::Tags::SpatialRicci<Dim, Frame::Grid>>(*target_vars);
+    // Transform quantities from inertial to grid frame
+    transform::to_different_frame(make_not_null(&grid_spatial_metric),
+                                  inertial_spatial_metric, jacobian);
+    transform::to_different_frame(make_not_null(&grid_ext_curvature),
+                                  inertial_ext_curvature, jacobian);
+    // Compute derived quantities
     Scalar<DataVector> unused_det{mesh.number_of_grid_points()};
     determinant_and_inverse(make_not_null(&unused_det),
-                            make_not_null(&inv_spatial_metric), spatial_metric);
+                            make_not_null(&grid_inv_spatial_metric),
+                            grid_spatial_metric);
     const auto deriv_spatial_metric =
-        ::partial_derivative(spatial_metric, mesh, inv_jacobian);
-    auto& spatial_christoffel_second_kind =
-        get<gr::Tags::SpatialChristoffelSecondKind<Dim, Frame::Inertial,
-                                                   DataVector>>(*target_vars);
+        ::partial_derivative(grid_spatial_metric, mesh, inv_jacobian);
     gr::christoffel_second_kind(make_not_null(&spatial_christoffel_second_kind),
-                                deriv_spatial_metric, inv_spatial_metric);
+                                deriv_spatial_metric, grid_inv_spatial_metric);
     const auto deriv_spatial_christoffel_second_kind = ::partial_derivative(
         spatial_christoffel_second_kind, mesh, inv_jacobian);
-    auto& spatial_ricci =
-        get<gr::Tags::SpatialRicci<Dim, Frame::Inertial>>(*target_vars);
     gr::ricci_tensor(make_not_null(&spatial_ricci),
                      spatial_christoffel_second_kind,
                      deriv_spatial_christoffel_second_kind);
@@ -210,22 +219,23 @@ struct ApparentHorizon
   static std::string name() { return "Ah" + ah::name(Label); }
   using temporal_id = ::Tags::Time;
   using compute_target_points =
-      intrp::TargetPoints::ApparentHorizon<ApparentHorizon, Frame::Inertial>;
+      intrp::TargetPoints::ApparentHorizon<ApparentHorizon, Frame::Grid>;
   using post_interpolation_callback =
-      intrp::callbacks::FindApparentHorizon<ApparentHorizon, Frame::Inertial>;
+      intrp::callbacks::FindApparentHorizon<ApparentHorizon, Frame::Grid>;
   using horizon_find_failure_callback =
       intrp::callbacks::ErrorOnFailedApparentHorizon;
   using post_horizon_find_callbacks = tmpl::list<
       intrp::callbacks::ObserveTimeSeriesOnSurface<
-          ::ah::tags_for_observing<Frame::Inertial>, ApparentHorizon>,
+          ::ah::tags_for_observing<Frame::Grid>, ApparentHorizon>,
       intrp::callbacks::ObserveSurfaceData<::ah::surface_tags_for_observing,
-                                           ApparentHorizon, ::Frame::Inertial>>;
+                                           ApparentHorizon, ::Frame::Grid>,
+      ah::callbacks::ObserveCenters<ApparentHorizon>>;
 
   using vars_to_interpolate_to_target =
-      ::ah::vars_to_interpolate_to_target<Dim, Frame::Inertial>;
+      ::ah::vars_to_interpolate_to_target<Dim, Frame::Grid>;
   using compute_vars_to_interpolate = ComputeHorizonVolumeQuantities<Dim>;
   using compute_items_on_target =
-      ::ah::compute_items_on_target<Dim, Frame::Inertial>;
+      ::ah::compute_items_on_target<Dim, Frame::Grid>;
 };
 
 template <size_t Dim, bool TwoHorizons>
@@ -266,13 +276,13 @@ struct Metavariables {
         tmpl::map<tmpl::pair<DomainCreator<Dim>, domain_creators<Dim>>>;
   };
 
-  using element_array = elliptic::DgElementArray<
+  using element_array = ::DgElementArray<
       Metavariables,
       tmpl::list<
           Parallel::PhaseActions<
               Parallel::Phase::Initialization,
               tmpl::list<
-                  elliptic::dg::Actions::InitializeDomain<Dim>,
+                  evolution::dg::Initialization::Domain<Dim>,
                   Actions::InitializeFields<Dim, adm_vars>,
                   ::Initialization::Actions::RemoveOptionsAndTerminatePhase>>,
           Parallel::PhaseActions<
