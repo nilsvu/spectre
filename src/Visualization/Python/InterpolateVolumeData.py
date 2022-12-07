@@ -107,6 +107,8 @@ def interpolate_h5_file(source_file_path,
             raise NameError(
                 "If the source and target files are the same, "
                 "the source and target volume_data need to be different.")
+        with spectre_h5.H5File(source_file_path, "r") as source_file2:
+            pass
         source_file = spectre_h5.H5File(source_file_path, "r+")
         target_file = source_file
     else:
