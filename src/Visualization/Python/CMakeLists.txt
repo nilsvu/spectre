@@ -5,9 +5,10 @@ set(LIBRARY "PyVisualization")
 
 spectre_python_add_module(
   Visualization
+  PYTHON_FILES
+  InterpolateVolumeData.py
   PYTHON_EXECUTABLES
   GenerateXdmf.py
-  InterpolateVolumeData.py
   PlotDatFile.py
   Render1D.py
 )

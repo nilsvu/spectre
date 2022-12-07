@@ -13,12 +13,16 @@ SPECTRE_VERSION = "@SPECTRE_VERSION@"
 # invoked. This is important so the CLI responds quickly.
 class Cli(click.MultiCommand):
     def list_commands(self, ctx):
-        return ["clean-output"]
+        return ["clean-output", "interpolate-vol"]
 
     def get_command(self, ctx, name):
         if name == "clean-output":
             from spectre.tools.CleanOutput import clean_output_command
             return clean_output_command
+        elif name == "interpolate-vol":
+            from spectre.Visualization.InterpolateVolumeData import (
+                interpolate_volume_data_command)
+            return interpolate_volume_data_command
         raise NotImplementedError(f"The command '{name}' is not implemented.")
 
 
