@@ -1,0 +1,129 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Executable: EvolveValenciaDivCleanSlabJet
+# Check: parse;execute
+
+AnalyticData:
+  SlabJet:
+    AdiabaticIndex: 1.3333333333333333
+    AmbientDensity: 10.0
+    AmbientPressure: 0.01
+    AmbientElectronFraction: 0.15
+    JetDensity: 0.1
+    JetPressure: 0.01
+    JetElectronFraction: 0.15
+    JetVelocity: [0.9987523388778445, 0.0, 0.0]  # u_i = [20, 0, 0]
+    InletRadius: 1.0
+    MagneticField: [1.0, 0.0, 0.0]
+
+ResourceInfo:
+  AvoidGlobalProc0: false
+
+Evolution:
+  InitialTime: 0.0
+  InitialTimeStep: 0.01
+  TimeStepper:
+    AdamsBashforth:
+      Order: 3
+
+PhaseChangeAndTriggers:
+
+DomainCreator:
+  Brick:
+    LowerBound: [-1.0, -14.0, 0.0]
+    UpperBound: [20.0, 14.0, 1.0]
+    InitialRefinement: [4, 4, 0]
+    InitialGridPoints: [6, 6, 6]
+    TimeDependence: None
+    BoundaryCondition: HydroFreeOutflow
+
+SpatialDiscretization:
+  BoundaryCorrection:
+    Rusanov:
+  DiscontinuousGalerkin:
+    Formulation: StrongInertial
+    Quadrature: GaussLobatto
+    Subcell:
+      RdmpDelta0: 1.0e-7
+      RdmpEpsilon: 1.0e-3
+      PerssonExponent: 4.0
+      InitialData:
+        RdmpDelta0: 1.0e-7
+        RdmpEpsilon: 1.0e-3
+        PerssonExponent: 4.0
+      AlwaysUseSubcells: false
+      SubcellToDgReconstructionMethod: DimByDim
+      UseHalo: false
+      OnlyDgBlocksAndGroups: None
+    TciOptions:
+      MinimumValueOfD: 1.0e-20
+      MinimumValueOfYe: 1.0e-20
+      MinimumValueOfTildeTau: 1.0e-50
+      MagneticFieldCutoff: DoNotCheckMagneticField
+      AtmosphereDensity: 1.01e-15
+      SafetyFactorForB: 1.0e-12
+  SubcellSolver:
+    Reconstructor:
+      Wcns5zPrim:
+        NonlinearWeightExponent: 2
+        Epsilon: 1.0e-15
+        FallbackReconstructor: MonotonisedCentral
+        MaxNumberOfExtrema: 0
+
+EvolutionSystem:
+  ValenciaDivClean:
+    DampingParameter: 1.0
+
+VariableFixing:
+  FixConservatives:
+    CutoffD: 1.0e-12
+    MinimumValueOfD: 1.0e-12
+    CutoffYe: 0.0
+    MinimumValueOfYe: 0.0
+    SafetyFactorForB: 1.0e-12
+    SafetyFactorForS: 1.0e-12
+  FixToAtmosphere:
+    DensityOfAtmosphere: 1.0e-12
+    DensityCutoff: 1.0e-12
+    TransitionDensityCutoff: 1.0e-11
+    MaxVelocityMagnitude: 1.0e-4
+
+Observers:
+  VolumeFileName: "SlabJetVolume"
+  ReductionFileName: "SlabJetReduction"
+
+Interpolator:
+  DumpVolumeDataOnFailure: false
+
+EventsAndTriggers:
+  - - TimeCompares:
+        Comparison: GreaterThanOrEqualTo
+        Value: 10
+    - - Completion
+  - - Slabs:
+        EvenlySpaced:
+          Interval: 1
+          Offset: 0
+    - - ObserveFields:
+          SubfileName: VolumeData
+          VariablesToObserve:
+            - RestMassDensity
+            - SpecificEnthalpy
+            - Pressure
+            - SpatialVelocity
+            - LorentzFactor
+            - MagneticField
+            - DivergenceCleaningField
+            - ElectronFraction
+            - TciStatus
+          InterpolateToMesh: None
+          CoordinatesFloatingPointType: Double
+          FloatingPointTypes: [Double]
+          OverrideObservationValue: None
+      - ObserveTimeStep:
+          SubfileName: TimeStep
+          PrintTimeToTerminal: True
+          ObservePerCore: False
+
+EventsAndDenseTriggers:
