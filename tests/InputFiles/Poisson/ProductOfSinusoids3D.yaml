@@ -19,8 +19,12 @@ ResourceInfo:
   Singletons: Auto
 
 Background:
-  ProductOfSinusoids:
-    WaveNumbers: [1, 1, 1]
+  MathFunction:
+    Function:
+      Gaussian:
+        Amplitude: 1.
+        Width: 1.
+        Center: [0., 0., 0.]
 
 InitialGuess:
   Zero:
@@ -28,11 +32,19 @@ InitialGuess:
 RandomizeInitialGuess: None
 
 DomainCreator:
-  Brick:
-    LowerBound: [-1.570796326794896, 0., 0.]
-    UpperBound: [3.141592653589793, 1.570796326794896, 3.141592653589793]
-    InitialRefinement: [1, 0, 0]
-    InitialGridPoints: [4, 3, 5]
+  Sphere:
+    InnerRadius: 0.2
+    OuterRadius: 1e4
+    InnerCubeSphericity: 0.
+    UseEquiangularMap: True
+    RadialPartitioning: [0.5, 2.]
+    RadialDistribution: [Linear, Logarithmic, Inverse]
+    InitialRefinement:
+      InnerCube: [1, 1, 1]
+      Shell0:    [1, 1, 1]
+      Shell1:    [1, 1, 2]
+      Shell2:    [1, 1, 2]
+    InitialGridPoints: 6
     TimeDependence: None
     BoundaryCondition:
       AnalyticSolution:
@@ -49,28 +61,28 @@ Observers:
 
 LinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 1
-    RelativeResidual: 1.e-6
-    AbsoluteResidual: 1.e-6
-  Verbosity: Verbose
+    MaxIterations: 30
+    RelativeResidual: 1.e-10
+    AbsoluteResidual: 1.e-10
+  Verbosity: Quiet
 
   Multigrid:
     Iterations: 1
     MaxLevels: Auto
     PreSmoothing: True
     PostSmoothingAtBottom: False
-    Verbosity: Verbose
+    Verbosity: Silent
     OutputVolumeData: False
 
   SchwarzSmoother:
     Iterations: 3
     MaxOverlap: 2
-    Verbosity: Quiet
+    Verbosity: Silent
     SubdomainSolver: ExplicitInverse
     ObservePerCoreReductions: False
 
 EventsAndTriggers:
-  - - HasConverged
+  - - Always
     - - ObserveNorms:
           SubfileName: ErrorNorms
           TensorsToObserve:
@@ -79,7 +91,7 @@ EventsAndTriggers:
               Components: Sum
       - ObserveFields:
           SubfileName: VolumeData
-          VariablesToObserve: [Field]
+          VariablesToObserve: [Field, Error(Field), LinearResidual(Field)]
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Double
           FloatingPointTypes: [Double]

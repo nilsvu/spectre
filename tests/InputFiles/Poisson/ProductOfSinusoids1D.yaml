@@ -19,8 +19,12 @@ ResourceInfo:
   Singletons: Auto
 
 Background:
-  ProductOfSinusoids:
-    WaveNumbers: [1]
+  MathFunction:
+    Function:
+      Gaussian:
+        Amplitude: 1.
+        Width: 1.
+        Center: 0.
 
 InitialGuess:
   Zero:
@@ -29,20 +33,22 @@ RandomizeInitialGuess: None
 
 DomainCreator:
   Interval:
-    LowerBound: [-1.570796326794896]
-    UpperBound: [3.141592653589793]
-    Distribution: Linear
-    Singularity: None
-    InitialRefinement: [1]
-    InitialGridPoints: [4]
+    LowerBound: [0.]
+    UpperBound: [1e9]
+    Distribution: Inverse
+    Singularity: -1.
+    InitialRefinement: [3]
+    InitialGridPoints: [8]
     TimeDependence: None
     BoundaryConditions:
       LowerBoundary:
         AnalyticSolution:
           Field: Dirichlet
       UpperBoundary:
-        AnalyticSolution:
-          Field: Neumann
+        Robin:
+          DirichletWeight: 1.
+          NeumannWeight: 0.
+          Constant: 0.
 
 Discretization:
   DiscontinuousGalerkin:
@@ -55,7 +61,7 @@ Observers:
 
 LinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 3
+    MaxIterations: 10
     RelativeResidual: 1.e-10
     AbsoluteResidual: 1.e-10
   Verbosity: Verbose
@@ -76,7 +82,7 @@ LinearSolver:
     ObservePerCoreReductions: False
 
 EventsAndTriggers:
-  - - HasConverged
+  - - Always
     - - ObserveNorms:
           SubfileName: ErrorNorms
           TensorsToObserve:
@@ -85,7 +91,7 @@ EventsAndTriggers:
               Components: Sum
       - ObserveFields:
           SubfileName: VolumeData
-          VariablesToObserve: [Field]
+          VariablesToObserve: [Field, LinearResidual(Field), Error(Field)]
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Double
           FloatingPointTypes: [Double]
