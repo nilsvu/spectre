@@ -155,10 +155,12 @@ struct Metavariables {
   using error_tags = db::wrap_tags_in<Tags::Error, analytic_solution_fields>;
   using observe_fields = tmpl::append<
       analytic_solution_fields, error_tags,
+      db::wrap_tags_in<LinearSolver::Tags::Residual,
+                       typename system::primal_fields>,
       tmpl::list<domain::Tags::Coordinates<volume_dim, Frame::Inertial>>>;
-  using observer_compute_tags =
-      tmpl::list<::Events::Tags::ObserverMeshCompute<volume_dim>,
-                 error_compute>;
+  using observer_compute_tags = tmpl::list<
+      ::Events::Tags::ObserverMeshCompute<volume_dim>, error_compute,
+      LinearSolver::Tags::ResidualCompute<fields_tag, fixed_sources_tag>>;
 
   // Collect all items to store in the cache.
   using const_global_cache_tags = tmpl::list<background_tag, initial_guess_tag>;
@@ -249,7 +251,11 @@ struct Metavariables {
                   smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
               ::LinearSolver::Actions::make_identity_if_skipped<
                   multigrid, build_linear_operator_actions>>,
-          Actions::RunEventsAndTriggers>,
+          tmpl::list<elliptic::dg::Actions::apply_operator<
+                         system, true, linear_solver_iteration_id, fields_tag,
+                         fluxes_vars_tag, operator_applied_to_fields_tag,
+                         vars_tag, fluxes_vars_tag>,
+                     Actions::RunEventsAndTriggers>>,
       Parallel::Actions::TerminatePhase>;
 
   using dg_element_array = elliptic::DgElementArray<
