@@ -395,7 +395,7 @@ jobs:
         # We make sure to use a fixed absolute path for the ccache directory
         CCACHE_DIR: /work/ccache
         # Control the cache size
-        CCACHE_MAXSIZE: ${{ matrix.ccache_max_size }}
+        CCACHE_MAXSIZE: 5GB # ${{ matrix.ccache_max_size }}
         CCACHE_COMPRESS: 1
         CCACHE_COMPRESSLEVEL: 6
         # We hash the content of the compiler rather than the location and mtime
@@ -443,9 +443,9 @@ ${{ env.CACHE_KEY_SUFFIX }}"
           ccache -pz
       - name: Clear ccache
         # Clear ccache if requested
-        if: >
-          github.event_name == 'workflow_dispatch'
-            && github.event.inputs.clear_ccache == 'yes'
+        # if: >
+        #   github.event_name == 'workflow_dispatch'
+        #     && github.event.inputs.clear_ccache == 'yes'
         run: |
           ccache -C
       - name: Configure build with cmake
