@@ -89,7 +89,8 @@ namespace evolution::dg::subcell::Actions {
  *   - `System::variables_tag` if the cell is troubled
  *   - `Tags::dt<System::variables_tag>` if the cell is troubled
  */
-template <size_t Dim, typename System, typename TciMutator>
+template <size_t Dim, typename System, typename TciMutator,
+          bool UseNumericInitialData>
 struct Initialize {
   using const_global_cache_tags = tmpl::list<Tags::SubcellOptions<Dim>>;
 
@@ -198,17 +199,26 @@ struct Initialize {
         },
         make_not_null(&box));
     if (cell_is_troubled) {
-      // Set variables on subcells.
-      if constexpr (System::has_primitive_and_conservative_vars) {
+      if constexpr (UseNumericInitialData) {
         db::mutate<typename System::primitive_variables_tag>(
-            make_not_null(&box), [&subcell_mesh](const auto prim_vars_ptr) {
-              prim_vars_ptr->initialize(subcell_mesh.number_of_grid_points());
+            make_not_null(&box),
+            [&dg_mesh, &subcell_mesh](const auto prim_vars_ptr) {
+              *prim_vars_ptr =
+                  fd::project(*prim_vars_ptr, dg_mesh, subcell_mesh.extents());
             });
+      } else {
+        // Set variables on subcells.
+        if constexpr (System::has_primitive_and_conservative_vars) {
+          db::mutate<typename System::primitive_variables_tag>(
+              make_not_null(&box), [&subcell_mesh](const auto prim_vars_ptr) {
+                prim_vars_ptr->initialize(subcell_mesh.number_of_grid_points());
+              });
+        }
+        evolution::Initialization::Actions::
+            SetVariables<Tags::Coordinates<Dim, Frame::ElementLogical>>::apply(
+                box, inboxes, cache, array_index, ActionList{},
+                std::add_pointer_t<ParallelComponent>{nullptr});
       }
-      evolution::Initialization::Actions::
-          SetVariables<Tags::Coordinates<Dim, Frame::ElementLogical>>::apply(
-              box, inboxes, cache, array_index, ActionList{},
-              std::add_pointer_t<ParallelComponent>{nullptr});
       db::mutate<
           db::add_tag_prefix<::Tags::dt, typename System::variables_tag>>(
           make_not_null(&box),

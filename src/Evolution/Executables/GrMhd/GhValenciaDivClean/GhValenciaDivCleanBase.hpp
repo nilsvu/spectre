@@ -55,6 +55,7 @@
 #include "Evolution/Initialization/NonconservativeSystem.hpp"
 #include "Evolution/Initialization/SetVariables.hpp"
 #include "Evolution/NumericInitialData.hpp"
+#include "Evolution/Systems/GeneralizedHarmonic/Actions/NumericInitialData.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/AllSolutions.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/BoundaryConditions/Factory.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/BoundaryCorrections/Factory.hpp"
@@ -66,6 +67,7 @@
 #include "Evolution/Systems/GeneralizedHarmonic/Initialize.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/System.hpp"
 #include "Evolution/Systems/GeneralizedHarmonic/Tags.hpp"
+#include "Evolution/Systems/GrMhd/GhValenciaDivClean/Actions/NumericInitialData.hpp"
 #include "Evolution/Systems/GrMhd/GhValenciaDivClean/BoundaryConditions/Factory.hpp"
 #include "Evolution/Systems/GrMhd/GhValenciaDivClean/BoundaryCorrections/ProductOfCorrections.hpp"
 #include "Evolution/Systems/GrMhd/GhValenciaDivClean/FiniteDifference/Tag.hpp"
@@ -242,9 +244,23 @@ struct get_thermodynamic_dim<InitialData, false> {
   static constexpr size_t value =
       InitialData::equation_of_state_type::thermodynamic_dim;
 };
+
+namespace OptionTags {
+struct GrNumericInitialData {
+  using group = importers::OptionTags::Group;
+  static constexpr Options::String help =
+      "Numeric initial data for GR variables";
+};
+
+struct HydroNumericInitialData {
+  using group = importers::OptionTags::Group;
+  static constexpr Options::String help =
+      "Numeric initial data for hydro variables";
+};
+}  // namespace OptionTags
 }  // namespace detail
 
-template <bool UseDgSubcell>
+template <bool UseDgSubcell, bool UseNumericInitialData>
 struct GhValenciaDivCleanDefaults {
  public:
   static constexpr size_t volume_dim = 3;
@@ -271,17 +287,34 @@ struct GhValenciaDivCleanDefaults {
                                      grmhd::ValenciaDivClean::Tags::TildeS<>,
                                      grmhd::ValenciaDivClean::Tags::TildeB<>>>>;
 
-  using initialize_initial_data_dependent_quantities_actions =
-      tmpl::list<Actions::MutateApply<tmpl::conditional_t<
-                     UseDgSubcell, grmhd::GhValenciaDivClean::SetPiFromGauge,
-                     GeneralizedHarmonic::gauges::SetPiFromGauge<3>>>,
-                 Initialization::Actions::AddComputeTags<
-                     tmpl::list<gr::Tags::SqrtDetSpatialMetricCompute<
-                         volume_dim, domain_frame, DataVector>>>,
-                 VariableFixing::Actions::FixVariables<
-                     VariableFixing::FixToAtmosphere<volume_dim>>,
-                 Actions::UpdateConservatives,
-                 Parallel::Actions::TerminatePhase>;
+  using initialize_initial_data_dependent_quantities_actions = tmpl::list<
+      GeneralizedHarmonic::Actions::InitializeGhAnd3Plus1Variables<volume_dim>,
+      Actions::MutateApply<tmpl::conditional_t<
+          UseDgSubcell, grmhd::GhValenciaDivClean::SetPiFromGauge,
+          GeneralizedHarmonic::gauges::SetPiFromGauge<3>>>,
+      Initialization::Actions::AddComputeTags<
+          tmpl::list<gr::Tags::SqrtDetSpatialMetricCompute<
+              volume_dim, domain_frame, DataVector>>>,
+      VariableFixing::Actions::FixVariables<
+          VariableFixing::FixToAtmosphere<volume_dim>>,
+      Actions::UpdateConservatives,
+
+      tmpl::conditional_t<
+          UseDgSubcell,
+          tmpl::list<
+              evolution::dg::subcell::Actions::Initialize<
+                  volume_dim, system,
+                  grmhd::GhValenciaDivClean::subcell::DgInitialDataTci, true>,
+              Initialization::Actions::AddSimpleTags<
+                  grmhd::ValenciaDivClean::SetVariablesNeededFixingToFalse>,
+              VariableFixing::Actions::FixVariables<
+                  VariableFixing::FixToAtmosphere<volume_dim>>,
+              Actions::UpdateConservatives,
+              Actions::MutateApply<
+                  grmhd::ValenciaDivClean::subcell::SetInitialRdmpData>>,
+          tmpl::list<>>,
+
+      Parallel::Actions::TerminatePhase>;
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& /*p*/) {}
@@ -318,10 +351,25 @@ template <bool UseDgSubcell,
           typename InitialData, typename... InterpolationTargetTags>
 struct GhValenciaDivCleanTemplateBase<
     EvolutionMetavarsDerived<InitialData, InterpolationTargetTags...>,
-    UseDgSubcell> : public virtual GhValenciaDivCleanDefaults<UseDgSubcell> {
+    UseDgSubcell>
+    : public virtual GhValenciaDivCleanDefaults<
+          UseDgSubcell, evolution::is_numeric_initial_data_v<InitialData>> {
   using derived_metavars =
       EvolutionMetavarsDerived<InitialData, InterpolationTargetTags...>;
-  using defaults = GhValenciaDivCleanDefaults<UseDgSubcell>;
+
+  static constexpr bool use_dg_subcell = UseDgSubcell;
+
+  using initial_data = InitialData;
+  static constexpr bool use_numeric_initial_data =
+      evolution::is_numeric_initial_data_v<initial_data>;
+  static_assert(
+      is_analytic_data_v<initial_data> xor
+          is_analytic_solution_v<initial_data> xor use_numeric_initial_data,
+      "initial_data must be either an analytic_data, an "
+      "analytic_solution, or externally provided numerical initial data");
+
+  using defaults =
+      GhValenciaDivCleanDefaults<use_dg_subcell, use_numeric_initial_data>;
   static constexpr size_t volume_dim = defaults::volume_dim;
   using domain_frame = typename defaults::domain_frame;
   static constexpr bool use_damped_harmonic_rollon =
@@ -336,17 +384,6 @@ struct GhValenciaDivCleanTemplateBase<
   using limiter = typename defaults::limiter;
   using initialize_initial_data_dependent_quantities_actions =
       typename defaults::initialize_initial_data_dependent_quantities_actions;
-
-  static constexpr bool use_dg_subcell = UseDgSubcell;
-
-  using initial_data = InitialData;
-  static constexpr bool use_numeric_initial_data =
-      evolution::is_numeric_initial_data_v<initial_data>;
-  static_assert(
-      is_analytic_data_v<initial_data> xor
-          is_analytic_solution_v<initial_data> xor use_numeric_initial_data,
-      "initial_data must be either an analytic_data, an "
-      "analytic_solution, or externally provided numerical initial data");
 
   static constexpr size_t thermodynamic_dim =
       detail::get_thermodynamic_dim<initial_data>::value;
@@ -638,26 +675,6 @@ struct GhValenciaDivCleanTemplateBase<
           evolution::Initialization::Actions::SetVariables<
               domain::Tags::Coordinates<volume_dim, Frame::ElementLogical>>>,
       Initialization::Actions::TimeStepperHistory<derived_metavars>,
-      VariableFixing::Actions::FixVariables<
-          VariableFixing::FixToAtmosphere<volume_dim>>,
-      Actions::UpdateConservatives,
-      GeneralizedHarmonic::Actions::InitializeGhAnd3Plus1Variables<volume_dim>,
-
-      tmpl::conditional_t<
-          use_dg_subcell,
-          tmpl::list<
-              evolution::dg::subcell::Actions::Initialize<
-                  volume_dim, system,
-                  grmhd::GhValenciaDivClean::subcell::DgInitialDataTci>,
-              Initialization::Actions::AddSimpleTags<
-                  grmhd::ValenciaDivClean::SetVariablesNeededFixingToFalse>,
-              VariableFixing::Actions::FixVariables<
-                  VariableFixing::FixToAtmosphere<volume_dim>>,
-              Actions::UpdateConservatives,
-              Actions::MutateApply<
-                  grmhd::ValenciaDivClean::subcell::SetInitialRdmpData>>,
-          tmpl::list<>>,
-
       Initialization::Actions::AddComputeTags<
           StepChoosers::step_chooser_compute_tags<
               GhValenciaDivCleanTemplateBase, local_time_stepping>>,
@@ -683,13 +700,18 @@ struct GhValenciaDivCleanTemplateBase<
                           Parallel::Actions::TerminatePhase>>,
                   Parallel::PhaseActions<
                       Parallel::Phase::ImportInitialData,
-                      tmpl::list<importers::Actions::ReadVolumeData<
-                                     evolution::OptionTags::NumericInitialData,
-                                     typename system::variables_tag::tags_list>,
-                                 importers::Actions::ReceiveVolumeData<
-                                     evolution::OptionTags::NumericInitialData,
-                                     typename system::variables_tag::tags_list>,
-                                 Parallel::Actions::TerminatePhase>>>,
+                      tmpl::list<
+                          GeneralizedHarmonic::Actions::ReadNumericInitialData<
+                              detail::OptionTags::GrNumericInitialData>,
+                          grmhd::GhValenciaDivClean::Actions::
+                              ReadNumericInitialData<
+                                  detail::OptionTags::HydroNumericInitialData>,
+                          GeneralizedHarmonic::Actions::SetNumericInitialData<
+                              detail::OptionTags::GrNumericInitialData>,
+                          grmhd::GhValenciaDivClean::Actions::
+                              SetNumericInitialData<
+                                  detail::OptionTags::HydroNumericInitialData>,
+                          Parallel::Actions::TerminatePhase>>>,
               tmpl::list<>>,
           Parallel::PhaseActions<
               Parallel::Phase::InitializeInitialDataDependentQuantities,
