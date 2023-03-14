@@ -9,15 +9,10 @@ ResourceInfo:
 
 Evolution:
   InitialTime: 0.0
-  InitialTimeStep: 0.0001
+  InitialTimeStep: 0.075  # This gets overriden by `ChangeSlabSize` anyway
   TimeStepper: Rk3HesthavenSsp
 
 PhaseChangeAndTriggers:
-  - - Slabs:
-        EvenlySpaced:
-          Interval: 1000
-          Offset: 5
-    - - VisitAndReturn(LoadBalancing)
 
 # Values taken from the Xcts/HeadOnBns.yaml input file
 EquationOfState:
@@ -42,40 +37,41 @@ DomainCreator:
 
 VariableFixing:
   FixConservatives:
-    CutoffD: 1.0e-12
-    MinimumValueOfD: 1.0e-12
+    CutoffD: 1.1e-15
+    MinimumValueOfD: 1.0e-15
     CutoffYe: 0.0
     MinimumValueOfYe: 0.0
     SafetyFactorForB: 1.0e-12
     SafetyFactorForS: 1.0e-12
   FixToAtmosphere:
-    DensityOfAtmosphere: 1.0e-12
-    DensityCutoff: 1.0e-12
-    TransitionDensityCutoff: 1.0e-11
+    DensityOfAtmosphere: 1.0e-15
+    DensityCutoff: 1.1e-15
+    TransitionDensityCutoff: 1.0e-14
     MaxVelocityMagnitude: 1.0e-4
 
+# These need some adjustment for the binary
 EvolutionSystem:
   ValenciaDivClean:
-    DampingParameter: 0.0
+    DampingParameter: 1.0
   GeneralizedHarmonic:
     GaugeCondition: Harmonic
     DampingFunctionGamma0:
       GaussianPlusConstant:
-        Constant: 1.0
-        Amplitude: 0.0
-        Width: 1.0
+        Constant: 0.001
+        Amplitude: 0.1
+        Width: 80.
         Center: [0.0, 0.0, 0.0]
     DampingFunctionGamma1:
       GaussianPlusConstant:
-        Constant: -1.0
-        Amplitude: 0.0
-        Width: 1.0
+        Constant: -0.999
+        Amplitude: 0.999
+        Width: 200.
         Center: [0.0, 0.0, 0.0]
     DampingFunctionGamma2:
       GaussianPlusConstant:
-        Constant: 1.0
-        Amplitude: 0.0
-        Width: 1.0
+        Constant: 0.001
+        Amplitude: 4.0
+        Width: 80.
         Center: [0.0, 0.0, 0.0]
 
 SpatialDiscretization:
@@ -103,7 +99,7 @@ SpatialDiscretization:
       MinimumValueOfD: 1.0e-20
       MinimumValueOfYe: 1.0e-20
       MinimumValueOfTildeTau: 1.0e-50
-      AtmosphereDensity: 1.01e-15
+      AtmosphereDensity: 1.1e-15
       SafetyFactorForB: 1.0e-12
       MagneticFieldCutoff: DoNotCheckMagneticField
   SubcellSolver:
@@ -119,22 +115,30 @@ Filtering:
     DisableForDebugging: false
 
 EventsAndTriggers:
+  # Set time step based on CLF condition
   - - Slabs:
-        EvenlySpaced:
-          Interval: 5
-          Offset: 0
+        Specified:
+          Values: [0]
     - - ChangeSlabSize:
-          DelayChange: 5
+          DelayChange: 0
           StepChoosers:
             - Cfl:
-                SafetyFactor: 0.6
-            - Increase:
-                Factor: 1.5
+                SafetyFactor: 0.5
   - - Slabs:
         EvenlySpaced:
           Interval: 1
           Offset: 0
-    - - ObserveFields:
+    - - ObserveTimeStep:
+            SubfileName: TimeSteps
+            PrintTimeToTerminal: True
+            ObservePerCore: False
+      - ObserveNorms:
+          SubfileName: Norms
+          TensorsToObserve:
+            - Name: RestMassDensity
+              NormType: Max
+              Components: Individual
+      - ObserveFields:
           SubfileName: VolumeData
           VariablesToObserve:
             - SpacetimeMetric
@@ -150,12 +154,12 @@ EventsAndTriggers:
             - PointwiseL2Norm(GaugeConstraint)
             - TciStatus
           InterpolateToMesh: None
-          CoordinatesFloatingPointType: Double
-          FloatingPointTypes: [Double]
+          CoordinatesFloatingPointType: Float
+          FloatingPointTypes: [Float]
           OverrideObservationValue: None
-  - - Slabs:
-        Specified:
-          Values: [10]
+  - - TimeCompares:
+        Comparison: GreaterThan
+        Value: 1.5
     - - Completion
 
 Observers:

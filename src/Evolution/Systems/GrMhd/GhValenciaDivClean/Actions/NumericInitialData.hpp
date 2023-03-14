@@ -264,9 +264,16 @@ struct SetNumericInitialData {
               eos.specific_internal_energy_from_density(*rest_mass_density);
           *pressure = eos.pressure_from_density(*rest_mass_density);
           // Specific enthalpy
-          hydro::relativistic_specific_enthalpy(
-              specific_enthalpy, *rest_mass_density, *specific_internal_energy,
-              *pressure);
+          destructive_resize_components(specific_enthalpy, num_points);
+          for (size_t i = 0; i < num_points; ++i) {
+            if (not equal_within_roundoff(get(*rest_mass_density)[i], 0.)) {
+              get(*specific_enthalpy)[i] =
+                  get(hydro::relativistic_specific_enthalpy(
+                      Scalar<double>(get(*rest_mass_density)[i]),
+                      Scalar<double>(get(*specific_internal_energy)[i]),
+                      Scalar<double>(get(*pressure)[i])));
+            }
+          }
           // Velocity and Lorentz factor from u_i dataset
           // W = 1 + W^2 v_i v^i
           // where W v_i = u_i, so we first raise the index on W v_i with the
