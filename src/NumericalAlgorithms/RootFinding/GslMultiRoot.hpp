@@ -262,6 +262,8 @@ std::array<double, Dim> gsl_multiroot_impl(
     const Method method, const SolverType solver_type,
     const SolverAlloc solver_alloc, const SolverSet solver_set,
     const SolverIterate solver_iterate, const SolverFree solver_free) {
+  gsl_set_error_handler_off();
+
   // Supply gsl_root with the initial guess:
   const auto gsl_root = gsl_alloc(&gsl_vector_alloc, &gsl_vector_free, Dim);
   gsl_vector_set_with_std_array(gsl_root.get(), initial_guess);
@@ -283,12 +285,7 @@ std::array<double, Dim> gsl_multiroot_impl(
 
     status = solver_iterate(solver.get());
     // Check if solver is stuck
-    if (UNLIKELY(status == GSL_ENOPROG)) {
-      if (UNLIKELY(verbosity >= Verbosity::Debug)) {
-        Parallel::printf(
-            "The iteration is not making any progress, preventing the "
-            "algorithm from continuing.");
-      }
+    if (status != GSL_SUCCESS) {
       break;
     }
     status = condition.test(*solver);

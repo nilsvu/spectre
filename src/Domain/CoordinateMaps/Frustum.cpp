@@ -233,6 +233,11 @@ std::optional<std::array<double, 3>> Frustum::inverse(
     struct {
       std::array<double, 3> operator()(
           const std::array<double, 3>& source_coords) const {
+        // if (source_coords[0] > 1. or source_coords[0] < -1. or
+        //     source_coords[1] > 1. or source_coords[1] < -1. or
+        //     source_coords[2] > 1. or source_coords[2] < -1.) {
+        //   throw convergence_error{"conv err"};
+        // }
         return map(source_coords) - target_coords;
       }
       std::array<std::array<double, 3>, 3> jacobian(

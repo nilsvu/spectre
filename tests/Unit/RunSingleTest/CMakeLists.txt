@@ -32,7 +32,7 @@ add_spectre_executable(
 
   # The following lines list the source files with tests in them to be
   # compiled into the executable.
-  ../DataStructures/Test_DataVector.cpp
+  ../Domain/CoordinateMaps/Test_Frustum.cpp
   )
 
 # Modify which libraries to link for your test case.
@@ -40,6 +40,7 @@ target_link_libraries(
   ${EXECUTABLE}
   PRIVATE
   DataStructures
+  Domain
   )
 
 # Core required libraries
