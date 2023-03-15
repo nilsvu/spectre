@@ -37,16 +37,16 @@ DomainCreator:
 
 VariableFixing:
   FixConservatives:
-    CutoffD: 1.1e-15
-    MinimumValueOfD: 1.0e-15
+    CutoffD: 1.0e-12
+    MinimumValueOfD: 1.0e-12
     CutoffYe: 0.0
     MinimumValueOfYe: 0.0
     SafetyFactorForB: 1.0e-12
     SafetyFactorForS: 1.0e-12
   FixToAtmosphere:
-    DensityOfAtmosphere: 1.0e-15
-    DensityCutoff: 1.1e-15
-    TransitionDensityCutoff: 1.0e-14
+    DensityOfAtmosphere: 1.0e-12
+    DensityCutoff: 1.0e-12
+    TransitionDensityCutoff: 1.0e-11
     MaxVelocityMagnitude: 1.0e-4
 
 # These need some adjustment for the binary
@@ -99,7 +99,7 @@ SpatialDiscretization:
       MinimumValueOfD: 1.0e-20
       MinimumValueOfYe: 1.0e-20
       MinimumValueOfTildeTau: 1.0e-50
-      AtmosphereDensity: 1.1e-15
+      AtmosphereDensity: 1.01e-15
       SafetyFactorForB: 1.0e-12
       MagneticFieldCutoff: DoNotCheckMagneticField
   SubcellSolver:
