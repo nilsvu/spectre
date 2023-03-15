@@ -287,7 +287,8 @@ struct GhValenciaDivCleanDefaults {
           tmpl::list<
               evolution::dg::subcell::Actions::Initialize<
                   volume_dim, system,
-                  grmhd::GhValenciaDivClean::subcell::DgInitialDataTci>,
+                  grmhd::GhValenciaDivClean::subcell::DgInitialDataTci,
+                  UseNumericInitialData>,
               Initialization::Actions::AddSimpleTags<
                   grmhd::ValenciaDivClean::SetVariablesNeededFixingToFalse>,
               VariableFixing::Actions::FixVariables<

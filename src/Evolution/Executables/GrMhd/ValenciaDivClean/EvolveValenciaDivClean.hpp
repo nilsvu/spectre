@@ -458,7 +458,7 @@ struct EvolutionMetavars {
           tmpl::list<
               evolution::dg::subcell::Actions::Initialize<
                   volume_dim, system,
-                  grmhd::ValenciaDivClean::subcell::DgInitialDataTci>,
+                  grmhd::ValenciaDivClean::subcell::DgInitialDataTci, false>,
               Initialization::Actions::AddSimpleTags<
                   Initialization::subcell::GrTagsForHydro<system, volume_dim>,
                   grmhd::ValenciaDivClean::SetVariablesNeededFixingToFalse>,

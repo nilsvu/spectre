@@ -55,8 +55,10 @@
 #include "PointwiseFunctions/AnalyticSolutions/AnalyticSolution.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Tags.hpp"
 #include "Time/Tags.hpp"
+#include "Utilities/CartesianProduct.hpp"
 #include "Utilities/CloneUniquePtrs.hpp"
 #include "Utilities/Gsl.hpp"
+#include "Utilities/MakeArray.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -109,17 +111,18 @@ struct Component {
 
   using phase_dependent_action_list = tmpl::list<Parallel::PhaseActions<
       Parallel::Phase::Initialization,
-      tmpl::list<
-          ActionTesting::InitializeDataBox<initial_tags>,
-          evolution::Initialization::Actions::SetVariables<
-              domain::Tags::Coordinates<Dim, Frame::ElementLogical>>,
-          evolution::dg::subcell::Actions::Initialize<
-              Dim, System<Dim>, typename Metavariables::DgInitialDataTci>>>>;
+      tmpl::list<ActionTesting::InitializeDataBox<initial_tags>,
+                 evolution::Initialization::Actions::SetVariables<
+                     domain::Tags::Coordinates<Dim, Frame::ElementLogical>>,
+                 evolution::dg::subcell::Actions::Initialize<
+                     Dim, System<Dim>, typename Metavariables::DgInitialDataTci,
+                     Metavariables::use_numeric_initial_data>>>>;
 };
 
-template <size_t Dim, bool TciFails>
+template <size_t Dim, bool TciFails, bool UseNumericInitialData>
 struct Metavariables {
   static constexpr size_t volume_dim = Dim;
+  static constexpr bool use_numeric_initial_data = UseNumericInitialData;
   using analytic_solution = SystemAnalyticSolution;
   using component_list = tmpl::list<Component<Dim, Metavariables>>;
   using system = System<Dim>;
@@ -170,9 +173,10 @@ struct Metavariables {
   };
 };
 
-template <size_t Dim, bool TciFails>
+template <size_t Dim, bool TciFails, bool UseNumericInitialData>
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-bool Metavariables<Dim, TciFails>::DgInitialDataTci::invoked = false;
+bool Metavariables<Dim, TciFails,
+                   UseNumericInitialData>::DgInitialDataTci::invoked = false;
 
 template <size_t Dim>
 class TestCreator : public DomainCreator<Dim> {
@@ -195,15 +199,16 @@ class TestCreator : public DomainCreator<Dim> {
   }
 };
 
-template <size_t Dim, bool TciFails>
+template <size_t Dim, bool TciFails, bool UseNumericInitialData>
 void test(const bool always_use_subcell, const bool interior_element,
           const bool allow_subcell_in_block) {
   CAPTURE(Dim);
   CAPTURE(TciFails);
+  CAPTURE(UseNumericInitialData);
   CAPTURE(always_use_subcell);
   CAPTURE(interior_element);
   CAPTURE(allow_subcell_in_block);
-  using metavars = Metavariables<Dim, TciFails>;
+  using metavars = Metavariables<Dim, TciFails, UseNumericInitialData>;
   using comp = Component<Dim, metavars>;
   using MockRuntimeSystem = ActionTesting::MockRuntimeSystem<metavars>;
   MockRuntimeSystem runner{
@@ -218,7 +223,7 @@ void test(const bool always_use_subcell, const bool interior_element,
                    : std::optional{std::vector<std::string>{"Block0"}},
                std::nullopt},
            TestCreator<Dim>{}}}};
-  Metavariables<Dim, TciFails>::DgInitialDataTci::invoked = false;
+  metavars::DgInitialDataTci::invoked = false;
 
   const Mesh<Dim> dg_mesh{5, Spectral::Basis::Legendre,
                           Spectral::Quadrature::GaussLobatto};
@@ -266,7 +271,7 @@ void test(const bool always_use_subcell, const bool interior_element,
 
   // TCI is always invoked since even at computational boundary it must set the
   // RDMP data.
-  REQUIRE(Metavariables<Dim, TciFails>::DgInitialDataTci::invoked);
+  REQUIRE(metavars::DgInitialDataTci::invoked);
 
   CHECK(
       ActionTesting::get_databox_tag<comp,
@@ -369,15 +374,18 @@ SPECTRE_TEST_CASE("Unit.Evolution.Subcell.Actions.Initialize",
                             domain::CoordinateMaps::Identity<2>>,
       domain::CoordinateMap<Frame::Grid, Frame::Inertial,
                             domain::CoordinateMaps::Identity<3>>>();
-  for (const bool always_use_subcell : {false, true}) {
-    for (const bool interior_element : {false, true}) {
-      for (const bool allow_subcell_in_block : {false, true}) {
-        test<1, true>(always_use_subcell, interior_element,
-                      allow_subcell_in_block);
-        test<1, false>(always_use_subcell, interior_element,
-                       allow_subcell_in_block);
-      }
-    }
+  for (const auto& [always_use_subcell, interior_element,
+                    allow_subcell_in_block] :
+       cartesian_product(make_array(false, true), make_array(false, true),
+                         make_array(false, true))) {
+    test<1, true, false>(always_use_subcell, interior_element,
+                         allow_subcell_in_block);
+    test<1, true, true>(always_use_subcell, interior_element,
+                        allow_subcell_in_block);
+    test<1, false, false>(always_use_subcell, interior_element,
+                          allow_subcell_in_block);
+    test<1, false, true>(always_use_subcell, interior_element,
+                         allow_subcell_in_block);
   }
 }
 }  // namespace

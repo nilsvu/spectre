@@ -301,14 +301,14 @@ struct EvolutionMetavars {
 
       tmpl::conditional_t<
           use_dg_subcell,
-          tmpl::list<
-              evolution::dg::subcell::Actions::Initialize<
-                  volume_dim, system,
-                  ScalarAdvection::subcell::DgInitialDataTci<volume_dim>>,
-              Initialization::Actions::AddSimpleTags<
-                  ScalarAdvection::subcell::VelocityAtFace<volume_dim>>,
-              Actions::MutateApply<
-                  ScalarAdvection::subcell::SetInitialRdmpData>>,
+          tmpl::list<evolution::dg::subcell::Actions::Initialize<
+                         volume_dim, system,
+                         ScalarAdvection::subcell::DgInitialDataTci<volume_dim>,
+                         false>,
+                     Initialization::Actions::AddSimpleTags<
+                         ScalarAdvection::subcell::VelocityAtFace<volume_dim>>,
+                     Actions::MutateApply<
+                         ScalarAdvection::subcell::SetInitialRdmpData>>,
           tmpl::list<>>,
 
       Initialization::Actions::AddComputeTags<

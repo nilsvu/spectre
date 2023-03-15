@@ -300,7 +300,8 @@ struct EvolutionMetavars {
           use_dg_subcell,
           tmpl::list<
               evolution::dg::subcell::Actions::Initialize<
-                  volume_dim, system, Burgers::subcell::DgInitialDataTci>,
+                  volume_dim, system, Burgers::subcell::DgInitialDataTci,
+                  false>,
               Actions::MutateApply<Burgers::subcell::SetInitialRdmpData>>,
           tmpl::list<>>,
 
