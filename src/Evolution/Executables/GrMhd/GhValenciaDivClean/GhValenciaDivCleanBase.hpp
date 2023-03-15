@@ -244,7 +244,7 @@ struct get_thermodynamic_dim<InitialData, false> {
 };
 }  // namespace detail
 
-template <bool UseDgSubcell>
+template <bool UseDgSubcell, bool UseNumericInitialData>
 struct GhValenciaDivCleanDefaults {
  public:
   static constexpr size_t volume_dim = 3;
@@ -318,10 +318,25 @@ template <bool UseDgSubcell,
           typename InitialData, typename... InterpolationTargetTags>
 struct GhValenciaDivCleanTemplateBase<
     EvolutionMetavarsDerived<InitialData, InterpolationTargetTags...>,
-    UseDgSubcell> : public virtual GhValenciaDivCleanDefaults<UseDgSubcell> {
+    UseDgSubcell>
+    : public virtual GhValenciaDivCleanDefaults<
+          UseDgSubcell, evolution::is_numeric_initial_data_v<InitialData>> {
   using derived_metavars =
       EvolutionMetavarsDerived<InitialData, InterpolationTargetTags...>;
-  using defaults = GhValenciaDivCleanDefaults<UseDgSubcell>;
+
+  static constexpr bool use_dg_subcell = UseDgSubcell;
+
+  using initial_data = InitialData;
+  static constexpr bool use_numeric_initial_data =
+      evolution::is_numeric_initial_data_v<initial_data>;
+  static_assert(
+      is_analytic_data_v<initial_data> xor
+          is_analytic_solution_v<initial_data> xor use_numeric_initial_data,
+      "initial_data must be either an analytic_data, an "
+      "analytic_solution, or externally provided numerical initial data");
+
+  using defaults =
+      GhValenciaDivCleanDefaults<use_dg_subcell, use_numeric_initial_data>;
   static constexpr size_t volume_dim = defaults::volume_dim;
   using domain_frame = typename defaults::domain_frame;
   static constexpr bool use_damped_harmonic_rollon =
@@ -336,17 +351,6 @@ struct GhValenciaDivCleanTemplateBase<
   using limiter = typename defaults::limiter;
   using initialize_initial_data_dependent_quantities_actions =
       typename defaults::initialize_initial_data_dependent_quantities_actions;
-
-  static constexpr bool use_dg_subcell = UseDgSubcell;
-
-  using initial_data = InitialData;
-  static constexpr bool use_numeric_initial_data =
-      evolution::is_numeric_initial_data_v<initial_data>;
-  static_assert(
-      is_analytic_data_v<initial_data> xor
-          is_analytic_solution_v<initial_data> xor use_numeric_initial_data,
-      "initial_data must be either an analytic_data, an "
-      "analytic_solution, or externally provided numerical initial data");
 
   static constexpr size_t thermodynamic_dim =
       detail::get_thermodynamic_dim<initial_data>::value;

@@ -56,7 +56,8 @@ struct EvolutionMetavars
           EvolutionMetavars<InitialData, InterpolationTargetTags...>, false> {
   static constexpr bool use_dg_subcell = false;
 
-  using defaults = GhValenciaDivCleanDefaults<use_dg_subcell>;
+  using defaults = GhValenciaDivCleanDefaults<
+      use_dg_subcell, evolution::is_numeric_initial_data_v<InitialData>>;
   static constexpr size_t volume_dim = defaults::volume_dim;
   using domain_frame = typename defaults::domain_frame;
   static constexpr bool use_damped_harmonic_rollon =
