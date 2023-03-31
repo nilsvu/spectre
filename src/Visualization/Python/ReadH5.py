@@ -24,3 +24,25 @@ def available_subfiles(h5file, extension):
 
     h5file.visit(visitor)
     return subfiles
+
+
+def to_dataframe(open_subfile):
+    """Convert a '.dat' subfile to a Pandas DataFrame
+
+    This function isn't particularly complex, but it allows to convert a
+    subfile to a DataFrame in a single statement like this:
+
+        to_dataframe(open_h5_file["Norms.dat"])
+
+    Without this function, you would have to store the subfile in an extra
+    variable to access its "Legend" attribute.
+
+    Arguments:
+      open_subfile: An open h5py subfile representing a SpECTRE dat file,
+        typically from a reductions file.
+
+    Returns: Pandas DataFrame with column names read from the "Legend"
+      attribute of the dat file.
+    """
+    import pandas as pd
+    return pd.DataFrame(open_subfile, columns=open_subfile.attrs["Legend"])

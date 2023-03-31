@@ -1,7 +1,7 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-from spectre.Visualization.ReadH5 import available_subfiles
+from spectre.Visualization.ReadH5 import available_subfiles, to_dataframe
 
 import h5py
 import os
@@ -27,6 +27,12 @@ class TestReadH5(unittest.TestCase):
                              [])
             self.assertEqual(available_subfiles(open_file, extension=".vol"),
                              ["element_data.vol"])
+
+    def test_to_dataframe(self):
+        with h5py.File(os.path.join(self.data_dir, "DatTestData.h5"),
+                       "r") as open_file:
+            df = to_dataframe(open_file["TimeSteps2.dat"])
+            self.assertEqual(df.columns[0], "Time")
 
 
 if __name__ == '__main__':
