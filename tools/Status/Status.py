@@ -54,12 +54,17 @@ def fetch_job_data(fields: Sequence[str],
         (["-S", starttime] if starttime else []),
         capture_output=True,
         text=True)
+    try:
+        completed_process.check_returncode()
+    except subprocess.CalledProcessError as err:
+        raise ValueError(completed_process.stderr) from err
     job_data = pd.read_table(StringIO(completed_process.stdout),
                              sep="|",
                              keep_default_na=False)
     # Filter out some derived jobs. Not sure what these jobs are.
     job_data = job_data[~job_data["JobName"].
                         isin(["batch", "extern", "pmi_proxy", "orted"])]
+    job_data = job_data[job_data["User"] != ""]
     # Parse dates and times. Do this in postprocessing because
     # `pd.read_table(parse_dates=...)` doesn't handle NaN values well.
     date_cols = set(fields).intersection({"Start", "End"})
@@ -147,9 +152,9 @@ def _state_order(state):
 def _format(field: str, value: Any) -> str:
     if field == "State":
         style = {
-            "RUNNING": "[green]",
+            "RUNNING": "[blue]",
             "COMPLETED": "[green]",
-            "PENDING": "[blue]",
+            "PENDING": "[magenta]",
             "FAILED": "[red]",
             "TIMEOUT": "[red]",
         }
@@ -158,7 +163,7 @@ def _format(field: str, value: Any) -> str:
         if pd.isnull(value):
             return "-"
         else:
-            return humanize.naturaltime(value)
+            return humanize.naturaldate(value) + " " + value.strftime("%X")
     else:
         return str(value)
 
@@ -231,8 +236,13 @@ def status_command(show_paths, show_unidentified, **kwargs):
     standard_columns = [col_names.get(col, col) for col in standard_fields]
 
     # Group output by executable
+    first_section = True
     for executable_name, exec_data in job_data.groupby("ExecutableName"):
-        console.rule(f"[bold]{executable_name}", style="black", align="center")
+        if first_section:
+            first_section = False
+        else:
+            console.print("")
+        console.rule(f"[bold]{executable_name}", align="left")
         executable_status = match_executable_status(executable_name)
 
         extra_columns = [(field + f" [{unit}]") if unit else field
@@ -284,7 +294,8 @@ def status_command(show_paths, show_unidentified, **kwargs):
     # Output jobs that couldn't be parsed
     unidentified_jobs = job_data[job_data["ExecutableName"].isnull()]
     if len(unidentified_jobs) > 0 and show_unidentified:
-        console.rule("[bold]Unidentified Jobs", style="black", align="center")
+        console.print("")
+        console.rule("[bold]Unidentified Jobs", align="left")
         table = rich.table.Table(*standard_columns, box=None)
         for i, row in unidentified_jobs.iterrows():
             row_formatted = [
