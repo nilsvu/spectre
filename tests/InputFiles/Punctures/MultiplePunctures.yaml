@@ -18,7 +18,7 @@ ResourceInfo:
 Background:
   MultiplePunctures:
     Punctures:
-      - Position: [0., 0., 0.]
+      - Position: [0.1, 0., 0.]
         Mass: 1.
         Momentum: [0., 0., 0.]
         Spin: [0.1, 0.2, 0.3]
@@ -32,7 +32,7 @@ DomainCreator:
     Interior:
       FillWithSphericity: 0.
     InitialRefinement: 0
-    InitialGridPoints: 4
+    InitialGridPoints: 6
     RadialPartitioning: []
     RadialDistribution: [Linear]
     UseEquiangularMap: True
@@ -40,6 +40,18 @@ DomainCreator:
     WhichWedges: All
     TimeDependentMaps: None
     OuterBoundaryCondition: Flatness
+
+Amr:
+  Verbosity: Debug
+  Criteria:
+    - RefineAtPunctures
+
+PhaseChangeAndTriggers:
+  - Trigger: Always
+    PhaseChanges:
+      - VisitAndReturn(EvaluateAmrCriteria)
+      - VisitAndReturn(AdjustDomain)
+      - VisitAndReturn(CheckDomain)
 
 Discretization:
   DiscontinuousGalerkin:
@@ -59,7 +71,7 @@ NonlinearSolver:
     SufficientDecrease: 1.e-4
     MaxGlobalizationSteps: 40
     DampingFactor: 1.
-    Verbosity: Quiet
+    Verbosity: Debug
 
 LinearSolver:
   Gmres:
@@ -99,7 +111,7 @@ LinearSolver:
 RadiallyCompressedCoordinates: None
 
 EventsAndTriggers:
-  - Trigger: HasConverged
+  - Trigger: Always
     Events:
       - ObserveFields:
           SubfileName: VolumeData

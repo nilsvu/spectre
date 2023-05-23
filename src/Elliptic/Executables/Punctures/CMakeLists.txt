@@ -2,6 +2,8 @@
 # See LICENSE.txt for details.
 
 set(LIBS_TO_LINK
+  AmrCriteria
+  AmrProjectors
   Convergence
   CoordinateMaps
   DataStructures
@@ -22,16 +24,18 @@ set(LIBS_TO_LINK
   Observer
   Options
   Parallel
+  ParallelAmr
   ParallelLinearSolver
   ParallelMultigrid
   ParallelNonlinearSolver
   ParallelSchwarz
-  Utilities
   Punctures
+  PuncturesAmrCriteria
   PuncturesAnalyticData
   PuncturesBoundaryConditions
   PuncturesPointwiseFunctions
   PuncturesSolutions
+  Utilities
   )
 
 add_spectre_parallel_executable(
