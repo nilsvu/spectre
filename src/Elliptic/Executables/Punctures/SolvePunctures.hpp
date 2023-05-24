@@ -95,12 +95,10 @@ struct Metavariables {
                 Events::Completion,
                 dg::Events::field_observations<
                     volume_dim, typename solver::nonlinear_solver_iteration_id,
-                    observe_fields, observer_compute_tags,
-                    LinearSolver::multigrid::Tags::IsFinestGrid>,
+                    observe_fields, observer_compute_tags>,
                 dg::Events::ObserveVolumeIntegrals<
                     volume_dim, typename solver::nonlinear_solver_iteration_id,
-                    observe_integral_fields, observer_compute_tags,
-                    LinearSolver::multigrid::Tags::IsFinestGrid>>>>,
+                    observe_integral_fields, observer_compute_tags>>>>,
         tmpl::pair<Trigger,
                    elliptic::Triggers::all_triggers<
                        typename solver::nonlinear_solver::options_group>>,
@@ -151,9 +149,7 @@ struct Metavariables {
           Parallel::PhaseActions<
               Parallel::Phase::CheckDomain,
               tmpl::list<amr::Actions::SendAmrDiagnostics,
-                         Parallel::Actions::TerminatePhase>>>,
-      LinearSolver::multigrid::ElementsAllocator<
-          volume_dim, typename solver::multigrid::options_group>>;
+                         Parallel::Actions::TerminatePhase>>>>;
 
   // Specify all parallel components that will execute actions at some point.
   using component_list = tmpl::flatten<tmpl::list<
@@ -194,8 +190,6 @@ static const std::vector<void (*)()> charm_init_node_funcs{
     &setup_memory_allocation_failure_reporting,
     &disable_openblas_multithreading,
     &domain::creators::register_derived_with_charm,
-    &register_derived_classes_with_charm<
-        metavariables::solver::schwarz_smoother::subdomain_solver>,
     &elliptic::subdomain_preconditioners::register_derived_with_charm,
     &register_factory_classes_with_charm<metavariables>,
     &register_amr_callbacks<typename metavariables::dg_element_array>};

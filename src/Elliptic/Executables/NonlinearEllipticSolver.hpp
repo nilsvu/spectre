@@ -113,7 +113,7 @@ struct Solver {
   /// The nonlinear solver algorithm
   using nonlinear_solver = NonlinearSolver::newton_raphson::NewtonRaphson<
       Metavariables, fields_tag, OptionTags::NewtonRaphsonGroup,
-      fixed_sources_tag, LinearSolver::multigrid::Tags::IsFinestGrid>;
+      fixed_sources_tag>;
   using nonlinear_solver_iteration_id =
       Convergence::Tags::IterationId<typename nonlinear_solver::options_group>;
 
@@ -123,29 +123,28 @@ struct Solver {
   using linear_solver = LinearSolver::gmres::Gmres<
       Metavariables, typename nonlinear_solver::linear_solver_fields_tag,
       OptionTags::GmresGroup, true,
-      typename nonlinear_solver::linear_solver_source_tag,
-      LinearSolver::multigrid::Tags::IsFinestGrid>;
+      typename nonlinear_solver::linear_solver_source_tag>;
   using linear_solver_iteration_id =
       Convergence::Tags::IterationId<typename linear_solver::options_group>;
 
   /// Precondition each linear solver iteration with a multigrid V-cycle
-  using multigrid = LinearSolver::multigrid::Multigrid<
-      volume_dim, typename linear_solver::operand_tag,
-      OptionTags::MultigridGroup, elliptic::dg::Tags::Massive,
-      typename linear_solver::preconditioner_source_tag>;
+//   using multigrid = LinearSolver::multigrid::Multigrid<
+//       volume_dim, typename linear_solver::operand_tag,
+//       OptionTags::MultigridGroup, elliptic::dg::Tags::Massive,
+//       typename linear_solver::preconditioner_source_tag>;
 
   /// Smooth each multigrid level with a number of Schwarz smoothing steps
-  using subdomain_operator =
-      elliptic::dg::subdomain_operator::SubdomainOperator<
-          system, OptionTags::SchwarzSmootherGroup>;
-  using subdomain_preconditioners = tmpl::list<
-      elliptic::subdomain_preconditioners::Registrars::MinusLaplacian<
-          volume_dim, OptionTags::SchwarzSmootherGroup>>;
-  using schwarz_smoother = LinearSolver::Schwarz::Schwarz<
-      typename multigrid::smooth_fields_tag, OptionTags::SchwarzSmootherGroup,
-      subdomain_operator, subdomain_preconditioners,
-      typename multigrid::smooth_source_tag,
-      LinearSolver::multigrid::Tags::MultigridLevel>;
+  //   using subdomain_operator =
+  //       elliptic::dg::subdomain_operator::SubdomainOperator<
+  //           system, OptionTags::SchwarzSmootherGroup>;
+  //   using subdomain_preconditioners = tmpl::list<
+  //       elliptic::subdomain_preconditioners::Registrars::MinusLaplacian<
+  //           volume_dim, OptionTags::SchwarzSmootherGroup>>;
+  //   using schwarz_smoother = LinearSolver::Schwarz::Schwarz<
+  //       typename linear_solver::operand_tag,
+  //       OptionTags::SchwarzSmootherGroup, subdomain_operator,
+  //       subdomain_preconditioners, typename
+  //       linear_solver::preconditioner_source_tag>;
 
   /// For the GMRES linear solver we need to apply the DG operator to its
   /// internal "operand" in every iteration of the algorithm.
@@ -161,14 +160,14 @@ struct Solver {
 
   /// Collect all reduction tags for observers
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
-      tmpl::list<nonlinear_solver, linear_solver, multigrid, schwarz_smoother>>;
+      tmpl::list<nonlinear_solver, linear_solver>>;
 
   using initialization_actions = tmpl::list<
       elliptic::dg::Actions::InitializeDomain<volume_dim>,
       typename nonlinear_solver::initialize_element,
       typename linear_solver::initialize_element,
-      typename multigrid::initialize_element,
-      typename schwarz_smoother::initialize_element,
+      //   typename multigrid::initialize_element,
+      //   typename schwarz_smoother::initialize_element,
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       elliptic::Actions::InitializeFixedSources<system, background_tag>,
       elliptic::Actions::InitializeOptionalAnalyticSolution<
@@ -177,8 +176,9 @@ struct Solver {
                        typename system::primal_fluxes>,
           elliptic::analytic_data::AnalyticSolution>,
       elliptic::dg::Actions::initialize_operator<system, background_tag>,
-      elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
-          system, background_tag, typename schwarz_smoother::options_group>,
+      //   elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
+      //       system, background_tag, typename
+      //       schwarz_smoother::options_group>,
       ::Initialization::Actions::AddComputeTags<tmpl::list<
           // For linearized boundary conditions
           elliptic::Tags::BoundaryFieldsCompute<volume_dim, fields_tag>,
@@ -186,9 +186,7 @@ struct Solver {
                                                 fluxes_tag>>>>;
 
   using register_actions =
-      tmpl::list<typename nonlinear_solver::register_element,
-                 typename multigrid::register_element,
-                 typename schwarz_smoother::register_element>;
+      tmpl::list<typename nonlinear_solver::register_element>;
 
   template <bool Linearized>
   using build_operator_actions = elliptic::dg::Actions::apply_operator<
@@ -199,11 +197,6 @@ struct Solver {
       tmpl::conditional_t<Linearized, correction_fluxes_tag, fluxes_tag>,
       tmpl::conditional_t<Linearized, operator_applied_to_correction_vars_tag,
                           operator_applied_to_fields_tag>>;
-
-  template <typename Label>
-  using smooth_actions =
-      typename schwarz_smoother::template solve<build_operator_actions<true>,
-                                                Label>;
 
   /// This data needs to be communicated on subdomain overlap regions
   using communicated_overlap_tags = tmpl::flatten<tmpl::list<
@@ -219,33 +212,25 @@ struct Solver {
   using solve_actions = typename nonlinear_solver::template solve<
       build_operator_actions<false>,
       tmpl::list<
-          LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
-              volume_dim, tmpl::list<fields_tag, fluxes_tag>,
-              typename multigrid::options_group>,
-          LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
-              tmpl::list<fields_tag, fluxes_tag>,
-              typename multigrid::options_group, void>,
-          LinearSolver::Schwarz::Actions::SendOverlapFields<
-              communicated_overlap_tags,
-              typename schwarz_smoother::options_group, false>,
-          LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
-              volume_dim, communicated_overlap_tags,
-              typename schwarz_smoother::options_group>,
-          LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
-              typename schwarz_smoother::options_group>,
-          typename linear_solver::template solve<tmpl::list<
-              typename multigrid::template solve<
-                  build_operator_actions<true>,
-                  smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
-                  smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
-              ::LinearSolver::Actions::make_identity_if_skipped<
-                  multigrid, build_operator_actions<true>>>>>,
+          //   LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
+          //       volume_dim, tmpl::list<fields_tag, fluxes_tag>,
+          //       typename multigrid::options_group>,
+          //   LinearSolver::multigrid::Actions::SendFieldsToCoarserGrid<
+          //       tmpl::list<fields_tag, fluxes_tag>,
+          //       typename multigrid::options_group, void>,
+          //   LinearSolver::Schwarz::Actions::SendOverlapFields<
+          //       communicated_overlap_tags,
+          //       typename schwarz_smoother::options_group, false>,
+          //   LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
+          //       volume_dim, communicated_overlap_tags,
+          //       typename schwarz_smoother::options_group>,
+          //   LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
+          //       typename schwarz_smoother::options_group>,
+          typename linear_solver::template solve<build_operator_actions<true>>>,
       StepActions>;
 
   using component_list = tmpl::list<typename nonlinear_solver::component_list,
-                                    typename linear_solver::component_list,
-                                    typename multigrid::component_list,
-                                    typename schwarz_smoother::component_list>;
+                                    typename linear_solver::component_list>;
 };
 
 }  // namespace elliptic::nonlinear_solver
