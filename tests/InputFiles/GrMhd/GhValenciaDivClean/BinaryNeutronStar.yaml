@@ -19,7 +19,7 @@ Evolution:
 PhaseChangeAndTriggers:
 
 # Values taken from the Xcts/HeadOnBns.yaml input file
-EquationOfState:
+EquationOfState: &eos
   PolytropicFluid:
       PolytropicConstant: 123.6489
       PolytropicExponent: 2.
@@ -30,7 +30,7 @@ DomainCreator:
     OuterRadius: 200.
     Interior:
       FillWithSphericity: 0.
-    InitialRefinement: 3
+    InitialRefinement: 1
     InitialGridPoints: 8
     UseEquiangularMap: False
     RadialPartitioning: []
@@ -188,19 +188,8 @@ EventsAndDenseTriggers:
 EventsRunAtCleanup:
 
 InitialData:
-  NumericInitialData:
-    FileGlob: BnsVolume*.h5
-    Subgroup: VolumeData
-    ObservationValue: Last
-    Interpolate: True
-    GhVariables:
-      Lapse: Lapse
-      Shift: ShiftExcess
-      SpatialMetric: SpatialMetric
-      ExtrinsicCurvature: ExtrinsicCurvature
-    HydroVariables:
-      RestMassDensity: RestMassDensity
-      LowerSpatialFourVelocity: LowerSpatialFourVelocity
-      ElectronFraction: 0.15
-      MagneticField: 0.
+  SpecInitialData:
+    DataDirectory: "/panfs/ds09/sxs/ffoucart/InitialData/NsNs-SpectreTest/EvID"
+    EquationOfState: *eos
     DensityCutoff: *density_cutoff
+    ElectronFraction: 0.15

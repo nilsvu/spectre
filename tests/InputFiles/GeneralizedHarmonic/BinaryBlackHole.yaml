@@ -59,13 +59,7 @@ DomainCreator:
         ConstraintPreservingBjorhus:
           Type: ConstraintPreservingPhysical
     UseEquiangularMap: True
-    InitialRefinement:
-      ObjectAShell:   [3, 3, 4]
-      ObjectACube:    [2, 2, 1]
-      ObjectBShell:   [3, 3, 4]
-      ObjectBCube:    [2, 2, 1]
-      Envelope:       [2, 2, 3]
-      OuterShell:     [2, 2, 5]
+    InitialRefinement: 0
     InitialGridPoints: 5
     TimeDependentMaps:
       InitialTime: 0.0
@@ -341,15 +335,5 @@ ControlSystems:
 #   In this case, set `Interpolate: False` because the data is already given
 #   on this exact grid.
 InitialData:
-  NumericInitialData:
-    FileGlob: "/path/to/initial_data.h5"
-    Subgroup: "VolumeData"
-    ObservationValue: Last
-    Interpolate: True
-    Variables:
-      Lapse: Lapse
-      # Load a shift that is not corotating. See `docs/Examples/BbhInitialData`
-      # for details.
-      Shift: ShiftExcess
-      SpatialMetric: SpatialMetric
-      ExtrinsicCurvature: ExtrinsicCurvature
+  SpecInitialData:
+    DataDirectory: "/panfs/ds09/sxs/nilsvu/2023-spec-bbh-id/ID/EvID"
