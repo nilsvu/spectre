@@ -181,6 +181,7 @@ if (USE_PCH)
     Brigand
     Charmxx::charmxx
     Charmxx::pup
+    ErrorHandling
     hdf5::hdf5
     )
   target_include_directories(

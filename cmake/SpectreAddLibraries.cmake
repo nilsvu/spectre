@@ -3,7 +3,17 @@
 
 add_custom_target(libs)
 
+# Wraps CMake's `add_library` to handle PCH, compiler flags, etc.
+#
+# Arguments:
+# - NO_PCH (optional): Don't use PCH (precompiled headers). Use this option to
+#   exclude PCH from libraries that the PCH depend on.
+#
+# All additional arguments are forwarded to `add_library`.
 function(ADD_SPECTRE_LIBRARY LIBRARY_NAME)
+  cmake_parse_arguments(PARSE_ARGV 1 ARG "NO_PCH" "" "")
+  list(REMOVE_ITEM ARGN NO_PCH)
+
   add_library(${LIBRARY_NAME} ${ARGN})
   add_dependencies(libs ${LIBRARY_NAME})
 
@@ -51,6 +61,7 @@ function(ADD_SPECTRE_LIBRARY LIBRARY_NAME)
   if (NOT "${LIBRARY_NAME}" MATCHES "^${SPECTRE_PCH}"
       AND NOT ${LIBRARY_IS_IMPORTED}
       AND NOT ${LIBRARY_TYPE} STREQUAL INTERFACE_LIBRARY
+      AND NOT "${ARG_NO_PCH}"
       AND TARGET ${SPECTRE_PCH})
     target_link_libraries(${LIBRARY_NAME} PRIVATE ${SPECTRE_PCH})
     add_dependencies(${LIBRARY_NAME} ${SPECTRE_PCH_DEP})
