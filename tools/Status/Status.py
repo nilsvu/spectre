@@ -204,15 +204,7 @@ def _format(field: str, value: Any, state_styles: dict) -> str:
         return str(value)
 
 
-@rich.console.group()
-def render_status(
-    show_paths,
-    show_unidentified,
-    show_deleted,
-    show_all_segments,
-    state_styles,
-    **kwargs,
-):
+def get_job_data(show_deleted=False, show_all_segments=False, **kwargs):
     job_data = fetch_job_data(
         [
             "JobID",
@@ -300,6 +292,18 @@ def render_status(
 
     # Add metadata so jobs can be grouped by state
     job_data["StateOrder"] = job_data["State"].apply(_state_order)
+
+    return job_data
+
+
+@rich.console.group()
+def render_status(
+    show_paths,
+    show_unidentified,
+    state_styles,
+    **kwargs,
+):
+    job_data = get_job_data(**kwargs)
 
     # We'll print these columns
     standard_fields = [
