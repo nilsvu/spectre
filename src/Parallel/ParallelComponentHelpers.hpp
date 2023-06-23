@@ -246,9 +246,9 @@ struct get_initialization_actions_list {
   using type = tmpl::list<>;
 };
 
-template <typename InitializationActionsList>
+template <Parallel::Phase Phase, typename InitializationActionsList>
 struct get_initialization_actions_list<Parallel::PhaseActions<
-    Parallel::Phase::Initialization, InitializationActionsList>> {
+    Phase, InitializationActionsList>> {
   using type = InitializationActionsList;
 };
 }  // namespace detail
