@@ -304,6 +304,17 @@ struct Initialize {
           },
           make_not_null(&box));
     }
+
+    db::mutate<fd::Tags::InverseJacobianLogicalToGrid<Dim>>(
+        [](const auto inv_jac_ptr,
+           const auto& logical_to_grid_map, const auto& logical_coords) {
+          if (not inv_jac_ptr->has_value()) {
+            *inv_jac_ptr = logical_to_grid_map.inv_jacobian(logical_coords);
+          }
+        },
+        make_not_null(&box),
+        db::get<::domain::Tags::ElementMap<Dim, Frame::Grid>>(box),
+        db::get<subcell::Tags::Coordinates<Dim, Frame::ElementLogical>>(box));
     return {Parallel::AlgorithmExecution::Continue, std::nullopt};
   }
 };

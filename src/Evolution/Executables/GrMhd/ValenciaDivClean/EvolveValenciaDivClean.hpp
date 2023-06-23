@@ -59,6 +59,7 @@
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/BoundaryCorrections/Factory.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/BoundaryCorrections/RegisterDerived.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/ComovingMagneticFieldMagnitude.hpp"
+#include "Evolution/Systems/GrMhd/ValenciaDivClean/Constraints.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/FiniteDifference/Factory.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/FiniteDifference/RegisterDerivedWithCharm.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/FiniteDifference/Tag.hpp"
@@ -258,6 +259,7 @@ struct EvolutionMetavars {
                   evolution::dg::subcell::Tags::TciStatusCompute<volume_dim>,
                   evolution::dg::subcell::Tags::MethodOrderCompute<volume_dim>>,
               tmpl::list<>>>,
+      ::Tags::div<hydro::Tags::MagneticField<DataVector, volume_dim>>,
       tmpl::conditional_t<
           use_dg_subcell,
           evolution::dg::subcell::Tags::ObserverCoordinatesCompute<
@@ -491,9 +493,10 @@ struct EvolutionMetavars {
                   grmhd::ValenciaDivClean::subcell::SetInitialRdmpData>>,
           tmpl::list<>>,
 
-      Initialization::Actions::AddComputeTags<
+      Initialization::Actions::AddComputeTags<tmpl::push_back<
           StepChoosers::step_chooser_compute_tags<EvolutionMetavars,
-                                                  local_time_stepping>>,
+                                                  local_time_stepping>,
+          grmhd::ValenciaDivClean::Tags::DivBCompute<volume_dim>>>,
       ::evolution::dg::Initialization::Mortars<volume_dim, system>,
       Initialization::Actions::Minmod<3>,
       evolution::Actions::InitializeRunEventsAndDenseTriggers,
