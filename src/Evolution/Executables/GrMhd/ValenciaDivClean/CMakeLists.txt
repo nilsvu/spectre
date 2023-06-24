@@ -16,6 +16,8 @@ set(LIBS_TO_LINK
   DgSubcell
   DiscontinuousGalerkin
   DomainCreators
+  EllipticDg
+  EllipticSubdomainPreconditioners
   EventsAndDenseTriggers
   EventsAndTriggers
   Evolution
@@ -29,11 +31,13 @@ set(LIBS_TO_LINK
   LinearOperators
   MathFunctions
   ParallelInterpolation
+  ParallelSchwarz
   RelativisticEulerSolutions
   Observer
   Options
   Parallel
   PhaseControl
+  Poisson
   Serialization
   Time
   Utilities

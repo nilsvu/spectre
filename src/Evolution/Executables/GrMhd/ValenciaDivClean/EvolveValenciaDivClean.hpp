@@ -12,6 +12,8 @@
 #include "Domain/Creators/TimeDependence/RegisterDerivedWithCharm.hpp"
 #include "Domain/FunctionsOfTime/RegisterDerivedWithCharm.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/DivClean/Actions/EllipticDivClean.hpp"
+#include "Elliptic/SubdomainPreconditioners/RegisterDerived.hpp"
 #include "Evolution/Actions/RunEventsAndDenseTriggers.hpp"
 #include "Evolution/ComputeTags.hpp"
 #include "Evolution/Conservative/UpdateConservatives.hpp"
@@ -196,6 +198,15 @@ template <typename Metavariables>
 class CProxy_GlobalCache;
 }  // namespace Parallel
 /// \endcond
+
+namespace EvolveValenciaDivClean {
+namespace OptionTags {
+struct SchwarzSmootherGroup {
+  static std::string name() { return "SchwarzSmoother"; }
+  static constexpr Options::String help = "Options for the Schwarz smoother";
+};
+}  // namespace OptionTags
+}  // namespace EvolveValenciaDivClean
 
 template <typename InitialData, typename... InterpolationTargetTags>
 struct EvolutionMetavars {
@@ -416,7 +427,6 @@ struct EvolutionMetavars {
               tmpl::front<ordered_list_of_primitive_recovery_schemes>>>,
       VariableFixing::Actions::FixVariables<
           VariableFixing::FixToAtmosphere<volume_dim>>,
-      Actions::UpdateConservatives,
       Actions::Goto<evolution::dg::subcell::Actions::Labels::EndOfSolvers>,
 
       Actions::Label<evolution::dg::subcell::Actions::Labels::BeginSubcell>,
@@ -450,9 +460,11 @@ struct EvolutionMetavars {
               ordered_list_of_primitive_recovery_schemes>>,
       VariableFixing::Actions::FixVariables<
           VariableFixing::FixToAtmosphere<volume_dim>>,
-      Actions::UpdateConservatives,
 
-      Actions::Label<evolution::dg::subcell::Actions::Labels::EndOfSolvers>>>;
+      Actions::Label<evolution::dg::subcell::Actions::Labels::EndOfSolvers>,
+      elliptic::divclean::Actions::EllipticDivClean<
+          EvolveValenciaDivClean::OptionTags::SchwarzSmootherGroup>,
+      Actions::UpdateConservatives>>;
 
   using step_actions =
       tmpl::conditional_t<use_dg_subcell, dg_subcell_step_actions,
@@ -636,6 +648,11 @@ static const std::vector<void (*)()> charm_init_node_funcs{
     &grmhd::ValenciaDivClean::BoundaryCorrections::register_derived_with_charm,
     &grmhd::ValenciaDivClean::fd::register_derived_with_charm,
     &EquationsOfState::register_derived_with_charm,
+    &register_derived_classes_with_charm<
+        elliptic::divclean::Actions::EllipticDivClean<
+            EvolveValenciaDivClean::OptionTags::SchwarzSmootherGroup>::
+            SubdomainSolver>,
+    &elliptic::subdomain_preconditioners::register_derived_with_charm,
     &register_factory_classes_with_charm<metavariables>};
 
 static const std::vector<void (*)()> charm_init_proc_funcs{

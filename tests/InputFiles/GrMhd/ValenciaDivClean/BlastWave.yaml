@@ -26,12 +26,17 @@ PhaseChangeAndTriggers:
       - CheckpointAndExitAfterWallclock:
           WallclockHours: None
 
+SchwarzSmoother:
+  Enabled: True
+  MaxOverlap: 0
+  SubdomainSolver: ExplicitInverse
+
 DomainCreator:
   Brick:
-    LowerBound: [-6.0, -6.0, -6.0]
-    UpperBound: [6.0, 6.0, 6.0]
-    InitialRefinement: [2, 2, 0]
-    InitialGridPoints: [3, 3, 3]
+    LowerBound: [-6.0, -6.0, -1.0]
+    UpperBound: [6.0, 6.0, 1.0]
+    InitialRefinement: [3, 3, 0]
+    InitialGridPoints: [6, 6, 6]
     TimeDependence: None
     BoundaryConditionInX: Periodic
     BoundaryConditionInY: Periodic
@@ -110,11 +115,42 @@ Interpolator:
 
 EventsAndTriggers:
   - Trigger:
-      Slabs:
-        Specified:
-          Values: [2]
+      TimeCompares:
+        Comparison: GreaterThan
+        Value: 4.
     Events:
       - Completion
+  - Trigger:
+      Slabs:
+        EvenlySpaced:
+          Interval: 10
+          Offset: 0
+    Events:
+      - ObserveTimeStep:
+          SubfileName: TimeSteps
+          PrintTimeToTerminal: True
+          ObservePerCore: False
+      - ObserveNorms:
+          SubfileName: Norms
+          TensorsToObserve:
+            - Name: div(MagneticField)
+              NormType: L2Norm
+              Components: Sum
+            - Name: DivergenceCleaningField
+              NormType: L2Norm
+              Components: Sum
+      - ObserveFields:
+          SubfileName: VolumeData
+          VariablesToObserve:
+            - RestMassDensity
+            - MagneticField
+            - div(MagneticField)
+            - DivergenceCleaningField
+            - TciStatus
+          InterpolateToMesh: None
+          CoordinatesFloatingPointType: Double
+          FloatingPointTypes: [Float]
+          OverrideObservationValue: None
 
 EventsAndDenseTriggers:
 
