@@ -30,12 +30,13 @@ SchwarzSmoother:
   Enabled: True
   MaxOverlap: 0
   SubdomainSolver: ExplicitInverse
+  Verbosity: Quiet
 
 DomainCreator:
   Brick:
     LowerBound: [-6.0, -6.0, -1.0]
     UpperBound: [6.0, 6.0, 1.0]
-    InitialRefinement: [3, 3, 0]
+    InitialRefinement: [4, 4, 0]
     InitialGridPoints: [6, 6, 6]
     TimeDependence: None
     BoundaryConditionInX: Periodic
@@ -59,7 +60,7 @@ SpatialDiscretization:
       AlwaysUseSubcells: false
       SubcellToDgReconstructionMethod: DimByDim
       UseHalo: false
-      OnlyDgBlocksAndGroups: None
+      OnlyDgBlocksAndGroups: ["Brick"]
       FiniteDifferenceDerivativeOrder: 2
     TciOptions:
       MinimumValueOfD: 1.0e-20
@@ -117,7 +118,7 @@ EventsAndTriggers:
   - Trigger:
       TimeCompares:
         Comparison: GreaterThan
-        Value: 4.
+        Value: 1.
     Events:
       - Completion
   - Trigger:

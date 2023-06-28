@@ -8,6 +8,7 @@
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Domain/Tags.hpp"
+#include "Elliptic/DiscontinuousGalerkin/Actions/ApplyOperator.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/InitializeSubdomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
 #include "Elliptic/SubdomainPreconditioners/MinusLaplacian.hpp"
@@ -28,6 +29,11 @@
 
 namespace elliptic::divclean::Actions {
 
+static constexpr size_t Dim = 3;
+using poisson_system =
+    Poisson::FirstOrderSystem<Dim, Poisson::Geometry::FlatCartesian>;
+using div_clean_potential_tag = Poisson::Tags::Field;
+
 template <typename OptionsGroup>
 struct Enabled : db::SimpleTag {
   using type = bool;
@@ -39,11 +45,50 @@ struct Enabled : db::SimpleTag {
 };
 
 template <typename OptionsGroup>
+struct InitializeElement {
+  using simple_tags = tmpl::list<domain::Tags::ElementMap<Dim>,
+                                 elliptic::dg::Tags::PenaltyParameter,
+                                 elliptic::dg::Tags::Massive>;
+  using compute_tags = tmpl::list<>;
+  template <typename DbTagsList, typename... InboxTags, typename Metavariables,
+            typename ActionList, typename ParallelComponent>
+  static Parallel::iterable_action_return_t apply(
+      db::DataBox<DbTagsList>& box,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      const Parallel::GlobalCache<Metavariables>& /*cache*/,
+      const ElementId<Dim>& element_id, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) {
+    // TODO:
+    // - [ ] Moving mesh
+    // - [ ] Curved background geometry
+    // - [ ] Dynamic background geometry
+    // - [ ] AMR
+    // - [ ] FD
+    const auto& domain = db::get<domain::Tags::Domain<Dim>>(box);
+    const auto& block = domain.blocks()[element_id.block_id()];
+    ASSERT(not block.is_time_dependent(), "Moving mesh not yet implemented");
+    ElementMap<Dim, Frame::Inertial> inertial_element_map{
+        element_id, block.stationary_map().get_clone()};
+
+    Initialization::mutate_assign<tmpl::list<
+        domain::Tags::ElementMap<Dim>, elliptic::dg::Tags::PenaltyParameter,
+        elliptic::dg::Tags::Massive>>(
+        make_not_null(&box), std::move(inertial_element_map), 1., false);
+
+    return {Parallel::AlgorithmExecution::Continue, std::nullopt};
+  }
+};
+
+template <typename OptionsGroup>
+using initialize_element =
+    tmpl::list<InitializeElement<OptionsGroup>,
+               elliptic::dg::Actions::initialize_operator<poisson_system>,
+               elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
+                   poisson_system, void, OptionsGroup>>;
+
+template <typename OptionsGroup>
 struct EllipticDivClean {
  private:
-  static constexpr size_t Dim = 3;
-  using poisson_system =
-      Poisson::FirstOrderSystem<Dim, Poisson::Geometry::FlatCartesian>;
   //   using elliptic_div_clean_vars_tag =
   //       ::Tags::Variables<tmpl::list<grmhd::ValenciaDivClean::Tags::TildePhi>>;
   //   using elliptic_div_clean_source_tag = ::Tags::Variables<
@@ -56,7 +101,7 @@ struct EllipticDivClean {
 
  public:
   using SubdomainData = LinearSolver::Schwarz::ElementCenteredSubdomainData<
-      Dim, tmpl::list<div_b_tag>>;
+      Dim, tmpl::list<div_clean_potential_tag>>;
   struct subdomain_data_buffer_tag : db::SimpleTag {
     using type = SubdomainData;
   };
@@ -74,19 +119,18 @@ struct EllipticDivClean {
  public:
   using const_global_cache_tags =
       tmpl::list<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>,
-                 Enabled<OptionsGroup>>;
+                 Enabled<OptionsGroup>, logging::Tags::Verbosity<OptionsGroup>>;
   using simple_tags_from_options = tmpl::list<subdomain_solver_tag>;
 
   using simple_tags = tmpl::list<subdomain_data_buffer_tag>;
   using compute_tags = tmpl::list<>;
   template <typename DbTagsList, typename... InboxTags, typename Metavariables,
-            typename ArrayIndex, typename ActionList,
-            typename ParallelComponent>
+            typename ActionList, typename ParallelComponent>
   static Parallel::iterable_action_return_t apply(
       db::DataBox<DbTagsList>& box,
       const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
-      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) {
     if (not db::get<Enabled<OptionsGroup>>(box)) {
       return {Parallel::AlgorithmExecution::Continue, std::nullopt};
@@ -120,6 +164,7 @@ struct EllipticDivClean {
     // }
 
     // Assemble subdomain. Project div(B) to DG grid if on subcell.
+    // TODO: Apply mass matrix?
     const auto& div_b = db::get<div_b_tag>(box);
     db::mutate<subdomain_data_buffer_tag>(
         [&div_b, &num_points, &active_grid, &mesh,
@@ -128,14 +173,15 @@ struct EllipticDivClean {
               num_points) {
             subdomain_data->element_data.initialize(num_points);
           }
+          auto& div_clean_source =
+              get<div_clean_potential_tag>(subdomain_data->element_data);
           if (active_grid == evolution::dg::subcell::ActiveGrid::Dg) {
-            get<div_b_tag>(subdomain_data->element_data) = div_b;
+            div_clean_source = div_b;
           } else {
             // TODO: multiply with jac det?
             evolution::dg::subcell::fd::reconstruct(
-                make_not_null(
-                    &get(get<div_b_tag>(subdomain_data->element_data))),
-                get(div_b), mesh, subcell_mesh.extents(),
+                make_not_null(&get(div_clean_source)), get(div_b), mesh,
+                subcell_mesh.extents(),
                 evolution::dg::subcell::fd::ReconstructionMethod::DimByDim);
           }
           // Nothing was communicated if the overlaps are empty
@@ -153,22 +199,49 @@ struct EllipticDivClean {
     const SubdomainOperator subdomain_operator{};
 
     // Solve the subdomain problem
-    // const auto& subdomain_solver = get<subdomain_solver_tag>(box);
+    const auto& subdomain_solver = get<subdomain_solver_tag>(box);
     auto subdomain_solve_initial_guess_in_solution_out =
         make_with_value<SubdomainData>(subdomain_source, 0.);
-    // const auto subdomain_solve_has_converged = subdomain_solver.solve(
-    //     make_not_null(&subdomain_solve_initial_guess_in_solution_out),
-    //     subdomain_operator, subdomain_source, std::forward_as_tuple(box),
-    // );
+    const auto subdomain_solve_has_converged = subdomain_solver.solve(
+        make_not_null(&subdomain_solve_initial_guess_in_solution_out),
+        subdomain_operator, subdomain_source, std::forward_as_tuple(box));
     // Re-naming the solution buffer for the code below
     const auto& subdomain_solution =
         subdomain_solve_initial_guess_in_solution_out;
 
+    if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
+                 ::Verbosity::Debug)) {
+      const double time = db::get<::Tags::Time>(box);
+      if (not subdomain_solve_has_converged or
+          subdomain_solve_has_converged.reason() ==
+              Convergence::Reason::MaxIterations) {
+        Parallel::printf(
+            "%s %s(%f): WARNING: Subdomain solver did not converge in %zu "
+            "iterations: %e -> %e\n",
+            element_id, pretty_type::name<OptionsGroup>(), time,
+            subdomain_solve_has_converged.num_iterations(),
+            subdomain_solve_has_converged.initial_residual_magnitude(),
+            subdomain_solve_has_converged.residual_magnitude());
+      } else if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
+                          ::Verbosity::Debug)) {
+        Parallel::printf(
+            "%s %s(%f): Subdomain solver converged in %zu iterations (%s): %e"
+            "-> %e\n",
+            element_id, pretty_type::name<OptionsGroup>(), time,
+            subdomain_solve_has_converged.num_iterations(),
+            subdomain_solve_has_converged.reason(),
+            subdomain_solve_has_converged.initial_residual_magnitude(),
+            subdomain_solve_has_converged.residual_magnitude());
+      }
+    }
+
     // Use solution to correct B-field in this element: B += grad(phi)
     // Also kill div-cleaning field in this element because we solved the div
     // constraint.
-    auto b_correction = partial_derivative(
-        get<div_b_tag>(subdomain_solution.element_data), mesh, inv_jacobian);
+    const auto& div_clean_potential =
+        get<div_clean_potential_tag>(subdomain_solution.element_data);
+    auto b_correction =
+        partial_derivative(div_clean_potential, mesh, inv_jacobian);
     if (active_grid != evolution::dg::subcell::ActiveGrid::Dg) {
       for (size_t d = 0; d < Dim; ++d) {
         b_correction.get(d) = evolution::dg::subcell::fd::project(

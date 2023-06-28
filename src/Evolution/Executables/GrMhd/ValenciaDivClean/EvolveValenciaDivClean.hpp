@@ -514,6 +514,10 @@ struct EvolutionMetavars {
       evolution::Actions::InitializeRunEventsAndDenseTriggers,
       intrp::Actions::ElementInitInterpPoints<
           intrp::Tags::InterpPointInfo<EvolutionMetavars>>,
+
+      elliptic::divclean::Actions::initialize_element<
+          EvolveValenciaDivClean::OptionTags::SchwarzSmootherGroup>,
+
       Parallel::Actions::TerminatePhase>>;
 
   using dg_element_array_component = DgElementArray<
