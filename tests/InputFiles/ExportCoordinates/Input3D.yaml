@@ -14,16 +14,17 @@ ResourceInfo:
   AvoidGlobalProc0: false
 
 DomainCreator:
-  Brick:
-    LowerBound: [-0.5, -0.5, -0.5]
-    UpperBound: [0.5, 0.5, 0.5]
+  AlignedLattice:
+    BlockBounds:
+      - [-1., -0.5, 0.5, 1.]
+      - [-1., -0.5, 0.5, 1.]
+      - [-1., -0.5, 0.5, 1.]
+    InitialLevels: [0, 0, 0]
+    InitialGridPoints: [2, 2, 2]
+    RefinedLevels: []
+    RefinedGridPoints: []
+    BlocksToExclude: [[1, 1, 1]]
     IsPeriodicIn: [false, false, false]
-    InitialRefinement: [0, 0, 0]
-    InitialGridPoints: [3, 3, 3]
-    TimeDependence:
-      UniformTranslation:
-        InitialTime: 0.0
-        Velocity: [0.5, 0.0, 0.0]
 
 SpatialDiscretization:
   ActiveGrid: Dg

@@ -10,7 +10,7 @@ Testing:
 ResourceInfo:
   AvoidGlobalProc0: false
 
-InitialData:
+InitialData: &initial_data
   PlaneWave:
     WaveVector: [1.0, 1.0, 1.0]
     Center: [0.0, 0.0, 0.0]
@@ -38,15 +38,22 @@ Evolution:
         SafetyFactor: 0.2
 
 DomainCreator:
-  Brick:
-    LowerBound: [0.0, 0.0, 0.0]
-    UpperBound: [6.283185307179586, 6.283185307179586, 6.283185307179586]
-    InitialRefinement: [1, 1, 1]
-    InitialGridPoints: [5, 5, 5]
-    TimeDependence: None
-    BoundaryConditionInX: Periodic
-    BoundaryConditionInY: Periodic
-    BoundaryConditionInZ: Periodic
+  AlignedLattice:
+    BlockBounds:
+      - [-1., -0.5, 0.5, 1.]
+      - [-1., -0.5, 0.5, 1.]
+      - [-1., -0.5, 0.5, 1.]
+    InitialLevels: [0, 0, 0]
+    InitialGridPoints: [2, 2, 2]
+    RefinedLevels: []
+    RefinedGridPoints: []
+    BlocksToExclude: [[1, 1, 1]]
+    BoundaryCondition:
+      DirichletAnalytic:
+        AnalyticPrescription: *initial_data
+    InnerBoundaryCondition:
+      DirichletAnalytic:
+        AnalyticPrescription: *initial_data
 
 SpatialDiscretization:
   BoundaryCorrection:

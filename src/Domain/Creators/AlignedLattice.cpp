@@ -54,7 +54,8 @@ AlignedLattice<VolumeDim>::AlignedLattice(
       number_of_blocks_by_dim_{
           map_array(block_bounds_,
                     [](const std::vector<double>& v) { return v.size() - 1; })},
-      boundary_condition_(nullptr) {
+      boundary_condition_(nullptr),
+      inner_boundary_condition_(nullptr) {
   if (not blocks_to_exclude_.empty() and
       alg::any_of(is_periodic_in_, [](const bool t) { return t; })) {
     PARSE_ERROR(context,
@@ -93,6 +94,9 @@ AlignedLattice<VolumeDim>::AlignedLattice(
     typename BlocksToExclude::type blocks_to_exclude,
     std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
         boundary_condition,
+    std::optional<
+        std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>>
+        inner_boundary_condition,
     const Options::Context& context)
     // clang-tidy: trivially copyable
     : block_bounds_(std::move(block_bounds)),  // NOLINT
@@ -107,7 +111,8 @@ AlignedLattice<VolumeDim>::AlignedLattice(
       number_of_blocks_by_dim_{
           map_array(block_bounds_,
                     [](const std::vector<double>& v) { return v.size() - 1; })},
-      boundary_condition_(std::move(boundary_condition)) {
+      boundary_condition_(std::move(boundary_condition)),
+      inner_boundary_condition_(std::move(inner_boundary_condition)) {
   using domain::BoundaryConditions::is_none;
   if (is_none(boundary_condition_)) {
     PARSE_ERROR(
@@ -170,6 +175,24 @@ AlignedLattice<VolumeDim>::external_boundary_conditions() const {
   // boundaries
   const auto domain = create_domain();
   const auto& blocks = domain.blocks();
+
+  // Determine if direction is an inner boundary by checking if the direction
+  // points towards the origin. Assumes blocks around the origin are excised.
+  const auto is_inner_boundary =
+      [&blocks](const size_t block_id,
+                const Direction<VolumeDim>& direction) -> bool {
+    const auto& block = blocks[block_id];
+    const size_t dim = direction.dimension();
+    tnsr::I<double, VolumeDim, Frame::BlockLogical> logical_coord_on_face{0.};
+    logical_coord_on_face.get(dim) = direction.sign();
+    const auto& grid_coord_on_face =
+        block.is_time_dependent()
+            ? block.moving_mesh_logical_to_grid_map()(logical_coord_on_face)
+            : block.stationary_map().get_to_grid_frame()->operator()(
+                  logical_coord_on_face);
+    return direction.sign() * grid_coord_on_face.get(dim) < 0.;
+  };
+
   std::vector<DirectionMap<
       VolumeDim,
       std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>>>
@@ -177,8 +200,14 @@ AlignedLattice<VolumeDim>::external_boundary_conditions() const {
   for (size_t i = 0; i < blocks.size(); ++i) {
     for (const Direction<VolumeDim>& external_direction :
          blocks[i].external_boundaries()) {
-      boundary_conditions[i][external_direction] =
-          boundary_condition_->get_clone();
+      if (inner_boundary_condition_.has_value() and
+          is_inner_boundary(i, external_direction)) {
+        boundary_conditions[i][external_direction] =
+            inner_boundary_condition_.value()->get_clone();
+      } else {
+        boundary_conditions[i][external_direction] =
+            boundary_condition_->get_clone();
+      }
     }
   }
   return boundary_conditions;
