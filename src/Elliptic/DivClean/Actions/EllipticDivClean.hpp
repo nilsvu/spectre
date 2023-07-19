@@ -19,11 +19,13 @@
 #include "Evolution/DgSubcell/Reconstruction.hpp"
 #include "Evolution/DgSubcell/Tags/ActiveGrid.hpp"
 #include "Evolution/DgSubcell/Tags/Mesh.hpp"
+#include "Evolution/Systems/GrMhd/ValenciaDivClean/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Schwarz.hpp"
 #include "ParallelAlgorithms/LinearSolver/Schwarz/Tags.hpp"
 #include "PointwiseFunctions/Hydro/Tags.hpp"
+#include "Utilities/SetNumberOfGridPoints.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
@@ -59,6 +61,8 @@ struct InitializeElement {
       const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) {
     // TODO:
+    // - [ ] Overlap communication
+    // - [ ] FD derivatives
     // - [ ] Moving mesh
     // - [ ] Curved background geometry
     // - [ ] Dynamic background geometry
@@ -89,14 +93,6 @@ using initialize_element =
 template <typename OptionsGroup>
 struct EllipticDivClean {
  private:
-  //   using elliptic_div_clean_vars_tag =
-  //       ::Tags::Variables<tmpl::list<grmhd::ValenciaDivClean::Tags::TildePhi>>;
-  //   using elliptic_div_clean_source_tag = ::Tags::Variables<
-  //       tmpl::list<::Tags::div<grmhd::ValenciaDivClean::Tags::TildeB<>>>>;
-  //   using schwarz_smoother = LinearSolver::Schwarz::Schwarz<
-  //       elliptic_div_clean_vars_tag, OptionTags::SchwarzSmootherGroup,
-  //       subdomain_operator, tmpl::list<>, elliptic_div_clean_source_tag>;
-
   using div_b_tag = ::Tags::div<hydro::Tags::MagneticField<DataVector, Dim>>;
 
  public:
@@ -119,7 +115,8 @@ struct EllipticDivClean {
  public:
   using const_global_cache_tags =
       tmpl::list<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>,
-                 Enabled<OptionsGroup>, logging::Tags::Verbosity<OptionsGroup>>;
+                 Enabled<OptionsGroup>, logging::Tags::Verbosity<OptionsGroup>,
+                 grmhd::ValenciaDivClean::Tags::EnableDivCleaning>;
   using simple_tags_from_options = tmpl::list<subdomain_solver_tag>;
 
   using simple_tags = tmpl::list<subdomain_data_buffer_tag>;
@@ -132,13 +129,18 @@ struct EllipticDivClean {
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) {
+    if (not db::get<grmhd::ValenciaDivClean::Tags::EnableDivCleaning>(box)) {
+      db::mutate<hydro::Tags::DivergenceCleaningField<DataVector>>(
+          [](const gsl::not_null<Scalar<DataVector>*> div_cleaning_field) {
+            get(*div_cleaning_field) = 0.;
+          },
+          make_not_null(&box));
+    }
     if (not db::get<Enabled<OptionsGroup>>(box)) {
       return {Parallel::AlgorithmExecution::Continue, std::nullopt};
     }
 
     // TODO:
-    // - Decide where to store div clean field and source
-    // - Initialize subdomain
     // - Handle curved background in div(B) source
     // - Handle curved background in Poisson operator
     // const size_t max_overlap =
@@ -169,10 +171,8 @@ struct EllipticDivClean {
     db::mutate<subdomain_data_buffer_tag>(
         [&div_b, &num_points, &active_grid, &mesh,
          &subcell_mesh](const gsl::not_null<SubdomainData*> subdomain_data) {
-          if (subdomain_data->element_data.number_of_grid_points() !=
-              num_points) {
-            subdomain_data->element_data.initialize(num_points);
-          }
+          set_number_of_grid_points(
+              make_not_null(&subdomain_data->element_data), num_points);
           auto& div_clean_source =
               get<div_clean_potential_tag>(subdomain_data->element_data);
           if (active_grid == evolution::dg::subcell::ActiveGrid::Dg) {
@@ -210,7 +210,7 @@ struct EllipticDivClean {
         subdomain_solve_initial_guess_in_solution_out;
 
     if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
-                 ::Verbosity::Debug)) {
+                 ::Verbosity::Verbose)) {
       const double time = db::get<::Tags::Time>(box);
       if (not subdomain_solve_has_converged or
           subdomain_solve_has_converged.reason() ==

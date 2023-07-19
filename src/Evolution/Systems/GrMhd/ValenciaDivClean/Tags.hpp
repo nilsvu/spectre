@@ -87,6 +87,13 @@ struct DampingParameter {
       "Constraint damping parameter for divergence cleaning"};
   using group = ValenciaDivCleanGroup;
 };
+
+struct EnableDivCleaning {
+  using type = bool;
+  static constexpr Options::String help{
+      "Enable hyperbolic divergence cleaning"};
+  using group = ValenciaDivCleanGroup;
+};
 }  // namespace OptionTags
 
 namespace Tags {
@@ -98,6 +105,16 @@ struct ConstraintDampingParameter : db::SimpleTag {
   static constexpr bool pass_metavariables = false;
   static double create_from_options(const double constraint_damping_parameter) {
     return constraint_damping_parameter;
+  }
+};
+
+struct EnableDivCleaning : db::SimpleTag {
+  using type = bool;
+  using option_tags = tmpl::list<OptionTags::EnableDivCleaning>;
+
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type value) {
+    return value;
   }
 };
 }  // namespace Tags

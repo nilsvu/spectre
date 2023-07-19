@@ -4,6 +4,9 @@
 Executable: EvolveValenciaDivCleanBlastWave
 Testing:
   Check: parse;execute
+ExpectedOutput:
+  - ValenciaDivCleanBlastWaveReductions.h5
+  - ValenciaDivCleanBlastWaveVolume0.h5
 
 ---
 
@@ -16,15 +19,6 @@ Evolution:
   TimeStepper: Rk3HesthavenSsp
 
 PhaseChangeAndTriggers:
-  - Trigger:
-      Slabs:
-       EvenlySpaced:
-         # Current implementation checks wallclock at these global syncs
-         Interval: 100
-         Offset: 0
-    PhaseChanges:
-      - CheckpointAndExitAfterWallclock:
-          WallclockHours: None
 
 SchwarzSmoother:
   Enabled: True
@@ -60,7 +54,7 @@ SpatialDiscretization:
       AlwaysUseSubcells: false
       SubcellToDgReconstructionMethod: DimByDim
       UseHalo: false
-      OnlyDgBlocksAndGroups: ["Brick"]
+      OnlyDgBlocksAndGroups: []
       FiniteDifferenceDerivativeOrder: 2
     TciOptions:
       MinimumValueOfD: 1.0e-20
@@ -91,6 +85,7 @@ AnalyticData:
 
 EvolutionSystem:
   ValenciaDivClean:
+    EnableDivCleaning: True
     DampingParameter: 1.0
 
 VariableFixing:
@@ -118,7 +113,7 @@ EventsAndTriggers:
   - Trigger:
       TimeCompares:
         Comparison: GreaterThan
-        Value: 1.
+        Value: 4.
     Events:
       - Completion
   - Trigger:

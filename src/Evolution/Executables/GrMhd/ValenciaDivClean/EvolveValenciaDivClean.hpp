@@ -425,8 +425,6 @@ struct EvolutionMetavars {
       evolution::dg::subcell::Actions::TciAndRollback<
           grmhd::ValenciaDivClean::subcell::TciOnDgGrid<
               tmpl::front<ordered_list_of_primitive_recovery_schemes>>>,
-      VariableFixing::Actions::FixVariables<
-          VariableFixing::FixToAtmosphere<volume_dim>>,
       Actions::Goto<evolution::dg::subcell::Actions::Labels::EndOfSolvers>,
 
       Actions::Label<evolution::dg::subcell::Actions::Labels::BeginSubcell>,
@@ -458,10 +456,11 @@ struct EvolutionMetavars {
       Actions::MutateApply<
           grmhd::ValenciaDivClean::subcell::ResizeAndComputePrims<
               ordered_list_of_primitive_recovery_schemes>>,
-      VariableFixing::Actions::FixVariables<
-          VariableFixing::FixToAtmosphere<volume_dim>>,
 
       Actions::Label<evolution::dg::subcell::Actions::Labels::EndOfSolvers>,
+
+      VariableFixing::Actions::FixVariables<
+          VariableFixing::FixToAtmosphere<volume_dim>>,
       elliptic::divclean::Actions::EllipticDivClean<
           EvolveValenciaDivClean::OptionTags::SchwarzSmootherGroup>,
       Actions::UpdateConservatives>>;
