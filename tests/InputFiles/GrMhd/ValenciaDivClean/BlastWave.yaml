@@ -85,7 +85,7 @@ AnalyticData:
 
 EvolutionSystem:
   ValenciaDivClean:
-    EnableDivCleaning: True
+    EnableDivCleaning: False
     DampingParameter: 1.0
 
 VariableFixing:
