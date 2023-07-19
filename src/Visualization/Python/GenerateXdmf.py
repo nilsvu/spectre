@@ -157,6 +157,7 @@ def _xmf_grid(
     topo_dim: int,
     filename: str,
     subfile_name: str,
+    relative_to_filename: str,
     temporal_id: str,
     coordinates: str,
     filling_poles: bool = False,
@@ -174,6 +175,9 @@ def _xmf_grid(
             ]
         )
     )
+
+    # Determine relative path to the data file
+    filename = os.path.relpath(filename, os.path.dirname(relative_to_filename))
 
     # Determine dimension of embedding space by counting the number of
     # coordinate components
@@ -384,6 +388,7 @@ def generate_xdmf(
                     topo_dim=topo_dim,
                     filename=filename,
                     subfile_name=subfile_name,
+                    relative_to_filename=output,
                     temporal_id=temporal_id,
                     coordinates=coordinates,
                 )
@@ -396,6 +401,7 @@ def generate_xdmf(
                         topo_dim=topo_dim,
                         filename=filename,
                         subfile_name=subfile_name,
+                        relative_to_filename=output,
                         temporal_id=temporal_id,
                         coordinates=coordinates,
                         filling_poles=True,
