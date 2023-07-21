@@ -96,11 +96,11 @@ void add_slice_to_data(
   const size_t volume_grid_points = extents.product();
   const size_t slice_grid_points = extents.slice_away(sliced_dim).product();
   ASSERT(volume_vars->number_of_grid_points() == volume_grid_points,
-         "volume_vars has wrong number of grid points.  Expected "
+         "volume_vars has wrong number of grid points. Expected "
              << volume_grid_points << ", got "
              << volume_vars->number_of_grid_points());
   ASSERT(vars_on_slice.number_of_grid_points() == slice_grid_points,
-         "vars_on_slice has wrong number of grid points.  Expected "
+         "vars_on_slice has wrong number of grid points. Expected "
              << slice_grid_points << ", got "
              << vars_on_slice.number_of_grid_points());
   using value_type = typename Variables<tmpl::list<VolumeTags...>>::value_type;
