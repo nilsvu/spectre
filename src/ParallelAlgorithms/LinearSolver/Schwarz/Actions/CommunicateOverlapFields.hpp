@@ -41,11 +41,12 @@ namespace LinearSolver::Schwarz {
 namespace Actions {
 
 namespace detail {
-template <size_t Dim, typename OverlapFields, typename OptionsGroup>
+template <size_t Dim, typename OverlapFields, typename OptionsGroup,
+          typename TemporalId = size_t>
 struct OverlapFieldsTag
     : public Parallel::InboxInserters::Map<
-          OverlapFieldsTag<Dim, OverlapFields, OptionsGroup>> {
-  using temporal_id = size_t;
+          OverlapFieldsTag<Dim, OverlapFields, OptionsGroup, TemporalId>> {
+  using temporal_id = TemporalId;
   using type = std::map<
       temporal_id,
       OverlapMap<Dim, tmpl::conditional_t<
@@ -70,14 +71,15 @@ struct OverlapFieldsTag
  * This actions should be followed by
  * `LinearSolver::Schwarz::Actions::ReceiveOverlapFields` in the action list.
  */
-template <typename OverlapFields, typename OptionsGroup, bool RestrictToOverlap>
+template <typename OverlapFields, typename OptionsGroup, bool RestrictToOverlap,
+          typename TemporalIdTag = Convergence::Tags::IterationId<OptionsGroup>>
 struct SendOverlapFields;
 
 /// \cond
 template <typename... OverlapFields, typename OptionsGroup,
-          bool RestrictToOverlap>
+          bool RestrictToOverlap, typename TemporalIdTag>
 struct SendOverlapFields<tmpl::list<OverlapFields...>, OptionsGroup,
-                         RestrictToOverlap> {
+                         RestrictToOverlap, TemporalIdTag> {
   using const_global_cache_tags =
       tmpl::list<Tags::MaxOverlap<OptionsGroup>,
                  logging::Tags::Verbosity<OptionsGroup>>;
@@ -99,12 +101,11 @@ struct SendOverlapFields<tmpl::list<OverlapFields...>, OptionsGroup,
     }
 
     // Do some logging
-    const auto& iteration_id =
-        get<Convergence::Tags::IterationId<OptionsGroup>>(box);
+    const auto& temporal_id = get<TemporalIdTag>(box);
     if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
                  ::Verbosity::Debug)) {
       Parallel::printf("%s %s(%zu): Send overlap fields\n", element_id,
-                       pretty_type::name<OptionsGroup>(), iteration_id);
+                       pretty_type::name<OptionsGroup>(), temporal_id);
     }
 
     // Send data on intruding overlaps to the corresponding neighbors
@@ -138,16 +139,16 @@ struct SendOverlapFields<tmpl::list<OverlapFields...>, OptionsGroup,
         } else {
           return get<OverlapFields...>(overlap_fields);
         }
-      }
-      ();
+      }();
       // Copy data to send to neighbors, but move it for the last one
       const auto direction_from_neighbor =
           neighbors.orientation()(direction.opposite());
       for (auto neighbor = neighbors.begin(); neighbor != neighbors.end();
            ++neighbor) {
         Parallel::receive_data<detail::OverlapFieldsTag<
-            Dim, tmpl::list<OverlapFields...>, OptionsGroup>>(
-            receiver_proxy[*neighbor], iteration_id,
+            Dim, tmpl::list<OverlapFields...>, OptionsGroup,
+            typename TemporalIdTag::type>>(
+            receiver_proxy[*neighbor], temporal_id,
             std::make_pair(
                 OverlapId<Dim>{direction_from_neighbor, element.id()},
                 (std::next(neighbor) == neighbors.end())
@@ -172,15 +173,19 @@ struct SendOverlapFields<tmpl::list<OverlapFields...>, OptionsGroup,
  * This actions should be preceded by
  * `LinearSolver::Schwarz::Actions::SendOverlapFields` in the action list.
  */
-template <size_t Dim, typename OverlapFields, typename OptionsGroup>
+template <size_t Dim, typename OverlapFields, typename OptionsGroup,
+          typename TemporalIdTag = Convergence::Tags::IterationId<OptionsGroup>>
 struct ReceiveOverlapFields;
 
 /// \cond
-template <size_t Dim, typename... OverlapFields, typename OptionsGroup>
-struct ReceiveOverlapFields<Dim, tmpl::list<OverlapFields...>, OptionsGroup> {
+template <size_t Dim, typename... OverlapFields, typename OptionsGroup,
+          typename TemporalIdTag>
+struct ReceiveOverlapFields<Dim, tmpl::list<OverlapFields...>, OptionsGroup,
+                            TemporalIdTag> {
  private:
   using overlap_fields_tag =
-      detail::OverlapFieldsTag<Dim, tmpl::list<OverlapFields...>, OptionsGroup>;
+      detail::OverlapFieldsTag<Dim, tmpl::list<OverlapFields...>, OptionsGroup,
+                               typename TemporalIdTag::type>;
 
  public:
   using simple_tags =
@@ -197,8 +202,7 @@ struct ReceiveOverlapFields<Dim, tmpl::list<OverlapFields...>, OptionsGroup> {
       const Parallel::GlobalCache<Metavariables>& /*cache*/,
       const ElementId<Dim>& element_id, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) {
-    const auto& iteration_id =
-        get<Convergence::Tags::IterationId<OptionsGroup>>(box);
+    const auto& temporal_id = get<TemporalIdTag>(box);
     const auto& element = get<domain::Tags::Element<Dim>>(box);
 
     // Nothing to receive if overlap is empty
@@ -208,7 +212,7 @@ struct ReceiveOverlapFields<Dim, tmpl::list<OverlapFields...>, OptionsGroup> {
     }
 
     if (not dg::has_received_from_all_mortars<overlap_fields_tag>(
-            iteration_id, element, inboxes)) {
+            temporal_id, element, inboxes)) {
       return {Parallel::AlgorithmExecution::Retry, std::nullopt};
     }
 
@@ -216,14 +220,12 @@ struct ReceiveOverlapFields<Dim, tmpl::list<OverlapFields...>, OptionsGroup> {
     if (UNLIKELY(get<logging::Tags::Verbosity<OptionsGroup>>(box) >=
                  ::Verbosity::Debug)) {
       Parallel::printf("%s %s(%zu): Receive overlap fields\n", element_id,
-                       pretty_type::name<OptionsGroup>(), iteration_id);
+                       pretty_type::name<OptionsGroup>(), temporal_id);
     }
 
     // Move received overlap data into DataBox
-    auto received_overlap_fields =
-        std::move(tuples::get<overlap_fields_tag>(inboxes)
-                      .extract(iteration_id)
-                      .mapped());
+    auto received_overlap_fields = std::move(
+        tuples::get<overlap_fields_tag>(inboxes).extract(temporal_id).mapped());
     db::mutate<Tags::Overlaps<OverlapFields, Dim, OptionsGroup>...>(
         [&received_overlap_fields](const auto... local_overlap_fields) {
           if constexpr (sizeof...(OverlapFields) > 1) {

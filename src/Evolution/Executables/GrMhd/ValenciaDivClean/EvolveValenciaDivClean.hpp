@@ -461,7 +461,7 @@ struct EvolutionMetavars {
 
       VariableFixing::Actions::FixVariables<
           VariableFixing::FixToAtmosphere<volume_dim>>,
-      elliptic::divclean::Actions::EllipticDivClean<
+      elliptic::divclean::Actions::clean_actions<
           EvolveValenciaDivClean::OptionTags::SchwarzSmootherGroup>,
       Actions::UpdateConservatives>>;
 

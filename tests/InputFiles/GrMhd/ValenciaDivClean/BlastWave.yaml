@@ -22,7 +22,8 @@ PhaseChangeAndTriggers:
 
 SchwarzSmoother:
   Enabled: True
-  MaxOverlap: 0
+  # MaxOverlap: 0
+  MaxOverlap: 3
   SubdomainSolver: ExplicitInverse
   Verbosity: Quiet
 
