@@ -31,7 +31,7 @@ DomainCreator:
   Brick:
     LowerBound: [-6.0, -6.0, -1.0]
     UpperBound: [6.0, 6.0, 1.0]
-    InitialRefinement: [4, 4, 0]
+    InitialRefinement: [4, 4, 2]
     InitialGridPoints: [6, 6, 6]
     TimeDependence: None
     BoundaryConditionInX: Periodic

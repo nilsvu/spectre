@@ -19,6 +19,7 @@
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Domain/BoundaryConditions/BoundaryCondition.hpp"
+#include "Domain/BoundaryConditions/Periodic.hpp"
 #include "Domain/Creators/AlignedLattice.hpp"
 #include "Domain/Creators/Brick.hpp"
 #include "Domain/Creators/Cylinder.hpp"
@@ -132,6 +133,12 @@ make_boundary_condition(
   return std::make_unique<
       elliptic::BoundaryConditions::AnalyticSolution<System>>(
       boundary_condition_type);
+}
+
+std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>
+make_periodic_boundary_condition() {
+  return std::make_unique<domain::BoundaryConditions::Periodic<
+      domain::BoundaryConditions::BoundaryCondition>>();
 }
 
 // Generate some random element-centered subdomain data on each element
@@ -887,6 +894,50 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.SubdomainOperator", "[Unit][Elliptic]") {
         test_subdomain_operator<system>(domain_creator,
                                         use_massive_dg_operator);
       }
+    }
+  }
+  {
+    INFO("Periodic boundary conditions");
+    // TODO: still doesn't work for refinement < 2
+    {
+      INFO("1D");
+      using system =
+          Poisson::FirstOrderSystem<1, Poisson::Geometry::FlatCartesian>;
+      const domain::creators::Interval domain_creator{
+          {{0.}},
+          {{1.}},
+          {{2}},
+          {{3}},
+          make_periodic_boundary_condition(),
+          make_periodic_boundary_condition()};
+      test_subdomain_operator<system>(domain_creator);
+    }
+    {
+      INFO("2D");
+      using system =
+          Poisson::FirstOrderSystem<2, Poisson::Geometry::FlatCartesian>;
+      const domain::creators::Rectangle domain_creator{
+          {{0., 0.}},
+          {{1., 1.}},
+          {{2, 2}},
+          {{3, 4}},
+          make_periodic_boundary_condition(),
+          nullptr};
+      test_subdomain_operator<system>(domain_creator);
+    }
+    {
+      INFO("3D");
+      using system =
+          Poisson::FirstOrderSystem<3, Poisson::Geometry::FlatCartesian>;
+      const domain::creators::Brick domain_creator{
+          {{0., 0., 0.}},
+          {{1., 1., 1.}},
+          {{2, 2, 2}},
+          {{2, 3, 4}},
+          make_periodic_boundary_condition(),
+          make_periodic_boundary_condition(),
+          make_periodic_boundary_condition()};
+      test_subdomain_operator<system>(domain_creator);
     }
   }
   {

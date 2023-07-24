@@ -330,6 +330,38 @@ struct SubdomainOperator
               BoundaryConditionClasses>(boundary_condition, box, map_keys,
                                         fields_and_fluxes...);
         };
+    // const bool has_periodic_boundary_conditions =
+    //     [&central_element_id = central_element.id(),
+    //      &central_element_neighbors = central_element.neighbors(),
+    //      &neighbor_elements = all_neighbor_elements]() {
+    //       for (const auto& [direction, neighbors] :
+    //            central_element_neighbors) {
+    //         const auto& orientation = neighbors.orientation();
+    //         const auto direction_in_neighbor = orientation(direction);
+    //         for (const auto& neighbor_id : neighbors) {
+    //           if (neighbor_id == central_element_id) {
+    //             return true;
+    //           }
+    //           const LinearSolver::Schwarz::OverlapId<Dim> overlap_id{
+    //               direction, neighbor_id};
+    //           const auto& neighbor = neighbor_elements.at(overlap_id);
+    //           const auto neighbor_neighbors =
+    //               neighbor.neighbors().find(direction_in_neighbor);
+    //           if (neighbor_neighbors != neighbor.neighbors().end() and
+    //               neighbor_neighbors->second.ids().find(central_element_id)
+    //               !=
+    //                   neighbor_neighbors->second.ids().end()) {
+    //             return true;
+    //           }
+    //         }
+    //       }
+    //       return false;
+    //     }();
+    // Parallel::printf("has_periodic_boundary_conditions: %s\n",
+    //                  has_periodic_boundary_conditions ? "true" : "false");
+    // if (not has_periodic_boundary_conditions) {
+    //   ERROR("should have periodic b.c.");
+    // }
 
     // Check if the subdomain data is sparse, i.e. if some elements have zero
     // data. If they are, the operator is a lot cheaper to apply due to its
@@ -559,22 +591,34 @@ struct SubdomainOperator
                 remote_mortar_data.remote_insert(
                     temporal_id, std::move(oriented_neighbor_mortar_data));
               };
+          // if (has_periodic_boundary_conditions) {
+          // Assuming a regular grid of elements. We have to send mortar data
+          // to the central element. But no other neighbors are part of the
+          // subdomain, so we don't have to do anything else.
+          // } else {
           if (neighbors_neighbor_id == central_element.id() and
               mortar_id_from_neighbors_neighbor == mortar_id) {
             send_mortar_data(central_mortar_data_.at(mortar_id),
                              central_element.id());
             continue;
           }
+          // }
           // Determine whether the neighbor's neighbor overlaps with the
           // subdomain and find its overlap ID if it does.
           const auto neighbors_neighbor_overlap_id =
               [&local_all_neighbor_mortar_meshes = all_neighbor_mortar_meshes,
                &neighbors_neighbor_id, &mortar_id_from_neighbors_neighbor,
-               &is_in_subdomain]()
+               &is_in_subdomain/*,
+               &has_periodic_boundary_conditions*/]()
               -> std::optional<LinearSolver::Schwarz::OverlapId<Dim>> {
             if (not is_in_subdomain(neighbors_neighbor_id)) {
               return std::nullopt;
             }
+            // Guard against periodic boundary conditions. We assume a regular
+            // if (has_periodic_boundary_conditions) {
+            //   return std::nullopt;
+            // }
+            // Find the overlap ID of the neighbor's neighbor
             for (const auto& [local_overlap_id, local_mortar_meshes] :
                  local_all_neighbor_mortar_meshes) {
               if (local_overlap_id.second != neighbors_neighbor_id) {
@@ -599,10 +643,20 @@ struct SubdomainOperator
             // copy of each other's mortar data, which is the subject of the
             // possible optimizations mentioned above. Note that the data may
             // differ by orientations.
-            send_mortar_data(
-                neighbors_mortar_data_[*neighbors_neighbor_overlap_id]
-                                      [mortar_id_from_neighbors_neighbor],
-                neighbors_neighbor_overlap_id->second);
+            try {
+              send_mortar_data(
+                  neighbors_mortar_data_[*neighbors_neighbor_overlap_id]
+                                        [mortar_id_from_neighbors_neighbor],
+                  neighbors_neighbor_overlap_id->second);
+            } catch (const std::exception& e) {
+              const auto& central_element_id = central_element.id();
+              ERROR_NO_TRACE("Error sending mortar data from central element "
+                             << central_element_id << ", overlap " << overlap_id
+                             << " to neighbor's neighbor "
+                             << neighbors_neighbor_id << " on overlap "
+                             << *neighbors_neighbor_overlap_id << ": "
+                             << e.what());
+            }
           } else if (not neighbor_data_is_zero) {
             // The neighbor's neighbor does not overlap with the subdomain, so
             // we don't copy mortar data and also don't expect to receive any.
