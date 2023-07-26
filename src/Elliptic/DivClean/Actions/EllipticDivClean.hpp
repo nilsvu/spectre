@@ -11,6 +11,7 @@
 #include "Elliptic/DiscontinuousGalerkin/Actions/ApplyOperator.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/InitializeSubdomain.hpp"
 #include "Elliptic/DiscontinuousGalerkin/SubdomainOperator/SubdomainOperator.hpp"
+#include "Elliptic/FiniteDifference/FdOperator.hpp"
 #include "Elliptic/SubdomainPreconditioners/MinusLaplacian.hpp"
 #include "Elliptic/Systems/Poisson/BoundaryConditions/Robin.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
@@ -18,6 +19,7 @@
 #include "Evolution/DgSubcell/Projection.hpp"
 #include "Evolution/DgSubcell/Reconstruction.hpp"
 #include "Evolution/DgSubcell/Tags/ActiveGrid.hpp"
+#include "Evolution/DgSubcell/Tags/Jacobians.hpp"
 #include "Evolution/DgSubcell/Tags/Mesh.hpp"
 #include "Evolution/Systems/GrMhd/ValenciaDivClean/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/Divergence.hpp"
@@ -51,6 +53,28 @@ struct Enabled : db::SimpleTag {
   static constexpr bool pass_metavariables = false;
   using option_tags = tmpl::list<Enabled>;
   static type create_from_options(const type& value) { return value; }
+};
+
+template <typename OptionsGroup>
+struct RunOnSubcells : db::SimpleTag {
+  using type = bool;
+  using group = OptionsGroup;
+  static constexpr Options::String help =
+      "Allow running the elliptic solver on FD subcells, instead of projecting "
+      "to the DG grid. This currently works only for zero overlaps.";
+  static constexpr bool pass_metavariables = false;
+  using option_tags =
+      tmpl::list<RunOnSubcells,
+                 LinearSolver::Schwarz::OptionTags::MaxOverlap<OptionsGroup>>;
+  static type create_from_options(const bool value, const bool max_overlap) {
+    if (max_overlap > 0 and value) {
+      ERROR(
+          "Running elliptic div cleaning on subcells is currently only "
+          "supported for zero overlaps. Either set 'MaxOverlap: 0', or set "
+          "'RunOnSubcells: False'.");
+    }
+    return value;
+  }
 };
 
 template <typename OptionsGroup>
@@ -98,6 +122,21 @@ using initialize_element =
                elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
                    poisson_system, void, OptionsGroup>>;
 
+namespace Tags {
+template <typename SolverType, typename OptionsGroup,
+          evolution::dg::subcell::ActiveGrid Grid>
+struct SubdomainSolver : db::SimpleTag {
+  using type = SolverType;
+  static constexpr bool pass_metavariables = false;
+  using option_tags =
+      tmpl::list<LinearSolver::Schwarz::OptionTags::SubdomainSolver<
+          SolverType, OptionsGroup>>;
+  static type create_from_options(const type& value) {
+    return deserialize<type>(serialize<type>(value).data());
+  }
+};
+}  // namespace Tags
+
 template <typename OptionsGroup>
 struct EllipticDivClean {
   using SubdomainData = LinearSolver::Schwarz::ElementCenteredSubdomainData<
@@ -113,8 +152,12 @@ struct EllipticDivClean {
                  elliptic::subdomain_preconditioners::Registrars::
                      MinusLaplacian<Dim, OptionsGroup>,
                  LinearSolver::Serial::Registrars::ExplicitInverse>>;
-  using subdomain_solver_tag = LinearSolver::Schwarz::Tags::SubdomainSolver<
-      std::unique_ptr<SubdomainSolver>, OptionsGroup>;
+  using dg_subdomain_solver_tag =
+      Tags::SubdomainSolver<std::unique_ptr<SubdomainSolver>, OptionsGroup,
+                            evolution::dg::subcell::ActiveGrid::Dg>;
+  using subcell_subdomain_solver_tag =
+      Tags::SubdomainSolver<std::unique_ptr<SubdomainSolver>, OptionsGroup,
+                            evolution::dg::subcell::ActiveGrid::Subcell>;
   using overlap_data_inbox_tag =
       LinearSolver::Schwarz::Actions::detail::OverlapFieldsTag<
           Dim, communicated_tags, OptionsGroup, TimeStepId>;
@@ -122,9 +165,11 @@ struct EllipticDivClean {
  public:
   using const_global_cache_tags =
       tmpl::list<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>,
-                 Enabled<OptionsGroup>, logging::Tags::Verbosity<OptionsGroup>,
+                 Enabled<OptionsGroup>, RunOnSubcells<OptionsGroup>,
+                 logging::Tags::Verbosity<OptionsGroup>,
                  grmhd::ValenciaDivClean::Tags::EnableDivCleaning>;
-  using simple_tags_from_options = tmpl::list<subdomain_solver_tag>;
+  using simple_tags_from_options =
+      tmpl::list<dg_subdomain_solver_tag, subcell_subdomain_solver_tag>;
   using inbox_tags = tmpl::list<overlap_data_inbox_tag>;
 
   using simple_tags = tmpl::list<subdomain_data_buffer_tag>;
@@ -152,16 +197,24 @@ struct EllipticDivClean {
     // - Handle curved background in Poisson operator
     const size_t max_overlap =
         db::get<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>(box);
+    const bool run_on_subcells = db::get<RunOnSubcells<OptionsGroup>>(box);
     const auto& element = db::get<domain::Tags::Element<Dim>>(box);
-    const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
-    const size_t num_points = mesh.number_of_grid_points();
-    const auto& inv_jacobian =
-        db::get<domain::Tags::InverseJacobian<Dim, Frame::ElementLogical,
-                                              Frame::Inertial>>(box);
     const auto& active_grid =
         db::get<evolution::dg::subcell::Tags::ActiveGrid>(box);
+    const auto& dg_mesh = db::get<domain::Tags::Mesh<Dim>>(box);
     const auto& subcell_mesh =
         db::get<evolution::dg::subcell::Tags::Mesh<Dim>>(box);
+    const evolution::dg::subcell::ActiveGrid solver_grid =
+        run_on_subcells ? active_grid : evolution::dg::subcell::ActiveGrid::Dg;
+    const auto& mesh = solver_grid == evolution::dg::subcell::ActiveGrid::Dg
+                           ? dg_mesh
+                           : subcell_mesh;
+    const auto& inv_jacobian =
+        solver_grid == evolution::dg::subcell::ActiveGrid::Dg
+            ? db::get<domain::Tags::InverseJacobian<Dim, Frame::ElementLogical,
+                                                    Frame::Inertial>>(box)
+            : db::get<evolution::dg::subcell::fd::Tags::
+                          InverseJacobianLogicalToInertial<Dim>>(box);
     const auto& temporal_id = db::get<::Tags::TimeStepId>(box);
     const auto& extruding_extents =
         db::get<LinearSolver::Schwarz::Tags::Overlaps<
@@ -181,26 +234,30 @@ struct EllipticDivClean {
     // TODO: Apply mass matrix?
     const auto& div_b = db::get<div_b_tag>(box);
     db::mutate<subdomain_data_buffer_tag>(
-        [&div_b, &num_points, &active_grid, &mesh, &subcell_mesh, &has_overlaps,
-         &temporal_id, &inboxes, &extruding_extents,
-         &element](const gsl::not_null<SubdomainData*> subdomain_data) {
+        [&div_b, &active_grid, &solver_grid, &mesh, &dg_mesh, &subcell_mesh,
+         &has_overlaps, &temporal_id, &inboxes, &extruding_extents, &element,
+         &run_on_subcells](const gsl::not_null<SubdomainData*> subdomain_data) {
           set_number_of_grid_points(
-              make_not_null(&subdomain_data->element_data), num_points);
+              make_not_null(&subdomain_data->element_data),
+              mesh.number_of_grid_points());
           auto& div_clean_source =
               get<div_clean_potential_tag>(subdomain_data->element_data);
-          if (active_grid == evolution::dg::subcell::ActiveGrid::Dg) {
+          if (active_grid == solver_grid) {
             div_clean_source = div_b;
           } else {
             // TODO: multiply with jac det?
             evolution::dg::subcell::fd::reconstruct(
-                make_not_null(&get(div_clean_source)), get(div_b), mesh,
+                make_not_null(&get(div_clean_source)), get(div_b), dg_mesh,
                 subcell_mesh.extents(),
                 evolution::dg::subcell::fd::ReconstructionMethod::DimByDim);
           }
           // Nothing was communicated if the overlaps are empty
-          if (UNLIKELY(not has_overlaps)) {
+          if (not has_overlaps) {
             return;
           }
+          ASSERT(not run_on_subcells,
+                 "Nonzero overlaps are currently not supported when running on "
+                 "subcells.");
           const auto inbox_overlap_data =
               std::move(tuples::get<overlap_data_inbox_tag>(inboxes)
                             .extract(temporal_id)
@@ -269,13 +326,32 @@ struct EllipticDivClean {
     }
 
     // Solve the subdomain problem
-    const auto& subdomain_solver = get<subdomain_solver_tag>(box);
+    // TODO: reset the subdomain solver if the operator changes
     auto subdomain_solve_initial_guess_in_solution_out =
         make_with_value<SubdomainData>(subdomain_source, 0.);
-    const auto subdomain_solve_has_converged = subdomain_solver.solve(
-        make_not_null(&subdomain_solve_initial_guess_in_solution_out),
-        subdomain_operator, subdomain_source,
-        std::forward_as_tuple(box, subdomain_boundary_conditions));
+    Convergence::HasConverged subdomain_solve_has_converged{};
+    if (solver_grid == evolution::dg::subcell::ActiveGrid::Subcell) {
+      const auto& subdomain_solver = get<subcell_subdomain_solver_tag>(box);
+      subdomain_solve_has_converged = subdomain_solver.solve(
+          make_not_null(&subdomain_solve_initial_guess_in_solution_out),
+          [&mesh, &inv_jacobian](const gsl::not_null<SubdomainData*> result,
+                                 const SubdomainData& operand,
+                                 const auto&... /*args*/) {
+            elliptic::fd::apply_operator(
+                make_not_null(
+                    &get(get<div_clean_potential_tag>(result->element_data))),
+                get(get<div_clean_potential_tag>(operand.element_data)), mesh,
+                inv_jacobian);
+          },
+          subdomain_source,
+          std::forward_as_tuple(box, subdomain_boundary_conditions));
+    } else {
+      const auto& subdomain_solver = get<dg_subdomain_solver_tag>(box);
+      subdomain_solve_has_converged = subdomain_solver.solve(
+          make_not_null(&subdomain_solve_initial_guess_in_solution_out),
+          subdomain_operator, subdomain_source,
+          std::forward_as_tuple(box, subdomain_boundary_conditions));
+    }
     // Re-naming the solution buffer for the code below
     const auto& subdomain_solution =
         subdomain_solve_initial_guess_in_solution_out;
@@ -313,10 +389,10 @@ struct EllipticDivClean {
         get<div_clean_potential_tag>(subdomain_solution.element_data);
     auto b_correction =
         partial_derivative(div_clean_potential, mesh, inv_jacobian);
-    if (active_grid != evolution::dg::subcell::ActiveGrid::Dg) {
+    if (active_grid != solver_grid) {
       for (size_t d = 0; d < Dim; ++d) {
         b_correction.get(d) = evolution::dg::subcell::fd::project(
-            b_correction.get(d), mesh, subcell_mesh.extents());
+            b_correction.get(d), dg_mesh, subcell_mesh.extents());
       }
     }
     db::mutate<hydro::Tags::MagneticField<DataVector, Dim>,
