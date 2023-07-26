@@ -11,6 +11,7 @@
 #include "DataStructures/Tensor/EagerMath/Determinant.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
 #include "Domain/ElementMap.hpp"
+#include "Evolution/DgSubcell/Tags/Coordinates.hpp"
 #include "Utilities/SetNumberOfGridPoints.hpp"
 
 /// \cond
