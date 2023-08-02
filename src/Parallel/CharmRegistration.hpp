@@ -54,10 +54,12 @@ namespace charmxx {
 struct MainChareRegistrationConstructor {};
 
 /// \cond
+#ifdef SPECTRE_CHARM_HAS_MAIN
 struct RegistrationHelper;
 extern std::unique_ptr<RegistrationHelper>* charm_register_list;
 extern size_t charm_register_list_capacity;
 extern size_t charm_register_list_size;
+#endif  // SPECTRE_CHARM_HAS_MAIN
 /// \endcond
 
 /*!
@@ -682,6 +684,7 @@ struct RegisterInvokeIterableAction : RegistrationHelper {
  */
 template <typename Derived>
 bool register_func_with_charm() {
+#ifdef SPECTRE_CHARM_HAS_MAIN
   if (charm_register_list_size >= charm_register_list_capacity) {
     // clang-tidy: use gsl::owner (we don't use raw owning pointers unless
     // necessary)
@@ -702,6 +705,7 @@ bool register_func_with_charm() {
   // clang-tidy: do not use pointer arithmetic
   charm_register_list[charm_register_list_size - 1] =  // NOLINT
       std::make_unique<Derived>();
+#endif  // SPECTRE_CHARM_HAS_MAIN
   return true;
 }
 }  // namespace charmxx
@@ -837,6 +841,7 @@ struct RegisterReducerFunction {
  */
 template <ReducerFunctions F>
 bool register_reducer_function() {
+#ifdef SPECTRE_CHARM_HAS_MAIN
   if (charm_reducer_functions_size >= charm_reducer_functions_capacity) {
     // clang-tidy: use gsl::owner (we don't use raw owning pointers unless
     // necessary)
@@ -855,6 +860,7 @@ bool register_reducer_function() {
   charm_reducer_functions_size++;
   // clang-tidy: do not use pointer arithmetic
   charm_reducer_functions_list[charm_reducer_functions_size - 1] = F;  // NOLINT
+#endif  // SPECTRE_CHARM_HAS_MAIN
   return true;
 }
 }  // namespace charmxx
