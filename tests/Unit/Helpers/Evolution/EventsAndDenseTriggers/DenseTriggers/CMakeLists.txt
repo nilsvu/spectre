@@ -3,7 +3,7 @@
 
 set(LIBRARY "DenseTriggerHelpers")
 
-add_spectre_library(${LIBRARY} ${SPECTRE_TEST_LIBS_TYPE})
+add_spectre_library(${LIBRARY})
 
 spectre_target_sources(
   ${LIBRARY}
