@@ -7,10 +7,9 @@
 
 #include "Utilities/ErrorHandling/SegfaultHandler.hpp"
 
-// [[OutputRegex, Segmentation fault!]]
 SPECTRE_TEST_CASE("Unit.ErrorHandling.SegfaultHandler",
                   "[ErrorHandling][Unit]") {
-  ERROR_TEST();
   enable_segfault_handler();
-  std::raise(SIGSEGV);
+  CHECK_THROWS_WITH(std::raise(SIGSEGV),
+                    Catch::Matchers::ContainsSubstring("Segmentation fault!"));
 }

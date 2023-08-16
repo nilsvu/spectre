@@ -643,7 +643,7 @@ enum RefSizeErrorTestKind { Copy, ExpressionAssign, Move };
 /// \brief Test that assigning to a non-owning `VectorType` of the wrong size
 /// appropriately generates an error.
 ///
-/// \details a calling function should be an `ASSERTION_TEST()` and check for
+/// \details a calling function should check for an exception with
 /// the string "Must copy/move/assign into same size".
 /// Three types of tests are provided and one must be provided as the first
 /// function argument:

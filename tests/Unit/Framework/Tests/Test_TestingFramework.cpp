@@ -33,9 +33,3 @@ SPECTRE_TEST_CASE("Unit.TestingFramework.Approx", "[Unit]") {
   CHECK(1.0 != my_approx(1.0 + 5e-12));
   // [approx_new_custom]
 }
-
-// [[OutputRegex, I failed]]
-[[noreturn]] SPECTRE_TEST_CASE("Unit.TestingFramework.Abort", "[Unit]") {
-  ERROR_TEST();
-  sys::abort("I failed");
-}
