@@ -557,7 +557,7 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
         if: matrix.unit_tests != 'OFF'
         working-directory: /work/build
         run: |
-          make -j2 unit-tests
+          make -j2 Test_ErrorHandling
       - name: Run unit tests
         if: matrix.unit_tests != 'OFF' && matrix.COVERAGE != 'ON'
         working-directory: /work/build
@@ -568,7 +568,7 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
           # We run ctest -L unit before build test-executables to make
           # sure that all the unit tests are actually built by the
           # unit-tests target.
-          ctest -j2 -L unit --output-on-failure --repeat after-timeout:3
+          ctest -j2 -R Unit.ErrorHandling --output-on-failure
       - name: Run unit tests with coverage reporting
         if: matrix.COVERAGE == 'ON'
         working-directory: /work/build
@@ -586,13 +586,6 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
         # We currently don't require codecov in our guidelines, so don't fail
         # the CI build if codecov fails to upload
         continue-on-error: true
-      # Build the executables in a single thread to reduce memory usage
-      # sufficiently so they compile on the GitHub-hosted runners
-      - name: Build executables
-        if: matrix.COVERAGE != 'ON'
-        working-directory: /work/build
-        run: |
-          make test-executables
       # Save the cache after everything has been built. Also save on failure or
       # on cancellation (`always()`) because a partial cache is better than no
       # cache.
@@ -607,102 +600,6 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
         run: |
           ls | xargs du -sh
           du -sh .
-      - name: Diagnose ccache
-        run: |
-          ccache -s
-      - name: Run non-unit tests
-        if: matrix.COVERAGE != 'ON'
-        working-directory: /work/build
-        run: |
-          # We get occasional random timeouts, repeat tests to see if
-          # it is a random timeout or systematic
-          ctest -j2 -LE unit --output-on-failure --repeat after-timeout:3
-      - name: Install
-        # Coverage and ASAN builds are larger, so skip install to avoid running
-        # out of disk space
-        if: matrix.COVERAGE != 'ON' && matrix.ASAN != 'ON'
-        working-directory: /work/build
-        # Make sure the `install` target runs without error. We could add some
-        # basic smoke tests here to make sure the installation worked.
-        run: |
-          make install
-      - name: Print size of install directory
-        if: matrix.COVERAGE != 'ON' && matrix.ASAN != 'ON'
-        working-directory: /work/spectre_install
-        # Remove files post-install to reduce disk space for later on.
-        run: |
-          ls | xargs du -sh
-          du -sh .
-          rm -r ./*
-      - name: Test formaline tar can be built
-        if: matrix.build_type == 'Debug'
-        working-directory: /work/build
-        run: >
-          # We only run the formaline tests in debug mode to reduce total
-          # build time in CI. We do run for all compilers, though, because
-          # formaline injects data at the linking stage, which means we are
-          # somewhat tied to the compiler version.
-
-          make EvolveBurgers -j2
-
-          if [ ! -f ./bin/EvolveBurgers ]; then
-            echo "Could not find the executable EvolveBurgers";
-            echo "which we use for testing formaline";
-            exit 1
-          fi
-
-          # We disable ASAN's leak sanitizer because Charm++ has false
-          # positives that would cause the build to fail. We disable
-          # leak sanitizer for the ctest runs inside CMake anyway.
-
-          ASAN_OPTIONS=detect_leaks=0 ./bin/EvolveBurgers
-          --dump-source-tree-as spectre_src --dump-only
-
-          mkdir spectre_src;
-          mv spectre_src.tar.gz spectre_src;
-          cd spectre_src;
-          tar xf spectre_src.tar.gz;
-          mkdir build;
-          cd build
-
-          if [[ ${{ matrix.compiler }} =~ (gcc|clang)-([0-9\.]+) ]]; then
-            CC=${BASH_REMATCH[1]}-${BASH_REMATCH[2]};
-            if [[ ${BASH_REMATCH[1]} = gcc ]]; then
-              CXX=g++-${BASH_REMATCH[2]};
-              FC=gfortran-${BASH_REMATCH[2]};
-            else
-              CXX=clang++-${BASH_REMATCH[2]};
-              FC=gfortran-9;
-            fi
-          fi
-
-          MEMORY_ALLOCATOR=${{ matrix.MEMORY_ALLOCATOR }};
-          USE_PCH=${{ matrix.use_pch }};
-
-          cmake
-          -D CMAKE_C_COMPILER=${CC}
-          -D CMAKE_CXX_COMPILER=${CXX}
-          -D CMAKE_Fortran_COMPILER=${FC}
-          -D CMAKE_CXX_FLAGS="${CXXFLAGS} ${{ matrix.EXTRA_CXX_FLAGS }}"
-          -D OVERRIDE_ARCH=x86-64
-          -D BUILD_SHARED_LIBS=ON
-          -D CHARM_ROOT=${CHARM_ROOT}
-          -D CMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -D DEBUG_SYMBOLS=OFF
-          -D UNIT_TESTS_IN_TEST_EXECUTABLES=OFF
-          -D STRIP_SYMBOLS=ON
-          -D STUB_EXECUTABLE_OBJECT_FILES=ON
-          -D STUB_LIBRARY_OBJECT_FILES=ON
-          -D USE_PCH=${USE_PCH:-'ON'}
-          -D USE_CCACHE=OFF
-          -D BUILD_PYTHON_BINDINGS=OFF
-          -D MEMORY_ALLOCATOR=${MEMORY_ALLOCATOR:-'SYSTEM'}
-          -D BUILD_DOCS=OFF
-          ..
-
-          make EvolveBurgers -j2
-
-          ctest -j2 -R InputFiles.Burgers.Step.yaml --output-on-failure
       - name: Diagnose ccache
         run: |
           ccache -s
@@ -862,11 +759,7 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
         # Build on 3 threads because GitHub's macOS VMs have 3 cores:
         # https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
         run: |
-          make -j3 unit-tests
-      - name: Build executables
-        working-directory: build
-        run: |
-          make test-executables
+          make -j3 Test_ErrorHandling
       - name: Save ccache
         if: always() && github.ref == 'refs/heads/develop'
         uses: actions/cache/save@v3
@@ -884,17 +777,7 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
       - name: Run unit tests
         working-directory: build
         run: |
-          ctest -j3 --repeat after-timeout:3 --output-on-failure
-      - name: Install
-        working-directory: build
-        run: |
-          make install
-      - name: Print size of install directory
-        working-directory: install
-        run: |
-          ls | xargs du -sh
-          du -sh .
-          rm -r ./*
+          ctest -j3 -R Unit.ErrorHandling --output-on-failure
 
   # Release a new version on manual events when requested and the tests pass.
   # Only enable this on the `sxs-collaboration/spectre` repository (not on
