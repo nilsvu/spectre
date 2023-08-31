@@ -62,282 +62,6 @@ concurrency:
     && github.ref != 'refs/heads/release' }}
 
 jobs:
-  # Make sure no commits are prefixed with `fixup` or similar keywords. See
-  # `tools/CheckCommits.sh` for details.
-  check_commits:
-    name: Commits
-    # Only run on pull requests since we don't check _all_ commits, but only
-    # those that came after the PR's base ref.
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Check commits
-        # `CheckCommits.sh` tests against the local `develop` branch, so that's
-        # where we fetch the pull-request's base-branch to. Typically, it is
-        # the upstream `sxs-collaboration/spectre/develop` branch.
-        run: >
-          cd $GITHUB_WORKSPACE
-
-          git remote add upstream
-          https://github.com/${{ github.repository }}.git
-
-          git remote -v
-
-          git fetch upstream ${{ github.base_ref }}:develop
-
-          ./tools/CheckCommits.sh
-
-  # - Run simple textual checks over files in the repository, e.g. checking for
-  #   a license, line length limits etc. See `tools/CheckFiles.sh` for details.
-  # - Run format checker for python to make sure the code is formatted correctly
-  # - Check the metadata are consistent
-  check_files_and_formatting:
-    name: Files and formatting
-    runs-on: ubuntu-latest
-    container:
-      image: sxscollaboration/spectre:ci
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      # Work around https://github.com/actions/checkout/issues/760
-      - name: Trust checkout
-        run: |
-          git config --global --add safe.directory $GITHUB_WORKSPACE
-      # The action above checks out the `github.ref` by default, which points to
-      # the merge commit with the target branch for pull-request events. For
-      # this job we check out the pull-request HEAD instead. It makes
-      # git-related issues easier to debug because the state matches the local
-      # repository. It also prevents releases that happened since the
-      # pull-request branch was last rebased from disrupting tests that involve
-      # the latest release tag.
-      - name: Checkout pull-request HEAD
-        if: github.event_name == 'pull_request'
-        run: |
-          git checkout ${{ github.event.pull_request.head.sha }}
-      # Some tests involve release tags, which may not have been pushed to
-      # forks. Fetching them here.
-      - name: Fetch upstream tags on forks
-        if: github.repository != 'sxs-collaboration/spectre'
-        run: |
-          git fetch --tags https://github.com/sxs-collaboration/spectre
-      - name: Install Python dependencies
-        run: |
-          pip3 install -r .github/scripts/requirements-release.txt
-          pip3 install -r support/Python/dev_requirements.txt
-      - name: Test tools
-        run: |
-          python3 -m unittest discover -p 'Test_CompileReleaseNotes.py' \
-            tests.tools -v
-      - name: Check Python formatting
-        run: |
-          cd $GITHUB_WORKSPACE
-          echo "Using 'black' to check Python formatting..."
-          black --check .
-          echo "Using 'isort' to check Python formatting..."
-          isort --check-only .
-      - name: Test script
-        run: |
-          cd $GITHUB_WORKSPACE
-          ./tools/CheckFiles.sh --test
-      - name: Check files
-        run: |
-          cd $GITHUB_WORKSPACE
-          ./tools/CheckFiles.sh
-      - name: Check metadata
-        run: |
-          python3 tools/CheckMetadata.py
-      - name: Check the metadata is consistent with the releases
-        # No need to check this on forks. They would need to set a Zenodo token
-        # for this test. Also disable on PRs because they don't have access to
-        # the repo's secrets.
-        if: >
-          github.repository == 'sxs-collaboration/spectre'
-            && github.event_name != 'pull_request'
-        run: |
-          python3 .github/scripts/Release.py prepare -vv --check-only \
-            --zenodo-token ${{ secrets.ZENODO_READONLY_TOKEN }} \
-            --github-token ${{ secrets.GITHUB_TOKEN }}
-          python3 .github/scripts/Release.py publish -vv --check-only \
-            --zenodo-token ${{ secrets.ZENODO_READONLY_TOKEN }} \
-            --github-token ${{ secrets.GITHUB_TOKEN }} \
-            --auto-publish
-      - name: Check release notes
-        run: |
-          python3 tools/CompileReleaseNotes.py -vv -o release_notes.md \
-            --github-token ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload release notes
-        uses: actions/upload-artifact@v3
-        with:
-          name: release-notes
-          path: release_notes.md
-      # GitHub doesn't display artifacts until the workflow has completed, so we
-      # print the release notes here to be able to review them before approving
-      # a release
-      - name: Print release notes
-        run: |
-          cat release_notes.md
-
-  # Lint with clang-tidy. We check only code that changed relative to the
-  # nearest common ancestor commit with `sxs-collaboration/spectre/develop`.
-  clang_tidy:
-    name: Clang-tidy
-    if: >
-      (github.event_name == 'pull_request'
-       && github.repository == 'sxs-collaboration/spectre'
-       && github.base_ref == 'develop')
-      || github.ref != 'refs/heads/develop'
-    runs-on: ubuntu-latest
-    container:
-      image: sxscollaboration/spectre:ci
-    strategy:
-      matrix:
-        build_type: [Debug, Release]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      # Work around https://github.com/actions/checkout/issues/760
-      - name: Trust checkout
-        run: |
-          git config --global --add safe.directory $GITHUB_WORKSPACE
-      - name: Fetch sxs-collaboration/spectre/develop
-        run: >
-          cd $GITHUB_WORKSPACE
-
-          git remote add upstream
-          https://github.com/sxs-collaboration/spectre.git
-
-          git remote -v
-
-          git fetch upstream develop
-      - name: Configure with cmake
-        working-directory: /work
-        # Notes on the build configuration:
-        # - Set `BUILD_TESTING=OFF` to test a CMake configuration with tests
-        #   turned off.
-        run: >
-          mkdir build && cd build
-
-          cmake
-          -D CMAKE_C_COMPILER=clang
-          -D CMAKE_CXX_COMPILER=clang++
-          -D CMAKE_Fortran_COMPILER=gfortran-9
-          -D CHARM_ROOT=${CHARM_ROOT}
-          -D CMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -D OVERRIDE_ARCH=x86-64
-          -D USE_CCACHE=OFF
-          -D DEBUG_SYMBOLS=OFF
-          -D BUILD_PYTHON_BINDINGS=ON
-          -D BUILD_TESTING=OFF
-          $GITHUB_WORKSPACE
-      - name: Check clang-tidy
-        working-directory: /work/build
-        run: >
-          UPSTREAM_HASH=$(
-            cd $GITHUB_WORKSPACE && git merge-base HEAD upstream/develop)
-
-          echo "Running clang-tidy relative to: $UPSTREAM_HASH\n"
-
-          make clang-tidy-hash HASH=$UPSTREAM_HASH NUM_THREADS=2
-
-  # Build the documentation and check for problems, then upload as a workflow
-  # artifact and deploy to gh-pages.
-  doc_check:
-    name: Documentation
-    needs: check_files_and_formatting
-    runs-on: ubuntu-latest
-    container:
-      image: sxscollaboration/spectre:ci
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      # Work around https://github.com/actions/checkout/issues/760
-      - name: Trust checkout
-        run: |
-          git config --global --add safe.directory $GITHUB_WORKSPACE
-      # These can be installed directly in the Docker container instead
-      - name: Install Python dependencies
-        run: |
-          python3 -m pip install -r support/Python/dev_requirements.txt
-      - name: Download release notes
-        uses: actions/download-artifact@v3
-        id: release-notes
-        with:
-          name: release-notes
-          path: /work
-      - name: Append release notes to changelog
-        # The sed command escapes @ symbols at beginning of words (GitHub
-        # usernames) so they aren't interpreted as Doxygen commands
-        run: |
-          echo "" >> docs/Changelog.md
-          cat /work/release_notes.md | sed 's/\(\B\@\)/\\\1/g' \
-            >> docs/Changelog.md
-      - name: Configure with cmake
-        working-directory: /work
-        run: >
-          mkdir build && cd build
-
-          cmake
-          -D CMAKE_C_COMPILER=clang
-          -D CMAKE_CXX_COMPILER=clang++
-          -D CMAKE_Fortran_COMPILER=gfortran-9
-          -D CHARM_ROOT=${CHARM_ROOT}
-          -D CMAKE_BUILD_TYPE=Debug
-          -D DEBUG_SYMBOLS=OFF
-          -D BUILD_PYTHON_BINDINGS=ON
-          $GITHUB_WORKSPACE
-      - name: Check documentation
-        working-directory: /work/build
-        run: |
-          make doc-check
-      # Re-build with coverage information on pushes to develop for deployment
-      # to gh-pages.
-      - name: Build documentation with coverage
-        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-        working-directory: /work/build
-        run: |
-          make doc-coverage
-      - name: Build Python docs
-        working-directory: /work/build
-        run: |
-          make py-docs
-      # Upload as an artifact to make available to deployment and to PRs
-      - name: Prepare for upload
-        working-directory: /work/build
-        run: |
-          tar -cf docs-html.tar --directory docs/html .
-      - name: Upload documentation
-        uses: actions/upload-artifact@v3
-        with:
-          name: docs-html
-          path: /work/build/docs-html.tar
-
-  # Deploy to gh-pages on pushes to develop
-  # See docs: https://github.com/actions/deploy-pages
-  docs-deploy:
-    name: Deploy documentation
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    needs: doc_check
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - uses: actions/deploy-pages@v2
-        id: deploy
-        with:
-          artifact_name: docs-html
-
   # Build all test executables and run unit tests on a variety of compiler
   # configurations.
   unit_tests:
@@ -350,38 +74,37 @@ jobs:
         # GitHub cache space we use. GCC being the production compiler on
         # supercomputers means we need to thoroughly test it.
         compiler:
-          - gcc-9
-          - gcc-10
-          - gcc-11
-        build_type: [Debug, Release]
+          - clang-11
+          - clang-13
+        build_type: [Debug]
         include:
-          # Generate code coverage report for a single build
-          # Note: currently disabled because it exceeds the available disk space
-          # - compiler: gcc-9
-          #   build_type: Debug
-          #   COVERAGE: ON
-          #   TEST_TIMEOUT_FACTOR: 3
-          # This configuration seems to run consistently slower than newer gcc
-          # or clang builds, so we increase the test timeout a bit
-          - compiler: gcc-10
-            build_type: Debug
-            TEST_TIMEOUT_FACTOR: 2
-          # Add a test without PCH to the build matrix, which only builds core
-          # libraries. Building all the tests without the PCH takes very long
-          # and the most we would catch is a missing include of something that's
-          # in the PCH.
-          # Use this test also to build and test all input files with "normal"
-          # or higher priority. The other configurations only test input files
-          # with "high" priority to reduce the total build time.
-          - compiler: clang-10
-            build_type: Debug
-            use_pch: OFF
-            unit_tests: OFF
-            input_file_tests_min_priority: "normal"
-          # Full clang-10 build to catch any incompatibilities.
-          - compiler: clang-10
-            build_type: Release
-          # Test with ASAN
+        #   # Generate code coverage report for a single build
+        #   # Note: currently disabled because it exceeds the available disk space
+        #   # - compiler: gcc-9
+        #   #   build_type: Debug
+        #   #   COVERAGE: ON
+        #   #   TEST_TIMEOUT_FACTOR: 3
+        #   # This configuration seems to run consistently slower than newer gcc
+        #   # or clang builds, so we increase the test timeout a bit
+        #   - compiler: gcc-10
+        #     build_type: Debug
+        #     TEST_TIMEOUT_FACTOR: 2
+        #   # Add a test without PCH to the build matrix, which only builds core
+        #   # libraries. Building all the tests without the PCH takes very long
+        #   # and the most we would catch is a missing include of something that's
+        #   # in the PCH.
+        #   # Use this test also to build and test all input files with "normal"
+        #   # or higher priority. The other configurations only test input files
+        #   # with "high" priority to reduce the total build time.
+        #   - compiler: clang-10
+        #     build_type: Debug
+        #     use_pch: OFF
+        #     unit_tests: OFF
+        #     input_file_tests_min_priority: "normal"
+        #   # Full clang-10 build to catch any incompatibilities.
+        #   - compiler: clang-10
+        #     build_type: Release
+        #   # Test with ASAN
           - compiler: clang-11
             build_type: Debug
             # When building with ASAN we also need python bindings to be
@@ -392,14 +115,14 @@ jobs:
             ASAN: ON
             BUILD_PYTHON_BINDINGS: OFF
             MEMORY_ALLOCATOR: JEMALLOC
-          # Test building with static libraries. Do so with clang in release
-          # mode because these builds use up little disk space compared to GCC
-          # builds or clang Debug builds
-          - compiler: clang-11
-            build_type: Release
-            BUILD_SHARED_LIBS: OFF
-            use_xsimd: OFF
-            MEMORY_ALLOCATOR: JEMALLOC
+        #   # Test building with static libraries. Do so with clang in release
+        #   # mode because these builds use up little disk space compared to GCC
+        #   # builds or clang Debug builds
+        #   - compiler: clang-11
+        #     build_type: Release
+        #     BUILD_SHARED_LIBS: OFF
+        #     use_xsimd: OFF
+        #     MEMORY_ALLOCATOR: JEMALLOC
           # Test with MPI version of charm
           - compiler: clang-13
             build_type: Debug
@@ -473,9 +196,9 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
           ccache -pz
       - name: Clear ccache
         # Clear ccache if requested
-        if: >
-          github.event_name == 'workflow_dispatch'
-            && github.event.inputs.clear_ccache == 'yes'
+        # if: >
+        #   github.event_name == 'workflow_dispatch'
+        #     && github.event.inputs.clear_ccache == 'yes'
         run: |
           ccache -C
       - name: Configure build with cmake
@@ -547,94 +270,110 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
         working-directory: build
         run: |
           ! grep -A 6 "CMake Warning" ./CMakeOutput.txt
-      - name: Build unit tests
-        if: matrix.unit_tests != 'OFF'
-        working-directory: build
-        run: |
-          make -j2 unit-tests
-      - name: Run unit tests
-        if: matrix.unit_tests != 'OFF' && matrix.COVERAGE != 'ON'
-        working-directory: build
-        run: |
-          # We get occasional random timeouts, repeat tests to see if
-          # it is a random timeout or systematic.
-          #
-          # We run ctest -L unit before build test-executables to make
-          # sure that all the unit tests are actually built by the
-          # unit-tests target.
-          ctest -j2 -L unit --output-on-failure --repeat after-timeout:3
-      - name: Run unit tests with coverage reporting
-        if: matrix.COVERAGE == 'ON'
-        working-directory: build
-        run: |
-          make unit-test-coverage
-          rm -r docs/html/unit-test-coverage
-      - name: Upload coverage report to codecov.io
-        if: matrix.COVERAGE == 'ON'
-        uses: codecov/codecov-action@v3
-        with:
-          files: build/tmp/coverage.info
-          # Display the job as failed if upload fails (defaults to false for
-          # some reason)
-          fail_ci_if_error: true
-        # We currently don't require codecov in our guidelines, so don't fail
-        # the CI build if codecov fails to upload
-        continue-on-error: true
+      # - name: Build unit tests
+      #   if: matrix.unit_tests != 'OFF'
+      #   working-directory: /work/build
+      #   run: |
+      #     make -j2 unit-tests
+      # - name: Run unit tests
+      #   if: matrix.unit_tests != 'OFF' && matrix.COVERAGE != 'ON'
+      #   working-directory: /work/build
+      #   run: |
+      #     # We get occasional random timeouts, repeat tests to see if
+      #     # it is a random timeout or systematic.
+      #     #
+      #     # We run ctest -L unit before build test-executables to make
+      #     # sure that all the unit tests are actually built by the
+      #     # unit-tests target.
+      #     ctest -j2 -L unit --output-on-failure --repeat after-timeout:3
+      # - name: Run unit tests with coverage reporting
+      #   if: matrix.COVERAGE == 'ON'
+      #   working-directory: /work/build
+      #   run: |
+      #     make unit-test-coverage
+      #     rm -r docs/html/unit-test-coverage
+      # - name: Upload coverage report to codecov.io
+      #   if: matrix.COVERAGE == 'ON'
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     files: /work/build/tmp/coverage.info
+      #     # Display the job as failed if upload fails (defaults to false for
+      #     # some reason)
+      #     fail_ci_if_error: true
+      #   # We currently don't require codecov in our guidelines, so don't fail
+      #   # the CI build if codecov fails to upload
+      #   continue-on-error: true
       # Build the executables in a single thread to reduce memory usage
       # sufficiently so they compile on the GitHub-hosted runners
       - name: Build executables
         if: matrix.COVERAGE != 'ON'
         working-directory: build
         run: |
-          make test-executables
-      # Delete unused cache entries before uploading the cache
-      - name: Clean up ccache
-        if: github.ref == 'refs/heads/develop'
-        run: |
-          now=$(date +%s)
-          job_duration=$((now - ${{ steps.start.outputs.time }}))
-          ccache --evict-older-than "${job_duration}s"
-      # Save the cache after everything has been built. Also save on failure or
-      # on cancellation (`always()`) because a partial cache is better than no
-      # cache.
-      - name: Save ccache
-        if: always() && github.ref == 'refs/heads/develop'
-        uses: actions/cache/save@v3
-        with:
-          path: /work/ccache
-          key: ${{ steps.restore-ccache.outputs.cache-primary-key }}
-      - name: Print size of build directory
-        working-directory: build
-        run: |
-          ls | xargs du -sh
-          du -sh .
+          export CCACHE_DEBUG=1
+          export CCACHE_DEBUGDIR=/work/ccache-debug-og
+          make -j2 DomainStructure
+          find /work/ccache-debug-og -type f -name '*.ccache-input-[cdp]' -delete
+      # # Delete unused cache entries before uploading the cache
+      # - name: Clean up ccache
+      #   if: github.ref == 'refs/heads/develop'
+      #   run: |
+      #     now=$(date +%s)
+      #     job_duration=$((now - ${{ steps.start.outputs.time }}))
+      #     ccache --evict-older-than "${job_duration}s"
+      # # Save the cache after everything has been built. Also save on failure or
+      # # on cancellation (`always()`) because a partial cache is better than no
+      # # cache.
+      # - name: Save ccache
+      #   if: always() && github.ref == 'refs/heads/develop'
+      #   uses: actions/cache/save@v3
+      #   with:
+      #     path: /work/ccache
+      #     key: ${{ steps.restore-ccache.outputs.cache-primary-key }}
+      # - name: Print size of build directory
+      #   working-directory: /work/build
+      #   run: |
+      #     ls | xargs du -sh
+      #     du -sh .
       - name: Diagnose ccache
         run: |
           ccache -s
-      - name: Run non-unit tests
-        if: matrix.COVERAGE != 'ON'
-        working-directory: build
+      # - name: Run non-unit tests
+      #   if: matrix.COVERAGE != 'ON'
+      #   working-directory: /work/build
+      #   run: |
+      #     # We get occasional random timeouts, repeat tests to see if
+      #     # it is a random timeout or systematic
+      #     ctest -j2 -LE unit --output-on-failure --repeat after-timeout:3
+      # - name: Install
+      #   # Coverage and ASAN builds are larger, so skip install to avoid running
+      #   # out of disk space
+      #   if: matrix.COVERAGE != 'ON' && matrix.ASAN != 'ON'
+      #   working-directory: /work/build
+      #   # Make sure the `install` target runs without error. We could add some
+      #   # basic smoke tests here to make sure the installation worked.
+      #   run: |
+      #     make install
+      # - name: Print size of install directory
+      #   if: matrix.COVERAGE != 'ON' && matrix.ASAN != 'ON'
+      #   working-directory: /work/spectre_install
+      #   # Remove files post-install to reduce disk space for later on.
+      #   run: |
+      #     ls | xargs du -sh
+      #     du -sh .
+      #     rm -r ./*
+      - name: Prepare for upload
+        working-directory: /work
         run: |
-          # We get occasional random timeouts, repeat tests to see if
-          # it is a random timeout or systematic
-          ctest -j2 -LE unit --output-on-failure --repeat after-timeout:3
-      - name: Install
-        # Coverage and ASAN builds are larger, so skip install to avoid running
-        # out of disk space
-        if: matrix.COVERAGE != 'ON' && matrix.ASAN != 'ON'
-        working-directory: build
-        # Make sure the `install` target runs without error. We could add some
-        # basic smoke tests here to make sure the installation worked.
+          tar -cf ccache-debug-og.tar --directory ccache-debug-og .
+      - name: Upload ccache debugdir2
+        uses: actions/upload-artifact@v3
+        with:
+          name: ccache-debug-og-${{ matrix.compiler }}
+          path: /work/ccache-debug-og.tar
+      - name: del
+        working-directory: /work
         run: |
-          make install
-      - name: Print size of install directory
-        if: matrix.COVERAGE != 'ON' && matrix.ASAN != 'ON'
-        working-directory: /work/spectre_install
-        # Remove files post-install to reduce disk space for later on.
-        run: |
-          ls | xargs du -sh
-          du -sh .
-          rm -r ./*
+          rm -rf ccache-debug-og.tar ccache-debug-og
       - name: Test formaline tar can be built
         # - We only run the formaline tests in debug mode to reduce total build
         #   time in CI.
@@ -709,409 +448,29 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
           -D BUILD_DOCS=OFF
           ..
 
-          make EvolveBurgers -j2
+          export CCACHE_LOGFILE=/work/ccache.log
 
-          ctest -j2 -R InputFiles.Burgers.Step.yaml --output-on-failure
-      - name: Diagnose ccache
-        run: |
-          ccache -s
+          export CCACHE_DEBUG=1
 
-  # Build all test executables and run unit tests on macOS
-  unit_tests_macos:
-    name: Unit tests on macOS
-    runs-on: macos-11
-    env:
-      # We install some low-level dependencies with Homebrew. They get picked up
-      # by `spack external find`.
-      SPECTRE_BREW_DEPS: >-  # Line breaks are spaces, no trailing newline
-        autoconf automake catch2 ccache cmake pkg-config
-      # We install these packages with Spack and cache them. The full specs are
-      # listed in support/DevEnvironments/spack.yaml. This list is only needed
-      # to create the cache.
-      SPECTRE_SPACK_DEPS: >-
-        blaze boost brigand charmpp gsl hdf5 libsharp libxsmm openblas
-        py-pybind11 yaml-cpp
-      CCACHE_DIR: $HOME/ccache
-      CCACHE_MAXSIZE: "2G"
-      CCACHE_COMPRESS: 1
-      CCACHE_COMPRESSLEVEL: 5
-      CCACHE_COMPILERCHECK: content
-      SPACK_SKIP_MODULES: true
-      SPACK_COLOR: always
-    steps:
-      - name: Record start time
-        id: start
-        run: |
-          echo "time=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      - name: Install Homebrew dependencies
-        run: |
-          brew install $SPECTRE_BREW_DEPS
-      # We install the remaining dependencies with Spack and cache them.
-      # See the `unit_tests` job above for details on the cache configuration.
-      - name: Restore dependency cache
-        uses: actions/cache/restore@v3
-        id: restore-dependencies
-        with:
-          path: ~/dependencies
-          key: "dependencies-macos-${{ github.run_id }}"
-          restore-keys: |
-            dependencies-macos-
-      - name: Install Spack
-        run: |
-          cd $HOME
-          git clone -c feature.manyFiles=true --depth=1 \
-            --branch releases/v0.18 --single-branch \
-            https://github.com/spack/spack.git
-      - name: Configure Spack
-        # - To avoid re-building packages that are already installed by Homebrew
-        #   we let Spack find them.
-        # - Add the dependency cache as binary mirror.
-        run: |
-          source $HOME/spack/share/spack/setup-env.sh
-          spack debug report
-          spack compiler find && spack compiler list
-          spack external find && spack external find perl python
-          spack config get packages
-          spack mirror add dependencies file://$HOME/dependencies/spack
-      # Install the remaining dependencies from source with Spack. We install
-      # them in an environment that we can activate later. After building the
-      # dependencies from source we cache them as compressed tarballs.
-      - name: Install Spack dependencies
-        run: |
-          source $HOME/spack/share/spack/setup-env.sh
-          spack env create spectre support/DevEnvironments/spack.yaml
-          spack env activate spectre
-          spack remove catch2 doxygen jemalloc
-          spack concretize --reuse
-          spack install --no-check-signature
-          spack find -v
-      - name: Update dependency cache
-        if: github.ref == 'refs/heads/develop'
-        run: |
-          source $HOME/spack/share/spack/setup-env.sh
-          # Clear existing buildcache so we don't accumulate old versions of
-          # packages in the cache
-          rm -rf $HOME/dependencies
-          spack buildcache create -ufa -m dependencies $SPECTRE_SPACK_DEPS
-        # Allow the buildcache creation to fail without failing the job, since
-        # it sometimes runs out of memory
-        continue-on-error: true
-      - name: Save dependency cache
-        if: github.ref == 'refs/heads/develop'
-        uses: actions/cache/save@v3
-        with:
-          path: ~/dependencies
-          key: ${{ steps.restore-dependencies.outputs.cache-primary-key }}
-      # Install remaining pure Python dependencies with pip because the Spack
-      # package index can be incomplete (it can't mirror all of pip)
-      - name: Install Python dependencies
-        run: |
-          source $HOME/spack/share/spack/setup-env.sh
-          spack env activate spectre
-          pip install -r support/Python/requirements.txt
-      # Replace the ccache directory that building the dependencies may have
-      # generated with the cached ccache directory.
-      - name: Clear ccache from dependencies
-        run: |
-          ccache --clear
-          rm -rf $CCACHE_DIR
-          mkdir -p $CCACHE_DIR
-      - name: Restore ccache
-        uses: actions/cache/restore@v3
-        id: restore-ccache
-        with:
-          path: ~/ccache
-          key: "ccache-macos-${{ github.run_id }}"
-          restore-keys: |
-            ccache-macos-
-      - name: Configure ccache
-        run: |
-          ccache -pz
-      - name: Clear ccache
-        # Clear ccache if requested
-        if: >
-          github.event_name == 'workflow_dispatch'
-            && github.event.inputs.clear_ccache == 'yes'
-        run: |
-          ccache -C
-      # Configure, build and run tests. See the `unit_tests` job above for
-      # details.
-      # - We increase the timeout for tests because the GitHub-hosted macOS VMs
-      #   appear to be quite slow.
-      - name: Configure build with cmake
-        run: |
-          source $HOME/spack/share/spack/setup-env.sh
-          spack env activate spectre
-          mkdir build && cd build
-          cmake \
-            -D CMAKE_C_COMPILER=clang \
-            -D CMAKE_CXX_COMPILER=clang++ \
-            -D CMAKE_Fortran_COMPILER=gfortran-11 \
-            -D CMAKE_CXX_FLAGS="-Werror" \
-            -D OVERRIDE_ARCH=x86-64 \
-            -D BUILD_SHARED_LIBS=ON \
-            -D BUILD_PYTHON_BINDINGS=ON \
-            -D MEMORY_ALLOCATOR=SYSTEM \
-            -D CHARM_ROOT=$(spack location --install-dir charmpp) \
-            -D CMAKE_BUILD_TYPE=Debug \
-            -D DEBUG_SYMBOLS=OFF \
-            -D UNIT_TESTS_IN_TEST_EXECUTABLES=OFF \
-            -D STUB_EXECUTABLE_OBJECT_FILES=ON \
-            -D STUB_LIBRARY_OBJECT_FILES=ON \
-            -D USE_PCH=ON \
-            -D USE_CCACHE=ON \
-            -D SPECTRE_TEST_TIMEOUT_FACTOR=5 \
-            -D CMAKE_INSTALL_PREFIX=../install \
-            -D BUILD_DOCS=OFF \
-            -D USE_XSIMD=OFF \
-            $GITHUB_WORKSPACE
-      - name: Build unit tests
-        working-directory: build
-        # Build on 3 threads because GitHub's macOS VMs have 3 cores:
-        # https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
-        run: |
-          make -j3 unit-tests
-      - name: Build executables
-        working-directory: build
-        run: |
-          make test-executables
-      - name: Clean up ccache
-        if: github.ref == 'refs/heads/develop'
-        run: |
-          now=$(date +%s)
-          job_duration=$((now - ${{ steps.start.outputs.time }}))
-          ccache --evict-older-than "${job_duration}s"
-      - name: Save ccache
-        if: always() && github.ref == 'refs/heads/develop'
-        uses: actions/cache/save@v3
-        with:
-          path: ~/ccache
-          key: ${{ steps.restore-ccache.outputs.cache-primary-key }}
-      - name: Print size of build directory
-        working-directory: build
-        run: |
-          ls | xargs du -sh
-          du -sh .
-      - name: Diagnose ccache
-        run: |
-          ccache -s
-      - name: Run unit tests
-        working-directory: build
-        run: |
-          ctest -j3 --repeat after-timeout:3 --output-on-failure
-      - name: Install
-        working-directory: build
-        run: |
-          make install
-      - name: Print size of install directory
-        working-directory: install
-        run: |
-          ls | xargs du -sh
-          du -sh .
-          rm -r ./*
+          export CCACHE_DEBUGDIR=/work/ccache-debug-formaline
 
-  # Release a new version on manual events when requested and the tests pass.
-  # Only enable this on the `sxs-collaboration/spectre` repository (not on
-  # forks).
-  release_version:
-    name: Release version
-    # Running in a protected environment that provides the necessary secrets
-    environment: release
-    runs-on: ubuntu-latest
-    if: >
-      github.repository == 'sxs-collaboration/spectre'
-        && github.ref == 'refs/heads/develop'
-        && github.event_name == 'workflow_dispatch'
-        && github.event.inputs.release_version != ''
-    needs:
-      - check_files_and_formatting
-      - doc_check
-      - unit_tests
-    env:
-      TZ: ${{ github.event.inputs.timezone }}
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          # Using a personal access token with admin privileges here so this
-          # action can push to protected branches. Note that this also means
-          # that the pushes can trigger additional workflows (GitHub only
-          # prevents pushes with the default GITHUB_TOKEN from triggering
-          # additional workflows).
-          token: ${{ secrets.GH_TOKEN_RELEASE }}
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.8'
-      - name: Install Python dependencies
-        run: |
-          pip3 install -r .github/scripts/requirements-release.txt
-      # We use the current date as tag name, unless a tag name was specified
-      # as input to the `workflow_dispatch` event
-      - name: Determine release version
-        id: get_version
-        run: |
-          INPUT_RELEASE_VERSION=${{ github.event.inputs.release_version }}
-          RELEASE_VERSION=${INPUT_RELEASE_VERSION:-$(date +'%Y.%m.%d')}
-          echo "Release version is: ${RELEASE_VERSION}"
-          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
-      - name: Validate release version
-        run: |
-          VERSION_PATTERN="^([0-9]{4})\.([0-9]{2})\.([0-9]{2})(\.[0-9]+)?$"
-          if [[ $RELEASE_VERSION =~ $VERSION_PATTERN ]]; then
-            if [ $(date +'%Y') != ${BASH_REMATCH[1]} ] ||
-            [ $(date +'%m') != ${BASH_REMATCH[2]} ] ||
-            [ $(date +'%d') != ${BASH_REMATCH[3]} ]; then
-              TODAY=$(date +'%Y.%m.%d')
-              echo "'$RELEASE_VERSION' doesn't match current date '$TODAY'"
-              exit 1
-            fi
-          else
-            echo "'$RELEASE_VERSION' doesn't match '$VERSION_PATTERN'"
-            exit 1
-          fi
-          if [ $(git tag -l "v$RELEASE_VERSION") ]; then
-            echo "Tag 'v$RELEASE_VERSION' already exists"
-            exit 1
-          fi
-          if [ $(git rev-parse HEAD) == $(git rev-parse origin/release) ]; then
-            echo "Nothing changed since last release $(git describe release)."
-            exit 1
-          fi
-      - name: Reserve Zenodo DOI and prepare repository
-        run: |
-          python3 .github/scripts/Release.py prepare -vv \
-            --version $RELEASE_VERSION \
-            --zenodo-token ${{ secrets.ZENODO_READWRITE_TOKEN }} \
-            --github-token ${{ secrets.GITHUB_TOKEN }}
-          git diff
-      - name: Download release notes
-        uses: actions/download-artifact@v3
-        id: release-notes
-        with:
-          name: release-notes
-          path: ~/release-notes
-      # Push a commit tagged with the new version to `develop` and `release`.
-      # The push will trigger the workflow again because we're using a personal
-      # access token. The triggered workflow will build and deploy the
-      # documentation so we don't need to do that here.
-      - name: Commit and push
-        run: |
-          git config user.name sxs-bot
-          git config user.email sxs-bot@black-holes.org
-          git commit -a -m "Prepare release $RELEASE_VERSION"
-          git show HEAD
-          git status
-          git tag -a v$RELEASE_VERSION -m "Release $RELEASE_VERSION" HEAD
-          git push origin HEAD:develop
-          git push origin HEAD:release
-          git push origin v$RELEASE_VERSION
-      - name: Create release on GitHub
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_RELEASE }}
-        with:
-          tag_name: v${{ env.RELEASE_VERSION }}
-          release_name: Release ${{ env.RELEASE_VERSION }}
-          body_path: >-
-            ${{ steps.release-notes.outputs.download-path }}/release_notes.md
-      # Publish the Zenodo record. Once published, the record can't be deleted
-      # anymore and editing is limited.
-      - name: Publish to Zenodo
-        run: |
-          python3 .github/scripts/Release.py publish -vv \
-            --zenodo-token ${{ secrets.ZENODO_PUBLISH_TOKEN }} \
-            --github-token ${{ secrets.GITHUB_TOKEN }} \
-            --auto-publish
+          make DomainStructure -j2
 
-  arch_datastructures_tests:
-    name: Archs
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        compiler:
-          - gcc-9
-          - gcc-10
-          - clang-10
-          - clang-13
-        include:
-          - sde_arch: ("-nhm;nehalem" "-snb;sandybridge" "-hsw;haswell"
-              "-skl;skylake")
-            compiler: gcc-9
-          - sde_arch: ("-nhm;nehalem" "-snb;sandybridge" "-hsw;haswell"
-              "-skl;skylake" "-icx;icelake-server")
-            compiler: gcc-10
-          - sde_arch: ("-nhm;nehalem" "-snb;sandybridge" "-hsw;haswell"
-              "-skl;skylake" "-icx;icelake-server")
-            compiler: clang-10
-          - sde_arch: ("-nhm;nehalem" "-snb;sandybridge" "-hsw;haswell"
-              "-skl;skylake" "-icx;icelake-server" "-tgl;tigerlake")
-            compiler: clang-13
-    container:
-      image: sxscollaboration/spectre:ci
-      env:
-        # See the unit test job for the reasons for these configuration choices
-        CXXFLAGS: "-Werror"
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      # Work around https://github.com/actions/checkout/issues/760
-      - name: Trust checkout
-        run: |
-          git config --global --add safe.directory $GITHUB_WORKSPACE
-      - name: Configure, build, and run tests
+          find /work/ccache-debug-formaline -type f -name '*.ccache-input-[cdp]' -delete
+      - name: Upload ccache logfile
+        uses: actions/upload-artifact@v3
+        with:
+          name: ccache-log-${{ matrix.compiler }}
+          path: /work/ccache.log
+      - name: Prepare for upload
         working-directory: /work
-        # Notes on the build configuration:
-        # - We don't need debug symbols during CI, so we turn them off to reduce
-        #   memory usage.
-        run: >
-          ARCH_PARAM_LIST=${{ matrix.sde_arch }}
-
-          for ARCH_PARAM in ${ARCH_PARAM_LIST[@]}; do
-            OVERRIDE_ARCH=`echo ${ARCH_PARAM} | cut -d";" -f2`
-            SDE_FLAG=`echo ${ARCH_PARAM} | cut -d";" -f1`
-            echo "CMake arch flag: $OVERRIDE_ARCH"
-            echo "Intel SDE arch flag: $SDE_FLAG"
-            cd /work
-            BUILD_DIR=build$OVERRIDE_ARCH
-            mkdir $BUILD_DIR && cd $BUILD_DIR
-            if [[ ${{ matrix.compiler }} =~ (gcc|clang)-([0-9\.]+) ]]; then
-              CC=${BASH_REMATCH[1]}-${BASH_REMATCH[2]};
-              if [[ ${BASH_REMATCH[1]} = gcc ]]; then
-                CXX=g++-${BASH_REMATCH[2]};
-                FC=gfortran-${BASH_REMATCH[2]};
-              else
-                CXX=clang++-${BASH_REMATCH[2]};
-                FC=gfortran-9;
-              fi
-            fi
-
-            cmake\
-            -D CMAKE_C_COMPILER=${CC}\
-            -D CMAKE_CXX_COMPILER=${CXX}\
-            -D CMAKE_Fortran_COMPILER=${FC}\
-            -D CMAKE_CXX_FLAGS="${CXXFLAGS}"\
-            -D OVERRIDE_ARCH=${OVERRIDE_ARCH}\
-            -D CHARM_ROOT=${CHARM_ROOT}\
-            -D CMAKE_BUILD_TYPE=Debug\
-            -D DEBUG_SYMBOLS=OFF\
-            -D STRIP_SYMBOLS=ON\
-            -D STUB_EXECUTABLE_OBJECT_FILES=ON\
-            -D STUB_LIBRARY_OBJECT_FILES=ON\
-            -D USE_PCH=ON\
-            -D USE_CCACHE=ON\
-            -D BUILD_DOCS=OFF\
-            $GITHUB_WORKSPACE
-
-            make -j2 TestArchitectureVectorization
-
-            /work/sde/sde ${SDE_FLAG}\
-            -- ./bin/TestArchitectureVectorization [Unit]
-          done
-
-        shell: bash
+        run: |
+          tar -cf ccache-debug-formaline.tar --directory ccache-debug-formaline .
+      - name: Upload ccache debugdir2
+        uses: actions/upload-artifact@v3
+        with:
+          name: ccache-debug-formaline-${{ matrix.compiler }}
+          path: /work/ccache-debug-formaline.tar
+      - name: Diagnose ccache
+        run: |
+          ccache -s
