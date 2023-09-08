@@ -43,17 +43,12 @@
 # someone who does. Since changes to this image effect our testing
 # infrastructure it is important all changes be carefully reviewed.
 #
-FROM ubuntu:20.04 AS base
+FROM ubuntu:22.04 AS base
 
 # See
 # https://docs.docker.com/engine/reference/builder/#automatic-platform-args-in-the-global-scope
 # for how TARGETARCH is defined.
 ARG TARGETARCH
-
-# Install add-apt-repository
-RUN apt-get update -y \
-    && apt-get install -y software-properties-common \
-    && add-apt-repository -y ppa:ubuntu-toolchain-r/test
 
 # Install required packages for SpECTRE
 #
@@ -64,18 +59,21 @@ RUN apt-get update -y \
 # The system MPI libraries are usually configured to take advantage of
 # InfiniBand or various other networking layers.
 RUN apt-get update -y \
-    && apt-get install -y gcc-9 g++-9 gfortran-9 \
+    && apt-get install -y gcc-11 g++-11 gfortran-11 \
                           gdb git ninja-build autoconf automake \
                           bison flex \
                           libopenblas-dev liblapack-dev \
-                          libgsl0-dev \
-                          clang-10 clang-format-10 clang-tidy-10 \
+                          libgsl-dev \
+                          clang-14 clang-format-14 clang-tidy-14 \
                           lld \
                           wget libncurses-dev \
-                          lcov cppcheck \
+                          cmake ccache lcov \
                           libboost-dev libboost-program-options-dev \
                           libboost-thread-dev libboost-tools-dev libssl-dev \
-                          libarpack2-dev
+                          doxygen \
+                          libhdf5-dev hdf5-tools \
+                          libarpack2-dev libsharp-dev libyaml-cpp-dev \
+                          libxsimd-dev
 
 # Install libc++ and jemalloc
 # The second `apt-get update` is to ensure that anything that depends on
@@ -96,17 +94,11 @@ RUN apt-get update -y \
 #   scripts use `/usr/bin/env python` to find python so restore it.
 COPY support/Python/requirements.txt requirements.txt
 COPY support/Python/dev_requirements.txt dev_requirements.txt
-RUN add-apt-repository universe \
-    && apt-get update -y \
+RUN apt-get update -y \
     && apt-get install -y python3-pip python-is-python3 \
     && pip3 --no-cache-dir install pybind11~=2.6.1 \
     && pip3 --no-cache-dir install -r requirements.txt -r dev_requirements.txt \
     && rm requirements.txt dev_requirements.txt
-
-# Add ruby gems and install coveralls using gem
-RUN apt-get update -y \
-    && apt-get install -y rubygems \
-    && gem install coveralls-lcov
 
 # Enable bash-completion by installing it and then adding it to the .bashrc file
 RUN apt-get update -y \
@@ -117,12 +109,10 @@ RUN apt-get update -y \
 # Install software that we can't install through apt. We have to distinguish
 # between different architectures for many of those.
 FROM base AS base-amd64
-ENV CMAKE_ARCH=x86_64
 ENV CHARM_ARCH=x86_64
 ENV TEX_ARCH=x86_64
 
 FROM base AS base-arm64
-ENV CMAKE_ARCH=aarch64
 ENV CHARM_ARCH=arm8
 ENV TEX_ARCH=aarch64
 
@@ -136,10 +126,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 # Spack since Spack ends up building a lot of dependencies from scratch
 # that we don't need. Thus, not building the deps with Spack reduces total
 # build time of the Docker image.
-# - CMake (first, so we can use it to build the rest)
-RUN wget https://github.com/Kitware/CMake/releases/download/v3.27.4/cmake-3.27.4-linux-${CMAKE_ARCH}.sh -O cmake-install.sh \
-    && sh cmake-install.sh --prefix=/usr/local --skip-license \
-    && rm cmake-install.sh
 # - Blaze
 RUN wget https://bitbucket.org/blaze-lib/blaze/downloads/blaze-3.8.tar.gz -O blaze.tar.gz \
     && tar -xzf blaze.tar.gz \
@@ -160,57 +146,12 @@ RUN wget https://github.com/catchorg/Catch2/archive/refs/tags/v3.4.0.tar.gz -O c
     && cd build \
     && make $PARALLEL_MAKE_ARG install \
     && cd ../.. && rm -rf Catch2
-# - Ccache
-RUN wget https://github.com/ccache/ccache/releases/download/v4.8.2/ccache-4.8.2.tar.gz -O ccache.tar.gz \
-    && tar -xzf ccache.tar.gz \
-    && cd ccache-* \
-    && mkdir build && cd build \
-    && cmake -D CMAKE_BUILD_TYPE=Release .. \
-    && make $PARALLEL_MAKE_ARG \
-    && make install \
-    && cd .. && rm -rf ccache*
-# - Doxygen
-RUN wget https://github.com/doxygen/doxygen/archive/Release_1_9_3.tar.gz -O doxygen.tar.gz \
-    && tar -xzf doxygen.tar.gz \
-    && mv doxygen-* doxygen \
-    && cd doxygen \
-    && mkdir build \
-    && cd build \
-    && cmake -G "Unix Makefiles" -D CMAKE_BUILD_TYPE=Release .. \
-    && make $PARALLEL_MAKE_ARG \
-    && make install \
-    && cd ../.. && rm -rf doxygen*
-# - HDF5
-RUN wget https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.10/hdf5-1.10.9/src/hdf5-1.10.9.tar.gz -O hdf5.tar.gz \
-    && tar -xzf hdf5.tar.gz \
-    && mv hdf5-* hdf5 \
-    && cd hdf5 \
-    && ./configure --prefix=/usr/local \
-    && make $PARALLEL_MAKE_ARG \
-    && make install \
-    && cd .. && rm -rf hdf5*
-# - Libsharp
-RUN wget https://github.com/Libsharp/libsharp/archive/v1.0.0.tar.gz -O libsharp.tar.gz \
-    && tar -xzf libsharp.tar.gz \
-    && mv libsharp-* libsharp_build \
-    && cd libsharp_build \
-    && { if [ "$TARGETARCH" != "arm64" ]; \
-        then sed -i 's/march=native/march=x86-64/' configure.ac; fi } \
-    && autoconf \
-    && ./configure --prefix=/usr/local --enable-pic --disable-openmp \
-    && make $PARALLEL_MAKE_ARG \
-    && mv auto/bin/* /usr/local/bin \
-    && mv auto/include/* /usr/local/include \
-    && mv auto/lib/* /usr/local/lib \
-    && cd ../ \
-    && rm -r libsharp*
 # - LibXSMM
 RUN if [ "$TARGETARCH" = "arm64" ] ; then \
         git clone --single-branch --branch main --depth 1 \
             https://github.com/libxsmm/libxsmm.git libxsmm \
         && cd libxsmm \
-        && make $PARALLEL_MAKE_ARG PREFIX=/usr/local/ CXX=g++-9 CC=gcc-9 \
-            FC=gfortran-9 PLATFORM=1 install \
+        && make $PARALLEL_MAKE_ARG PREFIX=/usr/local/ PLATFORM=1 install \
         && cd .. \
         && rm -rf libxsmm; \
     else \
@@ -219,49 +160,15 @@ RUN if [ "$TARGETARCH" = "arm64" ] ; then \
         && tar -xzf libxsmm.tar.gz \
         && mv libxsmm-* libxsmm \
         && cd libxsmm \
-        && make $PARALLEL_MAKE_ARG PREFIX=/usr/local/ CXX=g++-9 CC=gcc-9 \
-            FC=gfortran-9 install \
+        && make $PARALLEL_MAKE_ARG PREFIX=/usr/local/ install \
         && cd .. \
         && rm -rf libxsmm libxsmm.tar.gz; \
     fi
-# - Yaml-cpp
-RUN wget https://github.com/jbeder/yaml-cpp/archive/yaml-cpp-0.6.3.tar.gz -O yaml-cpp.tar.gz \
-    && tar -xzf yaml-cpp.tar.gz \
-    && mv yaml-cpp-* yaml-cpp-build \
-    && cd yaml-cpp-build \
-    && mkdir build \
-    && cd build \
-    && cmake -D CMAKE_BUILD_TYPE=Release -D YAML_CPP_BUILD_TESTS=OFF \
-             -D CMAKE_C_COMPILER=gcc-9 -D CMAKE_CXX_COMPILER=g++-9 \
-             -D YAML_CPP_BUILD_CONTRIB=OFF \
-             -D YAML_CPP_BUILD_TOOLS=ON \
-             -D CMAKE_INSTALL_PREFIX=/usr/local/ \
-             -D YAML_BUILD_SHARED_LIBS=ON .. \
-    && make $PARALLEL_MAKE_ARG \
-    && make install \
-    && cd ../.. \
-    && rm -rf yaml-cpp*
-# - xsimd https://github.com/xtensor-stack/xsimd
-RUN wget http://github.com/xtensor-stack/xsimd/archive/refs/tags/8.1.0.tar.gz \
-    && tar -xzf 8.1.0.tar.gz \
-    && cd ./xsimd-8.1.0  \
-    && mkdir build \
-    && cd ./build \
-    && cmake -D CMAKE_BUILD_TYPE=Release -D BUILD_TESTS=OFF \
-             -D CMAKE_INSTALL_PREFIX=/usr/local ../ \
-    && make install \
-    && cd ../.. \
-    && rm -rf /work/8.1.0.tar.gz /work/xsimd-8.1.0
 
 # Update ld cache to find shared libs in /usr/local/lib/
 RUN ldconfig
 
 WORKDIR /work
-# Charm doesn't support compiling with clang without symbolic links
-RUN ln -s $(which clang++-10) /usr/local/bin/clang++ \
-    && ln -s $(which clang-10) /usr/local/bin/clang \
-    && ln -s $(which clang-format-10) /usr/local/bin/clang-format \
-    && ln -s $(which clang-tidy-10) /usr/local/bin/clang-tidy
 # Download and build the Charm++ version used by SpECTRE
 # We check out only a specific branch in order to reduce the repo size.
 #
@@ -280,19 +187,16 @@ RUN git clone --single-branch --branch v7.0.0 --depth 1 \
     && cd /work/charm_7_0_0 \
     && git checkout v7.0.0 \
     && git apply /work/v7.0.0.patch \
-    && ./build LIBS multicore-linux-${CHARM_ARCH} gcc \
+    && ./build LIBS multicore-linux-${CHARM_ARCH} clang-14 \
       ${PARALLEL_MAKE_ARG} -g -O2 --build-shared \
     && rm -r /work/charm_7_0_0/doc /work/charm_7_0_0/examples
+ENV CHARM_ROOT="/work/charm_7_0_0/multicore-linux-${CHARM_ARCH}-clang"
 
-# - Set the environment variable SPECTRE_CONTAINER so we can check if we are
-#   inside a container (0 is true in bash)
-# - Set CHARM_ROOT so it's easy to find the Charm++ directory. Just use the
-#   multicore build.
-# - Symlink gfortran-9 to gfortran so it we can just specify gfortran in CMake
-# - The singularity containers work better if the locale is set properly
+# Set the environment variable SPECTRE_CONTAINER so we can check if we are
+# inside a container (0 is true in bash)
 ENV SPECTRE_CONTAINER 0
-ENV CHARM_ROOT="/work/charm_7_0_0/multicore-linux-${CHARM_ARCH}-gcc"
-RUN ln -s $(which gfortran-9) /usr/local/bin/gfortran
+
+# The singularity containers work better if the locale is set properly
 RUN apt-get update -y \
     && apt-get install -y locales language-pack-fi language-pack-en \
     && export LANGUAGE=en_US.UTF-8 \
@@ -327,34 +231,23 @@ ARG PARALLEL_MAKE_ARG=-j2
 
 # Install all the compilers we are going to test on CI
 RUN apt-get update -y \
-    && apt-get install -y gcc-10 g++-10 gfortran-10 \
-                          gcc-11 g++-11 gfortran-11
-
-# Install clang-11 and clang-13
-RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - \
-    && add-apt-repository 'deb http://apt.llvm.org/focal/ llvm-toolchain-focal-11 main' \
-    && apt-get update -y && apt-get install -y clang-11 \
-    && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - \
-    && add-apt-repository 'deb http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main' \
-    && apt-get update -y && apt-get install -y clang-13
+    && apt-get install -y gcc-9 g++-9 gfortran-9 \
+                          gcc-10 g++-10 gfortran-10 \
+                          clang-13
 
 # Install minimum required CMake version so that we test compatibility with it
 RUN wget https://github.com/Kitware/CMake/releases/download/v3.18.2/cmake-3.18.2-linux-${CMAKE_ARCH}.sh -O cmake-install.sh \
     && sh cmake-install.sh --prefix=/opt/local/cmake/3.18.2 --skip-license \
     && rm cmake-install.sh
 
-# Install OpenMPI 4.0.3
+# Install OpenMPI
 RUN apt-get install -y openmpi-bin
 
 # We build an mpi version of charm (with clang) because many of our production
 # environments have charm built with mpi and we should test that.
 WORKDIR /work/charm_7_0_0
-# This env variable was found to be necessary when building charm with OpenMPI
-# 4.0.3 which ships with Ubuntu 20.04. For more details see this issue:
-# https://bugs.launchpad.net/ubuntu/+source/openmpi/+bug/1941786
-ENV LDFLAGS="-lopen-pal"
-RUN ./build LIBS mpi-linux-${CHARM_ARCH}-smp clang \
-      ${PARALLEL_MAKE_ARG} -g -O2 --build-shared\
+RUN ./build LIBS mpi-linux-${CHARM_ARCH}-smp clang-14 \
+      ${PARALLEL_MAKE_ARG} -g -O2 --build-shared \
     && rm -rf /work/charm_7_0_0/doc /work/charm_7_0_0/examples
 
 # Download and extract the intel Software Development Emulator binaries
@@ -419,14 +312,12 @@ COPY . spectre/
 
 RUN mkdir spectre/build && cd spectre/build \
   && cmake \
-    -D CMAKE_C_COMPILER=clang-10 \
-    -D CMAKE_CXX_COMPILER=clang++-10 \
-    -D CMAKE_Fortran_COMPILER=gfortran-9 \
-    -D CHARM_ROOT=/work/charm_7_0_0/multicore-linux-${CHARM_ARCH}-gcc \
+    -D CMAKE_C_COMPILER=clang-14 \
+    -D CMAKE_CXX_COMPILER=clang++-14 \
+    -D CMAKE_Fortran_COMPILER=gfortran-11 \
     -D CMAKE_BUILD_TYPE=Release \
     -D DEBUG_SYMBOLS=OFF \
     -D BUILD_PYTHON_BINDINGS=ON \
-    -D Python_EXECUTABLE=/usr/bin/python3 \
     -D MEMORY_ALLOCATOR=SYSTEM \
     .. \
   && make ${PARALLEL_MAKE_ARG} ExportTimeDependentCoordinates3D \
