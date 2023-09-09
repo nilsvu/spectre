@@ -10,7 +10,6 @@ spectre_target_sources(
   PRIVATE
   AccessType.cpp
   CheckH5PropertiesMatch.cpp
-  CombineH5.cpp
   Dat.cpp
   EosTable.cpp
   ExtendConnectivityHelpers.cpp
@@ -33,7 +32,6 @@ spectre_target_headers(
   AccessType.hpp
   CheckH5.hpp
   CheckH5PropertiesMatch.hpp
-  CombineH5.hpp
   Dat.hpp
   EosTable.hpp
   ExtendConnectivityHelpers.hpp
