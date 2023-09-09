@@ -4,6 +4,7 @@
 import logging
 import os
 import shutil
+from typing import Sequence
 
 import click
 import h5py
@@ -11,7 +12,7 @@ import h5py
 from spectre.Visualization.ReadH5 import available_subfiles
 
 
-def combine_h5_dat(h5files, output, force):
+def combine_h5_dat(h5files: Sequence[str], output: str, force: bool):
     """Combines multiple HDF5 dat files
 
     This executable is used for combining a series of HDF5 files, each
@@ -48,7 +49,6 @@ def combine_h5_dat(h5files, output, force):
             with h5py.File(input_file, "r") as input:
                 for dat_file_key in dat_file_keys:
                     if dat_file_key in input.keys():
-                        data_to_append = input[dat_file_key]
                         start_size = out[dat_file_key].shape[0]
                         append_size = input[dat_file_key].shape[0]
                         out[dat_file_key].resize(
@@ -93,7 +93,7 @@ def combine_h5_dat(h5files, output, force):
     help="If the output file already exists, overwrite it.",
 )
 def combine_h5_dat_command(**kwargs):
-    combine_h5_dat(kwargs["h5files"], kwargs["output"], kwargs["force"])
+    combine_h5_dat(**kwargs)
 
 
 if __name__ == "__main__":
