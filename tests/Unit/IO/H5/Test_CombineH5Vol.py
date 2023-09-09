@@ -11,7 +11,7 @@ import spectre.IO.H5 as spectre_h5
 from spectre import Informer
 from spectre.DataStructures import DataVector
 from spectre.IO.H5 import ElementVolumeData, TensorComponent, combine_h5
-from spectre.IO.H5.CombineH5 import combine_h5_command
+from spectre.IO.H5.CombineH5Vol import combine_h5_vol_command
 from spectre.Spectral import Basis, Quadrature
 
 
@@ -239,9 +239,8 @@ class TestCombineH5(unittest.TestCase):
         # Checks if the CLI for CombineH5 runs properly
         runner = CliRunner()
         result = runner.invoke(
-            combine_h5_command,
+            combine_h5_vol_command,
             [
-                "vol",
                 *self.file_names,
                 "-d",
                 self.subfile_name,
@@ -271,7 +270,7 @@ class TestCombineH5(unittest.TestCase):
         # available subfiles correctly
         runner = CliRunner()
         result = runner.invoke(
-            combine_h5_command,
+            combine_h5_vol_command,
             [
                 *self.file_names,
                 "-o",
