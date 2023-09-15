@@ -22,7 +22,7 @@ SPECTRE_TEST_CASE("Unit.IO.External.InterpolateFromFuka", "[Unit][IO]") {
   const std::string fuka_root{fuka_root_ptr};
   REQUIRE_FALSE(fuka_root.empty());
   CAPTURE(fuka_root);
-  const std::string example_id_dir = fuka_root + "/example_id";
+  const std::string example_id_dir = fuka_root + "/codes/PythonTools/Example_id";
   {
     INFO("BH");
     const tnsr::I<DataVector, 3> coords{{{{2.0}, {0.0}, {0.0}}}};
@@ -30,7 +30,7 @@ SPECTRE_TEST_CASE("Unit.IO.External.InterpolateFromFuka", "[Unit][IO]") {
         make_not_null(&fuka_lock),
         example_id_dir + "/converged_BH_TOTAL_BC.0.5.0.0.09.info", coords);
     CHECK_ITERABLE_APPROX(get(get<gr::Tags::Lapse<DataVector>>(fuka_data)),
-                          DataVector{0.30512109920956748});
+                          DataVector{0.78166130712794868});
   }
   {
     INFO("BBH");
@@ -40,7 +40,7 @@ SPECTRE_TEST_CASE("Unit.IO.External.InterpolateFromFuka", "[Unit][IO]") {
         example_id_dir + "/converged_BBH_TOTAL_BC.10.0.0.1.q1.0.0.09.info",
         coords);
     CHECK_ITERABLE_APPROX(get(get<gr::Tags::Lapse<DataVector>>(fuka_data)),
-                          DataVector{0.0000042161179477});
+                          DataVector{0.82006289882662431});
   }
   {
     INFO("NS");
@@ -51,7 +51,7 @@ SPECTRE_TEST_CASE("Unit.IO.External.InterpolateFromFuka", "[Unit][IO]") {
         coords);
     CHECK_ITERABLE_APPROX(
         get(get<hydro::Tags::RestMassDensity<DataVector>>(fuka_data)),
-        DataVector{0.00220590213673744});
+        DataVector{0.00404310450359371});
   }
   {
     INFO("BNS");
@@ -63,7 +63,7 @@ SPECTRE_TEST_CASE("Unit.IO.External.InterpolateFromFuka", "[Unit][IO]") {
         coords);
     CHECK_ITERABLE_APPROX(
         get(get<hydro::Tags::RestMassDensity<DataVector>>(fuka_data)),
-        DataVector{0.00093178076659427});
+        DataVector{0.00137492312500218});
   }
   {
     INFO("BHNS");
@@ -75,6 +75,6 @@ SPECTRE_TEST_CASE("Unit.IO.External.InterpolateFromFuka", "[Unit][IO]") {
             "info",
         coords);
     CHECK_ITERABLE_APPROX(get(get<gr::Tags::Lapse<DataVector>>(fuka_data)),
-                          DataVector{0.08808942723720847});
+                          DataVector{0.77494679614415585});
   }
 }

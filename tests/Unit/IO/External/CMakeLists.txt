@@ -11,12 +11,7 @@ if (TARGET FUKA::Exporter)
   )
 endif()
 
-add_test_library(
-  ${LIBRARY}
-  "IO"
-  "${LIBRARY_SOURCES}"
-  ""
-  )
+add_test_library(${LIBRARY} "${LIBRARY_SOURCES}" WITH_CHARM)
 
 target_link_libraries(
   ${LIBRARY}
