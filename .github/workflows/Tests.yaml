@@ -425,14 +425,6 @@ jobs:
           - compiler: gcc-11
             build_type: Debug
             PYTHON_EXECUTABLE: /usr/bin/python3.8
-          # Test building with static libraries. Do so with clang in release
-          # mode because these builds use up little disk space compared to GCC
-          # builds or clang Debug builds
-          - compiler: clang-13
-            build_type: Release
-            BUILD_SHARED_LIBS: OFF
-            use_xsimd: OFF
-            MEMORY_ALLOCATOR: JEMALLOC
           # Add a test without PCH to the build matrix, which only builds core
           # libraries. Building all the tests without the PCH takes very long
           # and the most we would catch is a missing include of something that's
@@ -467,6 +459,14 @@ jobs:
             # Test `install` target with clang in Release mode because it uses
             # little disk space
             install: ON
+          # Test building with static libraries. Do so with clang in release
+          # mode because these builds use up little disk space compared to GCC
+          # builds or clang Debug builds
+          - compiler: clang-15
+            build_type: Release
+            BUILD_SHARED_LIBS: OFF
+            use_xsimd: OFF
+            MEMORY_ALLOCATOR: JEMALLOC
 
     container:
       image: ${{ inputs.container || 'sxscollaboration/spectre:ci' }}
