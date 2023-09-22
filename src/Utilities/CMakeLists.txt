@@ -12,7 +12,6 @@ spectre_target_sources(
   FileSystem.cpp
   Formaline.cpp
   MemoryHelpers.cpp
-  OptimizerHacks.cpp
   PrettyType.cpp
   Rational.cpp
   WrapText.cpp
@@ -53,7 +52,6 @@ spectre_target_headers(
   MemoryHelpers.hpp
   NoSuchType.hpp
   Numeric.hpp
-  OptimizerHacks.hpp
   OptionalHelpers.hpp
   Overloader.hpp
   PrettyType.hpp
