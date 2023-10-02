@@ -36,6 +36,7 @@ spectre_load_modules() {
     module load libbacktrace/1.0
     module load spec-exporter/2023-07
     module load fuka/2023-08
+    module load paraview/5.11.1-osmesa
 }
 
 spectre_unload_modules() {
@@ -63,6 +64,7 @@ spectre_unload_modules() {
     module unload libbacktrace/1.0
     module unload spec-exporter/2023-07
     module unload fuka/2023-08
+    module unload paraview/5.11.1-osmesa
 }
 
 spectre_run_cmake() {
