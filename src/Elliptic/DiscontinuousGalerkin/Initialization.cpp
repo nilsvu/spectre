@@ -63,8 +63,8 @@ void InitializeGeometry<Dim>::operator()(
         "any time-dependence, but the domain creator has set up the domain to "
         "have time-dependence.");
   }
-  *element = domain::Initialization::create_initial_element(element_id, block,
-                                                            initial_refinement);
+  *element = domain::Initialization::create_initial_element(
+      element_id, domain.blocks(), initial_refinement);
   // Element map
   *element_map = ElementMap<Dim, Frame::Inertial>{
       element_id, block.stationary_map().get_clone()};

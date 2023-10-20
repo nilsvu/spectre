@@ -150,7 +150,7 @@ struct Domain {
     *mesh = ::domain::Initialization::create_initial_mesh(
         initial_extents, element_id, quadrature);
     *element = ::domain::Initialization::create_initial_element(
-        element_id, my_block, initial_refinement);
+        element_id, domain.blocks(), initial_refinement);
     *element_map = ElementMap<Dim, Frame::Grid>{
         element_id, my_block.is_time_dependent()
                         ? my_block.moving_mesh_logical_to_grid_map().get_clone()

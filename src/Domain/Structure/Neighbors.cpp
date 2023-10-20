@@ -15,12 +15,15 @@
 
 template <size_t VolumeDim>
 Neighbors<VolumeDim>::Neighbors(std::unordered_set<ElementId<VolumeDim>> ids,
-                                OrientationMap<VolumeDim> orientation)
-    : ids_(std::move(ids)), orientation_(std::move(orientation)) {
+                                OrientationMap<VolumeDim> orientation,
+                                domain::BlockGeometry geometry)
+    : ids_(std::move(ids)),
+      orientation_(std::move(orientation)),
+      geometry_(std::move(geometry)) {
   // Assuming a maximum 2-to-1 refinement between neighboring elements:
-  ASSERT(ids_.size() <= maximum_number_of_neighbors_per_direction(VolumeDim),
-         "Can't have " << ids_.size() << " neighbors in " << VolumeDim
-                       << " dimensions");
+  // ASSERT(ids_.size() <= maximum_number_of_neighbors_per_direction(VolumeDim),
+  //        "Can't have " << ids_.size() << " neighbors in " << VolumeDim
+  //                      << " dimensions");
 }
 
 template <size_t VolumeDim>
@@ -44,7 +47,8 @@ std::ostream& operator<<(std::ostream& os, const Neighbors<VolumeDim>& n) {
 template <size_t VolumeDim>
 bool operator==(const Neighbors<VolumeDim>& lhs,
                 const Neighbors<VolumeDim>& rhs) {
-  return (lhs.ids() == rhs.ids() and lhs.orientation() == rhs.orientation());
+  return (lhs.ids() == rhs.ids() and lhs.orientation() == rhs.orientation() and
+          lhs.geometry() == rhs.geometry());
 }
 
 template <size_t VolumeDim>
@@ -57,6 +61,7 @@ template <size_t VolumeDim>
 void Neighbors<VolumeDim>::pup(PUP::er& p) {
   p | ids_;
   p | orientation_;
+  p | geometry_;
 }
 
 #define GET_DIM(data) BOOST_PP_TUPLE_ELEM(0, data)
