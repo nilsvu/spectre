@@ -136,10 +136,6 @@ class Mesh {
   Mesh(std::array<size_t, Dim> extents, std::array<Spectral::Basis, Dim> bases,
        std::array<Spectral::Quadrature, Dim> quadratures)
       : extents_(std::move(extents)), quadratures_(std::move(quadratures)) {
-    for (auto it = bases.begin(); it != bases.end(); it++) {
-      ASSERT(*it != Spectral::Basis::SphericalHarmonic,
-             "SphericalHarmonic is not a valid basis for the Mesh");
-    }
     bases_ = std::move(bases);
   }
 

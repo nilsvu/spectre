@@ -428,6 +428,8 @@ struct DifferentiationMatrixGenerator {
           diff_matrix(i, j) *= inv_delta;
         }
       }
+    } else if constexpr (BasisType == Basis::SphericalHarmonic) {
+      ERROR("Not implemented");
     } else {
       const DataVector& bary_weights =
           barycentric_weights<BasisType, QuadratureType>(num_points);
@@ -779,9 +781,7 @@ template <typename F>
 decltype(auto) get_spectral_quantity_for_mesh(F&& f, const Mesh<1>& mesh) {
   const auto num_points = mesh.extents(0);
   // Switch on runtime values of basis and quadrature to select
-  // corresponding template specialization. For basis functions spanning
-  // multiple dimensions we can generalize this function to take a
-  // higher-dimensional Mesh.
+  // corresponding template specialization.
   switch (mesh.basis(0)) {
     case Basis::Legendre:
       switch (mesh.quadrature(0)) {
@@ -807,6 +807,20 @@ decltype(auto) get_spectral_quantity_for_mesh(F&& f, const Mesh<1>& mesh) {
           return f(
               std::integral_constant<Basis, Basis::Chebyshev>{},
               std::integral_constant<Quadrature, Quadrature::GaussLobatto>{},
+              num_points);
+        default:
+          ERROR("Missing quadrature case for spectral quantity");
+      }
+    case Basis::SphericalHarmonic:
+      switch (mesh.quadrature(0)) {
+        case Quadrature::Gauss:  // [0, pi] direction
+          return f(std::integral_constant<Basis, Basis::SphericalHarmonic>{},
+                   std::integral_constant<Quadrature, Quadrature::Gauss>{},
+                   num_points);
+        case Quadrature::Equiangular:  // [0, 2 pi) direction
+          return f(
+              std::integral_constant<Basis, Basis::SphericalHarmonic>{},
+              std::integral_constant<Quadrature, Quadrature::Equiangular>{},
               num_points);
         default:
           ERROR("Missing quadrature case for spectral quantity");
@@ -912,6 +926,12 @@ GENERATE_INSTANTIATIONS(INSTANTIATE,
 #undef BASIS
 #undef QUAD
 #undef INSTANTIATE
+
+template const DataVector& Spectral::collocation_points<
+    Spectral::Basis::SphericalHarmonic, Spectral::Quadrature::Gauss>(size_t);
+template const DataVector&
+    Spectral::collocation_points<Spectral::Basis::SphericalHarmonic,
+                                 Spectral::Quadrature::Equiangular>(size_t);
 
 template const DataVector&
     Spectral::collocation_points<Spectral::Basis::FiniteDifference,

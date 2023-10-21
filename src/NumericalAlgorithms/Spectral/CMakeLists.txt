@@ -19,6 +19,7 @@ spectre_target_sources(
   Projection.cpp
   Quadrature.cpp
   Spectral.cpp
+  SphericalHarmonics.cpp
   SwshCoefficients.cpp
   SwshCollocation.cpp
   SwshDerivatives.cpp
