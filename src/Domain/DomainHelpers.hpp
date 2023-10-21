@@ -16,6 +16,7 @@
 #include "DataStructures/Index.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Domain/CoordinateMaps/Distribution.hpp"
+#include "Domain/CoordinateMaps/ShellType.hpp"
 #include "Domain/Structure/Direction.hpp"
 #include "Domain/Structure/Side.hpp"
 #include "Utilities/ConstantExpressions.hpp"
@@ -133,6 +134,8 @@ enum class ShellWedges {
   OneAlongMinusX
 };
 
+std::array<OrientationMap<3>, 6> orientations_for_wrappings();
+
 /// \ingroup ComputationalDomainGroup
 /// The first index in the list "UpperZ", "LowerZ", "UpperY", "LowerY", "UpperX"
 /// "LowerX" that is included in `which_wedges`. It is 0 for `ShellWedges::All`,
@@ -167,14 +170,20 @@ size_t which_wedge_index(const ShellWedges& which_wedges);
  * of pi minus this opening angle. This parameter only has an effect if
  * `use_half_wedges` is set to `true`.
  */
-std::vector<domain::CoordinateMaps::Wedge<3>> sph_wedge_coordinate_maps(
+template <typename SourceFrame, typename TargetFrame, typename... AppendMaps>
+std::vector<
+    std::unique_ptr<domain::CoordinateMapBase<SourceFrame, TargetFrame, 3>>>
+spherical_shells_coordinate_maps(
     double inner_radius, double outer_radius, double inner_sphericity,
     double outer_sphericity, bool use_equiangular_map,
     bool use_half_wedges = false,
     const std::vector<double>& radial_partitioning = {},
     const std::vector<domain::CoordinateMaps::Distribution>&
         radial_distribution = {domain::CoordinateMaps::Distribution::Linear},
-    ShellWedges which_wedges = ShellWedges::All, double opening_angle = M_PI_2);
+    const std::vector<domain::CoordinateMaps::ShellType>& shell_types =
+        {domain::CoordinateMaps::ShellType::Cubed},
+    ShellWedges which_wedges = ShellWedges::All, double opening_angle = M_PI_2,
+    const AppendMaps&... append_maps);
 
 /// \ingroup ComputationalDomainGroup
 /// These are the ten Frustums used in the DomainCreators for binary compact

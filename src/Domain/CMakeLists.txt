@@ -41,6 +41,7 @@ spectre_target_headers(
   DiagnosticInfo.hpp
   Domain.hpp
   DomainHelpers.hpp
+  DomainHelpers.tpp
   ElementDistribution.hpp
   ElementLogicalCoordinates.hpp
   ElementMap.hpp

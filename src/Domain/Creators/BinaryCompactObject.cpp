@@ -37,6 +37,7 @@
 #include "Domain/Creators/ExpandOverBlocks.hpp"
 #include "Domain/Domain.hpp"
 #include "Domain/DomainHelpers.hpp"
+#include "Domain/DomainHelpers.tpp"
 #include "Domain/ExcisionSphere.hpp"
 #include "Domain/FunctionsOfTime/FixedSpeedCubic.hpp"
 #include "Domain/FunctionsOfTime/PiecewisePolynomial.hpp"
@@ -375,20 +376,18 @@ Domain<3> BinaryCompactObject::create_domain() const {
     const auto& object_a = std::get<Object>(object_A_);
 
     Maps maps_center_A =
-        domain::make_vector_coordinate_map_base<Frame::BlockLogical,
-                                                Frame::Inertial, 3>(
-            sph_wedge_coordinate_maps(object_a.inner_radius,
-                                      object_a.outer_radius, inner_sphericity_A,
-                                      1.0, use_equiangular_map_, false, {},
-                                      object_A_radial_distribution),
-            translation_A);
+        spherical_shells_coordinate_maps<Frame::BlockLogical, Frame::Inertial>(
+            object_a.inner_radius, object_a.outer_radius, inner_sphericity_A,
+            1.0, use_equiangular_map_, false, {}, object_A_radial_distribution,
+            {domain::CoordinateMaps::ShellType::Cubed}, ShellWedges::All,
+            M_PI_2, translation_A);
     Maps maps_cube_A =
-        domain::make_vector_coordinate_map_base<Frame::BlockLogical,
-                                                Frame::Inertial, 3>(
-            sph_wedge_coordinate_maps(object_a.outer_radius,
-                                      sqrt(3.0) * 0.5 * length_inner_cube_, 1.0,
-                                      0.0, use_equiangular_map_),
-            translation_A);
+        spherical_shells_coordinate_maps<Frame::BlockLogical, Frame::Inertial>(
+            object_a.outer_radius, sqrt(3.0) * 0.5 * length_inner_cube_, 1.0,
+            0.0, use_equiangular_map_, false, {},
+            {domain::CoordinateMaps::Distribution::Linear},
+            {domain::CoordinateMaps::ShellType::Cubed}, ShellWedges::All,
+            M_PI_2, translation_A);
     std::move(maps_center_A.begin(), maps_center_A.end(),
               std::back_inserter(maps));
     std::move(maps_cube_A.begin(), maps_cube_A.end(), std::back_inserter(maps));
@@ -409,20 +408,18 @@ Domain<3> BinaryCompactObject::create_domain() const {
     // another 6 outer wedges that transition to a cube.
     const auto& object_b = std::get<Object>(object_B_);
     Maps maps_center_B =
-        domain::make_vector_coordinate_map_base<Frame::BlockLogical,
-                                                Frame::Inertial, 3>(
-            sph_wedge_coordinate_maps(object_b.inner_radius,
-                                      object_b.outer_radius, inner_sphericity_B,
-                                      1.0, use_equiangular_map_, false, {},
-                                      object_B_radial_distribution),
-            translation_B);
+        spherical_shells_coordinate_maps<Frame::BlockLogical, Frame::Inertial>(
+            object_b.inner_radius, object_b.outer_radius, inner_sphericity_B,
+            1.0, use_equiangular_map_, false, {}, object_B_radial_distribution,
+            {domain::CoordinateMaps::ShellType::Cubed}, ShellWedges::All,
+            M_PI_2, translation_B);
     Maps maps_cube_B =
-        domain::make_vector_coordinate_map_base<Frame::BlockLogical,
-                                                Frame::Inertial, 3>(
-            sph_wedge_coordinate_maps(object_b.outer_radius,
-                                      sqrt(3.0) * 0.5 * length_inner_cube_, 1.0,
-                                      0.0, use_equiangular_map_),
-            translation_B);
+        spherical_shells_coordinate_maps<Frame::BlockLogical, Frame::Inertial>(
+            object_b.outer_radius, sqrt(3.0) * 0.5 * length_inner_cube_, 1.0,
+            0.0, use_equiangular_map_, false, {},
+            {domain::CoordinateMaps::Distribution::Linear},
+            {domain::CoordinateMaps::ShellType::Cubed}, ShellWedges::All,
+            M_PI_2, translation_B);
     std::move(maps_center_B.begin(), maps_center_B.end(),
               std::back_inserter(maps));
     std::move(maps_cube_B.begin(), maps_cube_B.end(), std::back_inserter(maps));
@@ -447,10 +444,12 @@ Domain<3> BinaryCompactObject::create_domain() const {
             std::back_inserter(maps));
 
   // --- Outer spherical shell (10 blocks) ---
-  Maps maps_outer_shell = domain::make_vector_coordinate_map_base<
-      Frame::BlockLogical, Frame::Inertial, 3>(sph_wedge_coordinate_maps(
-      envelope_radius_, outer_radius_, 1.0, 1.0, use_equiangular_map_, true, {},
-      {radial_distribution_outer_shell_}, ShellWedges::All, opening_angle_));
+  Maps maps_outer_shell =
+      spherical_shells_coordinate_maps<Frame::BlockLogical, Frame::Inertial>(
+          envelope_radius_, outer_radius_, 1.0, 1.0, use_equiangular_map_, true,
+          {}, {radial_distribution_outer_shell_},
+          {domain::CoordinateMaps::ShellType::Cubed}, ShellWedges::All,
+          opening_angle_);
   std::move(maps_outer_shell.begin(), maps_outer_shell.end(),
             std::back_inserter(maps));
 

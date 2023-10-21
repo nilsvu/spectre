@@ -31,6 +31,7 @@ spectre_target_sources(
   Interval.cpp
   KerrHorizonConforming.cpp
   Rotation.cpp
+  ShellType.cpp
   SpecialMobius.cpp
   UniformCylindricalEndcap.cpp
   UniformCylindricalFlatEndcap.cpp
@@ -71,6 +72,7 @@ spectre_target_headers(
   ProductMaps.hpp
   ProductMaps.tpp
   Rotation.hpp
+  ShellType.hpp
   SpecialMobius.hpp
   Tags.hpp
   TimeDependentHelpers.hpp
