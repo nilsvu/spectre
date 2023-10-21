@@ -7,16 +7,15 @@
 #include <cstddef>
 #include <vector>
 
+#include "Domain/Structure/BlockGeometry.hpp"
+#include "NumericalAlgorithms/Spectral/Mesh.hpp"
+#include "NumericalAlgorithms/Spectral/Quadrature.hpp"
+
 /// \cond
 template <size_t Dim>
 struct ElementId;
 template <size_t Dim>
-class Mesh;
-template <size_t Dim>
 struct OrientationMap;
-namespace Spectral {
-enum class Quadrature;
-}  // namespace Spectral
 /// \endcond
 
 namespace domain::Initialization {
@@ -35,6 +34,8 @@ namespace domain::Initialization {
 template <size_t Dim>
 Mesh<Dim> create_initial_mesh(
     const std::vector<std::array<size_t, Dim>>& initial_extents,
-    const ElementId<Dim>& element_id, Spectral::Quadrature quadrature,
+    const ElementId<Dim>& element_id,
+    domain::BlockGeometry geometry = domain::BlockGeometry::Cube,
+    Spectral::Quadrature quadrature = Spectral::Quadrature::GaussLobatto,
     const OrientationMap<Dim>& orientation = {});
 }  // namespace domain::Initialization

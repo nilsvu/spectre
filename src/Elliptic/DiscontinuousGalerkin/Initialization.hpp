@@ -222,11 +222,11 @@ struct InitializeFacesAndMortars {
         const ::dg::MortarId<Dim> mortar_id{direction, neighbor_id};
         mortar_meshes->emplace(
             mortar_id,
-            ::dg::mortar_mesh(
-                face_mesh,
-                domain::Initialization::create_initial_mesh(
-                    initial_extents, neighbor_id, quadrature, orientation)
-                    .slice_away(direction.dimension())));
+            ::dg::mortar_mesh(face_mesh,
+                              domain::Initialization::create_initial_mesh(
+                                  initial_extents, neighbor_id,
+                                  neighbors.geometry(), quadrature, orientation)
+                                  .slice_away(direction.dimension())));
         mortar_sizes->emplace(
             mortar_id, ::dg::mortar_size(element_id, neighbor_id,
                                          direction.dimension(), orientation));

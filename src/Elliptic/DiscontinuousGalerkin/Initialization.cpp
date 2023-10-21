@@ -51,12 +51,12 @@ void InitializeGeometry<Dim>::operator()(
     const std::vector<std::array<size_t, Dim>>& initial_extents,
     const std::vector<std::array<size_t, Dim>>& initial_refinement,
     const Domain<Dim>& domain, const ElementId<Dim>& element_id) const {
+  const auto& block = domain.blocks()[element_id.block_id()];
   // Mesh
   const auto quadrature = Spectral::Quadrature::GaussLobatto;
-  *mesh = domain::Initialization::create_initial_mesh(initial_extents,
-                                                      element_id, quadrature);
+  *mesh = domain::Initialization::create_initial_mesh(
+      initial_extents, element_id, block.geometry(), quadrature);
   // Element
-  const auto& block = domain.blocks()[element_id.block_id()];
   if (block.is_time_dependent()) {
     ERROR_NO_TRACE(
         "The InitializeDomain action is for elliptic systems which do not have "

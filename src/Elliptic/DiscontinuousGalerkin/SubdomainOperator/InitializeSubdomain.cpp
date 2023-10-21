@@ -51,9 +51,9 @@ void InitializeOverlapGeometry<Dim>::operator()(
       const ::dg::MortarId<Dim> mortar_id{direction, neighbor_id};
       const auto& neighbor_mesh =
           neighbor_meshes
-              ->emplace(mortar_id,
-                        domain::Initialization::create_initial_mesh(
-                            initial_extents, neighbor_id, quadrature))
+              ->emplace(mortar_id, domain::Initialization::create_initial_mesh(
+                                       initial_extents, neighbor_id,
+                                       neighbors.geometry(), quadrature))
               .first->second;
       const auto neighbor_face_mesh =
           neighbor_mesh.slice_away(direction_from_neighbor.dimension());
