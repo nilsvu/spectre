@@ -19,6 +19,7 @@ set(LIBRARY_SOURCES
   Test_Mesh.cpp
   Test_Projection.cpp
   Test_Spectral.cpp
+  Test_SphericalHarmonics.cpp
   Test_SwshCoefficients.cpp
   Test_SwshCollocation.cpp
   Test_SwshDerivatives.cpp

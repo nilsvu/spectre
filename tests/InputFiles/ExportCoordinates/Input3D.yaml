@@ -25,7 +25,7 @@ DomainCreator:
     OuterRadius: 10.
     Interior: Excise
     InitialRefinement: 0
-    InitialGridPoints: 6
+    InitialGridPoints: 12
     UseEquiangularMap: True
     EquatorialCompression: None
     WhichWedges: All
