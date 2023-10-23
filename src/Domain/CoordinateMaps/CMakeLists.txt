@@ -30,9 +30,11 @@ spectre_target_sources(
   Identity.cpp
   Interval.cpp
   KerrHorizonConforming.cpp
+  PolarAngle.cpp
   Rotation.cpp
   ShellType.cpp
   SpecialMobius.cpp
+  SphericalToCartesian.cpp
   UniformCylindricalEndcap.cpp
   UniformCylindricalFlatEndcap.cpp
   UniformCylindricalSide.cpp
@@ -69,11 +71,13 @@ spectre_target_headers(
   Interval.hpp
   KerrHorizonConforming.hpp
   MapInstantiationMacros.hpp
+  PolarAngle.hpp
   ProductMaps.hpp
   ProductMaps.tpp
   Rotation.hpp
   ShellType.hpp
   SpecialMobius.hpp
+  SphericalToCartesian.hpp
   Tags.hpp
   TimeDependentHelpers.hpp
   UniformCylindricalEndcap.hpp
