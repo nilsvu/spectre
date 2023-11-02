@@ -14,6 +14,7 @@
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/Executables/NonlinearEllipticSolver.hpp"
+#include "Elliptic/Executables/Xcts/Actions/ConformToStarSurface.hpp"
 #include "Elliptic/Systems/Xcts/BoundaryConditions/Factory.hpp"
 #include "Elliptic/Systems/Xcts/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/Xcts/HydroQuantities.hpp"
@@ -25,6 +26,8 @@
 #include "Options/String.hpp"
 #include "Parallel/GlobalCache.hpp"
 #include "Parallel/Phase.hpp"
+#include "Parallel/PhaseControl/ExecutePhaseChange.hpp"
+#include "Parallel/PhaseControl/VisitAndReturn.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/Reduction.hpp"
 #include "ParallelAlgorithms/Actions/TerminatePhase.hpp"
@@ -35,6 +38,7 @@
 #include "ParallelAlgorithms/EventsAndTriggers/Trigger.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/ElementsAllocator.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Tags.hpp"
+#include "ParallelAlgorithms/SurfaceFinder/Component.hpp"
 #include "PointwiseFunctions/AnalyticData/Xcts/Binary.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Factory.hpp"
 #include "PointwiseFunctions/Hydro/LowerSpatialFourVelocity.hpp"
@@ -126,7 +130,9 @@ struct Metavariables {
                            LinearSolver::multigrid::Tags::IsFinestGrid>>>>,
         tmpl::pair<Trigger,
                    elliptic::Triggers::all_triggers<
-                       typename solver::nonlinear_solver::options_group>>>;
+                       typename solver::nonlinear_solver::options_group>>,
+        tmpl::pair<PhaseChange, tmpl::list<PhaseControl::VisitAndReturn<
+                                    Parallel::Phase::AdjustDomain>>>>;
   };
 
   // Collect all reduction tags for observers
@@ -147,8 +153,14 @@ struct Metavariables {
       solver::nonlinear_solver_iteration_id>>;
 
   using solve_actions =
-      tmpl::push_back<typename solver::template solve_actions<step_actions>,
-                      Parallel::Actions::TerminatePhase>;
+      tmpl::list<PhaseControl::Actions::ExecutePhaseChange,
+                 typename solver::template solve_actions<step_actions>,
+                 Parallel::Actions::TerminatePhase>;
+
+  using adjust_domain_actions =
+      tmpl::list<elliptic::Actions::ConformToStarSurface<
+                     typename solver::nonlinear_solver_iteration_id>,
+                 Parallel::Actions::TerminatePhase>;
 
   using dg_element_array = elliptic::DgElementArray<
       Metavariables,
@@ -156,15 +168,19 @@ struct Metavariables {
           Parallel::PhaseActions<Parallel::Phase::Initialization,
                                  initialization_actions>,
           Parallel::PhaseActions<Parallel::Phase::Register, register_actions>,
-          Parallel::PhaseActions<Parallel::Phase::Solve, solve_actions>>,
+          Parallel::PhaseActions<Parallel::Phase::Solve, solve_actions>,
+          Parallel::PhaseActions<Parallel::Phase::AdjustDomain,
+                                 adjust_domain_actions>>,
       LinearSolver::multigrid::ElementsAllocator<
           volume_dim, typename solver::multigrid::options_group>>;
 
   // Specify all parallel components that will execute actions at some point.
-  using component_list = tmpl::flatten<
-      tmpl::list<dg_element_array, typename solver::component_list,
-                 observers::Observer<Metavariables>,
-                 observers::ObserverWriter<Metavariables>>>;
+  using component_list = tmpl::flatten<tmpl::list<
+      dg_element_array, typename solver::component_list,
+      SurfaceFinder::Component<Metavariables,
+                               typename solver::nonlinear_solver_iteration_id>,
+      observers::Observer<Metavariables>,
+      observers::ObserverWriter<Metavariables>>>;
 
   static constexpr std::array<Parallel::Phase, 4> default_phase_order{
       {Parallel::Phase::Initialization, Parallel::Phase::Register,

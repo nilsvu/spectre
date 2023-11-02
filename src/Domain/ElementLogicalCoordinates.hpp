@@ -108,10 +108,14 @@ struct ElementLogicalCoordHolder {
 /// P_3 -> E3
 /// P_4 -> E3
 /// \endcode
-template <size_t Dim>
+template <size_t VolumeDim, size_t CoordsDim>
 auto element_logical_coordinates(
-    const std::vector<ElementId<Dim>>& element_ids,
-    const std::vector<std::optional<IdPair<
-        domain::BlockId, tnsr::I<double, Dim, typename Frame::BlockLogical>>>>&
-        block_coord_holders)
-    -> std::unordered_map<ElementId<Dim>, ElementLogicalCoordHolder<Dim>>;
+    const std::vector<ElementId<VolumeDim>>& element_ids,
+    const std::vector<std::optional<
+        IdPair<domain::BlockId,
+               tnsr::I<double, CoordsDim, typename Frame::BlockLogical>>>>&
+        block_coord_holders,
+    std::optional<std::array<size_t, CoordsDim>> volume_dimensions =
+        std::nullopt)
+    -> std::unordered_map<ElementId<VolumeDim>,
+                          ElementLogicalCoordHolder<CoordsDim>>;
