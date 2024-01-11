@@ -28,11 +28,11 @@ RandomizeInitialGuess: None
 
 DomainCreator:
   Sphere:
-    InnerRadius: 2
-    OuterRadius: &outer_radius 1e3
+    InnerRadius: 10
+    OuterRadius: &outer_radius {{ R }}
     Interior:
       FillWithSphericity: 0.
-    InitialRefinement: 2
+    InitialRefinement: {{ L }}
     InitialGridPoints: 2
     UseEquiangularMap: True
     EquatorialCompression: None
@@ -48,14 +48,14 @@ DomainCreator:
 Amr:
   Verbosity: Quiet
   Criteria:
-    # - DriveToTarget:
-    #     TargetNumberOfGridPoints: [7, 7, 7]
-    #     TargetRefinementLevels: [1, 1, 1]
-    #     OscillationAtTarget: [DoNothing, DoNothing, DoNothing]
-    - TruncationError:
-        VariablesToMonitor: [Field]
-        AbsoluteTarget: 1e-8
-        RelativeTarget: None
+    - DriveToTarget:
+        TargetNumberOfGridPoints: [12, 12, 12]
+        TargetRefinementLevels: [{{ L }}, {{ L }}, {{ L }}]
+        OscillationAtTarget: [DoNothing, DoNothing, DoNothing]
+    # - TruncationError:
+    #     VariablesToMonitor: [Field]
+    #     AbsoluteTarget: 1e-8
+    #     RelativeTarget: None
   Iterations: 10
 
 PhaseChangeAndTriggers:
@@ -83,7 +83,7 @@ LinearSolver:
   ConvergenceCriteria:
     MaxIterations: 100
     RelativeResidual: 0.
-    AbsoluteResidual: 1.e-10
+    AbsoluteResidual: 1.e-8
   Verbosity: Quiet
 
   Multigrid:
