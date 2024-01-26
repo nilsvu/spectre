@@ -116,7 +116,6 @@ struct InitializeFacesMortarsAndBackground {
       db::mutate_apply<typename InitializeFacesAndMortars::return_tags,
                        typename InitializeFacesAndMortars::argument_tags>(
           InitializeFacesAndMortars{}, make_not_null(&box),
-          db::get<domain::Tags::InitialExtents<Dim>>(box),
           db::get<domain::Tags::FunctionsOfTime>(box), background,
           background_classes{});
       // Initialize background fields
@@ -129,7 +128,6 @@ struct InitializeFacesMortarsAndBackground {
       db::mutate_apply<typename InitializeFacesAndMortars::return_tags,
                        typename InitializeFacesAndMortars::argument_tags>(
           InitializeFacesAndMortars{}, make_not_null(&box),
-          db::get<domain::Tags::InitialExtents<Dim>>(box),
           db::get<domain::Tags::FunctionsOfTime>(box));
     }
     return {Parallel::AlgorithmExecution::Continue, std::nullopt};
