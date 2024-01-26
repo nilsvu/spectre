@@ -230,14 +230,16 @@ struct Metavariables {
       elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
           system, fixed_sources_tag>,
       // Apply the DG operator to the initial guess
-      elliptic::dg::Actions::apply_operator<
+      typename elliptic::dg::Actions::DgOperator<
           system, true, linear_solver_iteration_id, fields_tag, fluxes_vars_tag,
-          operator_applied_to_fields_tag, vars_tag, fluxes_vars_tag>,
+          operator_applied_to_fields_tag, vars_tag,
+          fluxes_vars_tag>::apply_actions,
       Parallel::Actions::TerminatePhase>;
 
-  using build_linear_operator_actions = elliptic::dg::Actions::apply_operator<
-      system, true, linear_solver_iteration_id, vars_tag, fluxes_vars_tag,
-      operator_applied_to_vars_tag>;
+  using build_linear_operator_actions =
+      typename elliptic::dg::Actions::DgOperator<
+          system, true, linear_solver_iteration_id, vars_tag, fluxes_vars_tag,
+          operator_applied_to_vars_tag>::apply_actions;
 
   using register_actions =
       tmpl::list<observers::Actions::RegisterEventsWithObservers,

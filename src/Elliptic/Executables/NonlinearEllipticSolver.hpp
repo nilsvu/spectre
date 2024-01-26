@@ -198,7 +198,7 @@ struct Solver {
                  typename schwarz_smoother::register_element>;
 
   template <bool Linearized>
-  using build_operator_actions = elliptic::dg::Actions::apply_operator<
+  using dg_operator = elliptic::dg::Actions::DgOperator<
       system, Linearized,
       tmpl::conditional_t<Linearized, linear_solver_iteration_id,
                           nonlinear_solver_iteration_id>,
@@ -208,9 +208,8 @@ struct Solver {
                           operator_applied_to_fields_tag>>;
 
   template <typename Label>
-  using smooth_actions =
-      typename schwarz_smoother::template solve<build_operator_actions<true>,
-                                                Label>;
+  using smooth_actions = typename schwarz_smoother::template solve<
+      typename dg_operator<true>::apply_actions, Label>;
 
   /// This data needs to be communicated on subdomain overlap regions
   using communicated_overlap_tags = tmpl::flatten<tmpl::list<
@@ -224,7 +223,7 @@ struct Solver {
 
   template <typename StepActions>
   using solve_actions = typename nonlinear_solver::template solve<
-      build_operator_actions<false>,
+      typename dg_operator<false>::apply_actions,
       tmpl::list<
           LinearSolver::multigrid::Actions::ReceiveFieldsFromFinerGrid<
               volume_dim, tmpl::list<fields_tag, fluxes_tag>,
@@ -242,11 +241,11 @@ struct Solver {
               typename schwarz_smoother::options_group>,
           typename linear_solver::template solve<tmpl::list<
               typename multigrid::template solve<
-                  build_operator_actions<true>,
+                  typename dg_operator<true>::apply_actions,
                   smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
                   smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
               ::LinearSolver::Actions::make_identity_if_skipped<
-                  multigrid, build_operator_actions<true>>>>>,
+                  multigrid, typename dg_operator<true>::apply_actions>>>>,
       StepActions>;
 
   using component_list = tmpl::list<typename nonlinear_solver::component_list,
