@@ -220,7 +220,7 @@ struct Metavariables {
           RandomizeInitialGuess>,
       elliptic::Actions::InitializeFixedSources<system, background_tag>,
       elliptic::Actions::InitializeOptionalAnalyticSolution<
-          background_tag,
+          volume_dim, background_tag,
           tmpl::append<typename system::primal_fields,
                        typename system::primal_fluxes>,
           elliptic::analytic_data::AnalyticSolution>,
