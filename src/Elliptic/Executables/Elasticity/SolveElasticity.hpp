@@ -244,16 +244,37 @@ struct Metavariables {
       typename schwarz_smoother::template solve<build_linear_operator_actions,
                                                 Label>;
 
+  // These tags are communicated on subdomain overlaps to initialize the
+  // subdomain geometry. AMR updates these tags, so we have to communicate them
+  // after each AMR step.
+  using subdomain_init_tags =
+      tmpl::list<domain::Tags::Mesh<volume_dim>,
+                 domain::Tags::Element<volume_dim>,
+                 domain::Tags::NeighborMesh<volume_dim>>;
+
   using solve_actions = tmpl::list<
-      typename linear_solver::template solve<tmpl::list<
-          elliptic::Actions::RunEventsAndTriggers<linear_solver_iteration_id>,
-          typename multigrid::template solve<
-              build_linear_operator_actions,
-              smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
-              smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
-          ::LinearSolver::Actions::make_identity_if_skipped<
-              multigrid, build_linear_operator_actions>>>,
-      elliptic::Actions::RunEventsAndTriggers<linear_solver_iteration_id>,
+      // Communicate subdomain geometry and reinitialize subdomain to account
+      // for domain changes
+      LinearSolver::Schwarz::Actions::SendOverlapFields<
+          subdomain_init_tags, typename schwarz_smoother::options_group, false>,
+      LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
+          volume_dim, subdomain_init_tags,
+          typename schwarz_smoother::options_group>,
+      elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
+          system, background_tag, typename schwarz_smoother::options_group,
+          true>,
+      // Krylov solve
+      typename linear_solver::template solve<
+          tmpl::list<
+              // Multigrid preconditioning
+              typename multigrid::template solve<
+                  build_linear_operator_actions,
+                  // Schwarz smoothing on each multigrid level
+                  smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
+                  smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
+              ::LinearSolver::Actions::make_identity_if_skipped<
+                  multigrid, build_linear_operator_actions>>,
+          elliptic::Actions::RunEventsAndTriggers<linear_solver_iteration_id>>,
       Parallel::Actions::TerminatePhase>;
 
   using dg_element_array = elliptic::DgElementArray<
