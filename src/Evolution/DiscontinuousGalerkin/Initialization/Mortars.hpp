@@ -173,6 +173,12 @@ struct Mortars {
 template <typename Metavariables>
 struct ProjectMortars : tt::ConformsTo<amr::protocols::Projector> {
   static constexpr size_t dim = Metavariables::volume_dim;
+  using Key = DirectionalId<dim>;
+
+  template <typename MappedType>
+  using MortarMap = std::unordered_map<Key, MappedType, boost::hash<Key>>;
+
+ public:
   using dt_variables_tag = typename db::add_tag_prefix<
       ::Tags::dt, typename Metavariables::system::variables_tag>;
   using mortar_data_history_type =
@@ -189,14 +195,12 @@ struct ProjectMortars : tt::ConformsTo<amr::protocols::Projector> {
                  amr::Tags::NeighborInfo<dim>>;
 
   static void apply(
-      const gsl::not_null<::dg::MortarMap<dim, evolution::dg::MortarData<dim>>*>
+      const gsl::not_null<MortarMap<evolution::dg::MortarData<dim>>*>
           mortar_data,
-      const gsl::not_null<::dg::MortarMap<dim, Mesh<dim - 1>>*> mortar_mesh,
-      const gsl::not_null<
-          ::dg::MortarMap<dim, std::array<Spectral::MortarSize, dim - 1>>*>
+      const gsl::not_null<MortarMap<Mesh<dim - 1>>*> mortar_mesh,
+      const gsl::not_null<MortarMap<std::array<Spectral::MortarSize, dim - 1>>*>
           mortar_size,
-      const gsl::not_null<
-          ::dg::MortarMap<dim, TimeStepId>*> /*mortar_next_temporal_id*/,
+      const gsl::not_null<MortarMap<TimeStepId>*> /*mortar_next_temporal_id*/,
       const gsl::not_null<
           DirectionMap<dim, std::optional<Variables<tmpl::list<
                                 evolution::dg::Tags::MagnitudeOfNormal,
@@ -240,14 +244,12 @@ struct ProjectMortars : tt::ConformsTo<amr::protocols::Projector> {
 
   template <typename... Tags>
   static void apply(
-      const gsl::not_null<::dg::MortarMap<dim, evolution::dg::MortarData<dim>>*>
+      const gsl::not_null<MortarMap<evolution::dg::MortarData<dim>>*>
       /*mortar_data*/,
-      const gsl::not_null<::dg::MortarMap<dim, Mesh<dim - 1>>*> /*mortar_mesh*/,
-      const gsl::not_null<
-          ::dg::MortarMap<dim, std::array<Spectral::MortarSize, dim - 1>>*>
+      const gsl::not_null<MortarMap<Mesh<dim - 1>>*> /*mortar_mesh*/,
+      const gsl::not_null<MortarMap<std::array<Spectral::MortarSize, dim - 1>>*>
       /*mortar_size*/,
-      const gsl::not_null<
-          ::dg::MortarMap<dim, TimeStepId>*> /*mortar_next_temporal_id*/,
+      const gsl::not_null<MortarMap<TimeStepId>*> /*mortar_next_temporal_id*/,
       const gsl::not_null<
           DirectionMap<dim, std::optional<Variables<tmpl::list<
                                 evolution::dg::Tags::MagnitudeOfNormal,
@@ -264,14 +266,12 @@ struct ProjectMortars : tt::ConformsTo<amr::protocols::Projector> {
 
   template <typename... Tags>
   static void apply(
-      const gsl::not_null<::dg::MortarMap<dim, evolution::dg::MortarData<dim>>*>
+      const gsl::not_null<MortarMap<evolution::dg::MortarData<dim>>*>
       /*mortar_data*/,
-      const gsl::not_null<::dg::MortarMap<dim, Mesh<dim - 1>>*> /*mortar_mesh*/,
-      const gsl::not_null<
-          ::dg::MortarMap<dim, std::array<Spectral::MortarSize, dim - 1>>*>
+      const gsl::not_null<MortarMap<Mesh<dim - 1>>*> /*mortar_mesh*/,
+      const gsl::not_null<MortarMap<std::array<Spectral::MortarSize, dim - 1>>*>
       /*mortar_size*/,
-      const gsl::not_null<
-          ::dg::MortarMap<dim, TimeStepId>*> /*mortar_next_temporal_id*/,
+      const gsl::not_null<MortarMap<TimeStepId>*> /*mortar_next_temporal_id*/,
       const gsl::not_null<
           DirectionMap<dim, std::optional<Variables<tmpl::list<
                                 evolution::dg::Tags::MagnitudeOfNormal,

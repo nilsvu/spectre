@@ -47,6 +47,12 @@
 
 namespace evolution::dg {
 namespace {
+// This isn't ::dg::MortarMap because lots of evolution code hardcodes the
+// std::unordered_map. Could be refactored.
+template <size_t Dim, typename ValueType>
+using MortarMap = std::unordered_map<DirectionalId<Dim>, ValueType,
+                                     boost::hash<DirectionalId<Dim>>>;
+
 template <typename Metavariables>
 struct component {
   using metavariables = Metavariables;
@@ -110,8 +116,8 @@ void test_impl(
     const std::vector<std::array<size_t, Dim>>& initial_extents,
     const Element<Dim>& element, const TimeStepId& time_step_id,
     const TimeStepId& next_time_step_id, const Spectral::Quadrature quadrature,
-    const ::dg::MortarMap<Dim, Mesh<Dim - 1>>& expected_mortar_meshes,
-    const ::dg::MortarMap<Dim, std::array<Spectral::MortarSize, Dim - 1>>&
+    const MortarMap<Dim, Mesh<Dim - 1>>& expected_mortar_meshes,
+    const MortarMap<Dim, std::array<Spectral::MortarSize, Dim - 1>>&
         expected_mortar_sizes,
     const DirectionMap<Dim, std::optional<Variables<tmpl::list<
                                 evolution::dg::Tags::MagnitudeOfNormal,
@@ -200,9 +206,9 @@ struct Test<1, LocalTimeStepping> {
     // and an interface at upper xi.
     const DirectionalId<1> interface_mortar_id{Direction<1>::upper_xi(),
                                                east_id};
-    const ::dg::MortarMap<1, Mesh<0>> expected_mortar_meshes{
+    const MortarMap<1, Mesh<0>> expected_mortar_meshes{
         {interface_mortar_id, {}}};
-    const ::dg::MortarMap<1, std::array<Spectral::MortarSize, 0>>
+    const MortarMap<1, std::array<Spectral::MortarSize, 0>>
         expected_mortar_sizes{{interface_mortar_id, {}}};
 
     const DirectionMap<
@@ -253,13 +259,12 @@ struct Test<2, LocalTimeStepping> {
     const DirectionalId<2> interface_mortar_id_south{Direction<2>::lower_eta(),
                                                      south_id};
 
-    const ::dg::MortarMap<2, Mesh<1>> expected_mortar_meshes{
+    const MortarMap<2, Mesh<1>> expected_mortar_meshes{
         {interface_mortar_id_east,
          Mesh<1>(2, Spectral::Basis::Legendre, quadrature)},
         {interface_mortar_id_south,
          Mesh<1>(3, Spectral::Basis::Legendre, quadrature)}};
-    ::dg::MortarMap<2, std::array<Spectral::MortarSize, 1>>
-        expected_mortar_sizes{};
+    MortarMap<2, std::array<Spectral::MortarSize, 1>> expected_mortar_sizes{};
     for (const auto& mortar_id_and_mesh : expected_mortar_meshes) {
       expected_mortar_sizes[mortar_id_and_mesh.first] = {
           {Spectral::MortarSize::Full}};
@@ -318,15 +323,14 @@ struct Test<3, LocalTimeStepping> {
     const DirectionalId<3> interface_mortar_id_top{Direction<3>::upper_zeta(),
                                                    top_id};
 
-    const ::dg::MortarMap<3, Mesh<2>> expected_mortar_meshes{
+    const MortarMap<3, Mesh<2>> expected_mortar_meshes{
         {interface_mortar_id_right,
          Mesh<2>({{3, 4}}, Spectral::Basis::Legendre, quadrature)},
         {interface_mortar_id_front,
          Mesh<2>({{2, 4}}, Spectral::Basis::Legendre, quadrature)},
         {interface_mortar_id_top,
          Mesh<2>({{2, 3}}, Spectral::Basis::Legendre, quadrature)}};
-    ::dg::MortarMap<3, std::array<Spectral::MortarSize, 2>>
-        expected_mortar_sizes{};
+    MortarMap<3, std::array<Spectral::MortarSize, 2>> expected_mortar_sizes{};
     for (const auto& mortar_id_and_mesh : expected_mortar_meshes) {
       expected_mortar_sizes[mortar_id_and_mesh.first] = {
           {Spectral::MortarSize::Full, Spectral::MortarSize::Full}};
@@ -350,11 +354,10 @@ struct Test<3, LocalTimeStepping> {
 
 template <size_t Dim, bool UsingLts>
 void test_p_refine(
-    ::dg::MortarMap<Dim, evolution::dg::MortarData<Dim>>& mortar_data,
-    ::dg::MortarMap<Dim, Mesh<Dim - 1>>& mortar_mesh,
-    ::dg::MortarMap<Dim, std::array<Spectral::MortarSize, Dim - 1>>&
-        mortar_size,
-    ::dg::MortarMap<Dim, TimeStepId>& mortar_next_temporal_id,
+    MortarMap<Dim, evolution::dg::MortarData<Dim>>& mortar_data,
+    MortarMap<Dim, Mesh<Dim - 1>>& mortar_mesh,
+    MortarMap<Dim, std::array<Spectral::MortarSize, Dim - 1>>& mortar_size,
+    MortarMap<Dim, TimeStepId>& mortar_next_temporal_id,
     DirectionMap<Dim, std::optional<Variables<tmpl::list<
                           evolution::dg::Tags::MagnitudeOfNormal,
                           evolution::dg::Tags::NormalCovector<Dim>>>>>&
@@ -363,12 +366,12 @@ void test_p_refine(
     const Mesh<Dim>& old_mesh, Mesh<Dim>& new_mesh,
     const Element<Dim>& old_element, Element<Dim>& new_element,
     std::unordered_map<ElementId<Dim>, amr::Info<Dim>>& neighbor_info,
-    const ::dg::MortarMap<
-        Dim, evolution::dg::MortarData<Dim>>& /*expected_mortar_data*/,
-    const ::dg::MortarMap<Dim, Mesh<Dim - 1>>& expected_mortar_mesh,
-    const ::dg::MortarMap<Dim, std::array<Spectral::MortarSize, Dim - 1>>&
+    const MortarMap<Dim,
+                    evolution::dg::MortarData<Dim>>& /*expected_mortar_data*/,
+    const MortarMap<Dim, Mesh<Dim - 1>>& expected_mortar_mesh,
+    const MortarMap<Dim, std::array<Spectral::MortarSize, Dim - 1>>&
         expected_mortar_size,
-    const ::dg::MortarMap<Dim, TimeStepId>& expected_mortar_next_temporal_id,
+    const MortarMap<Dim, TimeStepId>& expected_mortar_next_temporal_id,
     const DirectionMap<Dim, std::optional<Variables<tmpl::list<
                                 evolution::dg::Tags::MagnitudeOfNormal,
                                 evolution::dg::Tags::NormalCovector<Dim>>>>>&
@@ -464,16 +467,16 @@ void test_p_refine_gts() {
 
   // These quantities are re-allocated after projection, so we can
   // just set them to empty maps...
-  ::dg::MortarMap<Dim, evolution::dg::MortarData<Dim>> mortar_data{};
-  ::dg::MortarMap<Dim, Mesh<Dim - 1>> mortar_mesh{};
-  ::dg::MortarMap<Dim, std::array<Spectral::MortarSize, Dim - 1>> mortar_size{};
+  MortarMap<Dim, evolution::dg::MortarData<Dim>> mortar_data{};
+  MortarMap<Dim, Mesh<Dim - 1>> mortar_mesh{};
+  MortarMap<Dim, std::array<Spectral::MortarSize, Dim - 1>> mortar_size{};
   DirectionMap<Dim, std::optional<Variables<
                         tmpl::list<evolution::dg::Tags::MagnitudeOfNormal,
                                    evolution::dg::Tags::NormalCovector<Dim>>>>>
       normal_covector_and_magnitude{};
   mortar_data_history_type<Dim> mortar_data_history{};
 
-  ::dg::MortarMap<Dim, TimeStepId> mortar_next_temporal_ids{};
+  MortarMap<Dim, TimeStepId> mortar_next_temporal_ids{};
   std::unordered_map<ElementId<Dim>, amr::Info<Dim>> neighbor_info{};
   for (const auto& [direction, neighbors] : old_element.neighbors()) {
     for (const auto& neighbor : neighbors) {
@@ -485,11 +488,11 @@ void test_p_refine_gts() {
     }
   }
 
-  ::dg::MortarMap<Dim, evolution::dg::MortarData<Dim>> expected_mortar_data{};
-  ::dg::MortarMap<Dim, Mesh<Dim - 1>> expected_mortar_mesh{};
-  ::dg::MortarMap<Dim, std::array<Spectral::MortarSize, Dim - 1>>
+  MortarMap<Dim, evolution::dg::MortarData<Dim>> expected_mortar_data{};
+  MortarMap<Dim, Mesh<Dim - 1>> expected_mortar_mesh{};
+  MortarMap<Dim, std::array<Spectral::MortarSize, Dim - 1>>
       expected_mortar_size{};
-  ::dg::MortarMap<Dim, TimeStepId> expected_mortar_next_temporal_ids{};
+  MortarMap<Dim, TimeStepId> expected_mortar_next_temporal_ids{};
   DirectionMap<Dim, std::optional<Variables<
                         tmpl::list<evolution::dg::Tags::MagnitudeOfNormal,
                                    evolution::dg::Tags::NormalCovector<Dim>>>>>
