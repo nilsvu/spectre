@@ -26,6 +26,8 @@
 #include "NumericalAlgorithms/Convergence/Tags.hpp"
 #include "Options/String.hpp"
 #include "ParallelAlgorithms/Actions/AddComputeTags.hpp"
+#include "ParallelAlgorithms/Amr/Projectors/DefaultInitialize.hpp"
+#include "ParallelAlgorithms/Amr/Projectors/Variables.hpp"
 #include "ParallelAlgorithms/LinearSolver/Actions/MakeIdentityIfSkipped.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Actions/RestrictFields.hpp"
@@ -170,6 +172,23 @@ struct Solver {
   using observed_reduction_data_tags = observers::collect_reduction_data_tags<
       tmpl::list<nonlinear_solver, linear_solver, multigrid, schwarz_smoother>>;
 
+  template <bool Linearized>
+  using dg_operator = elliptic::dg::Actions::DgOperator<
+      system, Linearized,
+      tmpl::conditional_t<Linearized, linear_solver_iteration_id,
+                          nonlinear_solver_iteration_id>,
+      tmpl::conditional_t<Linearized, correction_vars_tag, fields_tag>,
+      tmpl::conditional_t<Linearized, correction_fluxes_tag, fluxes_tag>,
+      tmpl::conditional_t<Linearized, operator_applied_to_correction_vars_tag,
+                          operator_applied_to_fields_tag>>;
+
+  using init_analytic_solution_action =
+      elliptic::Actions::InitializeOptionalAnalyticSolution<
+          volume_dim, background_tag,
+          tmpl::append<typename system::primal_fields,
+                       typename system::primal_fluxes>,
+          elliptic::analytic_data::AnalyticSolution>;
+
   using initialization_actions = tmpl::list<
       elliptic::dg::Actions::InitializeDomain<volume_dim>,
       typename nonlinear_solver::initialize_element,
@@ -178,11 +197,7 @@ struct Solver {
       typename schwarz_smoother::initialize_element,
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       elliptic::Actions::InitializeFixedSources<system, background_tag>,
-      elliptic::Actions::InitializeOptionalAnalyticSolution<
-          volume_dim, background_tag,
-          tmpl::append<typename system::primal_fields,
-                       typename system::primal_fluxes>,
-          elliptic::analytic_data::AnalyticSolution>,
+      init_analytic_solution_action,
       elliptic::dg::Actions::initialize_operator<system, background_tag>,
       ::Initialization::Actions::AddComputeTags<tmpl::list<
           // For linearized boundary conditions
@@ -194,16 +209,6 @@ struct Solver {
       tmpl::list<typename nonlinear_solver::register_element,
                  typename multigrid::register_element,
                  typename schwarz_smoother::register_element>;
-
-  template <bool Linearized>
-  using dg_operator = elliptic::dg::Actions::DgOperator<
-      system, Linearized,
-      tmpl::conditional_t<Linearized, linear_solver_iteration_id,
-                          nonlinear_solver_iteration_id>,
-      tmpl::conditional_t<Linearized, correction_vars_tag, fields_tag>,
-      tmpl::conditional_t<Linearized, correction_fluxes_tag, fluxes_tag>,
-      tmpl::conditional_t<Linearized, operator_applied_to_correction_vars_tag,
-                          operator_applied_to_fields_tag>>;
 
   template <typename Label>
   using smooth_actions = typename schwarz_smoother::template solve<
@@ -227,6 +232,11 @@ struct Solver {
           volume_dim, db::wrap_tags_in<::Tags::NormalDotFlux,
                                        typename system::primal_fields>>>>;
 
+  using init_subdomain_action =
+      elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
+          system, background_tag, typename schwarz_smoother::options_group,
+          true>;
+
   template <typename StepActions>
   using solve_actions = tmpl::list<
       // Communicate subdomain geometry and reinitialize subdomain to account
@@ -236,9 +246,7 @@ struct Solver {
       LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
           volume_dim, subdomain_init_tags,
           typename schwarz_smoother::options_group>,
-      elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
-          system, background_tag, typename schwarz_smoother::options_group,
-          true>,
+      init_subdomain_action,
       // Nonlinear solve
       typename nonlinear_solver::template solve<
           typename dg_operator<false>::apply_actions,
@@ -271,6 +279,35 @@ struct Solver {
                   ::LinearSolver::Actions::make_identity_if_skipped<
                       multigrid, typename dg_operator<true>::apply_actions>>>>,
           StepActions>>;
+
+  template <typename Tag>
+  using overlaps_tag =
+      LinearSolver::Schwarz::Tags::Overlaps<Tag, volume_dim,
+                                            OptionTags::SchwarzSmootherGroup>;
+
+  using amr_projectors = tmpl::flatten<tmpl::list<
+      elliptic::dg::ProjectGeometry<volume_dim>,
+      typename nonlinear_solver::amr_projectors,
+      typename linear_solver::amr_projectors,
+      typename multigrid::amr_projectors,
+      typename schwarz_smoother::amr_projectors,
+      amr::projectors::DefaultInitialize<tmpl::append<
+          tmpl::list<domain::Tags::InitialExtents<volume_dim>,
+                     domain::Tags::InitialRefinementLevels<volume_dim>>,
+          // Tags communicated on subdomain overlaps. No need to project these
+          // during AMR because they will be communicated.
+          db::wrap_tags_in<
+              overlaps_tag,
+              tmpl::append<subdomain_init_tags, communicated_overlap_tags>>,
+          // Tags initialized on subdomains. No need to project these during AMR
+          // because they will get re-initialized after communication.
+          typename init_subdomain_action::simple_tags>>,
+      amr::projectors::ProjectVariables<volume_dim, fields_tag>,
+      elliptic::Actions::InitializeFixedSources<system, background_tag>,
+      init_analytic_solution_action,
+      elliptic::dg::Actions::amr_projectors<system, background_tag>,
+      typename dg_operator<true>::amr_projectors,
+      typename dg_operator<false>::amr_projectors>>;
 
   using component_list = tmpl::list<typename nonlinear_solver::component_list,
                                     typename linear_solver::component_list,

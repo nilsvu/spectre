@@ -451,6 +451,19 @@ using initialize_operator = tmpl::list<
     detail::InitializeFacesMortarsAndBackground<System, BackgroundTag>>;
 
 /*!
+ * \brief AMR projectors for the tags added by `initialize_operator`
+ */
+template <typename System, typename BackgroundTag = void>
+using amr_projectors = tmpl::append<
+    tmpl::list<elliptic::dg::InitializeFacesAndMortars<
+        System::volume_dim, typename System::inv_metric_tag, BackgroundTag>>,
+    tmpl::conditional_t<
+        std::is_same_v<BackgroundTag, void>, tmpl::list<>,
+        tmpl::list<elliptic::dg::InitializeBackground<
+            System::volume_dim, typename System::background_fields,
+            BackgroundTag>>>>;
+
+/*!
  * \brief Apply the DG operator to the `PrimalFieldsTag` and write the result to
  * the `OperatorAppliedToFieldsTag`
  *
