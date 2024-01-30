@@ -90,7 +90,7 @@ spectre_run_cmake() {
           -D MEMORY_ALLOCATOR=JEMALLOC \
           -D BUILD_PYTHON_BINDINGS=ON \
           -D MACHINE=CaltechHpcSkylake \
-          -D OVERRIDE_ARCH=skylake-avx512 \
+          -D OVERRIDE_ARCH=skylake \
           "$@" \
           $SPECTRE_HOME
 }
