@@ -1,0 +1,15 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+Machine:
+  Name: CaltechHpcIcelake
+  Description: |
+    Public supercomputer at Caltech using the icelake intel nodes and
+    dependencies installed by Kyle Nelli.
+    More information:
+    https://www.hpc.caltech.edu/documentation
+  # Split one physical 56 core node into two charm nodes
+  DefaultTasksPerNode: 2
+  DefaultProcsPerTasks: 32
+  DefaultQueue: "any"
+  DefaultTimeLimit: "1-00:00:00"
