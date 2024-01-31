@@ -243,7 +243,8 @@ struct InitializeElement : tt::ConformsTo<amr::protocols::Projector> {
       const gsl::not_null<DirectionMap<Dim, Scalar<DataVector>>*>
           intruding_overlap_weights,
       const gsl::not_null<SubdomainData*> subdomain_data,
-      const gsl::not_null<std::unique_ptr<SubdomainSolver>*> subdomain_solver,
+      [[maybe_unused]] const gsl::not_null<std::unique_ptr<SubdomainSolver>*>
+          subdomain_solver,
       const Element<Dim>& element, const Mesh<Dim>& mesh,
       const tnsr::I<DataVector, Dim, Frame::ElementLogical>& logical_coords,
       const size_t max_overlap, const AmrData&... amr_data) {

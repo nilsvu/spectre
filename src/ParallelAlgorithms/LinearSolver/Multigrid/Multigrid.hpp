@@ -133,6 +133,8 @@ struct Multigrid {
       async_solvers::InitializeElement<FieldsTag, OptionsGroup, SourceTag>,
       detail::InitializeElement<Dim, FieldsTag, OptionsGroup, SourceTag>>;
 
+  using amr_projectors = initialize_element;
+
   using register_element =
       tmpl::list<async_solvers::RegisterElement<FieldsTag, OptionsGroup,
                                                 SourceTag, Tags::IsFinestGrid>,

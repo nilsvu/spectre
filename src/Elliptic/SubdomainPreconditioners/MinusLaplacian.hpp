@@ -210,6 +210,9 @@ class MinusLaplacian
     bc_signatures_ = std::nullopt;
     solvers_.clear();
     boundary_conditions_.clear();
+    subdomain_operator_ = SubdomainOperator{};
+    source_ = SubdomainData{};
+    initial_guess_in_solution_out_ = SubdomainData{};
   }
 
   // NOLINTNEXTLINE(google-runtime-references)
@@ -468,6 +471,7 @@ MinusLaplacian<Dim, OptionsGroup, Solver, LinearSolverRegistrars>::solve(
                      << " boundary-condition signatures (one per tensor "
                         "component), but got "
                      << bc_signatures.size() << ".");
+  // Possible optimization: elide when num_components is 1
   for (size_t component = 0; component < num_components; ++component) {
     detail::assign_component(make_not_null(&source_), source, 0, component);
     detail::assign_component(make_not_null(&initial_guess_in_solution_out_),
