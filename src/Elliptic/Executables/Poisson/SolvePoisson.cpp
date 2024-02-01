@@ -8,6 +8,7 @@
 #include "Domain/Creators/RegisterDerivedWithCharm.hpp"
 #include "Domain/FunctionsOfTime/RegisterDerivedWithCharm.hpp"
 #include "Parallel/CharmMain.tpp"
+#include "ParallelAlgorithms/Amr/Actions/RegisterCallbacks.hpp"
 #include "Utilities/Serialization/RegisterDerivedClassesWithCharm.hpp"
 
 // Parameters chosen in CMakeLists.txt
@@ -20,6 +21,8 @@ extern "C" void CkRegisterMainModule() {
        &domain::FunctionsOfTime::register_derived_with_charm,
        &register_derived_classes_with_charm<
            metavariables::schwarz_smoother::subdomain_solver>,
-       &register_factory_classes_with_charm<metavariables>},
+       &register_factory_classes_with_charm<metavariables>,
+       &::amr::register_callbacks<metavariables,
+                                  typename metavariables::dg_element_array>},
       {});
 }

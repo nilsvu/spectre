@@ -15,6 +15,8 @@
 #include "Elliptic/Actions/InitializeFields.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
 #include "Elliptic/Actions/RunEventsAndTriggers.hpp"
+#include "Elliptic/Amr/Actions/ProjectAmrIterationId.hpp"
+#include "Elliptic/Amr/Actions/StopAmr.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/ApplyOperator.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Actions/InitializeDomain.hpp"
@@ -38,8 +40,21 @@
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/Protocols/RegistrationMetavariables.hpp"
 #include "Parallel/Reduction.hpp"
+#include "ParallelAlgorithms/Actions/InitializeItems.hpp"
 #include "ParallelAlgorithms/Actions/RandomizeVariables.hpp"
 #include "ParallelAlgorithms/Actions/TerminatePhase.hpp"
+#include "ParallelAlgorithms/Amr/Actions/Component.hpp"
+#include "ParallelAlgorithms/Amr/Actions/Initialize.hpp"
+#include "ParallelAlgorithms/Amr/Actions/SendAmrDiagnostics.hpp"
+#include "ParallelAlgorithms/Amr/Criteria/DriveToTarget.hpp"
+#include "ParallelAlgorithms/Amr/Criteria/Loehner.hpp"
+#include "ParallelAlgorithms/Amr/Criteria/Persson.hpp"
+#include "ParallelAlgorithms/Amr/Criteria/Tags/Criteria.hpp"
+#include "ParallelAlgorithms/Amr/Criteria/TruncationError.hpp"
+#include "ParallelAlgorithms/Amr/Projectors/DefaultInitialize.hpp"
+#include "ParallelAlgorithms/Amr/Projectors/Variables.hpp"
+#include "ParallelAlgorithms/Amr/Protocols/AmrMetavariables.hpp"
+#include "ParallelAlgorithms/Amr/Tags.hpp"
 #include "ParallelAlgorithms/Events/Factory.hpp"
 #include "ParallelAlgorithms/Events/Tags.hpp"
 #include "ParallelAlgorithms/EventsAndTriggers/Completion.hpp"
@@ -171,7 +186,11 @@ struct Metavariables {
   // Collect all items to store in the cache.
   using const_global_cache_tags =
       tmpl::list<background_tag, initial_guess_tag,
+                 ::amr::Criteria::Tags::Criteria,
                  domain::Tags::RadiallyCompressedCoordinatesOptions>;
+
+  using amr_iteration_id =
+      Convergence::Tags::IterationId<::amr::OptionTags::AmrGroup>;
 
   struct factory_creation
       : tt::ConformsTo<Options::protocols::FactoryCreation> {
@@ -189,6 +208,14 @@ struct Metavariables {
         tmpl::pair<
             elliptic::BoundaryConditions::BoundaryCondition<volume_dim>,
             Poisson::BoundaryConditions::standard_boundary_conditions<system>>,
+        tmpl::pair<::amr::Criterion,
+                   tmpl::list<::amr::Criteria::TruncationError<
+                                  volume_dim, tmpl::list<Poisson::Tags::Field>>,
+                              ::amr::Criteria::Loehner<
+                                  volume_dim, tmpl::list<Poisson::Tags::Field>>,
+                              ::amr::Criteria::Persson<
+                                  volume_dim, tmpl::list<Poisson::Tags::Field>>,
+                              ::amr::Criteria::DriveToTarget<volume_dim>>>,
         tmpl::pair<Event,
                    tmpl::flatten<tmpl::list<
                        Events::Completion,
@@ -196,9 +223,17 @@ struct Metavariables {
                            volume_dim, observe_fields, observer_compute_tags,
                            LinearSolver::multigrid::Tags::IsFinestGrid>>>>,
         tmpl::pair<Trigger, elliptic::Triggers::all_triggers<
-                                typename linear_solver::options_group>>,
-        tmpl::pair<PhaseChange, tmpl::list<PhaseControl::VisitAndReturn<
-                                    Parallel::Phase::BuildMatrix>>>>;
+                                ::amr::OptionTags::AmrGroup>>,
+        tmpl::pair<
+            PhaseChange,
+            tmpl::list<
+                // Phase for building a matrix representation of the operator
+                PhaseControl::VisitAndReturn<Parallel::Phase::BuildMatrix>,
+                // Phases for AMR
+                PhaseControl::VisitAndReturn<
+                    Parallel::Phase::EvaluateAmrCriteria>,
+                PhaseControl::VisitAndReturn<Parallel::Phase::AdjustDomain>,
+                PhaseControl::VisitAndReturn<Parallel::Phase::CheckDomain>>>>;
   };
 
   // Collect all reduction tags for observers
@@ -207,45 +242,48 @@ struct Metavariables {
           tmpl::at<typename factory_creation::factory_classes, Event>,
           linear_solver, multigrid, schwarz_smoother>>>;
 
+  using dg_operator = elliptic::dg::Actions::DgOperator<
+      system, true, linear_solver_iteration_id, vars_tag, fluxes_vars_tag,
+      operator_applied_to_vars_tag>;
+
+  using build_linear_operator_actions = typename dg_operator::apply_actions;
+
+  using build_matrix = LinearSolver::Actions::BuildMatrix<
+      linear_solver_iteration_id, vars_tag, operator_applied_to_vars_tag,
+      domain::Tags::Coordinates<volume_dim, Frame::Inertial>,
+      LinearSolver::multigrid::Tags::IsFinestGrid>;
+
   // For labeling the yaml option for RandomizeVariables
   struct RandomizeInitialGuess {};
+
+  using init_analytic_solution_action =
+      elliptic::Actions::InitializeOptionalAnalyticSolution<
+          volume_dim, background_tag,
+          tmpl::append<typename system::primal_fields,
+                       typename system::primal_fluxes>,
+          elliptic::analytic_data::AnalyticSolution>;
 
   using initialization_actions = tmpl::list<
       elliptic::dg::Actions::InitializeDomain<volume_dim>,
       typename linear_solver::initialize_element,
       typename multigrid::initialize_element,
       typename schwarz_smoother::initialize_element,
+      Initialization::Actions::InitializeItems<
+          ::amr::Initialization::Initialize<volume_dim>>,
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       Actions::RandomizeVariables<
           ::Tags::Variables<typename system::primal_fields>,
           RandomizeInitialGuess>,
       elliptic::Actions::InitializeFixedSources<system, background_tag>,
-      elliptic::Actions::InitializeOptionalAnalyticSolution<
-          volume_dim, background_tag,
-          tmpl::append<typename system::primal_fields,
-                       typename system::primal_fluxes>,
-          elliptic::analytic_data::AnalyticSolution>,
+      init_analytic_solution_action,
       elliptic::dg::Actions::initialize_operator<system>,
-      elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
-          system, fixed_sources_tag>,
-      // Apply the DG operator to the initial guess
-      typename elliptic::dg::Actions::DgOperator<
-          system, true, linear_solver_iteration_id, fields_tag, fluxes_vars_tag,
-          operator_applied_to_fields_tag, vars_tag,
-          fluxes_vars_tag>::apply_actions,
       Parallel::Actions::TerminatePhase>;
 
-  using build_linear_operator_actions =
-      typename elliptic::dg::Actions::DgOperator<
-          system, true, linear_solver_iteration_id, vars_tag, fluxes_vars_tag,
-          operator_applied_to_vars_tag>::apply_actions;
-
   using register_actions =
-      tmpl::list<observers::Actions::RegisterEventsWithObservers,
-                 typename schwarz_smoother::register_element,
-                 typename multigrid::register_element,
-                 LinearSolver::Actions::build_matrix_register<
-                     LinearSolver::multigrid::Tags::IsFinestGrid>>;
+      tmpl::flatten<tmpl::list<observers::Actions::RegisterEventsWithObservers,
+                               typename schwarz_smoother::register_element,
+                               typename multigrid::register_element,
+                               typename build_matrix::register_actions>>;
 
   template <typename Label>
   using smooth_actions =
@@ -266,7 +304,17 @@ struct Metavariables {
           false>;
 
   using solve_actions = tmpl::list<
+      // Run AMR if requested
       PhaseControl::Actions::ExecutePhaseChange,
+      // Apply the DG operator to the initial guess
+      typename elliptic::dg::Actions::DgOperator<
+          system, true, linear_solver_iteration_id, fields_tag, fluxes_vars_tag,
+          operator_applied_to_fields_tag, vars_tag,
+          fluxes_vars_tag>::apply_actions,
+      // Modify fixed sources with boundary conditions. This must be done after
+      // the fixed sources are reset during AMR.
+      elliptic::dg::Actions::ImposeInhomogeneousBoundaryConditionsOnSource<
+          system, fixed_sources_tag>,
       // Communicate subdomain geometry and reinitialize subdomain to account
       // for domain changes
       LinearSolver::Schwarz::Actions::SendOverlapFields<
@@ -286,30 +334,58 @@ struct Metavariables {
                   smooth_actions<LinearSolver::multigrid::VcycleUpLabel>>,
               ::LinearSolver::Actions::make_identity_if_skipped<
                   multigrid, build_linear_operator_actions>>,
-          elliptic::Actions::RunEventsAndTriggers<linear_solver_iteration_id>>,
-      Parallel::Actions::TerminatePhase>;
-
-  using build_matrix_actions = tmpl::list<
-      LinearSolver::Actions::build_matrix_actions<
-          linear_solver_iteration_id, vars_tag, operator_applied_to_vars_tag,
-          build_linear_operator_actions,
-          domain::Tags::Coordinates<volume_dim, Frame::Inertial>,
-          LinearSolver::multigrid::Tags::IsFinestGrid>,
-      Parallel::Actions::TerminatePhase>;
+          tmpl::list<>>,
+      elliptic::Actions::RunEventsAndTriggers<amr_iteration_id>,
+      elliptic::amr::Actions::StopAmr>;
 
   using dg_element_array = elliptic::DgElementArray<
       Metavariables,
-      tmpl::list<Parallel::PhaseActions<Parallel::Phase::Initialization,
-                                        initialization_actions>,
-                 Parallel::PhaseActions<
-                     Parallel::Phase::Register,
-                     tmpl::push_back<register_actions,
-                                     Parallel::Actions::TerminatePhase>>,
-                 Parallel::PhaseActions<Parallel::Phase::Solve, solve_actions>,
-                 Parallel::PhaseActions<Parallel::Phase::BuildMatrix,
-                                        build_matrix_actions>>,
+      tmpl::list<
+          Parallel::PhaseActions<Parallel::Phase::Initialization,
+                                 initialization_actions>,
+          Parallel::PhaseActions<
+              Parallel::Phase::Register,
+              tmpl::list<register_actions, Parallel::Actions::TerminatePhase>>,
+          Parallel::PhaseActions<Parallel::Phase::Solve, solve_actions>,
+          Parallel::PhaseActions<Parallel::Phase::CheckDomain,
+                                 tmpl::list<::amr::Actions::SendAmrDiagnostics,
+                                            Parallel::Actions::TerminatePhase>>,
+          Parallel::PhaseActions<
+              Parallel::Phase::BuildMatrix,
+              tmpl::list<typename build_matrix::template actions<
+                             build_linear_operator_actions>,
+                         Parallel::Actions::TerminatePhase>>>,
       LinearSolver::multigrid::ElementsAllocator<
           volume_dim, typename multigrid::options_group>>;
+
+  template <typename Tag>
+  using overlaps_tag = LinearSolver::Schwarz::Tags::Overlaps<
+      Tag, volume_dim, SolvePoisson::OptionTags::SchwarzSmootherGroup>;
+
+  struct amr : tt::ConformsTo<::amr::protocols::AmrMetavariables> {
+    using projectors = tmpl::flatten<tmpl::list<
+        elliptic::dg::ProjectGeometry<volume_dim>,
+        typename linear_solver::amr_projectors,
+        typename multigrid::amr_projectors,
+        typename schwarz_smoother::amr_projectors,
+        ::amr::projectors::DefaultInitialize<tmpl::append<
+            tmpl::list<domain::Tags::InitialExtents<volume_dim>,
+                       domain::Tags::InitialRefinementLevels<volume_dim>>,
+            // Tags communicated on subdomain overlaps. No need to project these
+            // during AMR because they will be communicated.
+            db::wrap_tags_in<overlaps_tag, subdomain_init_tags>,
+            // Tags initialized on subdomains. No need to project these during
+            // AMR because they will get re-initialized after communication.
+            typename init_subdomain_action::simple_tags>>,
+        ::amr::projectors::ProjectVariables<volume_dim, fields_tag>,
+        elliptic::Actions::InitializeFixedSources<system, background_tag>,
+        init_analytic_solution_action,
+        elliptic::dg::Actions::amr_projectors<system>,
+        typename dg_operator::amr_projectors,
+        typename build_matrix::amr_projectors,
+        LinearSolver::multigrid::ProjectMultigridSections<dg_element_array>,
+        elliptic::amr::Actions::ProjectAmrIterationId>>;
+  };
 
   struct registration
       : tt::ConformsTo<Parallel::protocols::RegistrationMetavariables> {
@@ -318,12 +394,12 @@ struct Metavariables {
   };
 
   // Specify all parallel components that will execute actions at some point.
-  using component_list = tmpl::flatten<
-      tmpl::list<dg_element_array, typename linear_solver::component_list,
-                 typename multigrid::component_list,
-                 typename schwarz_smoother::component_list,
-                 observers::Observer<Metavariables>,
-                 observers::ObserverWriter<Metavariables>>>;
+  using component_list = tmpl::flatten<tmpl::list<
+      dg_element_array, typename linear_solver::component_list,
+      typename multigrid::component_list,
+      typename schwarz_smoother::component_list,
+      ::amr::Component<Metavariables>, observers::Observer<Metavariables>,
+      observers::ObserverWriter<Metavariables>>>;
 
   static constexpr std::array<Parallel::Phase, 4> default_phase_order{
       {Parallel::Phase::Initialization, Parallel::Phase::Register,
