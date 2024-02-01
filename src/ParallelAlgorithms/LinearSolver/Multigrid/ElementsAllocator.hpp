@@ -223,4 +223,22 @@ struct ElementsAllocator
   }
 };
 
+template <typename ElementArray>
+struct ProjectMultigridSections : tt::ConformsTo<amr::protocols::Projector> {
+  using argument_tags = tmpl::list<>;
+  using return_tags =
+      tmpl::list<Parallel::Tags::Section<ElementArray, Tags::MultigridLevel>,
+                 Parallel::Tags::Section<ElementArray, Tags::IsFinestGrid>>;
+
+  template <typename AmrData>
+  static void apply(
+      const gsl::not_null<
+          std::optional<Parallel::Section<ElementArray, Tags::MultigridLevel>>*>
+      /*multigrid_level_section*/,
+      const gsl::not_null<
+          std::optional<Parallel::Section<ElementArray, Tags::IsFinestGrid>>*>
+      /*finest_grid_section*/,
+      const AmrData& /*amr_data*/) {}
+};
+
 }  // namespace LinearSolver::multigrid

@@ -269,7 +269,10 @@ class Gmres final : public PreconditionedLinearSolver<Preconditioner,
           NoIterationCallback{}) const;
 
   void reset() override {
-    // Nothing to reset. Only call into base class to reset preconditioner.
+    basis_history_.clear();
+    basis_history_.resize(restart_ + 1);
+    preconditioned_basis_history_.clear();
+    preconditioned_basis_history_.resize(restart_);
     Base::reset();
   }
 

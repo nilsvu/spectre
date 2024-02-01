@@ -28,6 +28,7 @@
 #include "ParallelAlgorithms/Actions/AddComputeTags.hpp"
 #include "ParallelAlgorithms/Amr/Projectors/DefaultInitialize.hpp"
 #include "ParallelAlgorithms/Amr/Projectors/Variables.hpp"
+#include "ParallelAlgorithms/Amr/Tags.hpp"
 #include "ParallelAlgorithms/LinearSolver/Actions/MakeIdentityIfSkipped.hpp"
 #include "ParallelAlgorithms/LinearSolver/Gmres/Gmres.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Actions/RestrictFields.hpp"
@@ -117,7 +118,7 @@ struct Solver {
   /// The nonlinear solver algorithm
   using nonlinear_solver = NonlinearSolver::newton_raphson::NewtonRaphson<
       Metavariables, fields_tag, OptionTags::NewtonRaphsonGroup,
-      fixed_sources_tag, LinearSolver::multigrid::Tags::IsFinestGrid>;
+      fixed_sources_tag>;
   using nonlinear_solver_iteration_id =
       Convergence::Tags::IterationId<typename nonlinear_solver::options_group>;
 
@@ -127,8 +128,7 @@ struct Solver {
   using linear_solver = LinearSolver::gmres::Gmres<
       Metavariables, typename nonlinear_solver::linear_solver_fields_tag,
       OptionTags::GmresGroup, true,
-      typename nonlinear_solver::linear_solver_source_tag,
-      LinearSolver::multigrid::Tags::IsFinestGrid>;
+      typename nonlinear_solver::linear_solver_source_tag>;
   using linear_solver_iteration_id =
       Convergence::Tags::IterationId<typename linear_solver::options_group>;
 
@@ -232,6 +232,9 @@ struct Solver {
           volume_dim, db::wrap_tags_in<::Tags::NormalDotFlux,
                                        typename system::primal_fields>>>>;
 
+  using amr_iteration_id =
+      Convergence::Tags::IterationId<::amr::OptionTags::AmrGroup>;
+
   using init_subdomain_action =
       elliptic::dg::subdomain_operator::Actions::InitializeSubdomain<
           system, background_tag, typename schwarz_smoother::options_group,
@@ -242,10 +245,11 @@ struct Solver {
       // Communicate subdomain geometry and reinitialize subdomain to account
       // for domain changes
       LinearSolver::Schwarz::Actions::SendOverlapFields<
-          subdomain_init_tags, typename schwarz_smoother::options_group, false>,
+          subdomain_init_tags, typename schwarz_smoother::options_group, false,
+          amr_iteration_id>,
       LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
           volume_dim, subdomain_init_tags,
-          typename schwarz_smoother::options_group>,
+          typename schwarz_smoother::options_group, amr_iteration_id>,
       init_subdomain_action,
       // Nonlinear solve
       typename nonlinear_solver::template solve<

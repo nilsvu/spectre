@@ -28,15 +28,15 @@ RandomizeInitialGuess: None
 
 DomainCreator:
   Sphere:
-    InnerRadius: 10
-    OuterRadius: &outer_radius 1e9
+    InnerRadius: 2
+    OuterRadius: &outer_radius 1e3
     Interior:
       FillWithSphericity: 0.
-    InitialRefinement: 0
-    InitialGridPoints: 6
+    InitialRefinement: 2
+    InitialGridPoints: 2
     UseEquiangularMap: True
     EquatorialCompression: None
-    RadialPartitioning: [&outer_shell_inner_radius 20.]
+    RadialPartitioning: [&outer_shell_inner_radius 10.]
     RadialDistribution: [Linear, &outer_shell_distribution Inverse]
     WhichWedges: All
     TimeDependentMaps: None
@@ -44,6 +44,29 @@ DomainCreator:
       AnalyticSolution:
         Solution: *solution
         Field: Dirichlet
+
+Amr:
+  Verbosity: Quiet
+  Criteria:
+    # - DriveToTarget:
+    #     TargetNumberOfGridPoints: [7, 7, 7]
+    #     TargetRefinementLevels: [1, 1, 1]
+    #     OscillationAtTarget: [DoNothing, DoNothing, DoNothing]
+    - TruncationError:
+        VariablesToMonitor: [Field]
+        AbsoluteTarget: 1e-8
+        RelativeTarget: None
+  Iterations: 10
+
+PhaseChangeAndTriggers:
+  - Trigger:
+      EveryNIterations:
+        N: 1
+        Offset: 1
+    PhaseChanges:
+      - VisitAndReturn(EvaluateAmrCriteria)
+      - VisitAndReturn(AdjustDomain)
+      - VisitAndReturn(CheckDomain)
 
 Discretization:
   DiscontinuousGalerkin:
@@ -58,18 +81,18 @@ Observers:
 
 LinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 10
+    MaxIterations: 100
     RelativeResidual: 0.
-    AbsoluteResidual: 1.e-3
+    AbsoluteResidual: 1.e-10
   Verbosity: Quiet
 
   Multigrid:
     Iterations: 1
-    MaxLevels: Auto
+    MaxLevels: 1
     PreSmoothing: True
     PostSmoothingAtBottom: False
     Verbosity: Silent
-    OutputVolumeData: True
+    OutputVolumeData: False
 
   SchwarzSmoother:
     Iterations: 3
@@ -86,7 +109,7 @@ RadiallyCompressedCoordinates:
   Compression: *outer_shell_distribution
 
 EventsAndTriggers:
-  - Trigger: HasConverged
+  - Trigger: Always
     Events:
       - ObserveNorms:
           SubfileName: ErrorNorms
@@ -104,8 +127,6 @@ EventsAndTriggers:
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Double
           FloatingPointTypes: [Double]
-
-PhaseChangeAndTriggers:
 
 BuildMatrix:
   MatrixSubfileName: Matrix
