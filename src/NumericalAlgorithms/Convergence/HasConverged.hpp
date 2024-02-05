@@ -53,12 +53,12 @@ std::optional<Reason> criteria_match(const Criteria& criteria,
                                      double initial_residual_magnitude);
 
 /*!
- * \brief Signals convergence of the algorithm.
+ * \brief Signals convergence or termination of the algorithm.
  *
- * \details Evaluates to `true` if the algorithm has converged and no
- * further iterations should be performed. In this case, the `reason()` member
- * function provides more information. If `false`, calling `reason()` is an
- * error.
+ * \details Evaluates to `true` if the algorithm has converged or terminated and
+ * no further iterations should be performed. In this case, the `reason()`
+ * member function provides more information. If `false`, calling `reason()` is
+ * an error.
  *
  * The stream operator provides a human-readable description of the convergence
  * status.
@@ -82,6 +82,9 @@ struct HasConverged {
   /// `Convergence::Reason::NumIterations`.
   HasConverged(size_t num_iterations, size_t iteration_id);
 
+  /// Construct a state where the algorithm has terminated due to an error.
+  HasConverged(std::string error_message, size_t iteration_id);
+
   explicit operator bool() const { return static_cast<bool>(reason_); }
 
   /*!
@@ -91,6 +94,10 @@ struct HasConverged {
    * converged.
    */
   Reason reason() const;
+
+  const std::optional<std::string>& error_message() const {
+    return error_message_;
+  }
 
   /// The number of iterations the algorithm has completed
   size_t num_iterations() const;
@@ -114,6 +121,7 @@ struct HasConverged {
 
  private:
   std::optional<Reason> reason_{};
+  std::optional<std::string> error_message_ = std::nullopt;
   Criteria criteria_{};
   size_t iteration_id_{};
   double residual_magnitude_{};

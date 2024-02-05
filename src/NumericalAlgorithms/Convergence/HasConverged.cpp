@@ -53,6 +53,13 @@ HasConverged::HasConverged(const size_t num_iterations,
       residual_magnitude_(std::numeric_limits<double>::max()),
       initial_residual_magnitude_(std::numeric_limits<double>::max()) {}
 
+HasConverged::HasConverged(std::string error_message, const size_t iteration_id)
+    : reason_(Reason::Error),
+      error_message_(std::move(error_message)),
+      iteration_id_(iteration_id),
+      residual_magnitude_(std::numeric_limits<double>::max()),
+      initial_residual_magnitude_(std::numeric_limits<double>::max()) {}
+
 Reason HasConverged::reason() const {
   ASSERT(reason_,
          "Tried to retrieve the convergence reason, but has not yet converged. "
@@ -93,6 +100,8 @@ std::ostream& operator<<(std::ostream& os, const HasConverged& has_converged) {
                   << get_output(has_converged.residual_magnitude_ /
                                 has_converged.initial_residual_magnitude_)
                   << ").";
+      case Reason::Error:
+        return os << *has_converged.error_message_;
       default:
         ERROR("Unknown convergence reason");
     };
@@ -103,6 +112,7 @@ std::ostream& operator<<(std::ostream& os, const HasConverged& has_converged) {
 
 void HasConverged::pup(PUP::er& p) {
   p | reason_;
+  p | error_message_;
   p | criteria_;
   p | iteration_id_;
   p | residual_magnitude_;
@@ -110,7 +120,9 @@ void HasConverged::pup(PUP::er& p) {
 }
 
 bool operator==(const HasConverged& lhs, const HasConverged& rhs) {
-  return lhs.reason_ == rhs.reason_ and lhs.criteria_ == rhs.criteria_ and
+  return lhs.reason_ == rhs.reason_ and
+         lhs.error_message_ == rhs.error_message_ and
+         lhs.criteria_ == rhs.criteria_ and
          lhs.iteration_id_ == rhs.iteration_id_ and
          lhs.residual_magnitude_ == rhs.residual_magnitude_ and
          lhs.initial_residual_magnitude_ == rhs.initial_residual_magnitude_;

@@ -110,6 +110,17 @@ struct NormalDotNumericalFlux : db::PrefixTag, db::SimpleTag {
 };
 
 /// \ingroup DataBoxTagsGroup
+/// \brief Prefix indicating the value a quantity took in the previous iteration
+/// of the algorithm.
+///
+/// \snippet Test_DataBoxPrefixes.cpp previous_name
+template <typename Tag>
+struct Previous : db::PrefixTag, db::SimpleTag {
+  using type = typename Tag::type;
+  using tag = Tag;
+};
+
+/// \ingroup DataBoxTagsGroup
 /// \brief Prefix indicating the value a quantity will take on the
 /// next iteration of the algorithm.
 ///
