@@ -84,9 +84,9 @@ Observers:
 
 LinearSolver:
   ConvergenceCriteria:
-    MaxIterations: 100
+    MaxIterations: 1000
     RelativeResidual: 0.
-    AbsoluteResidual: 1.e-8
+    AbsoluteResidual: 1.e-9
   Verbosity: Quiet
 
   Multigrid:
