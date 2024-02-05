@@ -36,7 +36,7 @@ DomainCreator:
     InitialGridPoints: 2
     UseEquiangularMap: True
     EquatorialCompression: None
-    RadialPartitioning: [&outer_shell_inner_radius 10.]
+    RadialPartitioning: [&outer_shell_inner_radius 20.]
     RadialDistribution: [Linear, &outer_shell_distribution Inverse]
     WhichWedges: All
     TimeDependentMaps: None
@@ -48,14 +48,17 @@ DomainCreator:
 Amr:
   Verbosity: Quiet
   Criteria:
+{% if amr == 'true' %}
+    - TruncationError:
+        VariablesToMonitor: [Field]
+        AbsoluteTarget: 1e-8
+        RelativeTarget: None
+{% else %}
     - DriveToTarget:
         TargetNumberOfGridPoints: [12, 12, 12]
         TargetRefinementLevels: [{{ L }}, {{ L }}, {{ L }}]
         OscillationAtTarget: [DoNothing, DoNothing, DoNothing]
-    # - TruncationError:
-    #     VariablesToMonitor: [Field]
-    #     AbsoluteTarget: 1e-8
-    #     RelativeTarget: None
+{% endif %}
   Iterations: 10
 
 PhaseChangeAndTriggers:
