@@ -13,6 +13,7 @@ spectre_setup_modules() {
 
 spectre_load_modules() {
     module use /central/groups/sxs/knelli/modules
+    module use /central/groups/sxs/modules
     module load git/2.37.2
     module load compilers/binutils/2.41
     module load compilers/gcc/11.4.0
@@ -33,6 +34,7 @@ spectre_load_modules() {
     module load libraries/openblas/0.3.25-avx2
     module load libraries/spec-exporter/2024-01
     module load libraries/yaml-cpp/0.8.0
+    module load paraview/5.12.0-rc2-osmesa
     module load languages/python/spectre-python
 }
 
@@ -58,6 +60,7 @@ spectre_unload_modules() {
     module unload libraries/openblas/0.3.25-avx2
     module unload libraries/spec-exporter/2024-01
     module unload libraries/yaml-cpp/0.8.0
+    module unload paraview/5.12.0-rc2-osmesa
     module unload languages/python/spectre-python
 }
 
