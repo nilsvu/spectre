@@ -23,9 +23,11 @@
 #include "Options/String.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/AnalyticSolution.hpp"
+#include "PointwiseFunctions/InitialDataUtilities/InitialGuess.hpp"
 #include "Utilities/Gsl.hpp"
 #include "Utilities/MakeArray.hpp"
 #include "Utilities/Serialization/CharmPupable.hpp"
+#include "Utilities/Serialization/Serialize.hpp"
 #include "Utilities/TMPL.hpp"
 
 /// \cond
@@ -122,8 +124,8 @@ class ApparentHorizon
         "'Omega x (r - Center)', where 'r' are the coordinates on the surface.";
   };
   struct Lapse {
-    using type = Options::Auto<
-        std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>;
+    using type =
+        Options::Auto<std::unique_ptr<elliptic::analytic_data::InitialGuess>>;
     static constexpr Options::String help =
         "Specify an analytic solution to impose a Dirichlet condition on the "
         "lapse. The analytic solution will be evaluated at coordinates "
@@ -169,7 +171,10 @@ class ApparentHorizon
     return std::make_unique<ApparentHorizon>(
         center_, rotation_,
         solution_for_lapse_.has_value()
-            ? std::make_optional(solution_for_lapse_.value()->get_clone())
+            ? std::make_optional(
+                  deserialize<
+                      std::unique_ptr<elliptic::analytic_data::InitialGuess>>(
+                      serialize(solution_for_lapse_.value()).data()))
             : std::nullopt,
         solution_for_negative_expansion_.has_value()
             ? std::make_optional(
@@ -179,7 +184,7 @@ class ApparentHorizon
 
   ApparentHorizon(
       std::array<double, 3> center, std::array<double, 3> rotation,
-      std::optional<std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>
+      std::optional<std::unique_ptr<elliptic::analytic_data::InitialGuess>>
           solution_for_lapse,
       std::optional<std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>
           solution_for_negative_expansion,
@@ -187,8 +192,7 @@ class ApparentHorizon
 
   const std::array<double, 3>& center() const { return center_; }
   const std::array<double, 3>& rotation() const { return rotation_; }
-  const std::optional<
-      std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>&
+  const std::optional<std::unique_ptr<elliptic::analytic_data::InitialGuess>>&
   solution_for_lapse() const {
     return solution_for_lapse_;
   }
@@ -338,7 +342,7 @@ class ApparentHorizon
       make_array<3>(std::numeric_limits<double>::signaling_NaN());
   std::array<double, 3> rotation_ =
       make_array<3>(std::numeric_limits<double>::signaling_NaN());
-  std::optional<std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>
+  std::optional<std::unique_ptr<elliptic::analytic_data::InitialGuess>>
       solution_for_lapse_{};
   std::optional<std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>
       solution_for_negative_expansion_{};
