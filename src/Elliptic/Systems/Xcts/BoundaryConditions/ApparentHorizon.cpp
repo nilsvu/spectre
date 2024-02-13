@@ -17,6 +17,7 @@
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
 #include "Elliptic/Systems/Xcts/Geometry.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/NormalDotFlux.hpp"
+#include "PointwiseFunctions/AnalyticData/Xcts/Binary.hpp"
 #include "PointwiseFunctions/AnalyticSolutions/Xcts/Factory.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Christoffel.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/AnalyticSolution.hpp"
@@ -32,7 +33,7 @@ namespace Xcts::BoundaryConditions {
 template <Xcts::Geometry ConformalGeometry>
 ApparentHorizon<ConformalGeometry>::ApparentHorizon(
     std::array<double, 3> center, std::array<double, 3> rotation,
-    std::optional<std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>
+    std::optional<std::unique_ptr<elliptic::analytic_data::InitialGuess>>
         solution_for_lapse,
     std::optional<std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>
         solution_for_negative_expansion,
@@ -200,8 +201,7 @@ void apparent_horizon_impl(
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_excess,
     const std::array<double, 3>& center, const std::array<double, 3>& rotation,
-    const std::optional<
-        std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>&
+    const std::optional<std::unique_ptr<elliptic::analytic_data::InitialGuess>>&
         solution_for_lapse,
     const std::optional<
         std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>&
@@ -325,13 +325,18 @@ void apparent_horizon_impl(
   // Lapse
   if (solution_for_lapse.has_value()) {
     *lapse_times_conformal_factor_minus_one = call_with_dynamic_type<
-        Scalar<DataVector>, Xcts::Solutions::all_analytic_solutions>(
+        Scalar<DataVector>,
+        tmpl::push_back<Xcts::Solutions::all_analytic_solutions,
+                        Xcts::AnalyticData::Binary<
+                            elliptic::analytic_data::AnalyticSolution,
+                            Xcts::Solutions::all_analytic_solutions>>>(
         solution_for_lapse.value().get(),
-        [&x](const auto* const local_solution) {
+        [&x_offcenter](const auto* const local_solution) {
           return get<Xcts::Tags::LapseTimesConformalFactorMinusOne<DataVector>>(
               local_solution->variables(
-                  x, tmpl::list<Xcts::Tags::LapseTimesConformalFactorMinusOne<
-                         DataVector>>{}));
+                  x_offcenter,
+                  tmpl::list<Xcts::Tags::LapseTimesConformalFactorMinusOne<
+                      DataVector>>{}));
         });
   } else {
     get(*n_dot_lapse_times_conformal_factor_gradient) = 0.;
@@ -351,8 +356,7 @@ void linearized_apparent_horizon_impl(
     const gsl::not_null<tnsr::I<DataVector, 3>*>
         n_dot_longitudinal_shift_correction,
     const std::array<double, 3>& center,
-    const std::optional<
-        std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>&
+    const std::optional<std::unique_ptr<elliptic::analytic_data::InitialGuess>>&
         solution_for_lapse,
     const std::optional<
         std::unique_ptr<elliptic::analytic_data::AnalyticSolution>>&
