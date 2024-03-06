@@ -157,3 +157,15 @@ EventsAndTriggers:
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Float
           FloatingPointTypes: [Float]
+
+Amr:
+  Verbosity: Quiet
+  Criteria: []
+  Policies:
+    Isotropy: Anisotropic
+    Limits:
+      NumGridPoints: Auto
+      RefinementLevel: Auto
+  Iterations: 1
+
+PhaseChangeAndTriggers: []
