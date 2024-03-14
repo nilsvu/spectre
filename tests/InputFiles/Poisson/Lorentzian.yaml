@@ -33,11 +33,11 @@ RandomizeInitialGuess: None
 DomainCreator:
   Sphere:
     InnerRadius: 5.
-    OuterRadius: &outer_radius 1e9
+    OuterRadius: &outer_radius {{ R }}
     Interior:
       FillWithSphericity: 0.
-    InitialRefinement: 0
-    InitialGridPoints: 5
+    InitialRefinement: {{ L }}
+    InitialGridPoints: 2
     UseEquiangularMap: True
     EquatorialCompression: None
     RadialPartitioning: [&outer_shell_inner_radius 20.]
@@ -52,13 +52,20 @@ DomainCreator:
 Amr:
   Verbosity: Verbose
   Criteria:
+{% if amr == 'true' %}
+    - TruncationError:
+        VariablesToMonitor: [Field]
+        AbsoluteTarget: 1e-9
+        RelativeTarget: None
+{% else %}
     - IncreaseResolution
+{% endif %}
   Policies:
     Isotropy: Anisotropic
     Limits:
       NumGridPoints: Auto
       RefinementLevel: Auto
-  Iterations: 2
+  Iterations: 15
 
 PhaseChangeAndTriggers:
   # Run AMR in every iteration, but not on the initial guess
@@ -85,14 +92,14 @@ Observers:
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
-      MaxIterations: 100
+      MaxIterations: 1000
       RelativeResidual: 0.
-      AbsoluteResidual: 1.e-5
+      AbsoluteResidual: 1.e-10
     Verbosity: Quiet
 
   Multigrid:
     Iterations: 1
-    MaxLevels: Auto
+    MaxLevels: 1
     PreSmoothing: True
     PostSmoothingAtBottom: False
     Verbosity: Silent

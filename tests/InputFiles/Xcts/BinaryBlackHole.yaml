@@ -77,21 +77,21 @@ ResourceInfo:
 
 Background: &background
   Binary:
-    XCoords: [&x_left -8., &x_right 8.]
+    XCoords: [&x_left -7.683, &x_right 7.683]
     ObjectLeft: &kerr_left
       KerrSchild:
-        Mass: 0.4229
+        Mass: 0.416711018
         Spin: [0., 0., 0.]
         Center: [0., 0., 0.]
     ObjectRight: &kerr_right
       KerrSchild:
-        Mass: 0.4229
+        Mass: 0.416711018
         Spin: [0., 0., 0.]
         Center: [0., 0., 0.]
-    AngularVelocity: 0.0144
-    Expansion: 0.
+    AngularVelocity: 0.015264577062
+    Expansion: -4.61484576462e-05
     LinearVelocity: [0., 0., 0.]
-    FalloffWidths: [4.8, 4.8]
+    FalloffWidths: [4.6098, 4.6098]
 
 InitialGuess: *background
 
@@ -100,27 +100,27 @@ RandomizeInitialGuess: None
 DomainCreator:
   BinaryCompactObject:
     ObjectA:
-      InnerRadius: 0.8
+      InnerRadius: 0.8084193749
       OuterRadius: 4.
       XCoord: *x_right
       Interior:
         ExciseWithBoundaryCondition:
           ApparentHorizon:
             Center: [*x_right, 0., 0.]
-            Rotation: [0., 0., 0.]
-            Lapse: *kerr_right
+            Rotation: [0., 0., 0.01442047706]
+            Lapse: *background
             NegativeExpansion: *kerr_right
       UseLogarithmicMap: True
     ObjectB:
-      InnerRadius: 0.8
+      InnerRadius: 0.8084193749
       OuterRadius: 4.
       XCoord: *x_left
       Interior:
         ExciseWithBoundaryCondition:
           ApparentHorizon:
             Center: [*x_left, 0., 0.]
-            Rotation: [0., 0., 0.]
-            Lapse: *kerr_left
+            Rotation: [0., 0., 0.01442047706]
+            Lapse: *background
             NegativeExpansion: *kerr_left
       UseLogarithmicMap: True
     Envelope:
@@ -129,25 +129,59 @@ DomainCreator:
     OuterShell:
       Radius: &outer_radius 1.e9
       RadialDistribution: &outer_shell_distribution Inverse
-      OpeningAngle: 120.0
+      OpeningAngle: 120
       BoundaryCondition: Flatness
     UseEquiangularMap: True
     InitialRefinement:
-      ObjectAShell:     [0, 0, 0]
-      ObjectBShell:     [0, 0, 0]
-      ObjectACube:      [0, 0, 0]
-      ObjectBCube:      [0, 0, 0]
-      Envelope:         [0, 0, 1]
-      OuterShell:       [0, 0, 2]
-    # This p-refinement represents a crude manual optimization of the domain. We
-    # will need AMR to optimize the domain further.
+      ObjectAShell:     [{{ L }}, {{ L }}, {{ L }}]
+      ObjectBShell:     [{{ L }}, {{ L }}, {{ L }}]
+      ObjectACube:      [{{ L }}, {{ L }}, {{ L }}]
+      ObjectBCube:      [{{ L }}, {{ L }}, {{ L }}]
+      Envelope:         [{{ L }}, {{ L }}, {{ L + 1 }}]
+      OuterShell:       [{{ L }}, {{ L }}, {{ L + 2 }}]
+{% if amr == "fixed" %}
     InitialGridPoints:
-      ObjectAShell:   [6, 6, 10]
-      ObjectBShell:   [6, 6, 10]
-      ObjectACube:    [6, 6, 7]
-      ObjectBCube:    [6, 6, 7]
-      Envelope:       [6, 6, 6]
-      OuterShell:     [6, 6, 6]
+      ObjectAShell:   [{{ P + 1}}, {{ P + 1}}, {{ P + 5 }}]
+      ObjectBShell:   [{{ P + 1}}, {{ P + 1}}, {{ P + 5 }}]
+      ObjectACube:    [{{ P + 1}}, {{ P + 1}}, {{ P + 2 }}]
+      ObjectBCube:    [{{ P + 1}}, {{ P + 1}}, {{ P + 2 }}]
+      Envelope:       [{{ P + 1}}, {{ P + 1}}, {{ P + 1 }}]
+      OuterShell:     [{{ P + 1}}, {{ P + 1}}, {{ P + 1 }}]
+{% else %}
+    InitialGridPoints: {{ P + 1 }}
+{% endif %}
+
+Amr:
+  Verbosity: Quiet
+  Criteria:
+{% if amr == "true" %}
+    - TruncationError:
+        VariablesToMonitor:
+          - ConformalFactorMinusOne
+          - LapseTimesConformalFactorMinusOne
+          - ShiftExcess
+        AbsoluteTarget: 1e-8
+        RelativeTarget: None
+{% else %}
+    - IncreaseResolution
+{% endif %}
+  Policies:
+    Isotropy: Anisotropic
+    Limits:
+      NumGridPoints: Auto
+      RefinementLevel: Auto
+  Iterations: 15
+
+PhaseChangeAndTriggers:
+  - Trigger:
+      EveryNIterations:
+        N: 1
+        Offset: 1
+    PhaseChanges:
+      - VisitAndReturn(EvaluateAmrCriteria)
+      - VisitAndReturn(AdjustDomain)
+      - VisitAndReturn(CheckDomain)
+
 
 Amr:
   Verbosity: Verbose
@@ -163,7 +197,7 @@ PhaseChangeAndTriggers: []
 
 Discretization:
   DiscontinuousGalerkin:
-    PenaltyParameter: 1.
+    PenaltyParameter: {{ C }}
     Massive: True
     Quadrature: GaussLobatto
     Formulation: WeakInertial
@@ -175,27 +209,27 @@ Observers:
 NonlinearSolver:
   NewtonRaphson:
     ConvergenceCriteria:
-      MaxIterations: 20
+      MaxIterations: 10
       RelativeResidual: 1.e-10
-      AbsoluteResidual: 1.e-11
+      AbsoluteResidual: 1.e-8
     SufficientDecrease: 1.e-4
-    MaxGlobalizationSteps: 40
+    MaxGlobalizationSteps: 0
     DampingFactor: 1.
     Verbosity: Verbose
 
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
-      MaxIterations: 100
-      RelativeResidual: 1.e-3
+      MaxIterations: 1000
+      RelativeResidual: 1.e-4
       AbsoluteResidual: 1.e-10
     Verbosity: Quiet
 
   Multigrid:
     Iterations: 1
-    MaxLevels: Auto
+    MaxLevels: 1
     PreSmoothing: True
-    PostSmoothingAtBottom: True
+    PostSmoothingAtBottom: False
     Verbosity: Silent
     OutputVolumeData: False
 
@@ -250,6 +284,7 @@ EventsAndTriggers:
           SubfileName: VolumeData
           VariablesToObserve:
             - ConformalFactor
+            - LapseTimesConformalFactor
             - Lapse
             - Shift
             - ShiftExcess
