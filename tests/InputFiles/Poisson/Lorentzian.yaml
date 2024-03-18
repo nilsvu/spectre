@@ -55,7 +55,11 @@ Amr:
 {% if amr == 'true' %}
     - TruncationError:
         VariablesToMonitor: [Field]
+{% if L == 1 %}
+        AbsoluteTarget: 1e-7
+{% else %}
         AbsoluteTarget: 1e-9
+{% endif %}
         RelativeTarget: None
 {% else %}
     - IncreaseResolution
