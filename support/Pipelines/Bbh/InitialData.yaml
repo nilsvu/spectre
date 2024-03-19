@@ -89,8 +89,8 @@ DomainCreator:
       ObjectBShell:     [{{ L }}, {{ L }}, {{ L }}]
       ObjectACube:      [{{ L }}, {{ L }}, {{ L }}]
       ObjectBCube:      [{{ L }}, {{ L }}, {{ L }}]
-      Envelope:         [{{ L }}, {{ L }}, {{ L }}]
-      OuterShell:       [{{ L }}, {{ L }}, {{ L + 2}}]
+      Envelope:         [{{ L }}, {{ L }}, {{ L + 1 }}]
+      OuterShell:       [{{ L }}, {{ L }}, {{ L + 2 }}]
     # This p-refinement represents a crude manual optimization of the domain. We
     # will need AMR to optimize the domain further.
     InitialGridPoints:
@@ -102,16 +102,31 @@ DomainCreator:
       OuterShell:     [{{ P + 1}}, {{ P + 1}}, {{ P + 1}}]
 
 Amr:
-  Verbosity: Verbose
-  Criteria: []
+  Verbosity: Quiet
+  Criteria:
+    - TruncationError:
+        VariablesToMonitor:
+          - ConformalFactorMinusOne
+          - LapseTimesConformalFactorMinusOne
+          - ShiftExcess
+        AbsoluteTarget: 1e-8
+        RelativeTarget: None
   Policies:
     Isotropy: Anisotropic
     Limits:
       NumGridPoints: Auto
       RefinementLevel: Auto
-  Iterations: 1
+  Iterations: 3
 
-PhaseChangeAndTriggers: []
+PhaseChangeAndTriggers:
+  - Trigger:
+      EveryNIterations:
+        N: 1
+        Offset: 1
+    PhaseChanges:
+      - VisitAndReturn(EvaluateAmrCriteria)
+      - VisitAndReturn(AdjustDomain)
+      - VisitAndReturn(CheckDomain)
 
 Discretization:
   DiscontinuousGalerkin:
@@ -128,8 +143,8 @@ NonlinearSolver:
   NewtonRaphson:
     ConvergenceCriteria:
       MaxIterations: 20
-      RelativeResidual: 0.
-      AbsoluteResidual: 1.e-8
+      RelativeResidual: 1.e-6
+      AbsoluteResidual: 1.e-9
     SufficientDecrease: 1.e-4
     MaxGlobalizationSteps: 10
     DampingFactor: 1.
@@ -138,16 +153,18 @@ NonlinearSolver:
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
-      MaxIterations: 100
-      RelativeResidual: 1.e-3
+      MaxIterations: 1000
+      RelativeResidual: 1.e-4
       AbsoluteResidual: 1.e-10
     Verbosity: Quiet
 
   Multigrid:
     Iterations: 1
-    MaxLevels: Auto
+    # Disabled until AMR supports multigrid
+    MaxLevels: 1
     PreSmoothing: True
-    PostSmoothingAtBottom: True
+    # Disabled since we have only 1 level
+    PostSmoothingAtBottom: False
     Verbosity: Silent
     OutputVolumeData: False
 
@@ -178,7 +195,7 @@ RadiallyCompressedCoordinates:
   Compression: *outer_shell_distribution
 
 EventsAndTriggers:
-  - Trigger: HasConverged
+  - Trigger: Always
     Events:
       - ObserveFields:
           SubfileName: VolumeData
