@@ -53,7 +53,10 @@ DomainCreator:
         ExciseWithBoundaryCondition:
           ApparentHorizon:
             Center: [*x_right, 0., 0.]
-            Rotation: [0., 0., 0.]
+            Rotation:
+              - {{ HorizonRotationRight_x }}
+              - {{ HorizonRotationRight_y }}
+              - {{ HorizonRotationRight_z }}
             Lapse: *kerr_right
             NegativeExpansion: *kerr_right
       UseLogarithmicMap: True
@@ -65,7 +68,10 @@ DomainCreator:
         ExciseWithBoundaryCondition:
           ApparentHorizon:
             Center: [*x_left, 0., 0.]
-            Rotation: [0., 0., 0.]
+            Rotation:
+              - {{ HorizonRotationLeft_x }}
+              - {{ HorizonRotationLeft_y }}
+              - {{ HorizonRotationLeft_z }}
             Lapse: *kerr_left
             NegativeExpansion: *kerr_left
       UseLogarithmicMap: True
