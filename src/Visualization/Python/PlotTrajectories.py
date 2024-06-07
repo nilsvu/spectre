@@ -43,7 +43,9 @@ def import_A_and_B(filenames, subfile_name_aha, subfile_name_ahb):
         return None, None
 
 
-def plot_trajectory(AhA, AhB, sample_rate, figsize):
+def plot_trajectory(
+    AhA: np.ndarray, AhB: np.ndarray, figsize: tuple = (10, 10)
+):
     """
     Plot concatenated trajectories in inspiral simulation.
 
@@ -58,29 +60,26 @@ def plot_trajectory(AhA, AhB, sample_rate, figsize):
     the first object.
     AhB: Array of shape (num_points, 3) with the coordinates of
     the second object.
-    sample_rate: Integer specifying the downsampling rate for 3D plots.
     figsize: Tuple of two floats specifying the figure size as
     width and height in inches.
     """
 
     fig = plt.figure(figsize=figsize)
 
-    # Sample data for 3D plots
-    AhA_sampled = AhA[::sample_rate]
-    AhB_sampled = AhB[::sample_rate]
-
     # Plot 3D trajectories
     ax1 = fig.add_subplot(2, 2, 1, projection="3d")
     ax1.plot(
-        *AhA_sampled.T,
+        *AhA.T,
         color="C0",
         label="AhA",
     )
+    ax1.scatter(*AhA[-1], color="C0")
     ax1.plot(
-        *AhB_sampled.T,
+        *AhB.T,
         color="C1",
         label="AhB",
     )
+    ax1.scatter(*AhB[-1], color="C1")
     ax1.set_xlabel("X")
     ax1.set_ylabel("Y")
     ax1.set_zlabel("Z")
@@ -88,7 +87,7 @@ def plot_trajectory(AhA, AhB, sample_rate, figsize):
     ax1.legend()
 
     # Calculate coordinate separation in 3D
-    separation_3d = AhA_sampled - AhB_sampled
+    separation_3d = AhA - AhB
 
     # Plot 3D coordinate separation
     ax2 = fig.add_subplot(2, 2, 2, projection="3d")
@@ -96,6 +95,7 @@ def plot_trajectory(AhA, AhB, sample_rate, figsize):
         *separation_3d.T,
         color="C2",
     )
+    ax2.scatter(*separation_3d[-1], color="C2")
     ax2.set_xlabel("X diff")
     ax2.set_ylabel("Y diff")
     ax2.set_zlabel("Z diff")
@@ -104,7 +104,9 @@ def plot_trajectory(AhA, AhB, sample_rate, figsize):
     # Plot 2D trajectories
     ax3 = fig.add_subplot(2, 2, 3)
     ax3.plot(*AhA[:, 0:2].T, label="AhA", color="C0")
+    ax3.scatter(*AhA[-1, 0:2], color="C0")
     ax3.plot(*AhB[:, 0:2].T, label="AhB", color="C1")
+    ax3.scatter(*AhB[-1, 0:2], color="C1")
     ax3.set_xlabel("x")
     ax3.set_ylabel("y")
     ax3.legend()
@@ -117,13 +119,13 @@ def plot_trajectory(AhA, AhB, sample_rate, figsize):
     # Plot coordinate separation in 2D
     ax4 = fig.add_subplot(2, 2, 4)
     ax4.plot(*separation_2d.T, color="C2")
+    ax4.scatter(*separation_2d[-1], color="C2")
     ax4.set_xlabel("x1 - x2")
     ax4.set_ylabel("y1 - y2")
     ax4.set_title("Coordinate separation (2D)")
     ax4.set_aspect("equal")  # Set aspect ratio to 1
     ax4.grid(True)  # Add gridlines
 
-    plt.tight_layout()
     plt.subplots_adjust(wspace=0.3, hspace=0.3)
 
 
@@ -176,7 +178,7 @@ def plot_trajectories_command(
     full trajectories.
     """
     AhA, AhB = import_A_and_B(h5_files, subfile_name_aha, subfile_name_ahb)
-    plot_trajectory(AhA, AhB, sample_rate, figsize)
+    plot_trajectory(AhA[::sample_rate], AhB[::sample_rate], figsize)
 
 
 if __name__ == "__main__":
