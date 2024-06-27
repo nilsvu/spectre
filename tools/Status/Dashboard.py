@@ -39,7 +39,14 @@ plt.style.use(
 def page(row, executable_status):
     run_dir = Path(row["WorkDir"])
     st.header(row["JobName"])
-    st.caption(run_dir)
+    st.write(run_dir)
+
+    # Print README
+    if row["SegmentsDir"]:
+        readme_file = Path(row["SegmentsDir"]) / "../README.md"
+        if readme_file.exists():
+            st.markdown(readme_file.read_text())
+
     columns = list(DEFAULT_COLUMNS)
     columns.remove("JobName")
     st.table(pd.DataFrame([row[columns]]).set_index("JobID"))
@@ -79,12 +86,7 @@ def page(row, executable_status):
         "ApparentHorizons/ControlSystemAhA_Centers.dat",
         "ApparentHorizons/ControlSystemAhB_Centers.dat",
     )
-    plot_trajectory(
-        traj_A,
-        traj_B,
-        1,
-        (8, 8),
-    )
+    plot_trajectory(traj_A, traj_B, (8, 8))
     fig = plt.gcf()
     st.pyplot(fig)
 
