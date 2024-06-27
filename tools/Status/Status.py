@@ -264,14 +264,9 @@ def input_column_callback(ctx, param, value):
     return result
 
 
-@rich.console.group()
-def render_status(
-    show_paths,
-    show_unidentified,
-    show_deleted,
-    show_all_segments,
-    state_styles,
-    columns,
+def status(
+    show_deleted=False,
+    show_all_segments=False,
     **kwargs,
 ):
     columns_to_fetch = list(AVAILABLE_COLUMNS)
@@ -360,6 +355,19 @@ def render_status(
 
     # Add metadata so jobs can be grouped by state
     job_data["StateOrder"] = job_data["State"].apply(_state_order)
+
+    return job_data
+
+
+@rich.console.group()
+def render_status(
+    show_paths,
+    show_unidentified,
+    state_styles,
+    columns,
+    **kwargs,
+):
+    job_data = status(**kwargs)
 
     # Remove the user column unless we're specifying all users
     if not kwargs["allusers"]:
