@@ -120,10 +120,7 @@ def compute_separation(h5_file, subfile_name_aha, subfile_name_ahb):
         )
 
     # Compute separation
-    num_obs = len(ObjectA_centers[:, 0])
-
-    if len(ObjectB_centers[:, 0]) < num_obs:
-        num_obs = len(ObjectB_centers[:, 0])
+    num_obs = min(len(ObjectA_centers[:, 0]), len(ObjectB_centers[:, 0]))
 
     # Separation vector
     separation_vec = (
@@ -132,7 +129,7 @@ def compute_separation(h5_file, subfile_name_aha, subfile_name_ahb):
 
     # Compute separation norm
     separation_norm = np.zeros((num_obs, 2))
-    separation_norm[:, 0] = ObjectA_centers[:, 0]
+    separation_norm[:, 0] = ObjectA_centers[:num_obs, 0]
     separation_norm[:, 1] = np.linalg.norm(separation_vec, axis=1)
 
     return separation_norm

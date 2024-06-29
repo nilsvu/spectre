@@ -197,7 +197,7 @@ def _state_order(state):
         return None
 
 
-def _format(field: str, value: Any, state_styles: dict) -> str:
+def _format(field: str, value: Any, state_styles: dict = {}) -> str:
     # The SLURM field "NodeList" returns "None assigned" if a job is pending
     if pd.isnull(value) or value == "None assigned":
         return "-"
@@ -411,18 +411,18 @@ def render_status(
                     logger.debug("Unable to load input file.", exc_info=True)
                     input_file = None
                 try:
-                    status = executable_status.status(
+                    s_ = executable_status.status(
                         input_file, row["WorkDir"]
                     )
                 except:
                     logger.debug(
                         "Unable to extract executable status.", exc_info=True
                     )
-                    status = {}
+                    s_ = {}
                 row_formatted += [
                     (
-                        executable_status.format(field, status[field])
-                        if field in status
+                        executable_status.format(field, s_[field])
+                        if field in s_
                         else "-"
                     )
                     for field in executable_status.fields.keys()

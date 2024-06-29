@@ -22,54 +22,13 @@ from spectre.Visualization.ReadH5 import available_subfiles, to_dataframe
 logger = logging.getLogger(__name__)
 
 
-@click.command(name="size-control")
-@click.argument(
-    "reduction_files",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True),
-    nargs=-1,
-    required=True,
-)
-@click.option(
-    "--object-label",
-    "-d",
-    required=True,
-    help=(
-        "Which object to plot. This is either 'A', 'B', or 'None'. 'None' is"
-        " used when there is only one black hole in the simulation."
-    ),
-)
-# Plotting options
-@click.option(
-    "--x-bounds",
-    type=float,
-    nargs=2,
-    help="The lower and upper bounds of the x-axis.",
-)
-@click.option(
-    "--x-label",
-    help="The label on the x-axis.",
-)
-@click.option(
-    "--title",
-    "-t",
-    help="Title of the graph.",
-)
-@apply_stylesheet_command()
-@show_or_save_plot_command()
-def plot_size_control_command(
+def plot_size_control(
     reduction_files: Sequence[str],
     object_label: str,
-    x_bounds: Optional[Sequence[float]],
-    x_label: Optional[str],
-    title: Optional[str],
+    x_bounds: Optional[Sequence[float]] = None,
+    x_label: Optional[str] = None,
+    title: Optional[str] = None,
 ):
-    """
-    Plot diagnostic information regarding the Size control system.
-
-    This tool assumes there is a subfile in each of the "reduction-files" with
-    the path `/ControlSystems/Size{LABEL}/Diagnostics.dat`, where `{LABEL}` is
-    replaced with the "object-label" input option.
-    """
     object_label = (
         "" if object_label.lower() == "none" else object_label.upper()
     )
@@ -201,6 +160,53 @@ def plot_size_control_command(
             )
         else:
             axes[i].legend(loc="center left", bbox_to_anchor=(1, 0.5))
+
+    return fig
+
+
+@click.command(name="size-control")
+@click.argument(
+    "reduction_files",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True),
+    nargs=-1,
+    required=True,
+)
+@click.option(
+    "--object-label",
+    "-d",
+    required=True,
+    help=(
+        "Which object to plot. This is either 'A', 'B', or 'None'. 'None' is"
+        " used when there is only one black hole in the simulation."
+    ),
+)
+# Plotting options
+@click.option(
+    "--x-bounds",
+    type=float,
+    nargs=2,
+    help="The lower and upper bounds of the x-axis.",
+)
+@click.option(
+    "--x-label",
+    help="The label on the x-axis.",
+)
+@click.option(
+    "--title",
+    "-t",
+    help="Title of the graph.",
+)
+@apply_stylesheet_command()
+@show_or_save_plot_command()
+def plot_size_control_command(**kwargs):
+    """
+    Plot diagnostic information regarding the Size control system.
+
+    This tool assumes there is a subfile in each of the "reduction-files" with
+    the path `/ControlSystems/Size{LABEL}/Diagnostics.dat`, where `{LABEL}` is
+    replaced with the "object-label" input option.
+    """
+    plot_size_control(**kwargs)
 
 
 if __name__ == "__main__":
