@@ -125,18 +125,25 @@ template <typename System, bool Linearized, typename TemporalIdTag,
           typename FluxesArgsTags =
               typename System::fluxes_computer::argument_tags,
           typename SourcesArgsTags =
-              elliptic::get_sources_argument_tags<System, Linearized>>
+              elliptic::get_sources_argument_tags<System, Linearized>,
+          typename ModifyBoundaryDataArgsTags =
+              typename System::modify_boundary_data::argument_tags,
+          typename ExpandedPrimalMortarFields =
+              typename PrimalMortarFieldsTag::tags_list>
 struct PrepareAndSendMortarData;
 
 template <typename System, bool Linearized, typename TemporalIdTag,
           typename PrimalFieldsTag, typename PrimalFluxesTag,
           typename OperatorAppliedToFieldsTag, typename PrimalMortarFieldsTag,
           typename PrimalMortarFluxesTag, typename... FluxesArgsTags,
-          typename... SourcesArgsTags>
+          typename... SourcesArgsTags, typename... ModifyBoundaryDataArgsTags,
+          typename... ExpandedPrimalMortarFields>
 struct PrepareAndSendMortarData<
     System, Linearized, TemporalIdTag, PrimalFieldsTag, PrimalFluxesTag,
     OperatorAppliedToFieldsTag, PrimalMortarFieldsTag, PrimalMortarFluxesTag,
-    tmpl::list<FluxesArgsTags...>, tmpl::list<SourcesArgsTags...>> {
+    tmpl::list<FluxesArgsTags...>, tmpl::list<SourcesArgsTags...>,
+    tmpl::list<ModifyBoundaryDataArgsTags...>,
+    tmpl::list<ExpandedPrimalMortarFields...>> {
  private:
   static constexpr size_t Dim = System::volume_dim;
   using all_mortar_data_tag = ::Tags::Mortars<
@@ -179,28 +186,33 @@ struct PrepareAndSendMortarData<
     const auto& boundary_conditions =
         db::get<domain::Tags::ExternalBoundaryConditions<Dim>>(box).at(
             element_id.block_id());
-    const auto apply_boundary_condition =
-        [&box, &boundary_conditions, &element_id](
-            const Direction<Dim>& direction, auto&&... fields_and_fluxes) {
-          ASSERT(
-              boundary_conditions.contains(direction),
-              "No boundary condition is available in block "
-                  << element_id.block_id() << " in direction " << direction
-                  << ". Make sure you are setting up boundary conditions when "
-                     "creating the domain.");
-          ASSERT(dynamic_cast<const BoundaryConditionsBase*>(
-                     boundary_conditions.at(direction).get()) != nullptr,
-                 "The boundary condition in block "
-                     << element_id.block_id() << " in direction " << direction
-                     << " has an unexpected type. Make sure it derives off the "
-                        "'boundary_conditions_base' class set in the system.");
-          const auto& boundary_condition =
-              dynamic_cast<const BoundaryConditionsBase&>(
-                  *boundary_conditions.at(direction));
-          elliptic::apply_boundary_condition<Linearized>(
-              boundary_condition, box, direction,
-              std::forward<decltype(fields_and_fluxes)>(fields_and_fluxes)...);
-        };
+    const auto apply_boundary_condition = [&box, &boundary_conditions,
+                                           &element_id](
+                                              const Direction<Dim>& direction,
+                                              auto&&... fields_and_fluxes) {
+      ASSERT(boundary_conditions.contains(direction),
+             "No boundary condition is available in block "
+                 << element_id.block_id() << " in direction " << direction
+                 << ". Make sure you are setting up boundary conditions when "
+                    "creating the domain.");
+      ASSERT(dynamic_cast<const BoundaryConditionsBase*>(
+                 boundary_conditions.at(direction).get()) != nullptr,
+             "The boundary condition in block "
+                 << element_id.block_id() << " in direction " << direction
+                 << " has an unexpected type. Make sure it derives off the "
+                    "'boundary_conditions_base' class set in the system.");
+      const auto& boundary_condition =
+          dynamic_cast<const BoundaryConditionsBase&>(
+              *boundary_conditions.at(direction));
+      elliptic::apply_boundary_condition<Linearized>(
+          boundary_condition, box, direction,
+          std::forward<decltype(fields_and_fluxes)>(fields_and_fluxes)...);
+    };
+
+    // Used to retrieve items out of the DataBox to forward to functions
+    const auto get_items = [](const auto&... args) {
+      return std::forward_as_tuple(args...);
+    };
 
     // Can't `db::get` the arguments for the boundary conditions within
     // `db::mutate`, so we extract the data to mutate and move it back in when
@@ -248,6 +260,21 @@ struct PrepareAndSendMortarData<
         },
         make_not_null(&box));
 
+    using mod_args_tags = typename System::modify_boundary_data::argument_tags;
+    using mod_args_volume_tags =
+        typename System::modify_boundary_data::volume_tags;
+    DirectionMap<Dim, std::tuple<typename ModifyBoundaryDataArgsTags::type...>>
+        mod_args_on_faces{};
+    for (const auto& direction : Direction<Dim>::all_directions()) {
+      mod_args_on_faces.emplace(
+          direction,
+          elliptic::util::apply_at<
+              domain::make_faces_tags<Dim, mod_args_tags, mod_args_volume_tags>,
+              mod_args_volume_tags>(get_items, box, direction));
+    }
+    const auto& face_normals =
+        db::get<domain::Tags::Faces<Dim, domain::Tags::FaceNormal<Dim>>>(box);
+
     // Send mortar data to neighbors
     auto& receiver_proxy =
         Parallel::get_parallel_component<ParallelComponent>(cache);
@@ -260,8 +287,22 @@ struct PrepareAndSendMortarData<
         // Make a copy of the local boundary data on the mortar to send to the
         // neighbor
         auto remote_boundary_data_on_mortar =
-            get<all_mortar_data_tag>(box).at(mortar_id).local_data(
-                temporal_id);
+            get<all_mortar_data_tag>(box).at(mortar_id).local_data(temporal_id);
+        // Modify data if needed
+        if constexpr (not Linearized) {
+          std::apply(
+              [&remote_boundary_data_on_mortar, &mortar_id,
+               &face_normal = face_normals.at(direction)](const auto&... args) {
+                System::modify_boundary_data::apply(
+                    make_not_null(&get<ExpandedPrimalMortarFields>(
+                        remote_boundary_data_on_mortar.field_data))...,
+                    make_not_null(
+                        &get<::Tags::NormalDotFlux<ExpandedPrimalMortarFields>>(
+                            remote_boundary_data_on_mortar.field_data))...,
+                    mortar_id, true, face_normal, args...);
+              },
+              mod_args_on_faces.at(direction));
+        }
         // Reorient the data to the neighbor orientation if necessary
         if (not orientation.is_aligned()) {
           remote_boundary_data_on_mortar.orient_on_slice(
@@ -274,7 +315,7 @@ struct PrepareAndSendMortarData<
                 ::dg::MortarId<Dim>{direction_from_neighbor, element.id()},
                 std::move(remote_boundary_data_on_mortar)));
       }  // loop over neighbors in direction
-    }    // loop over directions
+    }  // loop over directions
 
     return {Parallel::AlgorithmExecution::Continue, std::nullopt};
   }
@@ -291,18 +332,25 @@ template <typename System, bool Linearized, typename TemporalIdTag,
           typename FluxesArgsTags =
               typename System::fluxes_computer::argument_tags,
           typename SourcesArgsTags =
-              elliptic::get_sources_argument_tags<System, Linearized>>
+              elliptic::get_sources_argument_tags<System, Linearized>,
+          typename ModifyBoundaryDataArgsTags =
+              typename System::modify_boundary_data::argument_tags,
+          typename ExpandedPrimalMortarFields =
+              typename PrimalMortarFieldsTag::tags_list>
 struct ReceiveMortarDataAndApplyOperator;
 
 template <typename System, bool Linearized, typename TemporalIdTag,
           typename PrimalFieldsTag, typename PrimalFluxesTag,
           typename OperatorAppliedToFieldsTag, typename PrimalMortarFieldsTag,
           typename PrimalMortarFluxesTag, typename... FluxesArgsTags,
-          typename... SourcesArgsTags>
+          typename... SourcesArgsTags, typename... ModifyBoundaryDataArgsTags,
+          typename... ExpandedPrimalMortarFields>
 struct ReceiveMortarDataAndApplyOperator<
     System, Linearized, TemporalIdTag, PrimalFieldsTag, PrimalFluxesTag,
     OperatorAppliedToFieldsTag, PrimalMortarFieldsTag, PrimalMortarFluxesTag,
-    tmpl::list<FluxesArgsTags...>, tmpl::list<SourcesArgsTags...>> {
+    tmpl::list<FluxesArgsTags...>, tmpl::list<SourcesArgsTags...>,
+    tmpl::list<ModifyBoundaryDataArgsTags...>,
+    tmpl::list<ExpandedPrimalMortarFields...>> {
  private:
   static constexpr size_t Dim = System::volume_dim;
   using all_mortar_data_tag = ::Tags::Mortars<
@@ -337,26 +385,63 @@ struct ReceiveMortarDataAndApplyOperator<
       return {Parallel::AlgorithmExecution::Retry, std::nullopt};
     }
 
+    // Used to retrieve items out of the DataBox to forward to functions
+    const auto get_items = [](const auto&... args) {
+      return std::forward_as_tuple(args...);
+    };
+
     // Move received "remote" mortar data into the DataBox
     if (LIKELY(element.number_of_neighbors() > 0)) {
       auto received_mortar_data =
           std::move(tuples::get<mortar_data_inbox_tag>(inboxes)
                         .extract(temporal_id)
                         .mapped());
-      db::mutate<all_mortar_data_tag>(
-          [&received_mortar_data, &temporal_id](const auto all_mortar_data) {
-            for (auto& [mortar_id, mortar_data] : received_mortar_data) {
+      using mod_args_tags =
+          typename System::modify_boundary_data::argument_tags;
+      using mod_args_volume_tags =
+          typename System::modify_boundary_data::volume_tags;
+      DirectionMap<Dim,
+                   std::tuple<typename ModifyBoundaryDataArgsTags::type...>>
+          mod_args_on_faces{};
+      for (const auto& direction : Direction<Dim>::all_directions()) {
+        mod_args_on_faces.emplace(
+            direction, elliptic::util::apply_at<
+                           domain::make_faces_tags<Dim, mod_args_tags,
+                                                   mod_args_volume_tags>,
+                           mod_args_volume_tags>(get_items, box, direction));
+      }
+      db::mutate_apply<
+          tmpl::list<all_mortar_data_tag>,
+          tmpl::list<domain::Tags::Faces<Dim, domain::Tags::FaceNormal<Dim>>>>(
+          [&received_mortar_data, &temporal_id, &mod_args_on_faces](
+              const auto all_mortar_data, const auto& face_normals) {
+            for (auto& mortar_id_and_data : received_mortar_data) {
+              auto& mortar_id = mortar_id_and_data.first;
+              auto& mortar_data = mortar_id_and_data.second;
+              // Modify data if needed
+              if constexpr (not Linearized) {
+                std::apply(
+                    [&mortar_data, &mortar_id,
+                     &face_normals](const auto&... args) {
+                      System::modify_boundary_data::apply(
+                          make_not_null(&get<ExpandedPrimalMortarFields>(
+                              mortar_data.field_data))...,
+                          make_not_null(&get<::Tags::NormalDotFlux<
+                                            ExpandedPrimalMortarFields>>(
+                              mortar_data.field_data))...,
+                          mortar_id, false,
+                          face_normals.at(mortar_id.direction()), args...);
+                    },
+                    mod_args_on_faces.at(mortar_id.direction()));
+              } else {
+                (void)mod_args_on_faces;
+              }
               all_mortar_data->at(mortar_id).remote_insert(
                   temporal_id, std::move(mortar_data));
             }
           },
           make_not_null(&box));
     }
-
-    // Used to retrieve items out of the DataBox to forward to functions
-    const auto get_items = [](const auto&... args) {
-      return std::forward_as_tuple(args...);
-    };
 
     // Apply DG operator
     using fluxes_args_tags = typename System::fluxes_computer::argument_tags;
@@ -563,28 +648,28 @@ struct ImposeInhomogeneousBoundaryConditionsOnSource<
     const auto& boundary_conditions =
         db::get<domain::Tags::ExternalBoundaryConditions<Dim>>(box).at(
             element_id.block_id());
-    const auto apply_boundary_condition =
-        [&box, &boundary_conditions, &element_id](
-            const Direction<Dim>& direction, auto&&... fields_and_fluxes) {
-          ASSERT(
-              boundary_conditions.contains(direction),
-              "No boundary condition is available in block "
-                  << element_id.block_id() << " in direction " << direction
-                  << ". Make sure you are setting up boundary conditions when "
-                     "creating the domain.");
-          ASSERT(dynamic_cast<const BoundaryConditionsBase*>(
-                     boundary_conditions.at(direction).get()) != nullptr,
-                 "The boundary condition in block "
-                     << element_id.block_id() << " in direction " << direction
-                     << " has an unexpected type. Make sure it derives off the "
-                        "'boundary_conditions_base' class set in the system.");
-          const auto& boundary_condition =
-              dynamic_cast<const BoundaryConditionsBase&>(
-                  *boundary_conditions.at(direction));
-          elliptic::apply_boundary_condition<false>(
-              boundary_condition, box, direction,
-              std::forward<decltype(fields_and_fluxes)>(fields_and_fluxes)...);
-        };
+    const auto apply_boundary_condition = [&box, &boundary_conditions,
+                                           &element_id](
+                                              const Direction<Dim>& direction,
+                                              auto&&... fields_and_fluxes) {
+      ASSERT(boundary_conditions.contains(direction),
+             "No boundary condition is available in block "
+                 << element_id.block_id() << " in direction " << direction
+                 << ". Make sure you are setting up boundary conditions when "
+                    "creating the domain.");
+      ASSERT(dynamic_cast<const BoundaryConditionsBase*>(
+                 boundary_conditions.at(direction).get()) != nullptr,
+             "The boundary condition in block "
+                 << element_id.block_id() << " in direction " << direction
+                 << " has an unexpected type. Make sure it derives off the "
+                    "'boundary_conditions_base' class set in the system.");
+      const auto& boundary_condition =
+          dynamic_cast<const BoundaryConditionsBase&>(
+              *boundary_conditions.at(direction));
+      elliptic::apply_boundary_condition<false>(
+          boundary_condition, box, direction,
+          std::forward<decltype(fields_and_fluxes)>(fields_and_fluxes)...);
+    };
 
     // Can't `db::get` the arguments for the boundary conditions within
     // `db::mutate`, so we extract the data to mutate and move it back in when

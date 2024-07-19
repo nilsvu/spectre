@@ -67,7 +67,16 @@ class DomainCreator {
 
   /// A human-readable name for every block, or empty if the domain creator
   /// doesn't support block names (yet).
-  virtual std::vector<std::string> block_names() const { return {}; }
+  virtual std::vector<std::string> block_names() const {
+    const auto domain = create_domain();
+    const auto& blocks = domain.blocks();
+    std::vector<std::string> names;
+    names.reserve(blocks.size());
+    for (size_t block_id = 0; block_id < blocks.size(); ++block_id) {
+      names.push_back("Block" + std::to_string(block_id));
+    }
+    return names;
+  }
 
   /// Labels to refer to groups of blocks. The groups can overlap, and they
   /// don't have to cover all blocks in the domain. The groups can be used to

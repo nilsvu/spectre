@@ -6,18 +6,19 @@
 #include <cstddef>
 
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
-#include "Domain/Creators/Factory1D.hpp"
-#include "Domain/Creators/Factory2D.hpp"
-#include "Domain/Creators/Factory3D.hpp"
+#include "Domain/Creators/AlignedLattice.hpp"
+#include "Domain/Creators/Rectangle.hpp"
 #include "Domain/RadiallyCompressedCoordinates.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/RunEventsAndTriggers.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
-#include "Elliptic/Executables/Poisson/Actions/InitializeEffectiveSource.hpp"
+#include "Elliptic/Executables/SelfForce/Scalar/Actions/InitializeEffectiveSource.hpp"
 #include "Elliptic/Executables/Solver.hpp"
-#include "Elliptic/Systems/Poisson/BoundaryConditions/Factory.hpp"
-#include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
+#include "Elliptic/Systems/SelfForce/Scalar/BoundaryConditions/Angular.hpp"
+#include "Elliptic/Systems/SelfForce/Scalar/BoundaryConditions/Sommerfeld.hpp"
+#include "Elliptic/Systems/SelfForce/Scalar/FirstOrderSystem.hpp"
+#include "Elliptic/Systems/SelfForce/Scalar/Tags.hpp"
 #include "Elliptic/Triggers/Factory.hpp"
 #include "IO/Observer/Actions/RegisterEvents.hpp"
 #include "IO/Observer/Helpers.hpp"
@@ -25,6 +26,7 @@
 #include "Options/Protocols/FactoryCreation.hpp"
 #include "Options/String.hpp"
 #include "Parallel/Phase.hpp"
+#include "Parallel/PhaseControl/ExecutePhaseChange.hpp"
 #include "Parallel/PhaseControl/VisitAndReturn.hpp"
 #include "Parallel/PhaseDependentActionList.hpp"
 #include "Parallel/Protocols/RegistrationMetavariables.hpp"
@@ -40,7 +42,7 @@
 #include "ParallelAlgorithms/EventsAndTriggers/Trigger.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/ElementsAllocator.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Tags.hpp"
-#include "PointwiseFunctions/AnalyticSolutions/Poisson/Factory.hpp"
+#include "PointwiseFunctions/AnalyticData/SelfForce/Scalar/CircularOrbit.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/AnalyticSolution.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/Background.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/InitialGuess.hpp"
@@ -53,53 +55,46 @@ namespace PUP {
 class er;
 }  // namespace PUP
 
-template <size_t Dim>
 struct Metavariables {
   static constexpr Options::String help{
-      "Find the solution to a Poisson problem."};
+      "Find the self force for a scalar charge by solving a 2D elliptic "
+      "problem."};
 
-  static constexpr size_t volume_dim = Dim;
-  using system =
-      Poisson::FirstOrderSystem<Dim, Poisson::Geometry::FlatCartesian>;
+  static constexpr size_t volume_dim = 2;
+  using system = ScalarSelfForce::FirstOrderSystem;
   using solver = elliptic::Solver<Metavariables>;
 
-  using analytic_solution_fields = typename system::primal_fields;
-  using error_compute = ::Tags::ErrorsCompute<analytic_solution_fields>;
-  using error_tags = db::wrap_tags_in<Tags::Error, analytic_solution_fields>;
   using observe_fields = tmpl::append<
-      analytic_solution_fields, error_tags, typename solver::observe_fields,
-      tmpl::list<domain::Tags::Coordinates<volume_dim, Frame::Inertial>,
-                 ::Events::Tags::ObserverDetInvJacobianCompute<
-                     Frame::ElementLogical, Frame::Inertial>,
-                 domain::Tags::RadiallyCompressedCoordinatesCompute<
-                     volume_dim, Frame::Inertial>>>;
+      typename system::primal_fields, typename system::background_fields,
+      tmpl::list<ScalarSelfForce::Tags::SingularField,
+                 ScalarSelfForce::Tags::BoyerLindquistRadius>,
+      typename solver::observe_fields,
+      tmpl::list<domain::Tags::Coordinates<volume_dim, Frame::Inertial>>>;
   using observer_compute_tags =
       tmpl::list<::Events::Tags::ObserverMeshCompute<volume_dim>,
-                 error_compute>;
+                 ::Events::Tags::ObserverDetInvJacobianCompute<
+                     Frame::ElementLogical, Frame::Inertial>>;
 
   // Collect all items to store in the cache.
-  using const_global_cache_tags =
-      tmpl::list<domain::Tags::RadiallyCompressedCoordinatesOptions>;
+  using const_global_cache_tags = tmpl::list<>;
 
   struct factory_creation
       : tt::ConformsTo<Options::protocols::FactoryCreation> {
     using factory_classes = tmpl::map<
-        tmpl::pair<DomainCreator<volume_dim>, domain_creators<volume_dim>>,
+        tmpl::pair<DomainCreator<volume_dim>,
+                   tmpl::list<domain::creators::Rectangle,
+                              domain::creators::AlignedLattice<2>>>,
         tmpl::pair<elliptic::analytic_data::Background,
-                   Poisson::Solutions::all_analytic_solutions<volume_dim>>,
+                   tmpl::list<ScalarSelfForce::AnalyticData::CircularOrbit>>,
         tmpl::pair<elliptic::analytic_data::InitialGuess,
-                   Poisson::Solutions::all_analytic_solutions<volume_dim>>,
-        tmpl::pair<elliptic::analytic_data::AnalyticSolution,
-                   Poisson::Solutions::all_analytic_solutions<volume_dim>>,
-        tmpl::pair<
-            ::MathFunction<volume_dim, Frame::Inertial>,
-            MathFunctions::all_math_functions<volume_dim, Frame::Inertial>>,
-        tmpl::pair<
-            elliptic::BoundaryConditions::BoundaryCondition<volume_dim>,
-            Poisson::BoundaryConditions::standard_boundary_conditions<system>>,
+                   tmpl::list<ScalarSelfForce::AnalyticData::CircularOrbit>>,
+        tmpl::pair<elliptic::analytic_data::AnalyticSolution, tmpl::list<>>,
+        tmpl::pair<elliptic::BoundaryConditions::BoundaryCondition<volume_dim>,
+                   tmpl::list<ScalarSelfForce::BoundaryConditions::Angular,
+                              ScalarSelfForce::BoundaryConditions::Sommerfeld>>,
         tmpl::pair<::amr::Criterion,
                    ::amr::Criteria::standard_criteria<
-                       volume_dim, tmpl::list<Poisson::Tags::Field>>>,
+                       volume_dim, typename system::primal_fields>>,
         tmpl::pair<Event,
                    tmpl::flatten<tmpl::list<
                        Events::Completion,
@@ -122,9 +117,8 @@ struct Metavariables {
 
   // Collect all reduction tags for observers
   using observed_reduction_data_tags =
-      observers::collect_reduction_data_tags<tmpl::flatten<tmpl::list<
-          tmpl::at<typename factory_creation::factory_classes, Event>,
-          solver>>>;
+      observers::collect_reduction_data_tags<tmpl::push_back<
+          tmpl::at<typename factory_creation::factory_classes, Event>, solver>>;
 
   using initialization_actions =
       tmpl::push_back<typename solver::initialization_actions,
@@ -144,8 +138,9 @@ struct Metavariables {
               tmpl::replace<initialization_actions,
                             elliptic::Actions::InitializeFixedSources<
                                 system, typename solver::background_tag>,
-                            Poisson::Actions::InitializeEffectiveSource<
-                                system, typename solver::background_tag>>>,
+                            ScalarSelfForce::Actions::InitializeEffectiveSource<
+                                system, typename solver::background_tag,
+                                elliptic::OptionTags::SchwarzSmootherGroup>>>,
           Parallel::PhaseActions<
               Parallel::Phase::Register,
               tmpl::push_back<register_actions,
@@ -168,8 +163,9 @@ struct Metavariables {
         tmpl::replace<typename solver::amr_projectors,
                       elliptic::Actions::InitializeFixedSources<
                           system, typename solver::background_tag>,
-                      Poisson::Actions::InitializeEffectiveSource<
-                          system, typename solver::background_tag>>;
+                      ScalarSelfForce::Actions::InitializeEffectiveSource<
+                          system, typename solver::background_tag,
+                          elliptic::OptionTags::SchwarzSmootherGroup>>;
   };
 
   struct registration

@@ -6,6 +6,9 @@
 #include <cstddef>
 
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Domain/Structure/DirectionalId.hpp"
+#include "Domain/Tags.hpp"
+#include "Domain/Tags/FaceNormal.hpp"
 #include "Elliptic/Systems/Poisson/Geometry.hpp"
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/Gsl.hpp"
@@ -129,6 +132,45 @@ struct Sources<Dim, Geometry::Curved> {
                     const tnsr::i<DataVector, Dim>& christoffel_contracted,
                     const Scalar<DataVector>& field,
                     const tnsr::I<DataVector, Dim>& field_flux);
+};
+
+template <size_t Dim>
+struct ModifyBoundaryData {
+  using argument_tags =
+      tmpl::list<domain::Tags::Element<Dim>,
+                 domain::Tags::Coordinates<Dim, Frame::Inertial>>;
+  using volume_tags = tmpl::list<domain::Tags::Element<Dim>>;
+  static void apply(gsl::not_null<Scalar<DataVector>*> field,
+                    gsl::not_null<Scalar<DataVector>*> n_dot_flux,
+                    const DirectionalId<Dim>& mortar_id, const bool sending,
+                    const tnsr::i<DataVector, Dim>& face_normal,
+                    const Element<Dim>& element,
+                    const tnsr::I<DataVector, Dim>& x) {
+    const auto& element_id = element.id();
+    const ElementId<Dim> reg_id{0, {{{2, 1}, {2, 1}}}};
+    const bool field_is_regularized = element_id == reg_id;
+    const bool neighbor_is_regularized = mortar_id.id == reg_id;
+    if (field_is_regularized == neighbor_is_regularized) {
+      // Both elements solve for the same field. Nothing to do.
+      return;
+    }
+    if (field_is_regularized) {
+      // We're on an element that's regularized and sending to or receiving from
+      // an element that's not regularized. We have to add or subtract the
+      // singular field.
+      const double sign = sending ? 1. : -1.;
+      // Assuming a regularization u(x) = u_R(x) + x^2 + y^2
+      const DataVector singular_field = square(get<0>(x)) + square(get<1>(x));
+      tnsr::I<DataVector, Dim> grad_singular_field{};
+      get<0>(grad_singular_field) = 2. * get<0>(x);
+      get<1>(grad_singular_field) = 2. * get<1>(x);
+      const DataVector singular_field_n_dot_flux =
+          get<0>(face_normal) * get<0>(grad_singular_field) +
+          get<1>(face_normal) * get<1>(grad_singular_field);
+      get(*field) += sign * singular_field;
+      get(*n_dot_flux) += singular_field_n_dot_flux;
+    }
+  }
 };
 
 }  // namespace Poisson

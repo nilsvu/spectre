@@ -10,10 +10,6 @@
 #include "Utilities/Gsl.hpp"
 #include "Utilities/TMPL.hpp"
 
-/// \cond
-class DataVector;
-/// \endcond
-
 /*!
  * \brief Items for assessing truncation error in spectral methods.
  */
@@ -36,12 +32,12 @@ namespace PowerMonitors {
  * of variable \f$ \psi \f$.
  *
  */
-template <size_t Dim>
-void power_monitors(gsl::not_null<std::array<DataVector, Dim>*> result,
-                    const DataVector& u, const Mesh<Dim>& mesh);
+template <typename VectorType, size_t Dim>
+void power_monitors(gsl::not_null<std::array<VectorType, Dim>*> result,
+                    const VectorType& u, const Mesh<Dim>& mesh);
 
-template <size_t Dim>
-std::array<DataVector, Dim> power_monitors(const DataVector& u,
+template <typename VectorType, size_t Dim>
+std::array<VectorType, Dim> power_monitors(const VectorType& u,
                                            const Mesh<Dim>& mesh);
 /// @}
 
@@ -83,7 +79,8 @@ std::array<DataVector, Dim> power_monitors(const DataVector& u,
  * from zero.
  *
  */
-double relative_truncation_error(const DataVector& power_monitor,
+template <typename VectorType>
+double relative_truncation_error(const VectorType& power_monitor,
                                  const size_t num_modes_to_use);
 /// @}
 
@@ -98,9 +95,9 @@ double relative_truncation_error(const DataVector& power_monitor,
  * the other overload that returns the negative log10 of the relative truncation
  * error.
  */
-template <size_t Dim>
+template <typename VectorType, size_t Dim>
 std::array<double, Dim> relative_truncation_error(
-    const DataVector& tensor_component, const Mesh<Dim>& mesh);
+    const VectorType& tensor_component, const Mesh<Dim>& mesh);
 
 /// @{
 /*!
@@ -120,8 +117,8 @@ std::array<double, Dim> relative_truncation_error(
  *
  * \warning This estimate is intended for visualization purposes only.
  */
-template <size_t Dim>
+template <typename VectorType, size_t Dim>
 std::array<double, Dim> absolute_truncation_error(
-    const DataVector& tensor_component, const Mesh<Dim>& mesh);
+    const VectorType& tensor_component, const Mesh<Dim>& mesh);
 /// @}
 }  // namespace PowerMonitors

@@ -37,15 +37,15 @@ Mesh<VolumeDim - 1> orient_mesh_on_slice(
 ///
 /// \warning The result is *not* resized and assumes to be of the correct size
 /// (`variables.size()`).
-template <size_t VolumeDim>
-void orient_variables(gsl::not_null<DataVector*> result,
-                      const DataVector& variables,
+template <typename VectorType, size_t VolumeDim>
+void orient_variables(gsl::not_null<VectorType*> result,
+                      const VectorType& variables,
                       const Index<VolumeDim>& extents,
                       const OrientationMap<VolumeDim>& orientation_of_neighbor);
 
-template <size_t VolumeDim>
+template <typename VectorType, size_t VolumeDim>
 void orient_variables_on_slice(
-    gsl::not_null<DataVector*> result, const DataVector& variables_on_slice,
+    gsl::not_null<VectorType*> result, const VectorType& variables_on_slice,
     const Index<VolumeDim - 1>& slice_extents, size_t sliced_dim,
     const OrientationMap<VolumeDim>& orientation_of_neighbor);
 /// @}
@@ -72,10 +72,12 @@ Variables<TagsList> orient_variables(
                 "  extents.product() = "
              << extents.product());
   Variables<TagsList> oriented_variables(number_of_grid_points);
-  DataVector result(oriented_variables.data(), oriented_variables.size());
+  using VectorType = typename Variables<TagsList>::vector_type;
+  using ValueType = typename Variables<TagsList>::value_type;
+  VectorType result(oriented_variables.data(), oriented_variables.size());
   orient_variables(
       make_not_null(&result),
-      DataVector(const_cast<double*>(variables.data()), variables.size()),
+      VectorType(const_cast<ValueType*>(variables.data()), variables.size()),
       extents, orientation_of_neighbor);
   return oriented_variables;
 }
@@ -100,10 +102,12 @@ Variables<TagsList> orient_variables_on_slice(
              << slice_extents.product());
 
   Variables<TagsList> oriented_variables(number_of_grid_points);
-  DataVector result(oriented_variables.data(), oriented_variables.size());
+  using VectorType = typename Variables<TagsList>::vector_type;
+  using ValueType = typename Variables<TagsList>::value_type;
+  VectorType result(oriented_variables.data(), oriented_variables.size());
   orient_variables_on_slice(
       make_not_null(&result),
-      DataVector(const_cast<double*>(variables_on_slice.data()),
+      VectorType(const_cast<ValueType*>(variables_on_slice.data()),
                  variables_on_slice.size()),
       slice_extents, sliced_dim, orientation_of_neighbor);
   return oriented_variables;
@@ -122,25 +126,25 @@ Variables<TagsList> orient_variables_on_slice(
 /// DG with finite difference methods, where sometimes the data sent is both the
 /// variables for reconstruction and the fluxes for either the DG or finite
 /// difference scheme, while at other points only one of these three is sent.
-template <size_t VolumeDim>
-std::vector<double> orient_variables(
-    const std::vector<double>& variables, const Index<VolumeDim>& extents,
+template <typename ValueType, size_t VolumeDim>
+std::vector<ValueType> orient_variables(
+    const std::vector<ValueType>& variables, const Index<VolumeDim>& extents,
     const OrientationMap<VolumeDim>& orientation_of_neighbor);
 
-template <size_t VolumeDim>
-DataVector orient_variables(
-    const DataVector& variables, const Index<VolumeDim>& extents,
+template <typename VectorType, size_t VolumeDim>
+VectorType orient_variables(
+    const VectorType& variables, const Index<VolumeDim>& extents,
     const OrientationMap<VolumeDim>& orientation_of_neighbor);
 
-template <size_t VolumeDim>
-std::vector<double> orient_variables_on_slice(
-    const std::vector<double>& variables_on_slice,
+template <typename ValueType, size_t VolumeDim>
+std::vector<ValueType> orient_variables_on_slice(
+    const std::vector<ValueType>& variables_on_slice,
     const Index<VolumeDim - 1>& slice_extents, size_t sliced_dim,
     const OrientationMap<VolumeDim>& orientation_of_neighbor);
 
-template <size_t VolumeDim>
-DataVector orient_variables_on_slice(
-    const DataVector& variables_on_slice,
+template <typename VectorType, size_t VolumeDim>
+VectorType orient_variables_on_slice(
+    const VectorType& variables_on_slice,
     const Index<VolumeDim - 1>& slice_extents, size_t sliced_dim,
     const OrientationMap<VolumeDim>& orientation_of_neighbor);
 /// @}

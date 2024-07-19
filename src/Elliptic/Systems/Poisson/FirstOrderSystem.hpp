@@ -80,6 +80,8 @@ struct FirstOrderSystem
   using sources_computer =
       tmpl::conditional_t<BackgroundGeometry == Geometry::FlatCartesian, void,
                           Sources<Dim, BackgroundGeometry>>;
+  using sources_computer_linearized = sources_computer;
+  using modify_boundary_data = ModifyBoundaryData<Dim>;
 
   using boundary_conditions_base =
       elliptic::BoundaryConditions::BoundaryCondition<Dim>;

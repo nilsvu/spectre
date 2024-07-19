@@ -1,0 +1,142 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+Executable: SolveGrSelfForce
+Testing:
+  Check: parse
+ExpectedOutput:
+  - SelfForceReductions.h5
+  - SelfForceVolume0.h5
+
+---
+
+Background: &background
+  CircularOrbit:
+    BlackHoleMass: &bh_mass 1.
+    BlackHoleSpin: &bh_spin 0.9
+    OrbitalRadius: &orbital_radius 6.
+    MModeNumber: &m_mode_number {{ m }}
+
+InitialGuess: *background
+
+RandomizeInitialGuess: None
+
+DomainCreator:
+  Brick:
+    # Order of dimensions is (r_*, theta)
+    LowerBound: [-50., 0., 0.]
+    UpperBound: [{{ R }}, 3.141592653589793, 1.]
+    InitialRefinement: [{{ L + 3 }}, {{ L + 1 }}, 0]
+    InitialGridPoints: [20, 20, 1]
+    TimeDependence: None
+    # Radial boundary conditions
+    BoundaryConditionInX:
+      # Ingoing near horizon
+      LowerBoundaryCondition:
+        Sommerfeld:
+          BlackHoleMass: *bh_mass
+          BlackHoleSpin: *bh_spin
+          OrbitalRadius: *orbital_radius
+          MModeNumber: *m_mode_number
+          Outgoing: False
+      # Outgoing far away
+      UpperBoundaryCondition:
+        Sommerfeld:
+          BlackHoleMass: *bh_mass
+          BlackHoleSpin: *bh_spin
+          OrbitalRadius: *orbital_radius
+          MModeNumber: *m_mode_number
+          Outgoing: True
+    # Angular boundary conditions
+    BoundaryConditionInY:
+      Angular:
+        MModeNumber: *m_mode_number
+    BoundaryConditionInZ: Periodic
+
+Discretization:
+  DiscontinuousGalerkin:
+    PenaltyParameter: 1.
+    Massive: True
+    Quadrature: Gauss
+    Formulation: StrongInertial
+
+Observers:
+  VolumeFileName: "SelfForceVolume"
+  ReductionFileName: "SelfForceReductions"
+
+NonlinearSolver:
+  NewtonRaphson:
+    ConvergenceCriteria:
+      MaxIterations: 1
+      RelativeResidual: 1.e-6
+      AbsoluteResidual: 1.e-12
+    Verbosity: Verbose
+    SufficientDecrease: 1e-4
+    MaxGlobalizationSteps: 10
+    DampingFactor: 1
+
+LinearSolver:
+  Gmres:
+    ConvergenceCriteria:
+      MaxIterations: 500
+      RelativeResidual: 1.e-6
+      AbsoluteResidual: 1.e-12
+    Verbosity: Quiet
+
+  Multigrid:
+    Iterations: 0
+    MaxLevels: Auto
+    PreSmoothing: True
+    PostSmoothingAtBottom: False
+    Verbosity: Silent
+    OutputVolumeData: False
+
+  SchwarzSmoother:
+    Iterations: 3
+    MaxOverlap: 2
+    Verbosity: Silent
+    SubdomainSolver:
+      # TODO: Reconsider this
+      ExplicitInverse:
+        WriteMatrixToFile: None
+    ObservePerCoreReductions: False
+    SkipResets: True
+
+EventsAndTriggers:
+  - Trigger: Always
+    Events:
+      - ObserveFields:
+          SubfileName: VolumeData
+          VariablesToObserve:
+            - MModeRe
+            - MModeIm
+            - FixedSource(MModeRe)
+            - FixedSource(MModeIm)
+            - SingularField
+            - BoyerLindquistRadius
+          InterpolateToMesh: None
+          CoordinatesFloatingPointType: Double
+          FloatingPointTypes: [Double]
+
+Amr:
+  Verbosity: Quiet
+  Criteria: []
+  Policies:
+    Isotropy: Anisotropic
+    Limits:
+      NumGridPoints: Auto
+      RefinementLevel: Auto
+  Iterations: 1
+
+PhaseChangeAndTriggers: []
+
+# BuildMatrix:
+#   MatrixSubfileName: Matrix
+#   Verbosity: Verbose
+
+Parallelization:
+  ElementDistribution: NumGridPoints
+
+ResourceInfo:
+  AvoidGlobalProc0: false
+  Singletons: Auto

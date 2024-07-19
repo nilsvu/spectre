@@ -9,9 +9,17 @@
 #include "DataStructures/ComplexDataVector.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "DataStructures/VariablesTag.hpp"
 #include "Elliptic/Systems/SelfForce/Scalar/Tags.hpp"
+#include "ParallelAlgorithms/LinearSolver/Schwarz/Tags.hpp"
+#include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "Utilities/Gsl.hpp"
+#include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
+
+namespace elliptic::OptionTags {
+class SchwarzSmootherGroup;
+}
 
 namespace ScalarSelfForce {
 
@@ -65,6 +73,51 @@ struct Sources {
                     const tnsr::i<ComplexDataVector, 2>& gamma,
                     const Scalar<ComplexDataVector>& field,
                     const tnsr::I<ComplexDataVector, 2>& flux);
+};
+
+struct ModifyBoundaryData {
+ private:
+  static constexpr size_t Dim = 2;
+  using SchwarzOptionsGroup = elliptic::OptionTags::SchwarzSmootherGroup;
+  template <typename Tag>
+  using overlaps_tag =
+      LinearSolver::Schwarz::Tags::Overlaps<Tag, Dim, SchwarzOptionsGroup>;
+  using singular_vars_on_mortars_tag =
+      ::Tags::Variables<tmpl::list<Tags::SingularField,
+                                   ::Tags::NormalDotFlux<Tags::SingularField>>>;
+
+ public:
+  using argument_tags = tmpl::list<Tags::FieldIsRegularized,
+                                   overlaps_tag<Tags::FieldIsRegularized>,
+                                   overlaps_tag<singular_vars_on_mortars_tag>>;
+  using volume_tags = argument_tags;
+  static void apply(
+      gsl::not_null<Scalar<ComplexDataVector>*> field,
+      gsl::not_null<Scalar<ComplexDataVector>*> n_dot_flux,
+      const DirectionalId<Dim>& mortar_id, const bool sending,
+      const tnsr::i<DataVector, Dim>& /*face_normal*/,
+      const bool field_is_regularized,
+      const DirectionalIdMap<Dim, bool>& neighbors_field_is_regularized,
+      const DirectionalIdMap<Dim, typename singular_vars_on_mortars_tag::type>&
+          singular_vars_on_mortars) {
+    if (field_is_regularized == neighbors_field_is_regularized.at(mortar_id)) {
+      // Both elements solve for the same field. Nothing to do.
+      return;
+    }
+    if (field_is_regularized) {
+      // We're on an element that's regularized and sending to or receiving from
+      // an element that's not regularized. We have to add or subtract the
+      // singular field.
+      const double sign = sending ? 1. : -1.;
+      const auto& singular_field =
+          get<Tags::SingularField>(singular_vars_on_mortars.at(mortar_id));
+      const auto& singular_field_n_dot_flux =
+          get<::Tags::NormalDotFlux<Tags::SingularField>>(
+              singular_vars_on_mortars.at(mortar_id));
+      get(*field) += sign * get(singular_field);
+      get(*n_dot_flux) += get(singular_field_n_dot_flux);
+    }
+  }
 };
 
 }  // namespace ScalarSelfForce

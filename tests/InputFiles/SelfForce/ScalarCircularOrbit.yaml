@@ -1,0 +1,191 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+Executable: SolveScalarSelfForce
+Testing:
+  Check: parse
+ExpectedOutput:
+  - ScalarSelfForceReductions.h5
+  - ScalarSelfForceVolume0.h5
+
+---
+
+Background: &background
+  CircularOrbit:
+    BlackHoleMass: &bh_mass 1.
+    BlackHoleSpin: &bh_spin 0.9
+    OrbitalRadius: &orbital_radius 6.
+    MModeNumber: &m_mode_number {{ m }}
+
+InitialGuess: *background
+
+RandomizeInitialGuess: None
+
+DomainCreator:
+  AlignedLattice:
+    # Order of dimensions is (r_*, theta)
+    BlockBounds:
+      - [{{ Rin }}, {{ 7.4 - dRS }}, {{ 7.4 + dRS }}, {{ Rout }}] # rstar
+      - [-1., {{ -dT}} , {{ dT }}, 1.] # cos(theta)
+    InitialGridPoints: [6, 6]
+    InitialLevels: [0, 0]
+    RefinedGridPoints: []
+    BlocksToExclude: []
+    RefinedLevels:
+      # bottom row
+      - LowerCornerIndex: [0, 0] # bottom left
+        UpperCornerIndex: [1, 1]
+        Refinement: [ {{ LRleft }}, {{ LT }} ]
+      - LowerCornerIndex: [1, 0] # bottom middle
+        UpperCornerIndex: [2, 1]
+        Refinement: [ 0, {{ LT }} ]
+      - LowerCornerIndex: [2, 0] # bottom right
+        UpperCornerIndex: [3, 1]
+        Refinement: [ {{ LRright }}, {{ LT }} ]
+      # middle row
+      - LowerCornerIndex: [0, 1] # middle left
+        UpperCornerIndex: [1, 2]
+        Refinement: [ {{ LRleft }}, 0 ]
+      - LowerCornerIndex: [1, 1] # source region
+        UpperCornerIndex: [2, 2]
+        Refinement: [ 0, 0 ]
+      - LowerCornerIndex: [2, 1] # middle right
+        UpperCornerIndex: [3, 2]
+        Refinement: [ {{ LRright }}, 0 ]
+      # top row
+      - LowerCornerIndex: [0, 2] # top left
+        UpperCornerIndex: [1, 3]
+        Refinement: [ {{ LRleft }}, {{ LT }} ]
+      - LowerCornerIndex: [1, 2] # top middle
+        UpperCornerIndex: [2, 3]
+        Refinement: [ 0, {{ LT }} ]
+      - LowerCornerIndex: [2, 2] # top right
+        UpperCornerIndex: [3, 3]
+        Refinement: [ {{ LRright }}, {{ LT }} ]
+    # Radial boundary conditions
+    BoundaryConditionInX:
+      Sommerfeld:
+        BlackHoleMass: *bh_mass
+        BlackHoleSpin: *bh_spin
+        OrbitalRadius: *orbital_radius
+        MModeNumber: *m_mode_number
+    # Angular boundary conditions
+    BoundaryConditionInY:
+      Angular:
+        MModeNumber: *m_mode_number
+
+Amr:
+  Verbosity: Quiet
+  Criteria:
+    - IncreaseResolution
+    # - TruncationError:
+    #     VariablesToMonitor: [MMode]
+    #     AbsoluteTarget: 1.e-8
+    #     RelativeTarget: None
+    # - Persson:
+    #     VariablesToMonitor: [MMode]
+    #     NumHighestModes: 1
+    #     Exponent: 4.
+    #     AbsoluteTolerance: 0.
+    #     CoarseningFactor: 0.1
+  Policies:
+    Isotropy: Anisotropic
+    EnforceTwoToOneBalanceInNormalDirection: False
+    Limits:
+      NumGridPoints: Auto
+      RefinementLevel: Auto
+  Iterations: 10
+
+PhaseChangeAndTriggers:
+  # Run AMR in every iteration, but not on the initial guess
+  - Trigger:
+      EveryNIterations:
+        N: 1
+        Offset: 1
+    PhaseChanges:
+      - VisitAndReturn(EvaluateAmrCriteria)
+      - VisitAndReturn(AdjustDomain)
+      - VisitAndReturn(CheckDomain)
+
+Discretization:
+  DiscontinuousGalerkin:
+    PenaltyParameter: 1.
+    Massive: True
+    Quadrature: Gauss
+    Formulation: StrongInertial
+
+Observers:
+  VolumeFileName: "ScalarSelfForceVolume"
+  ReductionFileName: "ScalarSelfForceReductions"
+
+NonlinearSolver:
+  NewtonRaphson:
+    ConvergenceCriteria:
+      MaxIterations: 1
+      RelativeResidual: 0.
+      AbsoluteResidual: &abstol 1.e-8
+    Verbosity: Verbose
+    SufficientDecrease: 1e-4
+    MaxGlobalizationSteps: 10
+    DampingFactor: 1
+
+LinearSolver:
+  Gmres:
+    ConvergenceCriteria:
+      MaxIterations: 500
+      RelativeResidual: 0
+      AbsoluteResidual: *abstol
+    Verbosity: Quiet
+
+  Multigrid:
+    Iterations: 1
+    MaxLevels: 1
+    PreSmoothing: True
+    PostSmoothingAtBottom: False
+    Verbosity: Silent
+    OutputVolumeData: False
+
+  SchwarzSmoother:
+    Iterations: 3
+    MaxOverlap: 2
+    Verbosity: Silent
+    SubdomainSolver:
+      # TODO: Reconsider this
+      ExplicitInverse:
+        WriteMatrixToFile: None
+    ObservePerCoreReductions: False
+    SkipResets: True
+
+EventsAndTriggers:
+  - Trigger: Always
+    Events:
+      - ObserveNorms:
+          SubfileName: Norms
+          TensorsToObserve:
+            - Name: MMode
+              NormType: Max
+              Components: Individual
+      - ObserveFields:
+          SubfileName: VolumeData
+          VariablesToObserve:
+            - MMode
+            - FixedSource(MMode)
+            - Alpha
+            - Beta
+            - Gamma
+            - SingularField
+            - BoyerLindquistRadius
+          InterpolateToMesh: None
+          CoordinatesFloatingPointType: Double
+          FloatingPointTypes: [Double]
+
+# BuildMatrix:
+#   MatrixSubfileName: Matrix
+#   Verbosity: Verbose
+
+Parallelization:
+  ElementDistribution: NumGridPoints
+
+ResourceInfo:
+  AvoidGlobalProc0: false
+  Singletons: Auto

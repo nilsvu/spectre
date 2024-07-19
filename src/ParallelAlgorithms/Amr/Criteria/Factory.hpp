@@ -27,8 +27,8 @@ using standard_criteria = tmpl::list<
     ::amr::Criteria::IncreaseResolution<Dim>,
     ::amr::Criteria::TruncationError<Dim, TensorTags>,
     // h-AMR criteria
-    ::amr::Criteria::Loehner<Dim, TensorTags>,
-    ::amr::Criteria::Persson<Dim, TensorTags>,
+    // ::amr::Criteria::Loehner<Dim, TensorTags>,
+    // ::amr::Criteria::Persson<Dim, TensorTags>,
     // Criteria for testing or experimenting
     ::amr::Criteria::DriveToTarget<Dim>, ::amr::Criteria::Random>;
 

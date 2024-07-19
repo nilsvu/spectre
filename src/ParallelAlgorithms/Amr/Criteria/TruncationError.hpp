@@ -42,11 +42,11 @@ namespace TruncationError_detail {
  * `Flag::IncreaseResolution`, followed by `Flag::DoNothing`, and then
  * `Flag::DecreaseResolution`.
  */
-template <size_t Dim>
+template <typename ValueType, size_t Dim>
 void max_over_components(
     gsl::not_null<std::array<Flag, Dim>*> result,
-    const gsl::not_null<std::array<DataVector, Dim>*> power_monitors_buffer,
-    const DataVector& tensor_component, const Mesh<Dim>& mesh,
+    const gsl::not_null<std::array<ValueType, Dim>*> power_monitors_buffer,
+    const ValueType& tensor_component, const Mesh<Dim>& mesh,
     std::optional<double> target_abs_truncation_error,
     std::optional<double> target_rel_truncation_error);
 }  // namespace TruncationError_detail
@@ -159,7 +159,8 @@ std::array<Flag, Dim> TruncationError<Dim, TensorTags>::operator()(
     const ElementId<Dim>& /*element_id*/) const {
   auto result = make_array<Dim>(Flag::Undefined);
   const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
-  std::array<DataVector, Dim> power_monitors_buffer{};
+  using VectorType = Variables<TensorTags>::vector_type;
+  std::array<VectorType, Dim> power_monitors_buffer{};
   // Check all tensors and all tensor components in turn
   tmpl::for_each<TensorTags>(
       [&result, &box, &mesh, &power_monitors_buffer, this](const auto tag_v) {
@@ -174,7 +175,7 @@ std::array<Flag, Dim> TruncationError<Dim, TensorTags>::operator()(
           return;
         }
         const auto& tensor = db::get<tag>(box);
-        for (const DataVector& tensor_component : tensor) {
+        for (const VectorType& tensor_component : tensor) {
           TruncationError_detail::max_over_components(
               make_not_null(&result), make_not_null(&power_monitors_buffer),
               tensor_component, mesh, target_abs_truncation_error_,

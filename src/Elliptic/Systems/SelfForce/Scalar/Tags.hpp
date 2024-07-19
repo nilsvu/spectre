@@ -55,13 +55,6 @@ struct MMode : db::SimpleTag {
  * F^i = \{\partial_{r_\star}, \alpha \partial_{\cos\theta}\} \Psi_m
  * \text{.}
  * \end{equation}
- *
- * For circular equatorial orbits this factor is
- * [Eq. (2.9) in \cite Osburn2022 ]
- * \begin{equation}
- * \alpha = \frac{\Delta}{(r^2 + a^2)^2}
- * \text{.}
- * \end{equation}
  */
 struct Alpha : db::SimpleTag {
   using type = Scalar<ComplexDataVector>;
@@ -73,15 +66,6 @@ struct Alpha : db::SimpleTag {
  * This is the factor $\beta$ in the general form of the equations
  * \begin{equation}
  * -\partial_i F^i + \beta \Psi_m + \gamma_i F^i = S_m
- * \text{.}
- * \end{equation}
- *
- * For circular equatorial orbits this factor is
- * [Eq. (2.9) in \cite Osburn2022 ]
- * \begin{equation}
- * \beta = \left(-m^2\Omega^2 \Sigma^2 + 4a m^2 \Omega M r + \Delta \left[
- *   \frac{m^2}{\sin^2\theta} + \frac{2M}{r}(1-\frac{a^2}{Mr}) + \frac{2iam}{r}
- *   \right]\right) \frac{1}{(r^2 + a^2)^2}}
  * \text{.}
  * \end{equation}
  */
