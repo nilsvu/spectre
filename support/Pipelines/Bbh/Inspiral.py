@@ -352,7 +352,7 @@ def start_inspiral(
             " 'pipeline_dir' automatically."
         )
     if pipeline_dir and not run_dir and not segments_dir:
-        segments_dir = pipeline_dir / "002_Inspiral"
+        segments_dir = pipeline_dir / "008_Inspiral_Ecc3"
 
     # Determine resource allocation
     if (

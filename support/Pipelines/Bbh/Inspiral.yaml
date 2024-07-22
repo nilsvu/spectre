@@ -268,8 +268,6 @@ EventsAndTriggers:
             Components: Sum
   - Trigger:
       Slabs:
-        # Trigger apparent horizon observations often enough so they find the
-        # next horizon based on the previous initial guess.
         EvenlySpaced:
           Interval: 20
           Offset: 0
@@ -288,6 +286,14 @@ EventsAndTriggers:
       - ErrorIfDataTooBig:
           Threshold: 100
           VariablesToCheck: [SpacetimeMetric]
+  - Trigger:
+      Slabs:
+        # Trigger apparent horizon observations often enough so they find the
+        # next horizon based on the previous initial guess.
+        EvenlySpaced:
+          Interval: 5
+          Offset: 0
+    Events:
       - ObservationAhA
       - ObservationAhB
       - ObservationExcisionBoundaryA
@@ -301,14 +307,8 @@ EventsAndTriggers:
       - ObserveFields:
           SubfileName: VolumeData
           VariablesToObserve:
-            - SpacetimeMetric
-            - Pi
-            - Phi
             - Lapse
-            - Shift
-            - PointwiseL2Norm(GaugeConstraint)
-            - PointwiseL2Norm(ThreeIndexConstraint)
-            - PointwiseL2Norm(FourIndexConstraint)
+            - ConstraintEnergy
           InterpolateToMesh: None
           # Save disk space by saving single precision data. This is enough
           # for visualization.
