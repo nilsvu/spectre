@@ -11,9 +11,11 @@ import click
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
+import yaml
 import rich
 import scipy
 from scipy import io, optimize
+from dataclasses import dataclass
 
 from spectre.Visualization.Plot import (
     apply_stylesheet_command,
@@ -490,6 +492,18 @@ def coordinate_separation_eccentricity_control(
     return functions
 
 
+@dataclass(frozen=True)
+class Opts:
+    t: str = "bbh"
+    freq_filter: bool = False
+    varpro: bool = True
+    tmin: float = None
+    tmax: float = None
+    improved_Omega0_update: bool = True
+    no_check: bool = False
+    no_output_files: bool = True
+
+
 @click.command(name="eccentricity-control")
 @click.argument(
     "h5_file",
@@ -514,6 +528,12 @@ def coordinate_separation_eccentricity_control(
     ),
 )
 @click.option(
+    "--id-input-file",
+    "-i",
+    "id_input_file_path",
+    help="Input file with initial data parameters.",
+)
+@click.option(
     "--tmin",
     type=float,
     help=(
@@ -530,26 +550,15 @@ def coordinate_separation_eccentricity_control(
         " include 2-3 orbits."
     ),
 )
-@click.option(
-    "--angular-velocity-from-xcts",
-    type=float,
-    help="Value of the angular velocity used in the Xcts file.",
-)
-@click.option(
-    "--expansion-from-xcts",
-    type=float,
-    help="Value of the expansion velocity (adot) used in the Xcts file.",
-)
-@apply_stylesheet_command()
-@show_or_save_plot_command()
+# @apply_stylesheet_command()
+# @show_or_save_plot_command()
 def eccentricity_control_command(
     h5_file,
     subfile_name_aha,
     subfile_name_ahb,
+    id_input_file_path,
     tmin,
     tmax,
-    angular_velocity_from_xcts,
-    expansion_from_xcts,
 ):
     """Compute updates based on fits to the coordinate separation for manual
     eccentricity control
@@ -584,15 +593,66 @@ def eccentricity_control_command(
     See OmegaDoEccRemoval.py in SpEC for improved eccentricity control.
 
     """
-    fig = plt.figure()
-    functions = coordinate_separation_eccentricity_control(
+    from OmegaDotEccRemoval import performAllFits, ComputeOmegaAndDerivsFromFile
+
+    logging.getLogger("VarPro").setLevel(logging.WARNING)
+
+    with open(id_input_file_path, "r") as open_input_file:
+        _, id_input_file = yaml.safe_load_all(open_input_file)
+    id_binary = id_input_file["Background"]["Binary"]
+    mA = id_binary["ObjectRight"]["KerrSchild"]["Mass"]
+    mB = id_binary["ObjectLeft"]["KerrSchild"]["Mass"]
+    sA = id_binary["ObjectRight"]["KerrSchild"]["Spin"]
+    sB = id_binary["ObjectLeft"]["KerrSchild"]["Spin"]
+    Omega0 = id_binary["AngularVelocity"]
+    adot0 = id_binary["Expansion"]
+    D0 = id_binary["XCoords"][1] - id_binary["XCoords"][0]
+
+    functions = [
+        ["InertialCenter_x", "x"],
+        ["InertialCenter_y", "y"],
+        ["InertialCenter_z", "z"],
+    ]
+    x_axis = "Time"
+    XA = extract_data_from_file(
         h5_file=h5_file,
-        subfile_name_aha=subfile_name_aha,
-        subfile_name_ahb=subfile_name_ahb,
+        subfile_name=subfile_name_aha,
+        functions=functions,
+        x_axis=x_axis,
+    )
+    XB = extract_data_from_file(
+        h5_file=h5_file,
+        subfile_name=subfile_name_ahb,
+        functions=functions,
+        x_axis=x_axis,
+    )
+
+    t, Omega, dOmegadt, OmegaVec = ComputeOmegaAndDerivsFromFile(XA, XB)
+
+    eccentricity, delta_Omega0, delta_adot0, delta_D0, _ = performAllFits(
+        IDparam_omega0=Omega0,
+        IDparam_adot0=adot0,
+        IDparam_D0=D0,
+        XA=XA,
+        XB=XB,
+        mA=mA,
+        mB=mB,
+        sA=sA,
+        sB=sB,
+        t=t,
+        Omega=Omega,
+        dOmegadt=dOmegadt,
+        OmegaVec=OmegaVec,
         tmin=tmin,
         tmax=tmax,
-        angular_velocity_from_xcts=angular_velocity_from_xcts,
-        expansion_from_xcts=expansion_from_xcts,
-        fig=fig,
+        tref=tmin,
+        opts=Opts(tmin=tmin, tmax=tmax),
+        Source=None,
     )
-    return fig
+
+    print(
+        f"eccentricity = {eccentricity}\n"
+        f"delta_Omega0 = {delta_Omega0}\n"
+        f"delta_adot0 = {delta_adot0}\n"
+        f"delta_D0 = {delta_D0}"
+    )
