@@ -104,6 +104,10 @@ class CircularOrbit : public elliptic::analytic_data::Background,
   WRAPPED_PUPable_decl_template(CircularOrbit);
 
   tnsr::I<double, 2> puncture_position() const;
+  double black_hole_mass() const { return black_hole_mass_; }
+  double black_hole_spin() const { return black_hole_spin_; }
+  double orbital_radius() const { return orbital_radius_; }
+  int m_mode_number() const { return m_mode_number_; }
 
   using background_tags = tmpl::list<Tags::Alpha, Tags::Beta, Tags::Gamma>;
   using source_tags = tmpl::list<
