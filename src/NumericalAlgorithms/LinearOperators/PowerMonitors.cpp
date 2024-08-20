@@ -147,7 +147,11 @@ std::array<double, Dim> absolute_truncation_error(
 #define DTYPE(data) BOOST_PP_TUPLE_ELEM(0, data)
 #define DIM(data) BOOST_PP_TUPLE_ELEM(1, data)
 
-#define INSTANTIATE(_, data)                                              \
+#define INSTANTIATE(_, data)                                                   \
+  template double relative_truncation_error(const DTYPE(data) & power_monitor, \
+                                            size_t num_modes_to_use);
+
+#define INSTANTIATE_DIM(_, data)                                          \
   template std::array<DTYPE(data), DIM(data)> power_monitors(             \
       const DTYPE(data) & u, const Mesh<DIM(data)>& mesh);                \
   template void power_monitors(                                           \
@@ -158,7 +162,9 @@ std::array<double, Dim> absolute_truncation_error(
   template std::array<double, DIM(data)> absolute_truncation_error(       \
       const DTYPE(data) & tensor_component, const Mesh<DIM(data)>& mesh);
 
-GENERATE_INSTANTIATIONS(INSTANTIATE, (DataVector, ComplexDataVector), (1, 2, 3))
+GENERATE_INSTANTIATIONS(INSTANTIATE, (DataVector, ComplexDataVector))
+GENERATE_INSTANTIATIONS(INSTANTIATE_DIM, (DataVector, ComplexDataVector),
+                        (1, 2, 3))
 
 #undef INSTANTIATE
 #undef DIM

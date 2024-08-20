@@ -14,6 +14,7 @@
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/Executables/SelfForce/Scalar/Actions/InitializeEffectiveSource.hpp"
+#include "Elliptic/Executables/SelfForce/Scalar/Events/ObserveSelfForce.hpp"
 #include "Elliptic/Executables/Solver.hpp"
 #include "Elliptic/Systems/SelfForce/Scalar/BoundaryConditions/Angular.hpp"
 #include "Elliptic/Systems/SelfForce/Scalar/BoundaryConditions/Sommerfeld.hpp"
@@ -98,6 +99,9 @@ struct Metavariables {
         tmpl::pair<Event,
                    tmpl::flatten<tmpl::list<
                        Events::Completion,
+                       ScalarSelfForce::Events::ObserveSelfForce<
+                           typename solver::background_tag,
+                           LinearSolver::multigrid::Tags::IsFinestGrid>,
                        dg::Events::field_observations<
                            volume_dim, observe_fields, observer_compute_tags,
                            LinearSolver::multigrid::Tags::IsFinestGrid>>>>,

@@ -6,6 +6,7 @@
 #include <complex>
 #include <cstddef>
 #include <effsource.hpp>
+#include <gsl/gsl_errno.h>
 #include <korb.hpp>
 #include <utility>
 

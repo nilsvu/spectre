@@ -33,10 +33,10 @@ class InvalidInputFileError(Exception):
 
     def __init__(
         self,
-        input_file_path: Union[str, Path],
-        line_number: Optional[int],
-        yaml_path: Sequence[str],
-        message: Optional[str],
+        input_file_path: Union[str, Path] = None,
+        line_number: Optional[int] = None,
+        yaml_path: Sequence[str] = None,
+        message: Optional[str]= None,
     ):
         self.input_file_path = Path(input_file_path)
         self.line_number = line_number
