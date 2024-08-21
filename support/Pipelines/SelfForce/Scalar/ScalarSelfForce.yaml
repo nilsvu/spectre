@@ -8,6 +8,22 @@ ExpectedOutput:
   - ScalarSelfForceReductions.h5
   - ScalarSelfForceVolume0.h5
 
+# This fails in multigrid: ./bin/spectre run
+# /Users/nilsvu/Projects/spectre/support/Pipelines/SelfForce/Scalar/ScalarSelfForce.yaml
+# -o test_ssf_mg -p spin=0.5 -p orbital_radius=6 -p m_mode=1 -p inner_radius=-50
+# -p outer_radius=350 -p puncture_position=7.5 -p worldtube_radius=7.5 -p
+# worldtube_dcostheta=0.5 -p P=6 -p L_left=2 -p L_right=3 -p L_angular=2 -fC
+
+# The error is:
+# NewtonRaphson initialized with residual: 1.789229e+01
+# Gmres initialized with residual: 1.789229e+01
+# Gmres(1) iteration complete. Remaining residual: 1.789229e+01
+# Gmres(2) iteration complete. Remaining residual: 1.789228e+01
+# Gmres(3) iteration complete. Remaining residual: 1.789228e+01
+# Gmres(4) iteration complete. Remaining residual: 1.789228e+01
+# Gmres(5) iteration complete. Remaining residual: 1.791361e+01
+# Gmres has encountered an error in iteration 5: Residual should decrease monotonically, but increased from 1.789228e+01 to 1.791361e+01.
+
 ---
 
 Background: &background
@@ -33,7 +49,7 @@ DomainCreator:
       # cos(theta)
       - [-1., {{ -worldtube_dcostheta}} , {{ worldtube_dcostheta }}, 1.]
     InitialGridPoints: [{{ P }}, {{ P }}]
-    InitialLevels: [0, 0]
+    InitialLevels: [2, 2]
     RefinedGridPoints: []
     BlocksToExclude: []
     RefinedLevels:
@@ -100,7 +116,7 @@ Amr:
     Limits:
       NumGridPoints: Auto
       RefinementLevel: Auto
-  Iterations: 8
+  Iterations: 1
 
 PhaseChangeAndTriggers:
   # Run AMR in every iteration, but not on the initial guess
@@ -145,7 +161,7 @@ LinearSolver:
 
   Multigrid:
     Iterations: 1
-    MaxLevels: 1
+    MaxLevels: Auto
     PreSmoothing: True
     PostSmoothingAtBottom: False
     Verbosity: Silent
