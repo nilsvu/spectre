@@ -37,6 +37,7 @@ target_link_libraries(
   ParallelNonlinearSolver
   ParallelSchwarz
   ScalarSelfForce
+  ScalarSelfForceAmrCriteria
   ScalarSelfForceAnalyticData
   ScalarSelfForceBoundaryConditions
   )

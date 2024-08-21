@@ -16,6 +16,7 @@
 #include "Elliptic/Executables/SelfForce/Scalar/Actions/InitializeEffectiveSource.hpp"
 #include "Elliptic/Executables/SelfForce/Scalar/Events/ObserveSelfForce.hpp"
 #include "Elliptic/Executables/Solver.hpp"
+#include "Elliptic/Systems/SelfForce/Scalar/AmrCriteria/RefineAtPuncture.hpp"
 #include "Elliptic/Systems/SelfForce/Scalar/BoundaryConditions/Angular.hpp"
 #include "Elliptic/Systems/SelfForce/Scalar/BoundaryConditions/Sommerfeld.hpp"
 #include "Elliptic/Systems/SelfForce/Scalar/FirstOrderSystem.hpp"
@@ -93,9 +94,11 @@ struct Metavariables {
         tmpl::pair<elliptic::BoundaryConditions::BoundaryCondition<volume_dim>,
                    tmpl::list<ScalarSelfForce::BoundaryConditions::Angular,
                               ScalarSelfForce::BoundaryConditions::Sommerfeld>>,
-        tmpl::pair<::amr::Criterion,
-                   ::amr::Criteria::standard_criteria<
-                       volume_dim, typename system::primal_fields>>,
+        tmpl::pair<
+            ::amr::Criterion,
+            tmpl::push_back<::amr::Criteria::standard_criteria<
+                                volume_dim, typename system::primal_fields>,
+                            ScalarSelfForce::AmrCriteria::RefineAtPuncture>>,
         tmpl::pair<Event,
                    tmpl::flatten<tmpl::list<
                        Events::Completion,
