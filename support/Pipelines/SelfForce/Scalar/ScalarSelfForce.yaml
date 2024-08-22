@@ -49,7 +49,7 @@ DomainCreator:
       # cos(theta)
       - [-1., {{ -worldtube_dcostheta}} , {{ worldtube_dcostheta }}, 1.]
     InitialGridPoints: [{{ P }}, {{ P }}]
-    InitialLevels: [2, 2]
+    InitialLevels: [&L 1, *L]
     RefinedGridPoints: []
     BlocksToExclude: []
     RefinedLevels:
@@ -66,13 +66,13 @@ DomainCreator:
       # middle row
       - LowerCornerIndex: [0, 1] # middle left
         UpperCornerIndex: [1, 2]
-        Refinement: [ {{ L_left }}, 0 ]
+        Refinement: [ {{ L_left }}, *L ]
       - LowerCornerIndex: [1, 1] # source region
         UpperCornerIndex: [2, 2]
-        Refinement: [ 0, 0 ]
+        Refinement: [ 0, *L ]
       - LowerCornerIndex: [2, 1] # middle right
         UpperCornerIndex: [3, 2]
-        Refinement: [ {{ L_right }}, 0 ]
+        Refinement: [ {{ L_right }}, *L ]
       # top row
       - LowerCornerIndex: [0, 2] # top left
         UpperCornerIndex: [1, 3]
@@ -154,23 +154,23 @@ NonlinearSolver:
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
-      MaxIterations: 500
+      MaxIterations: 1
       RelativeResidual: 0
       AbsoluteResidual: *abstol
     Verbosity: Quiet
 
   Multigrid:
     Iterations: 1
-    MaxLevels: Auto
+    MaxLevels: 1
     PreSmoothing: True
     PostSmoothingAtBottom: False
     Verbosity: Silent
-    OutputVolumeData: False
+    OutputVolumeData: True
 
   SchwarzSmoother:
-    Iterations: 3
+    Iterations: 10
     MaxOverlap: 2
-    Verbosity: Silent
+    Verbosity: Quiet
     SubdomainSolver:
       # TODO: Reconsider this
       ExplicitInverse:
