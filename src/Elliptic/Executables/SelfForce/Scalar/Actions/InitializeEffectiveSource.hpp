@@ -70,6 +70,7 @@ template <typename System, typename BackgroundTag, typename SchwarzOptionsGroup,
           size_t Dim = System::volume_dim>
 struct InitializeEffectiveSource : tt::ConformsTo<::amr::protocols::Projector> {
  private:
+  using fields_tag = ::Tags::Variables<typename System::primal_fields>;
   using fixed_sources_tag = ::Tags::Variables<
       db::wrap_tags_in<::Tags::FixedSource, typename System::primal_fields>>;
   using singular_vars_tag = ::Tags::Variables<tmpl::list<
@@ -90,7 +91,7 @@ struct InitializeEffectiveSource : tt::ConformsTo<::amr::protocols::Projector> {
   using const_global_cache_tags =
       tmpl::list<elliptic::dg::Tags::Massive, BackgroundTag>;
   using simple_tags =
-      tmpl::list<fixed_sources_tag, singular_vars_tag,
+      tmpl::list<fields_tag, fixed_sources_tag, singular_vars_tag,
                  overlaps_tag<singular_vars_on_mortars_tag>,
                  Tags::BoyerLindquistRadius, Tags::FieldIsRegularized,
                  overlaps_tag<Tags::FieldIsRegularized>>;
@@ -120,6 +121,7 @@ struct InitializeEffectiveSource : tt::ConformsTo<::amr::protocols::Projector> {
 
   template <typename Background, typename Metavariables, typename... AmrData>
   static void apply(
+      const gsl::not_null<typename fields_tag::type*> fields,
       const gsl::not_null<typename fixed_sources_tag::type*> fixed_sources,
       const gsl::not_null<typename singular_vars_tag::type*> singular_vars,
       const gsl::not_null<
@@ -183,10 +185,11 @@ struct InitializeEffectiveSource : tt::ConformsTo<::amr::protocols::Projector> {
       }
     }
 
-    // Only set the effective source if solving for the regular field
+    // - Set the effective source if solving for the regular field.
+    // - Set the singular field as initial guess if solving for the full field.
+    const auto vars =
+        circular_orbit.variables(inertial_coords, analytic_tags_list{});
     if (*field_is_regularized) {
-      const auto vars =
-          circular_orbit.variables(inertial_coords, analytic_tags_list{});
       fixed_sources->initialize(mesh.number_of_grid_points());
       singular_vars->initialize(mesh.number_of_grid_points());
       get<::Tags::FixedSource<Tags::MMode>>(*fixed_sources) =
@@ -236,6 +239,10 @@ struct InitializeEffectiveSource : tt::ConformsTo<::amr::protocols::Projector> {
             mortar_normal, singular_field_flux_on_mortar);
       }
     } else {
+      if constexpr (sizeof...(AmrData) == 0) {
+        fields->initialize(mesh.number_of_grid_points());
+        get<Tags::MMode>(*fields) = get<Tags::SingularField>(vars);
+      }
       *fixed_sources = Variables<typename fixed_sources_tag::tags_list>{
           mesh.number_of_grid_points(), 0.};
       *singular_vars = Variables<typename singular_vars_tag::tags_list>{
