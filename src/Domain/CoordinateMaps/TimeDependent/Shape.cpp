@@ -290,10 +290,14 @@ template <typename T>
 tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame> Shape::jacobian(
     const std::array<T, 3>& source_coords, const double time,
     const FunctionsOfTimeMap& functions_of_time) const {
-  const auto centered_coords = center_coordinates(source_coords);
+  using ReturnType = tt::remove_cvref_wrap_t<T>;
+
+  const std::array<ReturnType, 3> centered_coords =
+      center_coordinates(source_coords);
 
   // The distorted radii are calculated analogously to the call operator
-  auto theta_phis = cartesian_to_spherical(centered_coords);
+  std::array<ReturnType, 2> theta_phis =
+      cartesian_to_spherical(centered_coords);
   const ylm::Spherepack extended_ylm(l_max_ + 1, m_max_ + 1);
   // The Cartesian gradient cannot be represented exactly by `l_max_` and
   // `m_max_` which causes an aliasing error. We need an additional order to
@@ -321,7 +325,6 @@ tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame> Shape::jacobian(
     }
   }
   check_size(make_not_null(&extended_coefs), functions_of_time, time, false);
-  using ReturnType = tt::remove_cvref_wrap_t<T>;
 
   // Re-use allocation
   ReturnType& distorted_radii = get<0>(theta_phis);
