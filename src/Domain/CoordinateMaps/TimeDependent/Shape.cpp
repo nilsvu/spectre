@@ -95,7 +95,6 @@ void Shape::jacobian_helper(
                            get<2>(cartesian_gradient).data(),
                            interpolation_info);
 
-
   const T transition_func_over_square_radius =
       transition_func_over_radius * one_over_radius;
   const T transition_func_over_cube_radius =
@@ -333,12 +332,11 @@ tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame> Shape::jacobian(
       check_and_compute_one_over_radius(centered_coords);
   const ReturnType transition_func_over_radius =
       transition_func_->operator()(centered_coords) * one_over_radius;
-  tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame> result(
-      get_size(centered_coords[0]));
+  tnsr::Ij<ReturnType, 3, Frame::NoFrame> result(get_size(centered_coords[0]));
 
-  jacobian_helper(make_not_null(&result), interpolation_info, extended_coefs,
-                  centered_coords, distorted_radii, one_over_radius,
-                  transition_func_over_radius);
+  jacobian_helper<ReturnType>(make_not_null(&result), interpolation_info,
+                              extended_coefs, centered_coords, distorted_radii,
+                              one_over_radius, transition_func_over_radius);
   return result;
 }
 
