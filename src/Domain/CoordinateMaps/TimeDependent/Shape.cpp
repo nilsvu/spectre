@@ -95,11 +95,12 @@ void Shape::jacobian_helper(
                            get<2>(cartesian_gradient).data(),
                            interpolation_info);
 
-  auto transition_func_over_square_radius =
+
+  const T transition_func_over_square_radius =
       transition_func_over_radius * one_over_radius;
-  auto transition_func_over_cube_radius =
+  const T transition_func_over_cube_radius =
       transition_func_over_square_radius * one_over_radius;
-  auto transition_func_gradient_over_radius =
+  const std::array<T, 3> transition_func_gradient_over_radius =
       transition_func_->gradient(centered_coords) * one_over_radius;
 
   auto& target_gradient_x_times_spatial_part = target_gradient_x;
