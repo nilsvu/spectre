@@ -49,16 +49,17 @@ void Shape::jacobian_helper(
     const DataVector& extended_coefs, const std::array<T, 3>& centered_coords,
     const T& distorted_radii, const T& one_over_radius,
     const T& transition_func_over_radius) const {
+  const ylm::Spherepack extended_ylm(l_max_ + 1, m_max_ + 1);
   const auto angular_gradient =
-      extended_ylm_.gradient_from_coefs(extended_coefs);
+      extended_ylm.gradient_from_coefs(extended_coefs);
 
   tnsr::i<DataVector, 3, Frame::Inertial> cartesian_gradient(
-      extended_ylm_.physical_size());
+      extended_ylm.physical_size());
 
   std::array<DataVector, 2> collocation_theta_phis{};
   collocation_theta_phis[0].set_data_ref(&get<2>(cartesian_gradient));
   collocation_theta_phis[1].set_data_ref(&get<1>(cartesian_gradient));
-  collocation_theta_phis = extended_ylm_.theta_phi_points();
+  collocation_theta_phis = extended_ylm.theta_phi_points();
 
   const auto& col_thetas = collocation_theta_phis[0];
   const auto& col_phis = collocation_theta_phis[1];
@@ -84,15 +85,15 @@ void Shape::jacobian_helper(
 
   // interpolate the cartesian gradient to the thetas and phis of the
   // `source_coords`
-  extended_ylm_.interpolate(make_not_null(&target_gradient_x),
-                            get<0>(cartesian_gradient).data(),
-                            interpolation_info);
-  extended_ylm_.interpolate(make_not_null(&target_gradient_y),
-                            get<1>(cartesian_gradient).data(),
-                            interpolation_info);
-  extended_ylm_.interpolate(make_not_null(&target_gradient_z),
-                            get<2>(cartesian_gradient).data(),
-                            interpolation_info);
+  extended_ylm.interpolate(make_not_null(&target_gradient_x),
+                           get<0>(cartesian_gradient).data(),
+                           interpolation_info);
+  extended_ylm.interpolate(make_not_null(&target_gradient_y),
+                           get<1>(cartesian_gradient).data(),
+                           interpolation_info);
+  extended_ylm.interpolate(make_not_null(&target_gradient_z),
+                           get<2>(cartesian_gradient).data(),
+                           interpolation_info);
 
   auto transition_func_over_square_radius =
       transition_func_over_radius * one_over_radius;
@@ -293,18 +294,18 @@ tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame> Shape::jacobian(
 
   // The distorted radii are calculated analogously to the call operator
   auto theta_phis = cartesian_to_spherical(centered_coords);
-
+  const ylm::Spherepack extended_ylm(l_max_ + 1, m_max_ + 1);
   // The Cartesian gradient cannot be represented exactly by `l_max_` and
   // `m_max_` which causes an aliasing error. We need an additional order to
   // represent it. This is in theory not needed for the distorted_radii
   // calculation but saves calculating the `interpolation_info` twice.
   const auto interpolation_info =
-      extended_ylm_.set_up_interpolation_info(theta_phis);
+      extended_ylm.set_up_interpolation_info(theta_phis);
 
   const DataVector coefs =
       functions_of_time.at(shape_f_of_t_name_)->func(time)[0];
   check_coefficients(coefs);
-  DataVector extended_coefs(extended_ylm_.spectral_size(), 0.);
+  DataVector extended_coefs(extended_ylm.spectral_size(), 0.);
 
   // Copy over the coefficients. The additional coefficients of order `l_max_
   // +1` are zero and will only have an effect in the interpolation of the
@@ -323,8 +324,8 @@ tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame> Shape::jacobian(
 
   // Re-use allocation
   auto& distorted_radii = get<0>(theta_phis);
-  extended_ylm_.interpolate_from_coefs(make_not_null(&distorted_radii),
-                                       extended_coefs, interpolation_info);
+  extended_ylm.interpolate_from_coefs(make_not_null(&distorted_radii),
+                                      extended_coefs, interpolation_info);
 
   using ReturnType = tt::remove_cvref_wrap_t<T>;
   const ReturnType one_over_radius =
@@ -372,13 +373,14 @@ void Shape::coords_frame_velocity_jacobian(
   theta_phis[0].set_data_ref(&get<0, 0>(*jac));
   theta_phis[1].set_data_ref(&get<0, 1>(*jac));
   cartesian_to_spherical(make_not_null(&theta_phis), centered_coords);
+  const ylm::Spherepack extended_ylm(l_max_ + 1, m_max_ + 1);
   const auto interpolation_info =
-      extended_ylm_.set_up_interpolation_info(theta_phis);
+      extended_ylm.set_up_interpolation_info(theta_phis);
 
   const auto [coefs, coef_derivs] =
       functions_of_time.at(shape_f_of_t_name_)->func_and_deriv(time);
-  DataVector extended_coefs_derivs(extended_ylm_.spectral_size(), 0.);
-  DataVector extended_coefs(extended_ylm_.spectral_size(), 0.);
+  DataVector extended_coefs_derivs(extended_ylm.spectral_size(), 0.);
+  DataVector extended_coefs(extended_ylm.spectral_size(), 0.);
 
   // Copy over the coefficients. The additional coefficients of order `l_max_
   // +1` are zero and will only have an effect in the interpolation of the
@@ -400,8 +402,8 @@ void Shape::coords_frame_velocity_jacobian(
   auto& distorted_radii = get(get<::Tags::TempScalar<0>>(temps));
   // evaluate the spherical harmonic expansion at the angles of
   // `source_coords`
-  extended_ylm_.interpolate_from_coefs(make_not_null(&distorted_radii),
-                                       extended_coefs, interpolation_info);
+  extended_ylm.interpolate_from_coefs(make_not_null(&distorted_radii),
+                                      extended_coefs, interpolation_info);
 
   auto& one_over_radius = get(get<::Tags::TempScalar<1>>(temps));
   one_over_radius = check_and_compute_one_over_radius(centered_coords);
@@ -413,9 +415,9 @@ void Shape::coords_frame_velocity_jacobian(
       centered_coords * (1. - distorted_radii * transition_func_over_radius);
 
   auto& radii_velocities = get<0, 1>(*jac);
-  extended_ylm_.interpolate_from_coefs(make_not_null(&radii_velocities),
-                                       extended_coefs_derivs,
-                                       interpolation_info);
+  extended_ylm.interpolate_from_coefs(make_not_null(&radii_velocities),
+                                      extended_coefs_derivs,
+                                      interpolation_info);
   *frame_vel =
       -centered_coords * radii_velocities * transition_func_over_radius;
 
