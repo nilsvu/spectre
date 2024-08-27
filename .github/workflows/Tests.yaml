@@ -455,6 +455,13 @@ jobs:
             BUILD_SHARED_LIBS: OFF
             use_xsimd: OFF
             MEMORY_ALLOCATOR: JEMALLOC
+          - compiler: clang-13
+            build_type: Release
+            BUILD_SHARED_LIBS: OFF
+            MEMORY_ALLOCATOR: JEMALLOC
+            XCTS_ONLY: ON
+            unit_tests: OFF
+            test_executables: OFF
           # Add a test without PCH to the build matrix, which only builds core
           # libraries. Building all the tests without the PCH takes very long
           # and the most we would catch is a missing include of something that's
@@ -730,6 +737,13 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
         working-directory: build
         run: |
           make test-executables
+      - name: Run KerrSchild XCTS test
+        if: matrix.XCTS_ONLY == 'ON'
+        working-directory: build
+        run: |
+          make -j4 SolveXcts
+          ctest -R InputFiles.Xcts.KerrSchild.yaml.execute_check_output \
+              --output-on-failure --repeat after-timeout:3
       - name: Build Benchmark executable
         if: matrix.build_type == 'Release'
         working-directory: build
@@ -768,7 +782,7 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
           #
           # Only use 2 cores because these tests run more slowly.
           ctest -j2 -LE unit --output-on-failure \
-                --repeat after-timeout:3
+                --repeat after-timeout:3 --verbose
       - name: Install
         if: matrix.install == 'ON'
         working-directory: build

@@ -6,6 +6,7 @@ import glob
 import logging
 import os
 import re
+import sys
 import unittest
 
 import h5py
@@ -88,6 +89,7 @@ class H5Check:
 
         if isinstance(h5_file[test_entity], h5py.Dataset):
             logging.info("Checking dataset : " + test_entity)
+            np.set_printoptions(threshold=sys.maxsize, precision=16)
             with self.unit_test.subTest(
                 test_entity=test_entity, expected_entity=expected_entity
             ):
@@ -115,22 +117,66 @@ class H5Check:
                         ),
                     )
                     if test_data.dtype == float or test_data.dtype == complex:
-                        npt.assert_allclose(
-                            test_data[:, column_mask],
-                            expected_data[:, column_mask],
-                            rtol=self.relative_tolerance,
-                            atol=self.absolute_tolerance,
-                        )
+                        try:
+                            npt.assert_allclose(
+                                test_data[:, column_mask],
+                                expected_data[:, column_mask],
+                                rtol=self.relative_tolerance,
+                                atol=self.absolute_tolerance,
+                            )
+                        except Exception as e:
+                            print("Numpy exception message:")
+                            print(e)
+                            print("Full arrays")
+                            print("ACTUAL")
+                            actual = test_data[:, column_mask]
+                            print(actual)
+                            print("DESIRED")
+                            desired = np.array(expected_data[:, column_mask])
+                            print(desired)
+                            for i in range(len(actual)):
+                                for j in range(len(actual[0])):
+                                    print(f"index: i={i},j={j}")
+                                    npt.assert_allclose(
+                                        np.array([actual[i][j]]),
+                                        np.array([desired[i][j]]),
+                                        rtol=self.relative_tolerance,
+                                        atol=self.absolute_tolerance,
+                                    )
                     else:
                         self.unit_test.assertEqual(test_data, expected_data)
                 else:
                     if test_data.dtype == float or test_data.dtype == complex:
-                        npt.assert_allclose(
-                            test_data[:, column_mask],
-                            self.expected_data or 0.0,
-                            rtol=self.relative_tolerance,
-                            atol=self.absolute_tolerance,
-                        )
+                        try:
+                            npt.assert_allclose(
+                                test_data[:, column_mask],
+                                self.expected_data or 0.0,
+                                rtol=self.relative_tolerance,
+                                atol=self.absolute_tolerance,
+                            )
+                        except Exception as e:
+                            print("Numpy exception message:")
+                            print(e)
+                            print("Full arrays")
+                            print("ACTUAL")
+                            actual = test_data[:, column_mask]
+                            print(actual)
+                            print("DESIRED")
+                            desired = (
+                                np.full_like(actual, 0.0)
+                                if self.expected_data is None
+                                else np.array(self.expected_data)
+                            )
+                            print(desired)
+                            for i in range(len(actual)):
+                                for j in range(len(actual[0])):
+                                    print(f"index: i={i},j={j}")
+                                    npt.assert_allclose(
+                                        np.array([actual[i][j]]),
+                                        np.array([desired[i][j]]),
+                                        rtol=self.relative_tolerance,
+                                        atol=self.absolute_tolerance,
+                                    )
                     else:
                         self.assertTrue(
                             False,
