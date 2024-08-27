@@ -294,12 +294,12 @@ class Shape {
   }
 
   template <typename T>
-  void jacobian_helper(
-      gsl::not_null<tnsr::Ij<T, 3, Frame::NoFrame>*> result,
-      const ylm::Spherepack::InterpolationInfo<T>& interpolation_info,
-      const DataVector& extended_coefs, const std::array<T, 3>& centered_coords,
-      const T& distorted_radii, const T& one_over_radius,
-      const T& transition_func_over_radius) const;
+  void jacobian_helper(gsl::not_null<tnsr::Ij<T, 3, Frame::NoFrame>*> result,
+                       const std::array<T, 3>& centered_coords,
+                       const T& distorted_radii, const T& one_over_radius,
+                       const T& transition_func_over_radius,
+                       const T& target_gradient_x, const T& target_gradient_y,
+                       const T& target_gradient_z) const;
 
   void check_size(const gsl::not_null<DataVector*>& coefs,
                   const FunctionsOfTimeMap& functions_of_time, double time,

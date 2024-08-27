@@ -45,56 +45,10 @@ void cartesian_to_spherical(gsl::not_null<std::array<T, 2>*> result,
 template <typename T>
 void Shape::jacobian_helper(
     gsl::not_null<tnsr::Ij<T, 3, Frame::NoFrame>*> result,
-    const ylm::Spherepack::InterpolationInfo<T>& interpolation_info,
-    const DataVector& extended_coefs, const std::array<T, 3>& centered_coords,
-    const T& distorted_radii, const T& one_over_radius,
-    const T& transition_func_over_radius) const {
-  const ylm::Spherepack extended_ylm(l_max_ + 1, m_max_ + 1);
-  const tnsr::i<DataVector, 2, Frame::ElementLogical> angular_gradient =
-      extended_ylm.gradient_from_coefs(extended_coefs);
-
-  tnsr::i<DataVector, 3, Frame::Inertial> cartesian_gradient(
-      extended_ylm.physical_size());
-
-  std::array<DataVector, 2> collocation_theta_phis{};
-  collocation_theta_phis[0].set_data_ref(&get<2>(cartesian_gradient));
-  collocation_theta_phis[1].set_data_ref(&get<1>(cartesian_gradient));
-  collocation_theta_phis = extended_ylm.theta_phi_points();
-
-  const DataVector& col_thetas = collocation_theta_phis[0];
-  const DataVector& col_phis = collocation_theta_phis[1];
-
-  // The Cartesian derivative is the Pfaffian derivative multiplied by the
-  // inverse Jacobian matrix. Some optimizations here may be possible by
-  // introducing temporaries for some of the sin/cos which are computed twice,
-  // if the compiler CSE doesn't take care of it.
-  get<0>(cartesian_gradient) =
-      (cos(col_thetas) * cos(col_phis) * get<0>(angular_gradient) -
-       sin(col_phis) * get<1>(angular_gradient));
-
-  get<1>(cartesian_gradient) =
-      (cos(col_thetas) * sin(col_phis) * get<0>(angular_gradient) +
-       cos(col_phis) * get<1>(angular_gradient));
-
-  get<2>(cartesian_gradient) = -sin(col_thetas) * get<0>(angular_gradient);
-
-  // re-use allocation
-  T& target_gradient_x = get<2, 0>(*result);
-  T& target_gradient_y = get<2, 1>(*result);
-  T& target_gradient_z = get<2, 2>(*result);
-
-  // interpolate the cartesian gradient to the thetas and phis of the
-  // `source_coords`
-  extended_ylm.interpolate(make_not_null(&target_gradient_x),
-                           get<0>(cartesian_gradient).data(),
-                           interpolation_info);
-  extended_ylm.interpolate(make_not_null(&target_gradient_y),
-                           get<1>(cartesian_gradient).data(),
-                           interpolation_info);
-  extended_ylm.interpolate(make_not_null(&target_gradient_z),
-                           get<2>(cartesian_gradient).data(),
-                           interpolation_info);
-
+    const std::array<T, 3>& centered_coords, const T& distorted_radii,
+    const T& one_over_radius, const T& transition_func_over_radius,
+    const T& target_gradient_x, const T& target_gradient_y,
+    const T& target_gradient_z) const {
   const T transition_func_over_square_radius =
       transition_func_over_radius * one_over_radius;
   const T transition_func_over_cube_radius =
@@ -102,9 +56,9 @@ void Shape::jacobian_helper(
   const std::array<T, 3> transition_func_gradient_over_radius =
       transition_func_->gradient(centered_coords) * one_over_radius;
 
-  T& target_gradient_x_times_spatial_part = target_gradient_x;
-  T& target_gradient_y_times_spatial_part = target_gradient_y;
-  auto& target_gradient_z_times_spatial_part = target_gradient_z;
+  T target_gradient_x_times_spatial_part = target_gradient_x;
+  T target_gradient_y_times_spatial_part = target_gradient_y;
+  T target_gradient_z_times_spatial_part = target_gradient_z;
   target_gradient_x_times_spatial_part *= transition_func_over_square_radius;
   target_gradient_y_times_spatial_part *= transition_func_over_square_radius;
   target_gradient_z_times_spatial_part *= transition_func_over_square_radius;
@@ -336,17 +290,13 @@ tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame> Shape::jacobian(
   const ReturnType transition_func_over_radius =
       transition_func_->operator()(centered_coords) * one_over_radius;
   tnsr::Ij<ReturnType, 3, Frame::NoFrame> result(get_size(centered_coords[0]));
-
- const tnsr::i<DataVector, 2, Frame::ElementLogical> angular_gradient =
+  const tnsr::i<DataVector, 2, Frame::ElementLogical> angular_gradient =
       extended_ylm.gradient_from_coefs(extended_coefs);
 
   tnsr::i<DataVector, 3, Frame::Inertial> cartesian_gradient(
       extended_ylm.physical_size());
 
-  std::array<DataVector, 2> collocation_theta_phis{};
-  collocation_theta_phis[0].set_data_ref(&get<2>(cartesian_gradient));
-  collocation_theta_phis[1].set_data_ref(&get<1>(cartesian_gradient));
-  collocation_theta_phis = extended_ylm.theta_phi_points();
+  const auto collocation_theta_phis = extended_ylm.theta_phi_points();
 
   const DataVector& col_thetas = collocation_theta_phis[0];
   const DataVector& col_phis = collocation_theta_phis[1];
@@ -366,9 +316,9 @@ tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame> Shape::jacobian(
   get<2>(cartesian_gradient) = -sin(col_thetas) * get<0>(angular_gradient);
 
   // re-use allocation
-  ReturnType& target_gradient_x = get<2, 0>(result);
-  ReturnType& target_gradient_y = get<2, 1>(result);
-  ReturnType& target_gradient_z = get<2, 2>(result);
+  ReturnType target_gradient_x(get_size(get<0>(centered_coords)));
+  ReturnType target_gradient_y(get_size(get<0>(centered_coords)));
+  ReturnType target_gradient_z(get_size(get<0>(centered_coords)));
 
   // interpolate the cartesian gradient to the thetas and phis of the
   // `source_coords`
@@ -382,75 +332,10 @@ tnsr::Ij<tt::remove_cvref_wrap_t<T>, 3, Frame::NoFrame> Shape::jacobian(
                            get<2>(cartesian_gradient).data(),
                            interpolation_info);
 
-  const ReturnType transition_func_over_square_radius =
-      transition_func_over_radius * one_over_radius;
-  const ReturnType transition_func_over_cube_radius =
-      transition_func_over_square_radius * one_over_radius;
-  const std::array<ReturnType, 3> transition_func_gradient_over_radius =
-      transition_func_->gradient(centered_coords) * one_over_radius;
-
-  ReturnType& target_gradient_x_times_spatial_part = target_gradient_x;
-  ReturnType& target_gradient_y_times_spatial_part = target_gradient_y;
-  auto& target_gradient_z_times_spatial_part = target_gradient_z;
-  target_gradient_x_times_spatial_part *= transition_func_over_square_radius;
-  target_gradient_y_times_spatial_part *= transition_func_over_square_radius;
-  target_gradient_z_times_spatial_part *= transition_func_over_square_radius;
-
-  const auto& [x_transition_gradient_over_radius,
-               y_transition_gradient_over_radius,
-               z_transition_gradient_over_radius] =
-      transition_func_gradient_over_radius;
-  const auto& [x_centered, y_centered, z_centered] = centered_coords;
-
-  get<0, 0>(result) =
-      -x_centered * ((x_transition_gradient_over_radius -
-                      x_centered * transition_func_over_cube_radius) *
-                         distorted_radii +
-                     target_gradient_x_times_spatial_part);
-  get<0, 1>(result) =
-      -x_centered * ((y_transition_gradient_over_radius -
-                      y_centered * transition_func_over_cube_radius) *
-                         distorted_radii +
-                     target_gradient_y_times_spatial_part);
-  get<0, 2>(result) =
-      -x_centered * ((z_transition_gradient_over_radius -
-                      z_centered * transition_func_over_cube_radius) *
-                         distorted_radii +
-                     target_gradient_z_times_spatial_part);
-  get<1, 0>(result) =
-      -y_centered * ((x_transition_gradient_over_radius -
-                      x_centered * transition_func_over_cube_radius) *
-                         distorted_radii +
-                     target_gradient_x_times_spatial_part);
-  get<1, 1>(result) =
-      -y_centered * ((y_transition_gradient_over_radius -
-                      y_centered * transition_func_over_cube_radius) *
-                         distorted_radii +
-                     target_gradient_y_times_spatial_part);
-  get<1, 2>(result) =
-      -y_centered * ((z_transition_gradient_over_radius -
-                      z_centered * transition_func_over_cube_radius) *
-                         distorted_radii +
-                     target_gradient_z_times_spatial_part);
-  get<2, 0>(result) =
-      -z_centered * ((x_transition_gradient_over_radius -
-                      x_centered * transition_func_over_cube_radius) *
-                         distorted_radii +
-                     target_gradient_x_times_spatial_part);
-  get<2, 1>(result) =
-      -z_centered * ((y_transition_gradient_over_radius -
-                      y_centered * transition_func_over_cube_radius) *
-                         distorted_radii +
-                     target_gradient_y_times_spatial_part);
-  get<2, 2>(result) =
-      -z_centered * ((z_transition_gradient_over_radius -
-                      z_centered * transition_func_over_cube_radius) *
-                         distorted_radii +
-                     target_gradient_z_times_spatial_part);
-
-  get<0, 0>(result) += 1. - distorted_radii * transition_func_over_radius;
-  get<1, 1>(result) += 1. - distorted_radii * transition_func_over_radius;
-  get<2, 2>(result) += 1. - distorted_radii * transition_func_over_radius;
+  jacobian_helper<ReturnType>(make_not_null(&result), centered_coords,
+                              distorted_radii, one_over_radius,
+                              transition_func_over_radius, target_gradient_x,
+                              target_gradient_y, target_gradient_z);
   return result;
 }
 
@@ -534,9 +419,9 @@ void Shape::coords_frame_velocity_jacobian(
   *frame_vel =
       -centered_coords * radii_velocities * transition_func_over_radius;
 
-  jacobian_helper<DataVector>(jac, interpolation_info, extended_coefs,
-                              centered_coords, distorted_radii, one_over_radius,
-                              transition_func_over_radius);
+  jacobian_helper<DataVector>(jac, centered_coords, distorted_radii,
+                              one_over_radius, transition_func_over_radius,
+                              DataVector{}, DataVector{}, DataVector{});
 }
 
 template <typename T>
