@@ -478,10 +478,10 @@ auto CoordinateMap<SourceFrame, TargetFrame, Maps...>::
         using Map = std::decay_t<decltype(map)>;
         static constexpr bool is_time_dependent =
             domain::is_map_time_dependent_v<Map>;
-        static constexpr bool use_combined_call =
-            CoordinateMap_detail::has_combined_coords_frame_velocity_jacs_v<
-                dim, Map> and
-            std::is_same_v<T, DataVector>;
+        static constexpr bool use_combined_call = false;
+            //CoordinateMap_detail::has_combined_coords_frame_velocity_jacs_v<
+            //    dim, Map> and
+            //std::is_same_v<T, DataVector>;
 
         [[maybe_unused]] std::array<T, dim> noframe_frame_velocity{};
         tnsr::Ij<T, dim, Frame::NoFrame> noframe_jac{};
