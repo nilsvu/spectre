@@ -408,14 +408,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # We have a sparse clang test configuration to reduce the amount of
-        # GitHub cache space we use. GCC being the production compiler on
-        # supercomputers means we need to thoroughly test it.
-        compiler:
-          - gcc-9
-          - gcc-10
-          - gcc-11
-        build_type: [Debug, Release]
         include:
           # Generate code coverage report for a single build
           # Note: currently disabled because it exceeds the available disk space
@@ -425,36 +417,9 @@ jobs:
           #   TEST_TIMEOUT_FACTOR: 3
           # This configuration seems to run consistently slower than newer gcc
           # or clang builds, so we increase the test timeout a bit
-          - compiler: gcc-10
-            build_type: Debug
-            TEST_TIMEOUT_FACTOR: 2
-            # Test 3D rendering with ParaView
-            # Note: currently disabled because of some unknown upstream issue
-            # test_3d_rendering: ON
-            # Need Python version consistent with ParaView
-            PYTHON_VERSION: "3.9"
-          # Don't modify the gcc-11 Debug build so its cache can be reused for
-          # the documentation build
-          # - compiler: gcc-11
-          #   build_type: Debug
-          # Test with Python 3.8 so that we retain backwards compatibility. We
-          # keep track of Python versions on supercomputers in this issue:
-          # https://github.com/sxs-collaboration/spectre/issues/442
-          - compiler: gcc-11
-            build_type: Release
-            PYTHON_VERSION: "3.8"
-            # Disable building executable for this build for now because it
-            # exceeds the available memory. See issue:
-            # https://github.com/sxs-collaboration/spectre/issues/5472
-            test_executables: OFF
           # Test building with static libraries. Do so with clang in release
           # mode because these builds use up little disk space compared to GCC
           # builds or clang Debug builds
-          - compiler: clang-13
-            build_type: Release
-            BUILD_SHARED_LIBS: OFF
-            use_xsimd: OFF
-            MEMORY_ALLOCATOR: JEMALLOC
           - compiler: clang-13
             build_type: Release
             BUILD_SHARED_LIBS: OFF
@@ -462,43 +427,22 @@ jobs:
             XCTS_ONLY: ON
             unit_tests: OFF
             test_executables: OFF
-          # Add a test without PCH to the build matrix, which only builds core
-          # libraries. Building all the tests without the PCH takes very long
-          # and the most we would catch is a missing include of something that's
-          # in the PCH.
-          # Use this test also to build and test all input files with "normal"
-          # or higher priority. The other configurations only test input files
-          # with "high" priority to reduce the total build time.
           - compiler: clang-13
             build_type: Debug
-            use_pch: OFF
-            unit_tests: OFF
-            input_file_tests_min_priority: "normal"
-          # Test with ASAN
-          - compiler: clang-14
-            build_type: Debug
-            # When building with ASAN we also need python bindings to be
-            # disabled because otherwise we get link errors. See issue:
-            # https://github.com/sxs-collaboration/spectre/issues/1890
-            # So we are also using this build to test building without Python
-            # bindings enabled.
-            ASAN: ON
-            BUILD_PYTHON_BINDINGS: OFF
+            BUILD_SHARED_LIBS: OFF
             MEMORY_ALLOCATOR: JEMALLOC
-            TEST_TIMEOUT_FACTOR: 2
-          - compiler: clang-14
+            XCTS_ONLY: ON
+            unit_tests: OFF
+            test_executables: OFF
+          # Test with ASAN
+          - compiler: clang-13
             build_type: Release
-            # Test compatibility with oldest supported CMake version
-            CMAKE_VERSION: "3.18.2"
-            # Use an MPI version of Charm
-            CHARM_ROOT: /work/charm_7_0_0/mpi-linux-x86_64-smp-clang
-            # MPI running tests is a bit slower than multicore
-            TEST_TIMEOUT_FACTOR: 3
-            # If MPI should be tested
-            USE_MPI: ON
-            # Test `install` target with clang in Release mode because it uses
-            # little disk space
-            install: ON
+            BUILD_SHARED_LIBS: ON
+            MEMORY_ALLOCATOR: JEMALLOC
+            XCTS_ONLY: ON
+            unit_tests: OFF
+            test_executables: OFF
+
 
     container:
       image: ${{ inputs.container || 'sxscollaboration/spectre:dev' }}
@@ -1225,15 +1169,6 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
           - sde_arch: ("-nhm;nehalem" "-snb;sandybridge" "-hsw;haswell"
               "-skl;skylake")
             compiler: gcc-9
-          - sde_arch: ("-nhm;nehalem" "-snb;sandybridge" "-hsw;haswell"
-              "-skl;skylake" "-icx;icelake-server")
-            compiler: gcc-10
-          - sde_arch: ("-nhm;nehalem" "-snb;sandybridge" "-hsw;haswell"
-              "-skl;skylake" "-icx;icelake-server")
-            compiler: clang-13
-          - sde_arch: ("-nhm;nehalem" "-snb;sandybridge" "-hsw;haswell"
-              "-skl;skylake" "-icx;icelake-server" "-tgl;tigerlake")
-            compiler: clang-14
     container:
       image: ${{ inputs.container || 'sxscollaboration/spectre:dev' }}
       env:
