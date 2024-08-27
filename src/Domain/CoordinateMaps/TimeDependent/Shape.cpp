@@ -50,7 +50,7 @@ void Shape::jacobian_helper(
     const T& distorted_radii, const T& one_over_radius,
     const T& transition_func_over_radius) const {
   const ylm::Spherepack extended_ylm(l_max_ + 1, m_max_ + 1);
-  const auto angular_gradient =
+  const tnsr::i<DataVector, 2, Frame::ElementLogical> angular_gradient =
       extended_ylm.gradient_from_coefs(extended_coefs);
 
   tnsr::i<DataVector, 3, Frame::Inertial> cartesian_gradient(
@@ -61,8 +61,8 @@ void Shape::jacobian_helper(
   collocation_theta_phis[1].set_data_ref(&get<1>(cartesian_gradient));
   collocation_theta_phis = extended_ylm.theta_phi_points();
 
-  const auto& col_thetas = collocation_theta_phis[0];
-  const auto& col_phis = collocation_theta_phis[1];
+  const DataVector& col_thetas = collocation_theta_phis[0];
+  const DataVector& col_phis = collocation_theta_phis[1];
 
   // The Cartesian derivative is the Pfaffian derivative multiplied by the
   // inverse Jacobian matrix. Some optimizations here may be possible by
@@ -79,9 +79,9 @@ void Shape::jacobian_helper(
   get<2>(cartesian_gradient) = -sin(col_thetas) * get<0>(angular_gradient);
 
   // re-use allocation
-  auto& target_gradient_x = get<2, 0>(*result);
-  auto& target_gradient_y = get<2, 1>(*result);
-  auto& target_gradient_z = get<2, 2>(*result);
+  T& target_gradient_x = get<2, 0>(*result);
+  T& target_gradient_y = get<2, 1>(*result);
+  T& target_gradient_z = get<2, 2>(*result);
 
   // interpolate the cartesian gradient to the thetas and phis of the
   // `source_coords`
@@ -102,8 +102,8 @@ void Shape::jacobian_helper(
   const std::array<T, 3> transition_func_gradient_over_radius =
       transition_func_->gradient(centered_coords) * one_over_radius;
 
-  auto& target_gradient_x_times_spatial_part = target_gradient_x;
-  auto& target_gradient_y_times_spatial_part = target_gradient_y;
+  T& target_gradient_x_times_spatial_part = target_gradient_x;
+  T& target_gradient_y_times_spatial_part = target_gradient_y;
   auto& target_gradient_z_times_spatial_part = target_gradient_z;
   target_gradient_x_times_spatial_part *= transition_func_over_square_radius;
   target_gradient_y_times_spatial_part *= transition_func_over_square_radius;
