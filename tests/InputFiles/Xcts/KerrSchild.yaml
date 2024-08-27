@@ -100,7 +100,7 @@ DomainCreator:
     TimeDependentMaps:
       Shape:
         InitialTime: 0.
-        LMax: 22
+        LMax: 20
         Mass: *KerrMass
         Spin: *KerrSpin
         Center: *KerrCenter
