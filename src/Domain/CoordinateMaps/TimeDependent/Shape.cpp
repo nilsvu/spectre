@@ -345,8 +345,9 @@ void Shape::coords_frame_velocity_jacobian(
     gsl::not_null<std::array<DataVector, 3>*> source_and_target_coords,
     gsl::not_null<std::array<DataVector, 3>*> frame_vel,
     gsl::not_null<tnsr::Ij<DataVector, 3, Frame::NoFrame>*> jac, double time,
-    const FunctionsOfTimeMap& functions_of_time) const {
-  const size_t size = get<0>(*source_and_target_coords).size();
+    const FunctionsOfTimeMap& functions_of_time,
+    const std::array<DataVector, 3> target_coords) const {
+  const size_t size = get<0>(target_coords).size();
   ASSERT(size > 0,
          "The source coords have size 0 but the argument requires you to pass "
          "in the coordinates.");
@@ -366,8 +367,7 @@ void Shape::coords_frame_velocity_jacobian(
     gsl::at(centered_coords, i)
         .set_data_ref(&get<::Tags::TempI<0, 3, Frame::Inertial>>(temps).get(i));
   }
-  center_coordinates(make_not_null(&centered_coords),
-                     *source_and_target_coords);
+  center_coordinates(make_not_null(&centered_coords), target_coords);
 
   std::array<DataVector, 2> theta_phis{};
   theta_phis[0].set_data_ref(&get<0, 0>(*jac));

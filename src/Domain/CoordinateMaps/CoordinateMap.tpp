@@ -52,7 +52,8 @@ using combined_coords_frame_velocity_jacs_t =
         std::declval<const double>(),
         std::declval<const std::unordered_map<
             std::string,
-            std::unique_ptr<domain::FunctionsOfTime::FunctionOfTime>>&>()));
+            std::unique_ptr<domain::FunctionsOfTime::FunctionOfTime>>&>(),
+        std::declval<const std::array<DataVector, Dim>>()));
 
 template <size_t Dim, typename T, typename = std::void_t<>>
 struct has_combined_coords_frame_velocity_jacs : std::false_type {};
@@ -478,10 +479,10 @@ auto CoordinateMap<SourceFrame, TargetFrame, Maps...>::
         using Map = std::decay_t<decltype(map)>;
         static constexpr bool is_time_dependent =
             domain::is_map_time_dependent_v<Map>;
-        static constexpr bool use_combined_call = false;
-            //CoordinateMap_detail::has_combined_coords_frame_velocity_jacs_v<
-            //    dim, Map> and
-            //std::is_same_v<T, DataVector>;
+        static constexpr bool use_combined_call =
+            CoordinateMap_detail::has_combined_coords_frame_velocity_jacs_v<
+                dim, Map> and
+            std::is_same_v<T, DataVector>;
 
         [[maybe_unused]] std::array<T, dim> noframe_frame_velocity{};
         tnsr::Ij<T, dim, Frame::NoFrame> noframe_jac{};
@@ -489,7 +490,8 @@ auto CoordinateMap<SourceFrame, TargetFrame, Maps...>::
           map.coords_frame_velocity_jacobian(
               make_not_null(&mapped_point),
               make_not_null(&noframe_frame_velocity),
-              make_not_null(&noframe_jac), time, functions_of_time);
+              make_not_null(&noframe_jac), time, functions_of_time,
+              mapped_point);
         } else {
           // if the map is the identity we do not compute it unless it is the
           // first map, then it is used for initialization

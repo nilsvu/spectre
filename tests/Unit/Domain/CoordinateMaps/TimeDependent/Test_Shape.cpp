@@ -575,7 +575,7 @@ void test_combined_call(const TransitionFunction& transition_func, size_t l_max,
 
   map.coords_frame_velocity_jacobian(
       make_not_null(&target_data), make_not_null(&combined_frame_velocity),
-      make_not_null(&combined_jacobian), time, functions_of_time);
+      make_not_null(&combined_jacobian), time, functions_of_time, target_data);
 
   CHECK_ITERABLE_APPROX(target_data, single_coords);
   CHECK_ITERABLE_APPROX(combined_frame_velocity, single_frame_velocity);

@@ -253,7 +253,8 @@ class Shape {
       gsl::not_null<std::array<DataVector, 3>*> source_and_target_coords,
       gsl::not_null<std::array<DataVector, 3>*> frame_vel,
       gsl::not_null<tnsr::Ij<DataVector, 3, Frame::NoFrame>*> jac, double time,
-      const FunctionsOfTimeMap& functions_of_time) const;
+      const FunctionsOfTimeMap& functions_of_time,
+      const std::array<DataVector, 3> target_coords) const;
 
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p);
