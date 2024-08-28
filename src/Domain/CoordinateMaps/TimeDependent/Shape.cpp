@@ -50,6 +50,10 @@ void Shape::jacobian_helper(
     const T& target_gradient_x, const T& target_gradient_y,
     const T& target_gradient_z,
     const std::array<T, 3>& transition_func_gradient_over_radius) const {
+  const T transition_func_over_square_radius =
+      transition_func_over_radius * one_over_radius;
+  const T transition_func_over_cube_radius =
+      transition_func_over_radius * one_over_radius * one_over_radius;
   const auto& [x_transition_gradient_over_radius,
                y_transition_gradient_over_radius,
                z_transition_gradient_over_radius] =
@@ -57,68 +61,50 @@ void Shape::jacobian_helper(
   const auto& [x_centered, y_centered, z_centered] = centered_coords;
 
   get<0, 0>(*result) =
-      -x_centered *
-      ((x_transition_gradient_over_radius -
-        x_centered * transition_func_over_radius * one_over_radius *
-            one_over_radius) *
-           distorted_radii +
-       target_gradient_x * transition_func_over_radius * one_over_radius);
+      -x_centered * ((x_transition_gradient_over_radius -
+                      x_centered * transition_func_over_cube_radius) *
+                         distorted_radii +
+                     target_gradient_x * transition_func_over_square_radius);
   get<0, 1>(*result) =
-      -x_centered *
-      ((y_transition_gradient_over_radius -
-        y_centered * transition_func_over_radius * one_over_radius *
-            one_over_radius) *
-           distorted_radii +
-       target_gradient_y * transition_func_over_radius * one_over_radius);
+      -x_centered * ((y_transition_gradient_over_radius -
+                      y_centered * transition_func_over_cube_radius) *
+                         distorted_radii +
+                     target_gradient_y * transition_func_over_square_radius);
   get<0, 2>(*result) =
-      -x_centered *
-      ((z_transition_gradient_over_radius -
-        z_centered * transition_func_over_radius * one_over_radius *
-            one_over_radius) *
-           distorted_radii +
-       target_gradient_z * transition_func_over_radius * one_over_radius);
+      -x_centered * ((z_transition_gradient_over_radius -
+                      z_centered * transition_func_over_cube_radius) *
+                         distorted_radii +
+                     target_gradient_z * transition_func_over_square_radius);
   get<1, 0>(*result) =
-      -y_centered *
-      ((x_transition_gradient_over_radius -
-        x_centered * transition_func_over_radius * one_over_radius *
-            one_over_radius) *
-           distorted_radii +
-       target_gradient_x * transition_func_over_radius * one_over_radius);
+      -y_centered * ((x_transition_gradient_over_radius -
+                      x_centered * transition_func_over_cube_radius) *
+                         distorted_radii +
+                     target_gradient_x * transition_func_over_square_radius);
   get<1, 1>(*result) =
-      -y_centered *
-      ((y_transition_gradient_over_radius -
-        y_centered * transition_func_over_radius * one_over_radius *
-            one_over_radius) *
-           distorted_radii +
-       target_gradient_y * transition_func_over_radius * one_over_radius);
+      -y_centered * ((y_transition_gradient_over_radius -
+                      y_centered * transition_func_over_cube_radius) *
+                         distorted_radii +
+                     target_gradient_y * transition_func_over_square_radius);
   get<1, 2>(*result) =
-      -y_centered *
-      ((z_transition_gradient_over_radius -
-        z_centered * transition_func_over_radius * one_over_radius *
-            one_over_radius) *
-           distorted_radii +
-       target_gradient_z * transition_func_over_radius * one_over_radius);
+      -y_centered * ((z_transition_gradient_over_radius -
+                      z_centered * transition_func_over_cube_radius) *
+                         distorted_radii +
+                     target_gradient_z * transition_func_over_square_radius);
   get<2, 0>(*result) =
-      -z_centered *
-      ((x_transition_gradient_over_radius -
-        x_centered * transition_func_over_radius * one_over_radius *
-            one_over_radius) *
-           distorted_radii +
-       target_gradient_x * transition_func_over_radius * one_over_radius);
+      -z_centered * ((x_transition_gradient_over_radius -
+                      x_centered * transition_func_over_cube_radius) *
+                         distorted_radii +
+                     target_gradient_x * transition_func_over_square_radius);
   get<2, 1>(*result) =
-      -z_centered *
-      ((y_transition_gradient_over_radius -
-        y_centered * transition_func_over_radius * one_over_radius *
-            one_over_radius) *
-           distorted_radii +
-       target_gradient_y * transition_func_over_radius * one_over_radius);
+      -z_centered * ((y_transition_gradient_over_radius -
+                      y_centered * transition_func_over_cube_radius) *
+                         distorted_radii +
+                     target_gradient_y * transition_func_over_square_radius);
   get<2, 2>(*result) =
-      -z_centered *
-      ((z_transition_gradient_over_radius -
-        z_centered * transition_func_over_radius * one_over_radius *
-            one_over_radius) *
-           distorted_radii +
-       target_gradient_z * transition_func_over_radius * one_over_radius);
+      -z_centered * ((z_transition_gradient_over_radius -
+                      z_centered * transition_func_over_cube_radius) *
+                         distorted_radii +
+                     target_gradient_z * transition_func_over_square_radius);
 
   get<0, 0>(*result) += 1. - distorted_radii * transition_func_over_radius;
   get<1, 1>(*result) += 1. - distorted_radii * transition_func_over_radius;
