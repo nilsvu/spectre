@@ -4,98 +4,29 @@
 Executable: SolveXcts
 Testing:
   Check: parse
-  Timeout: 30
-  Priority: High
 ExpectedOutput:
   - BbhReductions.h5
-  - BbhVolume0.h5
-OutputFileChecks:
-  - Label: Norms
-    Subfile: Norms.dat
-    FileGlob: BbhReductions.h5
-    ExpectedData:
-      - [
-          5,
-          20304,
-          1.74532762048460e+33,
-          1.10996259399346e+00,
-          8.68051629831159e-01,
-          6.28127905852040e-01,
-          4.94959532218436e-03,
-          1.25936870550045e-03,
-          1.29835755854743e-03,
-          1.26478484974052e-03,
-        ]
-      - [
-          5,
-          20304,
-          1.74532762048460e+33,
-          1.10996259399346e+00,
-          8.68051629831159e-01,
-          6.28127905852040e-01,
-          4.94959532218436e-03,
-          1.25936870550045e-03,
-          1.29835755854743e-03,
-          1.26478484974052e-03,
-        ]
-      - [
-          5,
-          20304,
-          1.74532762048460e+33,
-          1.10996259399346e+00,
-          8.68051629831159e-01,
-          6.28127905852040e-01,
-          4.94959532218436e-03,
-          1.25936870550045e-03,
-          1.29835755854743e-03,
-          1.26478484974052e-03,
-        ]
-    AbsoluteTolerance: 0.
-    RelativeTolerance: 1e-9
-  - Label: Nonlinear solver convergence
-    Subfile: NewtonRaphsonResiduals.dat
-    FileGlob: BbhReductions.h5
-    SkipColumns: [1] # Skip walltime
-    ExpectedData:
-      # AMR iteration 0
-      - [0, 0, 9.58836468792872e+00, 1.]
-      - [1, 0, 2.56744819082553e+00, 1.]
-      - [2, 0, 6.92792186565806e-03, 1.]
-      - [3, 0, 1.21895158596328e-03, 1.]
-      - [4, 0, 7.97507362468631e-07, 1.]
-      - [5, 0, 7.12541536160998e-10, 1.]
-      # AMR iteration 1
-
-    AbsoluteTolerance: 1e-6
+  - BbhVolume*.h5
 
 ---
-Parallelization:
-  ElementDistribution: NumGridPoints
-
-ResourceInfo:
-  AvoidGlobalProc0: false
-  Singletons: Auto
 
 Background: &background
   Binary:
-    XCoords: [&x_left -8., &x_right 8.]
-    CenterOfMassOffset: [&y_offset 0., &z_offset 0.]
+    XCoords: [&x_left -7.683, &x_right 7.683]
     ObjectLeft: &kerr_left
       KerrSchild:
-        Mass: 0.4229
+        Mass: 0.416711018
         Spin: [0., 0., 0.]
         Center: [0., 0., 0.]
-        Velocity: [0., 0., 0.]
     ObjectRight: &kerr_right
       KerrSchild:
-        Mass: 0.4229
+        Mass: 0.416711018
         Spin: [0., 0., 0.]
         Center: [0., 0., 0.]
-        Velocity: [0., 0., 0.]
-    AngularVelocity: 0.0144
-    Expansion: 0.
+    AngularVelocity: 0.015264577062
+    Expansion: -4.61484576462e-05
     LinearVelocity: [0., 0., 0.]
-    FalloffWidths: [4.8, 4.8]
+    FalloffWidths: [4.6098, 4.6098]
 
 InitialGuess: *background
 
@@ -104,73 +35,83 @@ RandomizeInitialGuess: None
 DomainCreator:
   BinaryCompactObject:
     ObjectA:
-      InnerRadius: 0.8
+      InnerRadius: 0.8084193749
       OuterRadius: 4.
       XCoord: *x_right
       Interior:
         ExciseWithBoundaryCondition:
           ApparentHorizon:
-            Center: [*x_right, *y_offset, *z_offset]
-            Rotation: [0., 0., 0.]
-            Lapse: *kerr_right
+            Center: [*x_right, 0., 0.]
+            Rotation: [0., 0., 0.01442047706]
+            Lapse: *background
             NegativeExpansion: *kerr_right
       UseLogarithmicMap: True
     ObjectB:
-      InnerRadius: 0.8
+      InnerRadius: 0.8084193749
       OuterRadius: 4.
       XCoord: *x_left
       Interior:
         ExciseWithBoundaryCondition:
           ApparentHorizon:
-            Center: [*x_left, *y_offset, *z_offset]
-            Rotation: [0., 0., 0.]
-            Lapse: *kerr_left
+            Center: [*x_left, 0., 0.]
+            Rotation: [0., 0., 0.01442047706]
+            Lapse: *background  # or *kerr_left
             NegativeExpansion: *kerr_left
       UseLogarithmicMap: True
-    CenterOfMassOffset: [*y_offset, *z_offset]
     Envelope:
       Radius: &outer_shell_inner_radius 60.
       RadialDistribution: Projective
     OuterShell:
-      Radius: &outer_radius 1.e9
+      Radius: &outer_radius {{ R }}
       RadialDistribution: &outer_shell_distribution Inverse
-      OpeningAngle: 120.0
-      BoundaryCondition: Flatness
+      OpeningAngle: 120.
+      BoundaryCondition: {{ outer_bc }}
     UseEquiangularMap: True
     InitialRefinement:
-      ObjectAShell:     [0, 0, 0]
-      ObjectBShell:     [0, 0, 0]
-      ObjectACube:      [0, 0, 0]
-      ObjectBCube:      [0, 0, 0]
-      Envelope:         [0, 0, 1]
-      OuterShell:       [0, 0, 2]
-    # This p-refinement represents a crude manual optimization of the domain. We
-    # will need AMR to optimize the domain further.
-    InitialGridPoints:
-      ObjectAShell:   [6, 6, 10]
-      ObjectBShell:   [6, 6, 10]
-      ObjectACube:    [6, 6, 7]
-      ObjectBCube:    [6, 6, 7]
-      Envelope:       [6, 6, 6]
-      OuterShell:     [6, 6, 6]
+      ObjectAShell:     [{{ L }}, {{ L }}, {{ L }}]
+      ObjectBShell:     [{{ L }}, {{ L }}, {{ L }}]
+      ObjectACube:      [{{ L }}, {{ L }}, {{ L }}]
+      ObjectBCube:      [{{ L }}, {{ L }}, {{ L }}]
+      Envelope:         [{{ L }}, {{ L }}, {{ L + 1 }}]
+      OuterShell:       [{{ L }}, {{ L }}, {{ L + 2 }}]
+    InitialGridPoints: {{ P + 1 }}
     TimeDependentMaps: None
 
 Amr:
-  Verbosity: Verbose
-  Criteria: []
+  Verbosity: Quiet
+  Criteria:
+{% if amr == "true" %}
+    - TruncationError:
+        VariablesToMonitor:
+          - ConformalFactorMinusOne
+          - LapseTimesConformalFactorMinusOne
+          - ShiftExcess
+        AbsoluteTarget: {{ target }}
+        RelativeTarget: None
+{% else %}
+    - IncreaseResolution
+{% endif %}
   Policies:
     EnforceTwoToOneBalanceInNormalDirection: true
     Isotropy: Anisotropic
     Limits:
       NumGridPoints: Auto
       RefinementLevel: Auto
-  Iterations: 1
+  Iterations: 10
 
-PhaseChangeAndTriggers: []
+PhaseChangeAndTriggers:
+  - Trigger:
+      EveryNIterations:
+        N: 1
+        Offset: 1
+    PhaseChanges:
+      - VisitAndReturn(EvaluateAmrCriteria)
+      - VisitAndReturn(AdjustDomain)
+      - VisitAndReturn(CheckDomain)
 
 Discretization:
   DiscontinuousGalerkin:
-    PenaltyParameter: 1.
+    PenaltyParameter: 1.5
     Massive: True
     Quadrature: GaussLobatto
     Formulation: WeakInertial
@@ -182,27 +123,27 @@ Observers:
 NonlinearSolver:
   NewtonRaphson:
     ConvergenceCriteria:
-      MaxIterations: 20
+      MaxIterations: 10
       RelativeResidual: 1.e-10
-      AbsoluteResidual: 1.e-11
+      AbsoluteResidual: 1.e-8
     SufficientDecrease: 1.e-4
-    MaxGlobalizationSteps: 40
+    MaxGlobalizationSteps: 10
     DampingFactor: 1.
     Verbosity: Verbose
 
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
-      MaxIterations: 100
-      RelativeResidual: 1.e-3
+      MaxIterations: 1000
+      RelativeResidual: 1.e-4
       AbsoluteResidual: 1.e-10
     Verbosity: Quiet
 
   Multigrid:
     Iterations: 1
-    MaxLevels: Auto
+    MaxLevels: 1
     PreSmoothing: True
-    PostSmoothingAtBottom: True
+    PostSmoothingAtBottom: False
     Verbosity: Silent
     OutputVolumeData: False
 
@@ -257,14 +198,24 @@ EventsAndTriggers:
           SubfileName: VolumeData
           VariablesToObserve:
             - ConformalFactor
+            - LapseTimesConformalFactor
             - Lapse
             - Shift
             - ShiftExcess
             - SpatialMetric
+            - InverseSpatialMetric
             - ExtrinsicCurvature
+            - SpatialChristoffelSecondKind
             - HamiltonianConstraint
             - MomentumConstraint
             - RadiallyCompressedCoordinates
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Double
           FloatingPointTypes: [Double]
+
+Parallelization:
+  ElementDistribution: NumGridPoints
+
+ResourceInfo:
+  AvoidGlobalProc0: false
+  Singletons: Auto

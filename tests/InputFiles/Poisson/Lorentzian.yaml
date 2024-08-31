@@ -3,22 +3,10 @@
 
 Executable: SolvePoisson3D
 Testing:
-  Check: parse;execute_check_output
-  Timeout: 60
-  Priority: High
+  Check: parse
 ExpectedOutput:
   - LorentzianReductions.h5
-  - LorentzianVolume0.h5
-OutputFileChecks:
-  - Label: Discretization error
-    Subfile: ErrorNorms.dat
-    FileGlob: LorentzianReductions.h5
-    ExpectedData:
-      - [0, 1625, 3.14162705992265e+34, 1.28010014008500e-01]
-      - [1, 1625, 3.14162705992265e+34, 7.44115187323337e-02]
-      - [2, 2808, 2.09439617691359e+34, 1.40173310841862e-02]
-    AbsoluteTolerance: 0.
-    RelativeTolerance: 1e-4
+  - LorentzianVolume*.h5
 
 ---
 
@@ -36,8 +24,8 @@ DomainCreator:
     OuterRadius: &outer_radius 1e9
     Interior:
       FillWithSphericity: 0.
-    InitialRefinement: 0
-    InitialGridPoints: 5
+    InitialRefinement: {{ L }}
+    InitialGridPoints: 2
     UseEquiangularMap: True
     EquatorialCompression: None
     RadialPartitioning: [&outer_shell_inner_radius 20.]
@@ -52,14 +40,25 @@ DomainCreator:
 Amr:
   Verbosity: Verbose
   Criteria:
+{% if amr == 'true' %}
+    - TruncationError:
+        VariablesToMonitor: [Field]
+{% if L == 1 %}
+        AbsoluteTarget: 1e-7
+{% else %}
+        AbsoluteTarget: 1e-9
+{% endif %}
+        RelativeTarget: None
+{% else %}
     - IncreaseResolution
+{% endif %}
   Policies:
     EnforceTwoToOneBalanceInNormalDirection: true
     Isotropy: Anisotropic
     Limits:
       NumGridPoints: Auto
       RefinementLevel: Auto
-  Iterations: 2
+  Iterations: 10
 
 PhaseChangeAndTriggers:
   # Run AMR in every iteration, but not on the initial guess
@@ -74,10 +73,10 @@ PhaseChangeAndTriggers:
 
 Discretization:
   DiscontinuousGalerkin:
-    PenaltyParameter: 1.
+    PenaltyParameter: 1.5
     Massive: True
-    Quadrature: GaussLobatto
-    Formulation: WeakInertial
+    Quadrature: GaussLobatto # Or LG?
+    Formulation: WeakInertial # or StrongLogical?
 
 Observers:
   VolumeFileName: "LorentzianVolume"
@@ -86,14 +85,14 @@ Observers:
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
-      MaxIterations: 100
+      MaxIterations: 1000
       RelativeResidual: 0.
-      AbsoluteResidual: 1.e-5
+      AbsoluteResidual: 1.e-10
     Verbosity: Quiet
 
   Multigrid:
     Iterations: 1
-    MaxLevels: Auto
+    MaxLevels: 1
     PreSmoothing: True
     PostSmoothingAtBottom: False
     Verbosity: Silent

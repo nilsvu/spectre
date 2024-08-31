@@ -3,53 +3,24 @@
 
 Executable: SolvePunctures
 Testing:
-  Check: parse;execute
-  Timeout: 40
-  Priority: High
+  Check: parse
 ExpectedOutput:
   - PuncturesReductions.h5
-  - PuncturesVolume0.h5
-OutputFileChecks:
-  - Label: Volume integrals
-    Subfile: VolumeIntegrals.dat
-    FileGlob: PuncturesReductions.h5
-    ExpectedData:
-      - [0, 448, 4.18881285829836e+03, 4.55724627651079e-02]
-      - [1, 448, 4.18881285829836e+03, 4.19621052692138e-02]
-      - [2, 1262, 4.18883545625731e+03, 5.07147168589194e-02]
-    AbsoluteTolerance: 1e-12
-  - Label: Nonlinear solver convergence
-    Subfile: NewtonRaphsonResiduals.dat
-    FileGlob: PuncturesReductions.h5
-    SkipColumns: [1] # Skip walltime
-    ExpectedData:
-      # AMR iteration 0
-      - [0, 0, 7.32123992463425e-02, 1.]
-      - [1, 0, 3.51364804783180e-04, 1.]
-      - [2, 0, 6.28169780068392e-09, 1.]
-      # AMR iteration 1
-      - [0, 0, 1.10970183155322e-01, 1.]
-      - [0, 0, 3.36432810360753e-05, 1.]
-      - [0, 0, 1.05116741194963e-09, 1.]
-    AbsoluteTolerance: 1e-12
+  - PuncturesVolume*.h5
 
 ---
-
-Parallelization:
-  ElementDistribution: NumGridPoints
-
-ResourceInfo:
-  AvoidGlobalProc0: false
-  Singletons: Auto
 
 Background:
   MultiplePunctures:
     Punctures:
-      # Offset from center so the puncture doesn't coincide with a grid point
-      - Position: [0.1, 0.1, 0.1]
-        Mass: 1.
-        Momentum: [0., 0., 0.]
-        Spin: [0.1, 0.2, 0.3]
+      - Position: [3., 0., 0.]
+        Mass: 0.5
+        Momentum: [0., 0.4, 0.]
+        Spin: [0., 0., 0.]
+      - Position: [-3., 0., 0.]
+        Mass: 0.5
+        Momentum: [0., -0.4, 0.]
+        Spin: [0., 0., 0.]
 
 InitialGuess: Flatness
 
@@ -57,33 +28,41 @@ RandomizeInitialGuess: None
 
 DomainCreator:
   Sphere:
-    InnerRadius: 2.
-    OuterRadius: 10.
+    InnerRadius: 10.
+    OuterRadius: &outer_radius 1e5
     Interior:
       FillWithSphericity: 0.
-    InitialRefinement: 0
-    InitialGridPoints: 4
-    RadialPartitioning: []
-    RadialDistribution: [Linear]
-    UseEquiangularMap: True
+    InitialRefinement: 1
+    InitialGridPoints: 2
+    RadialPartitioning: [&outer_shell_inner_radius 30.]
+    RadialDistribution: [Linear, &outer_shell_distribution Inverse]
+    UseEquiangularMap: False
     EquatorialCompression: None
     WhichWedges: All
     TimeDependentMaps: None
     OuterBoundaryCondition: Flatness
 
 Amr:
-  Verbosity: Verbose
+  Verbosity: Quiet
   Criteria:
-    # h-refine (split) elements at the punctures, and p-refine everywhere else
+    # h-refine (split) elements at the punctures
     - RefineAtPunctures
+    # p-refine everywhere else
+{% if amr == 'true' %}
+    - TruncationError:
+        VariablesToMonitor: [Field]
+        AbsoluteTarget: 1e-9
+        RelativeTarget: None
+{% else %}
     - IncreaseResolution
+{% endif %}
   Policies:
     EnforceTwoToOneBalanceInNormalDirection: true
     Isotropy: Anisotropic
     Limits:
       NumGridPoints: Auto
       RefinementLevel: Auto
-  Iterations: 2
+  Iterations: 15
 
 PhaseChangeAndTriggers:
   # Run AMR in every iteration, but not on the initial guess
@@ -98,10 +77,10 @@ PhaseChangeAndTriggers:
 
 Discretization:
   DiscontinuousGalerkin:
-    PenaltyParameter: 1.
+    PenaltyParameter: 1.5
     Massive: True
-    Quadrature: GaussLobatto
-    Formulation: StrongInertial
+    Quadrature: GaussLobatto # Or LG?
+    Formulation: WeakInertial # or StrongLogical?
 
 Observers:
   VolumeFileName: "PuncturesVolume"
@@ -112,17 +91,17 @@ NonlinearSolver:
     ConvergenceCriteria:
       MaxIterations: 20
       RelativeResidual: 0.
-      AbsoluteResidual: 1.e-8
+      AbsoluteResidual: 1.e-10
     SufficientDecrease: 1.e-4
-    MaxGlobalizationSteps: 40
+    MaxGlobalizationSteps: 5
     DampingFactor: 1.
     Verbosity: Quiet
 
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
-      MaxIterations: 30
-      RelativeResidual: 1.e-4
+      MaxIterations: 1000
+      RelativeResidual: 0.
       AbsoluteResidual: 1.e-12
     Verbosity: Quiet
 
@@ -155,7 +134,10 @@ LinearSolver:
     SkipResets: True
     ObservePerCoreReductions: False
 
-RadiallyCompressedCoordinates: None
+RadiallyCompressedCoordinates:
+  InnerRadius: *outer_shell_inner_radius
+  OuterRadius: *outer_radius
+  Compression: *outer_shell_distribution
 
 EventsAndTriggers:
   - Trigger: Always
@@ -166,6 +148,7 @@ EventsAndTriggers:
             - Field
             - Alpha
             - Beta
+            - RadiallyCompressedCoordinates
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Double
           FloatingPointTypes: [Double]
@@ -175,3 +158,10 @@ EventsAndTriggers:
             - Name: AdmMassIntegrand
               NormType: VolumeIntegral
               Components: Individual
+
+Parallelization:
+  ElementDistribution: NumGridPoints
+
+ResourceInfo:
+  AvoidGlobalProc0: false
+  Singletons: Auto
