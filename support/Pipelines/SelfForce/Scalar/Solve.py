@@ -128,13 +128,15 @@ def solve_scalar_self_force(
         "Radius of the inner boundary near the black hole horizon in tortoise"
         " coordinates, where -inf is the horizon."
     ),
+    show_default=True,
 )
 @click.option(
     "--outer-radius",
     "-R",
     type=float,
-    default=300,
+    default=350,
     help="Radius of the outer boundary in tortoise coordinates.",
+    show_default=True,
 )
 @click.option(
     "--worldtube-size",
@@ -146,6 +148,7 @@ def solve_scalar_self_force(
         "Size of the worldtube within which we regularize the field, in"
         " (r_*, cos(theta))."
     ),
+    show_default=True,
 )
 @click.option(
     "--pipeline-dir",
