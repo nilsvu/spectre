@@ -36,6 +36,7 @@ target_link_libraries(
   ParallelMultigrid
   ParallelNonlinearSolver
   ParallelSchwarz
+  PhaseControl
   ScalarSelfForce
   ScalarSelfForceAmrCriteria
   ScalarSelfForceAnalyticData

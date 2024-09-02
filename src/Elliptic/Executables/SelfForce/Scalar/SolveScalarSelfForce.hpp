@@ -7,7 +7,7 @@
 
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "Domain/Creators/AlignedLattice.hpp"
-#include "Domain/Creators/Rectangle.hpp"
+#include "Domain/Creators/Rectilinear.hpp"
 #include "Domain/RadiallyCompressedCoordinates.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Actions/RunEventsAndTriggers.hpp"

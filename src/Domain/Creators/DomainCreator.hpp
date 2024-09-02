@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Domain/Domain.hpp"
 #include "Domain/FunctionsOfTime/FunctionOfTime.hpp"
 #include "Domain/Structure/DirectionMap.hpp"
 
