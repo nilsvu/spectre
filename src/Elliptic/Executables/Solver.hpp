@@ -108,9 +108,9 @@ struct Solver {
   using system = typename Metavariables::system;
   static_assert(
       tt::assert_conforms_to_v<system, elliptic::protocols::FirstOrderSystem>);
-  static constexpr bool is_linear =
-      std::is_same_v<elliptic::get_sources_computer<system, true>,
-                     typename system::sources_computer>;
+  static constexpr bool is_linear = false;
+  //   std::is_same_v<elliptic::get_sources_computer<system, true>,
+  //                  typename system::sources_computer>;
 
   using background_tag =
       elliptic::Tags::Background<elliptic::analytic_data::Background>;
@@ -198,6 +198,7 @@ struct Solver {
           typename db::add_tag_prefix<LinearSolver::Tags::OperatorAppliedTo,
                                       fields_tag>::tags_list>,
       tmpl::append<
+          typename fixed_sources_tag::tags_list,
           typename nonlinear_solver::linear_solver_fields_tag::tags_list,
           typename nonlinear_solver::linear_solver_source_tag::tags_list>>;
 
@@ -247,9 +248,11 @@ struct Solver {
           elliptic::amr::Actions::Initialize>,
       elliptic::Actions::InitializeFields<system, initial_guess_tag>,
       ::Actions::RandomizeVariables<fields_tag, RandomizeInitialGuess>,
-      elliptic::Actions::InitializeFixedSources<system, background_tag>,
       init_analytic_solution_action,
       elliptic::dg::Actions::initialize_operator<system, background_tag>,
+      // After initialization of faces and normals, needed for normal dot
+      // singular field flux
+      elliptic::Actions::InitializeFixedSources<system, background_tag>,
       tmpl::conditional_t<
           is_linear, tmpl::list<>,
           ::Initialization::Actions::AddComputeTags<tmpl::list<
@@ -317,14 +320,14 @@ struct Solver {
               tmpl::list<fields_tag, fluxes_tag>,
               typename multigrid::options_group, void>,
           // Communicate data on subdomain overlap regions
-          LinearSolver::Schwarz::Actions::SendOverlapFields<
-              communicated_overlap_tags,
-              typename schwarz_smoother::options_group, false,
-              nonlinear_solver_iteration_id>,
-          LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
-              volume_dim, communicated_overlap_tags,
-              typename schwarz_smoother::options_group, false,
-              nonlinear_solver_iteration_id>,
+          //   LinearSolver::Schwarz::Actions::SendOverlapFields<
+          //       communicated_overlap_tags,
+          //       typename schwarz_smoother::options_group, false,
+          //       nonlinear_solver_iteration_id>,
+          //   LinearSolver::Schwarz::Actions::ReceiveOverlapFields<
+          //       volume_dim, communicated_overlap_tags,
+          //       typename schwarz_smoother::options_group, false,
+          //       nonlinear_solver_iteration_id>,
           // Reset Schwarz subdomain solver
           LinearSolver::Schwarz::Actions::ResetSubdomainSolver<
               typename schwarz_smoother::options_group>,
@@ -387,21 +390,20 @@ struct Solver {
                      domain::Tags::InitialRefinementLevels<volume_dim>>,
           // Tags communicated on subdomain overlaps. No need to project
           // these during AMR because they will be communicated.
-          db::wrap_tags_in<
-              overlaps_tag,
-              tmpl::append<subdomain_init_tags,
-                           tmpl::conditional_t<is_linear, tmpl::list<>,
-                                               communicated_overlap_tags>>>,
+          db::wrap_tags_in<overlaps_tag, subdomain_init_tags>,
+          //   tmpl::append<subdomain_init_tags,
+          //                tmpl::conditional_t<is_linear, tmpl::list<>,
+          //                                    communicated_overlap_tags>>>,
           // Tags initialized on subdomains. No need to project these during
           // AMR because they will get re-initialized after communication.
           typename init_subdomain_action::simple_tags>>,
       ::amr::projectors::ProjectVariables<volume_dim, fields_tag>,
-      elliptic::Actions::InitializeFixedSources<system, background_tag>,
       init_analytic_solution_action,
       elliptic::dg::Actions::amr_projectors<system, background_tag>,
       typename dg_operator<true>::amr_projectors,
       tmpl::conditional_t<is_linear, typename build_matrix::amr_projectors,
                           typename dg_operator<false>::amr_projectors>,
+      elliptic::Actions::InitializeFixedSources<system, background_tag>,
       elliptic::amr::Actions::Initialize>>;
 
   using component_list = tmpl::flatten<

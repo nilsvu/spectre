@@ -1359,7 +1359,8 @@ Domain<VolumeDim> rectilinear_domain(
       &neighbors_of_all_blocks);
   for (size_t i = 0; i < corners_of_all_blocks.size(); i++) {
     blocks.emplace_back(std::move(maps[i]), i,
-                        std::move(neighbors_of_all_blocks[i]));
+                        std::move(neighbors_of_all_blocks[i]),
+                        "Block" + std::to_string(i));
   }
   return Domain<VolumeDim>(std::move(blocks));
 }

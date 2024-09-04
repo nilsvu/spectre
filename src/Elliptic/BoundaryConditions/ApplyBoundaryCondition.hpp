@@ -7,6 +7,7 @@
 #include <type_traits>
 
 #include "DataStructures/DataBox/DataBox.hpp"
+#include "Domain/BoundaryConditions/Periodic.hpp"
 #include "Domain/Structure/Direction.hpp"
 #include "Domain/Tags.hpp"
 #include "Domain/Tags/Faces.hpp"
@@ -70,9 +71,11 @@ void apply_boundary_condition(
     const db::DataBox<DbTagsList>& box, const MapKeys& map_keys_to_direction,
     FieldsAndFluxes&&... fields_and_fluxes) {
   using boundary_condition_classes =
-      typename detail::GetBoundaryConditionClasses<
-          elliptic::BoundaryConditions::BoundaryCondition<Dim>,
-          BoundaryConditionClasses, DbTagsList>::type;
+      tmpl::remove<typename detail::GetBoundaryConditionClasses<
+                       elliptic::BoundaryConditions::BoundaryCondition<Dim>,
+                       BoundaryConditionClasses, DbTagsList>::type,
+                   domain::BoundaryConditions::Periodic<
+                       elliptic::BoundaryConditions::BoundaryCondition<Dim>>>;
   call_with_dynamic_type<void, boundary_condition_classes>(
       &boundary_condition, [&map_keys_to_direction, &box,
                             &fields_and_fluxes...](const auto* const derived) {

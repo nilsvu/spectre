@@ -1,0 +1,213 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+Executable: SolveScalarSelfForce
+Testing:
+  Check: parse
+ExpectedOutput:
+  - ScalarSelfForceReductions.h5
+  - ScalarSelfForceVolume0.h5
+
+# This fails in multigrid: ./bin/spectre run
+# /Users/nilsvu/Projects/spectre/support/Pipelines/SelfForce/Scalar/ScalarSelfForce.yaml
+# -o test_ssf_mg -p spin=0.5 -p orbital_radius=6 -p m_mode=1 -p inner_radius=-50
+# -p outer_radius=350 -p puncture_position=7.5 -p worldtube_radius=7.5 -p
+# worldtube_dcostheta=0.5 -p P=6 -p L_left=2 -p L_right=3 -p L_angular=2 -fC
+
+# The error is:
+# NewtonRaphson initialized with residual: 1.789229e+01
+# Gmres initialized with residual: 1.789229e+01
+# Gmres(1) iteration complete. Remaining residual: 1.789229e+01
+# Gmres(2) iteration complete. Remaining residual: 1.789228e+01
+# Gmres(3) iteration complete. Remaining residual: 1.789228e+01
+# Gmres(4) iteration complete. Remaining residual: 1.789228e+01
+# Gmres(5) iteration complete. Remaining residual: 1.791361e+01
+# Gmres has encountered an error in iteration 5: Residual should decrease monotonically, but increased from 1.789228e+01 to 1.791361e+01.
+
+---
+
+Background: &background
+  CircularOrbit:
+    BlackHoleMass: &bh_mass 1.
+    BlackHoleSpin: &bh_spin {{ spin }}
+    OrbitalRadius: &orbital_radius {{ orbital_radius }}
+    MModeNumber: &m_mode_number {{ m_mode }}
+
+InitialGuess: *background
+
+RandomizeInitialGuess: None
+
+DomainCreator:
+  AlignedLattice:
+    # Order of dimensions is (r_*, theta)
+    BlockBounds:
+      # rstar
+      - - {{ inner_radius }}
+        - {{ puncture_position - worldtube_radius }}
+        - {{ puncture_position + worldtube_radius }}
+        - {{ outer_radius }}
+      # cos(theta)
+      - [-1., {{ -worldtube_dcostheta}} , {{ worldtube_dcostheta }}, 1.]
+    InitialGridPoints: [{{ P }}, {{ P }}]
+    InitialLevels: [&L 1, *L]
+    RefinedGridPoints: []
+    BlocksToExclude: []
+    RefinedLevels:
+      # bottom row
+      - LowerCornerIndex: [0, 0] # bottom left
+        UpperCornerIndex: [1, 1]
+        Refinement: [ {{ L_left }}, {{ L_angular }} ]
+      - LowerCornerIndex: [1, 0] # bottom middle
+        UpperCornerIndex: [2, 1]
+        Refinement: [ 0, {{ L_angular }} ]
+      - LowerCornerIndex: [2, 0] # bottom right
+        UpperCornerIndex: [3, 1]
+        Refinement: [ {{ L_right }}, {{ L_angular }} ]
+      # middle row
+      - LowerCornerIndex: [0, 1] # middle left
+        UpperCornerIndex: [1, 2]
+        Refinement: [ {{ L_left }}, *L ]
+      - LowerCornerIndex: [1, 1] # source region
+        UpperCornerIndex: [2, 2]
+        Refinement: [ 0, *L ]
+      - LowerCornerIndex: [2, 1] # middle right
+        UpperCornerIndex: [3, 2]
+        Refinement: [ {{ L_right }}, *L ]
+      # top row
+      - LowerCornerIndex: [0, 2] # top left
+        UpperCornerIndex: [1, 3]
+        Refinement: [ {{ L_left }}, {{ L_angular }} ]
+      - LowerCornerIndex: [1, 2] # top middle
+        UpperCornerIndex: [2, 3]
+        Refinement: [ 0, {{ L_angular }} ]
+      - LowerCornerIndex: [2, 2] # top right
+        UpperCornerIndex: [3, 3]
+        Refinement: [ {{ L_right }}, {{ L_angular }} ]
+    BoundaryConditions:
+      # Radial boundary conditions
+      - Sommerfeld:
+          BlackHoleMass: *bh_mass
+          BlackHoleSpin: *bh_spin
+          OrbitalRadius: *orbital_radius
+          MModeNumber: *m_mode_number
+      # Angular boundary conditions
+      - Angular:
+          MModeNumber: *m_mode_number
+
+Amr:
+  Verbosity: Quiet
+  Criteria:
+    # - IncreaseResolution
+    - RefineAtPuncture
+    - TruncationError:
+        VariablesToMonitor: [MMode]
+        AbsoluteTarget: 1.e-8
+        RelativeTarget: None
+    - Persson:
+        VariablesToMonitor: [MMode]
+        NumHighestModes: 1
+        Exponent: 4.
+        AbsoluteTolerance: 0.
+        CoarseningFactor: 0.1
+  Policies:
+    Isotropy: Anisotropic
+    EnforceTwoToOneBalanceInNormalDirection: False
+    Limits:
+      NumGridPoints: Auto
+      RefinementLevel: Auto
+  Iterations: 6
+
+PhaseChangeAndTriggers:
+  # Run AMR in every iteration, but not on the initial guess
+  - Trigger:
+      EveryNIterations:
+        N: 1
+        Offset: 1
+    PhaseChanges:
+      - VisitAndReturn(EvaluateAmrCriteria)
+      - VisitAndReturn(AdjustDomain)
+      - VisitAndReturn(CheckDomain)
+
+Discretization:
+  DiscontinuousGalerkin:
+    PenaltyParameter: 1.
+    Massive: True
+    Quadrature: Gauss
+    Formulation: StrongInertial
+
+Observers:
+  VolumeFileName: "ScalarSelfForceVolume"
+  ReductionFileName: "ScalarSelfForceReductions"
+
+NonlinearSolver:
+  NewtonRaphson:
+    ConvergenceCriteria:
+      MaxIterations: 1
+      RelativeResidual: 0.
+      AbsoluteResidual: &abstol 1.e-8
+    Verbosity: Verbose
+    SufficientDecrease: 1e-4
+    MaxGlobalizationSteps: 10
+    DampingFactor: 1
+
+LinearSolver:
+  Gmres:
+    ConvergenceCriteria:
+      MaxIterations: 1000
+      RelativeResidual: 0
+      AbsoluteResidual: *abstol
+    Verbosity: Quiet
+
+  Multigrid:
+    Iterations: 1
+    MaxLevels: 1
+    PreSmoothing: True
+    PostSmoothingAtBottom: False
+    Verbosity: Silent
+    OutputVolumeData: False
+
+  SchwarzSmoother:
+    Iterations: 3
+    MaxOverlap: 2
+    Verbosity: Silent
+    SubdomainSolver:
+      # TODO: Reconsider this
+      ExplicitInverse:
+        WriteMatrixToFile: None
+    ObservePerCoreReductions: False
+    SkipResets: True
+
+EventsAndTriggers:
+  - Trigger: Always
+    Events:
+      - ObserveNorms:
+          SubfileName: Norms
+          TensorsToObserve:
+            - Name: MMode
+              NormType: Max
+              Components: Individual
+      - ObserveSelfForce
+      - ObserveFields:
+          SubfileName: VolumeData
+          VariablesToObserve:
+            - MMode
+            - FixedSource(MMode)
+            - Alpha
+            - Beta
+            - Gamma
+            - SingularField
+            - BoyerLindquistRadius
+          InterpolateToMesh: None
+          CoordinatesFloatingPointType: Double
+          FloatingPointTypes: [Double]
+
+# BuildMatrix:
+#   MatrixSubfileName: Matrix
+#   Verbosity: Verbose
+
+Parallelization:
+  ElementDistribution: NumGridPoints
+
+ResourceInfo:
+  AvoidGlobalProc0: false
+  Singletons: Auto

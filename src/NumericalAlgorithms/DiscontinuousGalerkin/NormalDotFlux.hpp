@@ -23,14 +23,14 @@
  * Returns \f$n_i F^i_{j\ldots}\f$, where the flux tensor \f$F\f$ must have an
  * upper spatial first index and may have arbitrary extra indices.
  */
-template <size_t VolumeDim, typename Fr, typename Symm,
+template <size_t VolumeDim, typename Fr, typename DataType, typename Symm,
           typename... RemainingIndices,
-          typename ResultTensor = Tensor<DataVector, tmpl::pop_front<Symm>,
+          typename ResultTensor = Tensor<DataType, tmpl::pop_front<Symm>,
                                          index_list<RemainingIndices...>>>
 void normal_dot_flux(
     const gsl::not_null<ResultTensor*> normal_dot_flux,
     const tnsr::i<DataVector, VolumeDim, Fr>& normal,
-    const Tensor<DataVector, Symm,
+    const Tensor<DataType, Symm,
                  index_list<SpatialIndex<VolumeDim, UpLo::Up, Fr>,
                             RemainingIndices...>>& flux_tensor) {
   for (auto it = normal_dot_flux->begin(); it != normal_dot_flux->end(); it++) {

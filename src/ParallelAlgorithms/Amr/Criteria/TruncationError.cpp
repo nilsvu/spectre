@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <optional>
 
+#include "DataStructures/ComplexDataVector.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "Domain/Amr/Flag.hpp"
 #include "NumericalAlgorithms/LinearOperators/PowerMonitors.hpp"
@@ -16,11 +17,11 @@
 
 namespace amr::Criteria::TruncationError_detail {
 
-template <size_t Dim>
+template <typename ValueType, size_t Dim>
 void max_over_components(
     const gsl::not_null<std::array<Flag, Dim>*> result,
-    const gsl::not_null<std::array<DataVector, Dim>*> power_monitors_buffer,
-    const DataVector& tensor_component, const Mesh<Dim>& mesh,
+    const gsl::not_null<std::array<ValueType, Dim>*> power_monitors_buffer,
+    const ValueType& tensor_component, const Mesh<Dim>& mesh,
     const std::optional<double> target_abs_truncation_error,
     const std::optional<double> target_rel_truncation_error) {
   // We take the highest-priority refinement flag in each dimension, so if any
@@ -79,18 +80,20 @@ void max_over_components(
   }
 }
 
-#define DIM(data) BOOST_PP_TUPLE_ELEM(0, data)
+#define DTYPE(data) BOOST_PP_TUPLE_ELEM(0, data)
+#define DIM(data) BOOST_PP_TUPLE_ELEM(1, data)
 
-#define INSTANTIATION(_, data)                                         \
-  template void max_over_components(                                   \
-      gsl::not_null<std::array<Flag, DIM(data)>*> result,              \
-      const gsl::not_null<std::array<DataVector, DIM(data)>*>          \
-          power_monitors_buffer,                                       \
-      const DataVector& tensor_component, const Mesh<DIM(data)>& mesh, \
-      std::optional<double> target_abs_truncation_error,               \
+#define INSTANTIATION(_, data)                                           \
+  template void max_over_components(                                     \
+      gsl::not_null<std::array<Flag, DIM(data)>*> result,                \
+      const gsl::not_null<std::array<DTYPE(data), DIM(data)>*>           \
+          power_monitors_buffer,                                         \
+      const DTYPE(data) & tensor_component, const Mesh<DIM(data)>& mesh, \
+      std::optional<double> target_abs_truncation_error,                 \
       std::optional<double> target_rel_truncation_error);
 
-GENERATE_INSTANTIATIONS(INSTANTIATION, (1, 2, 3))
+GENERATE_INSTANTIATIONS(INSTANTIATION, (DataVector, ComplexDataVector),
+                        (1, 2, 3))
 
 #undef INSTANTIATION
 #undef DIM

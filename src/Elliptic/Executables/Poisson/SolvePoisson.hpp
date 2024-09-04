@@ -14,6 +14,7 @@
 #include "Elliptic/Actions/RunEventsAndTriggers.hpp"
 #include "Elliptic/BoundaryConditions/BoundaryCondition.hpp"
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
+#include "Elliptic/Executables/Poisson/Actions/InitializeEffectiveSource.hpp"
 #include "Elliptic/Executables/Solver.hpp"
 #include "Elliptic/Systems/Poisson/BoundaryConditions/Factory.hpp"
 #include "Elliptic/Systems/Poisson/FirstOrderSystem.hpp"
@@ -138,8 +139,13 @@ struct Metavariables {
   using dg_element_array = elliptic::DgElementArray<
       Metavariables,
       tmpl::list<
-          Parallel::PhaseActions<Parallel::Phase::Initialization,
-                                 initialization_actions>,
+          Parallel::PhaseActions<
+              Parallel::Phase::Initialization,
+              tmpl::replace<initialization_actions,
+                            elliptic::Actions::InitializeFixedSources<
+                                system, typename solver::background_tag>,
+                            Poisson::Actions::InitializeEffectiveSource<
+                                system, typename solver::background_tag>>>,
           Parallel::PhaseActions<
               Parallel::Phase::Register,
               tmpl::push_back<register_actions,
@@ -147,17 +153,23 @@ struct Metavariables {
           Parallel::PhaseActions<Parallel::Phase::Solve, solve_actions>,
           Parallel::PhaseActions<Parallel::Phase::CheckDomain,
                                  tmpl::list<::amr::Actions::SendAmrDiagnostics,
-                                            Parallel::Actions::TerminatePhase>>,
+                                            Parallel::Actions::TerminatePhase>>
+                                            /*,
           Parallel::PhaseActions<
               Parallel::Phase::BuildMatrix,
               tmpl::push_back<typename solver::build_matrix_actions,
-                              Parallel::Actions::TerminatePhase>>>,
+                              Parallel::Actions::TerminatePhase>>*/>,
       LinearSolver::multigrid::ElementsAllocator<
           volume_dim, typename solver::multigrid::options_group>>;
 
   struct amr : tt::ConformsTo<::amr::protocols::AmrMetavariables> {
     using element_array = dg_element_array;
-    using projectors = typename solver::amr_projectors;
+    using projectors =
+        tmpl::replace<typename solver::amr_projectors,
+                      elliptic::Actions::InitializeFixedSources<
+                          system, typename solver::background_tag>,
+                      Poisson::Actions::InitializeEffectiveSource<
+                          system, typename solver::background_tag>>;
   };
 
   struct registration

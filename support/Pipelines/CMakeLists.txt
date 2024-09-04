@@ -3,3 +3,4 @@
 
 add_subdirectory(Bbh)
 add_subdirectory(EccentricityControl)
+add_subdirectory(SelfForce)

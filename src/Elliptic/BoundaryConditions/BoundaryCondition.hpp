@@ -112,7 +112,9 @@ class BoundaryCondition : public domain::BoundaryConditions::BoundaryCondition {
   // conditions on a Scalar and Dirichlet-type conditions on a 2D vector, then
   // it should return `{Dirichlet, Neumann, Neumann}`.
   virtual std::vector<elliptic::BoundaryConditionType>
-  boundary_condition_types() const = 0;
+  boundary_condition_types() const {
+    return {};
+  };
 };
 
 }  // namespace BoundaryConditions

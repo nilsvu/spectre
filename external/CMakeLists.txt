@@ -2,5 +2,8 @@
 # See LICENSE.txt for details.
 
 add_subdirectory(brigand)
+add_subdirectory(EffectiveSource)
+add_subdirectory(GrEffectiveSource)
+add_subdirectory(KerrGeodesics)
 add_subdirectory(libsharp)
 add_subdirectory(SPHEREPACK)
