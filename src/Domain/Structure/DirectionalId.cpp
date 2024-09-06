@@ -15,8 +15,10 @@ static_assert(sizeof(DirectionalId<3>) == sizeof(ElementId<3>));
 
 template <size_t VolumeDim>
 size_t hash_value(const DirectionalId<VolumeDim>& id) {
-  return hash_value(id.id()) bitor static_cast<uint64_t>(id.direction().bits())
-                                       << ElementId<VolumeDim>::direction_shift;
+  size_t hash = 0;
+  boost::hash_combine(hash, hash_value(id.id()));
+  boost::hash_combine(hash, hash_value(id.direction()));
+  return hash;
 }
 
 // NOLINTNEXTLINE(cert-dcl58-cpp)

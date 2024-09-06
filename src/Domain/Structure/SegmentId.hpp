@@ -91,7 +91,7 @@ class SegmentId {
   void pup(PUP::er& p);
 
  private:
-  static constexpr size_t max_refinement_level = 16;
+  static constexpr size_t max_refinement_level = 19;
   size_t refinement_level_;
   size_t index_;
 };

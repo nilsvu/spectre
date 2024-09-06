@@ -52,29 +52,31 @@ class er;
 template <size_t VolumeDim>
 class alignas(int[3]) ElementId { // NOLINT(modernize-avoid-c-arrays)
  public:
-  // We restrict the ElementId size to 64 bits for easy hashing into
-  // size_t. This still allows us to have over 17 trillion elements, which is
-  // probably enough. 2^36 * 2^8=17.6 trillion elements per grid index, with
-  // up to 16 grid indices.
-  //
-  // Note: C++ populates bits from right to left in order of the
-  // variables. This gives us the direction_mask we use below.
   static constexpr size_t block_id_bits = 8;
-  static constexpr size_t grid_index_bits = 4;
+  static constexpr size_t grid_index_bits = 8;
   static constexpr size_t direction_bits = 4;
-  static constexpr size_t refinement_bits = 4;
+  static constexpr size_t refinement_bits = 5;
   /// The maximum allowed refinement level
-  static constexpr size_t max_refinement_level = 12;
-  static constexpr uint64_t direction_shift =
-      static_cast<uint64_t>(block_id_bits + grid_index_bits);
+  static constexpr size_t max_refinement_level = 19;
+  // We need some padding to ensure bit fields align with type boundaries,
+  // otherwise the size of `ElementId` is too large.
+  static constexpr size_t padding = 4;
+
+  // C++ populates bits from right to left in order of the variables.
+  // For simplicity we use the first 4 bits of this struct for the direction.
+  static constexpr uint64_t direction_shift = 0;
   static constexpr uint64_t direction_mask = static_cast<uint64_t>(0b1111)
                                              << direction_shift;
+
   static_assert(block_id_bits + 3 * (refinement_bits + max_refinement_level) +
-                        grid_index_bits + direction_bits ==
-                    static_cast<size_t>(2 * 8) * sizeof(int),
+                        grid_index_bits + direction_bits + padding ==
+                    static_cast<size_t>(3 * 8) * sizeof(int),
                 "Bit representation requires padding or is too large");
   static_assert(two_to_the(refinement_bits) >= max_refinement_level,
                 "Not enough bits to represent all refinement levels");
+  static_assert(
+      grid_index_bits >= refinement_bits,
+      "Need at least as many grid indices as refinement levels for multigrid");
 
   static constexpr size_t volume_dim = VolumeDim;
 
@@ -117,7 +119,6 @@ class alignas(int[3]) ElementId { // NOLINT(modernize-avoid-c-arrays)
   /// Returns the number of block boundaries the element has.
   size_t number_of_block_boundaries() const;
 
- protected:
   /// Create an `ElementId` in a specified direction.
   ElementId(const Direction<VolumeDim>& direction,
             const ElementId<VolumeDim>& element_id);
@@ -127,15 +128,19 @@ class alignas(int[3]) ElementId { // NOLINT(modernize-avoid-c-arrays)
   ElementId without_direction() const;
 
  private:
-  uint8_t block_id_ : block_id_bits;
-  uint8_t grid_index_ : grid_index_bits;
-  uint8_t direction_ : direction_bits;  // end first 16 bits
-  uint16_t index_xi_ : max_refinement_level;
-  uint8_t refinement_level_xi_ : refinement_bits;  // second 16 bits
-  uint16_t index_eta_ : max_refinement_level;
-  uint8_t refinement_level_eta_ : refinement_bits;  // third 16 bits
-  uint16_t index_zeta_ : max_refinement_level;
-  uint8_t refinement_level_zeta_ : refinement_bits;  // fourth 16 bits
+  uint32_t direction_ : direction_bits;
+  uint32_t empty_ : padding;
+  uint32_t refinement_level_xi_ : refinement_bits;
+  uint32_t index_xi_ : max_refinement_level;
+  // end 32 bits
+  uint32_t block_id_ : block_id_bits;
+  uint32_t refinement_level_eta_ : refinement_bits;
+  uint32_t index_eta_ : max_refinement_level;
+  // end 48 bits
+  uint32_t grid_index_ : grid_index_bits;
+  uint32_t refinement_level_zeta_ : refinement_bits;
+  uint32_t index_zeta_ : max_refinement_level;
+  // end 96 bits
 };
 
 /// \cond

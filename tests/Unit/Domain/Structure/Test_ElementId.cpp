@@ -62,7 +62,7 @@ void test_placement_new_and_hashing_impl(
   for (const auto& dir : Direction<VolumeDim>::all_directions()) {
     const DirectionTester<VolumeDim> dir_test_id1{dir, test_id1};
     CHECK(static_cast<const ElementId<VolumeDim>&>(dir_test_id1) == test_id1);
-    CHECK(Hash{}(dir_test_id1) == Hash{}(test_id1));
+    REQUIRE(Hash{}(dir_test_id1) == Hash{}(test_id1));
   }
 }
 
@@ -366,7 +366,7 @@ void test_serialization() {
   };
 
   const ElementId<volume_dim> unused_id(0);
-  CHECK(size_of_object_in_bytes(unused_id) == 8);
+  CHECK(size_of_object_in_bytes(unused_id) == 12);
   for (size_t i = 0; i < 100; ++i) {
     ElementId<volume_dim> element_id{dist_block_id(gen), random_segment_ids(),
                                      dist_grid_index(gen)};
