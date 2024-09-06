@@ -59,8 +59,8 @@ namespace ylm {
 // so, and doing so would increase the number of memory allocations
 // because other instances of Spherepack would then re-allocate
 // memory_pool.
-thread_local Spherepack_detail::MemoryPool Spherepack::memory_pool_ =
-    Spherepack_detail::MemoryPool();
+// thread_local Spherepack_detail::MemoryPool Spherepack::memory_pool_ =
+//     Spherepack_detail::MemoryPool();
 
 Spherepack::Spherepack(const size_t l_max, const size_t m_max)
     : l_max_{l_max},

@@ -514,7 +514,8 @@ class Spherepack {
   // memory_pool_ on entry, so between calls to member functions it is
   // safe to resize objects in memory_pool_ or to overwrite them with
   // arbitrary data.
-  static thread_local Spherepack_detail::MemoryPool memory_pool_;
+  // NOLINTNEXTLINE(spectre-mutable)
+  mutable Spherepack_detail::MemoryPool memory_pool_{};
   Spherepack_detail::ConstStorage storage_;
 };  // class Spherepack
 
