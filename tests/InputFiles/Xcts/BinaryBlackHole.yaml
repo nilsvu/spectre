@@ -13,16 +13,19 @@ ExpectedOutput:
 Background: &background
   Binary:
     XCoords: [&x_left -7.683, &x_right 7.683]
+    CenterOfMassOffset: [&y_offset 0., &z_offset 0.]
     ObjectLeft: &kerr_left
       KerrSchild:
         Mass: 0.416711018
         Spin: [0., 0., 0.]
         Center: [0., 0., 0.]
+        Velocity: [0., 0., 0.]  # Note: SpEC adds a boost
     ObjectRight: &kerr_right
       KerrSchild:
         Mass: 0.416711018
         Spin: [0., 0., 0.]
         Center: [0., 0., 0.]
+        Velocity: [0., 0., 0.]  # Note: SpEC adds a boost
     AngularVelocity: 0.015264577062
     Expansion: -4.61484576462e-05
     LinearVelocity: [0., 0., 0.]
@@ -43,7 +46,7 @@ DomainCreator:
           ApparentHorizon:
             Center: [*x_right, 0., 0.]
             Rotation: [0., 0., 0.01442047706]
-            Lapse: *background
+            Lapse: *kerr_right  # Note: SpEC uses background lapse
             NegativeExpansion: *kerr_right
       UseLogarithmicMap: True
     ObjectB:
@@ -55,16 +58,21 @@ DomainCreator:
           ApparentHorizon:
             Center: [*x_left, 0., 0.]
             Rotation: [0., 0., 0.01442047706]
-            Lapse: *background  # or *kerr_left
+            Lapse: *kerr_left  # Note: SpEC uses background lapse
             NegativeExpansion: *kerr_left
       UseLogarithmicMap: True
+    CenterOfMassOffset: [*y_offset, *z_offset]
     Envelope:
       Radius: &outer_shell_inner_radius 60.
       RadialDistribution: Projective
     OuterShell:
-      Radius: &outer_radius {{ R }}
+{% if outer_bc == "Robin" %}
+      Radius: &outer_radius 1e5
+{% else %}
+      Radius: &outer_radius 1e{{R}}
+{% endif %}
       RadialDistribution: &outer_shell_distribution Inverse
-      OpeningAngle: 120.
+      OpeningAngle: 120
       BoundaryCondition: {{ outer_bc }}
     UseEquiangularMap: True
     InitialRefinement:
@@ -75,7 +83,7 @@ DomainCreator:
       Envelope:         [{{ L }}, {{ L }}, {{ L + 1 }}]
       OuterShell:       [{{ L }}, {{ L }}, {{ L + 2 }}]
     InitialGridPoints: {{ P + 1 }}
-    TimeDependentMaps: None
+    TimeDependentMaps: None  # Note: SpEC deforms excisions for boost
 
 Amr:
   Verbosity: Quiet
@@ -86,7 +94,7 @@ Amr:
           - ConformalFactorMinusOne
           - LapseTimesConformalFactorMinusOne
           - ShiftExcess
-        AbsoluteTarget: {{ target }}
+        AbsoluteTarget: 1e-9
         RelativeTarget: None
 {% else %}
     - IncreaseResolution
@@ -97,7 +105,7 @@ Amr:
     Limits:
       NumGridPoints: Auto
       RefinementLevel: Auto
-  Iterations: 10
+  Iterations: 15
 
 PhaseChangeAndTriggers:
   - Trigger:
@@ -197,15 +205,10 @@ EventsAndTriggers:
       - ObserveFields:
           SubfileName: VolumeData
           VariablesToObserve:
-            - ConformalFactor
-            - LapseTimesConformalFactor
-            - Lapse
-            - Shift
+            - ConformalFactorMinusOne
+            - LapseTimesConformalFactorMinusOne
             - ShiftExcess
-            - SpatialMetric
-            - InverseSpatialMetric
-            - ExtrinsicCurvature
-            - SpatialChristoffelSecondKind
+            - Shift
             - HamiltonianConstraint
             - MomentumConstraint
             - RadiallyCompressedCoordinates
