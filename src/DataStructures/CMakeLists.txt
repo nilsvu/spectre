@@ -80,6 +80,7 @@ target_link_libraries(
   ErrorHandling
   Options
   Serialization
+  SpectreKokkos
   Utilities
   )
 

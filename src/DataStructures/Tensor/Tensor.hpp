@@ -34,6 +34,7 @@
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/ForceInline.hpp"
 #include "Utilities/Gsl.hpp"
+#include "Utilities/Kokkos/KokkosCore.hpp"
 #include "Utilities/MakeArray.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/PrettyType.hpp"
@@ -144,7 +145,7 @@ class Tensor<X, Symm, IndexList<Indices...>> {
   /// \param data the values of the individual components of the Vector
   template <size_t NumberOfIndices = sizeof...(Indices),
             Requires<(NumberOfIndices <= 1)> = nullptr>
-  explicit Tensor(storage_type data);
+  KOKKOS_FUNCTION explicit Tensor(storage_type data);
 
   /// Constructor that passes "args" to constructor of X and initializes each
   /// component to be the same
@@ -154,7 +155,7 @@ class Tensor<X, Symm, IndexList<Indices...>> {
                              std::decay_t<Args>>...> and
                          sizeof...(Args) == 1) and
                      std::is_constructible_v<X, Args...>> = nullptr>
-  explicit Tensor(Args&&... args);
+  KOKKOS_FUNCTION explicit Tensor(Args&&... args);
 
   using value_type = typename storage_type::value_type;
   static constexpr bool is_reference_wrapper =
