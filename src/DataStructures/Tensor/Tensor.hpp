@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <pup.h>
 #include <pup_stl.h>
 
@@ -156,8 +157,16 @@ class Tensor<X, Symm, IndexList<Indices...>> {
   explicit Tensor(Args&&... args);
 
   using value_type = typename storage_type::value_type;
-  using reference = typename storage_type::reference;
-  using const_reference = typename storage_type::const_reference;
+  static constexpr bool is_reference_wrapper =
+      tt::is_a_v<std::reference_wrapper, value_type>;
+  using reference = std::conditional_t<
+      is_reference_wrapper,
+      std::unwrap_ref_decay_t<typename storage_type::reference>,
+      typename storage_type::reference>;
+  using const_reference = std::conditional_t<
+      is_reference_wrapper,
+      std::unwrap_ref_decay_t<typename storage_type::const_reference>,
+      typename storage_type::const_reference>;
   using iterator = typename storage_type::iterator;
   using const_iterator = typename storage_type::const_iterator;
   using pointer = typename storage_type::pointer;
