@@ -28,6 +28,13 @@ if(SPECTRE_KOKKOS)
     # See https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#constexpr-functions-and-function-templates
     set(Kokkos_ENABLE_CUDA_CONSTEXPR ON CACHE BOOL
       "Enable constexpr in CUDA")
+    # Allow CUDA code in static libs, see
+    # https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#using-separate-compilation-in-cuda
+    # We may have to look into LTO if this has a performance penalty.
+    # set(Kokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE ON CACHE BOOL
+    #   "Enable relocatable device code in CUDA")
+    # set(Kokkos_ENABLE_COMPILE_AS_CMAKE_LANGUAGE ON CACHE BOOL
+    #   "Enable compile as CMAKE language in CUDA")
   endif()
 
   find_package(Kokkos)

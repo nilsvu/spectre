@@ -98,6 +98,11 @@ class Variables<tmpl::list<Tags...>> {
   using difference_type = std::ptrdiff_t;
   static constexpr auto transpose_flag = blaze::defaultTransposeFlag;
 
+  // SoA: better for derivs
+  // Kokkos::View<double /* tensor components */* /* element x grid points */*>;
+  // AoS: better for pointwise operations
+  // Kokkos::View<double /* element x grid points */* /* tensor components */*>;
+
   /// A typelist of the Tags whose variables are held
   using tags_list = tmpl::list<Tags...>;
   static_assert(sizeof...(Tags) > 0,
