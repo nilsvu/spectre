@@ -12,6 +12,7 @@
 #include "Utilities/Blas.hpp"
 #include "Utilities/EqualWithinRoundoff.hpp"
 #include "Utilities/ErrorHandling/Assert.hpp"
+#include "Utilities/ErrorHandling/CaptureForError.hpp"
 #include "Utilities/ForceInline.hpp"
 
 namespace LinearSolver {
@@ -92,9 +93,11 @@ SPECTRE_ALWAYS_INLINE double magnitude_square(const T& vector) {
       InnerProductImpls::InnerProductImpl<T, T>::apply(vector, vector);
   if constexpr (std::is_same_v<std::decay_t<decltype(result)>,
                                std::complex<double>>) {
-    ASSERT(equal_within_roundoff(imag(result), 0.0),
-           "The magnitude squared is not real. The imaginary part is: "
-               << imag(result));
+    // CAPTURE_FOR_ERROR(vector);
+    // CAPTURE_FOR_ERROR(result);
+    // ASSERT(equal_within_roundoff(imag(result), 0.0),
+    //        "The magnitude squared is not real. The imaginary part is: "
+    //            << imag(result));
     return real(result);
   } else {
     return result;

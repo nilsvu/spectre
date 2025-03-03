@@ -39,6 +39,7 @@ class Cli(click.Group):
             "render-3d",
             "resubmit",
             "run-next",
+            "scalar-self-force",
             "schedule",
             "simplify-traces",
             "status",
@@ -141,6 +142,12 @@ class Cli(click.Group):
             from spectre.support.Schedule import schedule_command
 
             return schedule_command
+        elif name in ["scalar-self-force", "ssf"]:
+            from spectre.Pipelines.ScalarSelfForce import (
+                scalar_self_force_pipeline,
+            )
+
+            return scalar_self_force_pipeline
         elif name == "simplify-traces":
             from spectre.tools.CharmSimplifyTraces import (
                 simplify_traces_command,

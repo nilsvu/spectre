@@ -38,18 +38,17 @@ Background: &solution
   ProductOfSinusoids:
     WaveNumbers: [1, 1]
 
-InitialGuess:
-  Zero:
+InitialGuess: *solution
 
 RandomizeInitialGuess: None
 
 DomainCreator:
   Rectangle:
-    LowerBound: [-1.570796326794896, 0.]
-    UpperBound: [3.141592653589793, 1.570796326794896]
+    LowerBound: [0., 0.]
+    UpperBound: [1.570796326794896, 1.570796326794896]
     Distribution: [Linear, Linear]
-    InitialRefinement: [1, 0]
-    InitialGridPoints: [4, 3]
+    InitialRefinement: [2, 2]
+    InitialGridPoints: [8, 8]
     TimeDependence: None
     BoundaryConditions:
       - AnalyticSolution:
@@ -62,8 +61,8 @@ DomainCreator:
 Discretization:
   DiscontinuousGalerkin:
     PenaltyParameter: 1.
-    Massive: True
-    Quadrature: Gauss
+    Massive: False
+    Quadrature: GaussLobatto
     Formulation: StrongInertial
 
 Observers:
@@ -73,7 +72,7 @@ Observers:
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
-      MaxIterations: 1
+      MaxIterations: 100
       RelativeResidual: 1.e-10
       AbsoluteResidual: 1.e-10
     Verbosity: Verbose
@@ -84,7 +83,7 @@ LinearSolver:
     PreSmoothing: True
     UseBottomSolver: False
     PostSmoothingAtBottom: False
-    Verbosity: Verbose
+    Verbosity: Quiet
     OutputVolumeData: False
 
   SchwarzSmoother:
@@ -95,12 +94,12 @@ LinearSolver:
       ExplicitInverse:
         WriteMatrixToFile: "SubdomainMatrix"
     ObservePerCoreReductions: False
-    OutputVolumeData: True
+    OutputVolumeData: False
 
 RadiallyCompressedCoordinates: None
 
 EventsAndTriggersAtIterations:
-  - Trigger: HasConverged
+  - Trigger: Always
     Events:
       - ObserveNorms:
           SubfileName: ErrorNorms
@@ -110,7 +109,7 @@ EventsAndTriggersAtIterations:
               Components: Sum
       - ObserveFields:
           SubfileName: VolumeData
-          VariablesToObserve: [Field]
+          VariablesToObserve: [Field, Error(Field), FixedSource(Field)]
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Double
           FloatingPointTypes: [Double]

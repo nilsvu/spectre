@@ -91,9 +91,9 @@ struct FirstOrderSystem
   using sources_computer =
       tmpl::conditional_t<BackgroundGeometry == Geometry::FlatCartesian, void,
                           Sources<Dim, BackgroundGeometry, DataType>>;
+  using modify_boundary_data = ModifyBoundaryData<Dim>;
 
   using boundary_conditions_base =
       elliptic::BoundaryConditions::BoundaryCondition<Dim>;
-  using modify_boundary_data = void;
 };
 }  // namespace Poisson

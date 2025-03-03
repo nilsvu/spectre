@@ -28,3 +28,5 @@ target_link_libraries(
   Options
   Utilities
   )
+
+add_subdirectory(Python)

@@ -25,6 +25,7 @@ set(LIBS_TO_LINK
   ParallelAmr
   ParallelLinearSolver
   ParallelMultigrid
+  ParallelNonlinearSolver
   ParallelSchwarz
   PhaseControl
   Poisson
