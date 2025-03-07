@@ -160,6 +160,7 @@ include(SetupLIBXSMM)
 include(SetupGsl)
 
 include(SetupBlaze)
+include(SetupEigen)
 include(SetupFuka)
 include(SetupGoogleBenchmark)
 include(SetupHdf5)

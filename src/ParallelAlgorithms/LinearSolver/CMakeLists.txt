@@ -25,6 +25,7 @@ target_link_libraries(
   PUBLIC
   DataStructures
   DomainStructure
+  Eigen3::Eigen
   H5
   Logging
   Observer

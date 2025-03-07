@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <Eigen/SparseCore>
+#include <Eigen/SparseLU>
 #include <blaze/math/Submatrix.h>
 #include <cstddef>
 #include <map>
@@ -614,8 +616,11 @@ struct InvertMatrix {
                         matrix_and_sources_slices) {
     const size_t total_num_points =
         matrix_and_sources_slices.begin()->second.first.columns();
-    blaze::DynamicMatrix<value_type> matrix(total_num_points, total_num_points);
-    blaze::DynamicVector<value_type> source(total_num_points);
+    Eigen::SparseMatrix<value_type> matrix(static_cast<int>(total_num_points),
+                                           static_cast<int>(total_num_points));
+    std::vector<Eigen::Triplet<value_type>> matrix_entries{};
+    matrix_entries.reserve(square(total_num_points));
+    Eigen::Vector<value_type, Eigen::Dynamic> source(total_num_points);
     // Assemble the full matrix and source
     size_t i = 0;
     for (const auto& [element_id, slice] : matrix_and_sources_slices) {
@@ -623,14 +628,21 @@ struct InvertMatrix {
       ASSERT(matrix_slice.rows() == source_slice.size(),
              "Matrix and source slice have different sizes.");
       const size_t slice_length = matrix_slice.rows();
-      blaze::submatrix(matrix, i, 0, slice_length, matrix_slice.columns()) =
-          matrix_slice;
-      std::copy_n(source_slice.data(), slice_length, source.data() + i);
+      for (size_t j = 0; j < total_num_points; ++j) {
+        for (auto it = matrix_slice.cbegin(j); it != matrix_slice.cend(j);
+             ++it) {
+          matrix_entries.emplace_back(i + it->index(), j, it->value());
+        }
+      }
+      for (size_t k = 0; k < slice_length; ++k) {
+        source[static_cast<int>(i + k)] = source_slice.data()[k];
+      }
       i += slice_length;
     }
     ASSERT(i == total_num_points, "The matrix is not fully assembled. Expected "
                                       << total_num_points << " rows, got "
                                       << i);
+    matrix.setFromTriplets(matrix_entries.begin(), matrix_entries.end());
     // Solve the equations Ax = b. Could use a more efficient solver here if
     // needed. But anything iterative could be done with the parallel linear
     // solver, the point here is to assemble the full matrix and invert it
@@ -640,12 +652,18 @@ struct InvertMatrix {
       Parallel::printf("Inverting matrix of size %zu x %zu\n", total_num_points,
                        total_num_points);
     }
-    const blaze::DynamicVector<value_type> solution =
-        blaze::solve(matrix, source);
+    Eigen::SparseLU<Eigen::SparseMatrix<value_type>> solver{};
+    solver.compute(matrix);
+    const Eigen::Vector<value_type, Eigen::Dynamic> solution =
+        solver.solve(source);
     // Broadcast the solution to the elements
+    blaze::DynamicVector<value_type> solution_blaze(total_num_points);
+    for (size_t k = 0; k < total_num_points; ++k) {
+      solution_blaze[k] = solution[static_cast<int>(k)];
+    }
     Parallel::simple_action<StoreSolution<BuildMatrixMetavars>>(
         Parallel::get_parallel_component<ElementArrayComponent>(cache),
-        grid_index, solution);
+        grid_index, solution_blaze);
   }
 };
 
