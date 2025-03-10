@@ -10,6 +10,7 @@
 #include "ParallelAlgorithms/Amr/Criteria/Loehner.hpp"
 #include "ParallelAlgorithms/Amr/Criteria/Persson.hpp"
 #include "ParallelAlgorithms/Amr/Criteria/Random.hpp"
+#include "ParallelAlgorithms/Amr/Criteria/RefineAtBoundary.hpp"
 #include "ParallelAlgorithms/Amr/Criteria/TruncationError.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -22,16 +23,21 @@ namespace amr::Criteria {
  * \tparam TensorTags the tensor fields to monitor
  */
 template <size_t Dim, typename TensorTags>
-using standard_criteria = tmpl::list<
+using standard_criteria = tmpl::flatten<tmpl::list<
     // p-AMR criteria
     ::amr::Criteria::IncreaseResolution<Dim>,
     ::amr::Criteria::TruncationError<Dim, TensorTags>,
     // h-AMR criteria
     ::amr::Criteria::Loehner<Dim, TensorTags>,
     ::amr::Criteria::Persson<Dim, TensorTags>,
+    ::amr::Criteria::RefineAtBoundary<Dim, 0>,
+    std::conditional_t<Dim >= 2, ::amr::Criteria::RefineAtBoundary<Dim, 1>,
+                       tmpl::list<>>,
+    std::conditional_t<Dim >= 3, ::amr::Criteria::RefineAtBoundary<Dim, 2>,
+                       tmpl::list<>>,
     // Criteria for testing or experimenting
     ::amr::Criteria::DriveToTarget<Dim, Type::h>,
     ::amr::Criteria::DriveToTarget<Dim, Type::p>,
-    ::amr::Criteria::Random<Type::h>, ::amr::Criteria::Random<Type::p>>;
+    ::amr::Criteria::Random<Type::h>, ::amr::Criteria::Random<Type::p>>>;
 
 }  // namespace amr::Criteria
