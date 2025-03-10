@@ -59,6 +59,8 @@ class SegmentId {
 
   constexpr size_t index() const { return index_; }
 
+  bool abuts_boundary() const;
+
   SegmentId id_of_parent() const;
 
   SegmentId id_of_child(Side side) const;

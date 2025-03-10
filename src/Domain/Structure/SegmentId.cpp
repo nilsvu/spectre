@@ -27,6 +27,10 @@ void SegmentId::pup(PUP::er& p) {
   p | index_;
 }
 
+bool SegmentId::abuts_boundary() const {
+  return index_ == 0 or index_ + 1 == two_to_the(refinement_level_);
+}
+
 std::ostream& operator<<(std::ostream& os, const SegmentId& id) {
   os << 'L' << id.refinement_level() << 'I' << id.index();
   return os;
