@@ -361,7 +361,7 @@ EventsAndTriggersAtSlabs:
   - Trigger:
       Slabs:
         EvenlySpaced:
-          Interval: 2000
+          Interval: 1000
           Offset: 0
     Events:
       - ObserveFields:
@@ -374,6 +374,12 @@ EventsAndTriggersAtSlabs:
             - PointwiseL2Norm(ThreeIndexConstraint)
             # For visualization:
             - Lapse
+            - deriv(Lapse)
+            - Shift
+            - deriv(Shift)
+            - InverseSpatialMetric
+            - deriv(InverseSpatialMetric)
+            - ExtrinsicCurvature
             - SpatialRicciScalar
             - Psi4Real
           InterpolateToMesh: None
@@ -398,6 +404,13 @@ EventsAndTriggersAtSlabs:
             - SpacetimeMetric
             - Pi
             - Phi
+            - Lapse
+            - deriv(Lapse)
+            - Shift
+            - deriv(Shift)
+            - InverseSpatialMetric
+            - deriv(InverseSpatialMetric)
+            - ExtrinsicCurvature
           InterpolateToMesh: None
           # This volume data is for ringdown, so double precision is needed.
           CoordinatesFloatingPointType: Double

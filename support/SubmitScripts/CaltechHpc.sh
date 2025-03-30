@@ -18,9 +18,8 @@
 #SBATCH --constraint=cascadelake
 #SBATCH -p {{ queue | default("expansion") }}
 #SBATCH -t {{ time_limit | default("1-00:00:00") }}
-{% if reservation is defined %}
-#SBATCH --reservation={{ reservation }}
-{% endif %}
+#SBATCH --reservation={{ reservation | default("sxs_standing") }}
+#SBATCH --exclude=hpc-80-[04-06]
 {% endblock %}
 
 {% block run_command %}
