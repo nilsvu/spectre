@@ -267,7 +267,7 @@ class KerrSchild : public AnalyticSolution<3_st>,
       "Black hole in Kerr-Schild coordinates"};
 
   KerrSchild(double mass, const std::array<double, 3>& dimensionless_spin,
-             const std::array<double, 3>& center,
+             const std::array<double, 3>& center = {{0., 0., 0.}},
              const std::array<double, 3>& boost_velocity = {{0., 0., 0.}},
              const Options::Context& context = {});
 
