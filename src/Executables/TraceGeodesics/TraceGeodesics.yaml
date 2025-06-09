@@ -1,0 +1,65 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+Executable: TraceGeodesics3D
+ExpectedOutput:
+  - RayTraces0.h5
+
+---
+
+BackgroundSpacetime:
+  KerrSchild:
+    Mass: 1
+    Spin: [0, 0, 0.95]
+    Center: [0, 0, 0]
+    Velocity: [0, 0, 0]
+  # NumericData:
+  #   FileGlob: "/Users/nilsvu/Downloads/BbhVolume0.h5"
+  #   SubfileName: "VolumeData"
+  #   Time: Last
+  #   NumTimeSlices: None
+  # NumericData:
+  #   FileGlob: "/resnick/groups/sxs/nilsvu/Runs/2025-03-28-ray-tracing/q1/001_Inspiral/Segment_0000/BbhVolume*.h5"
+  #   SubfileName: "VolumeData"
+  #   ObservationStep: Auto
+  # TovStar:
+  #   CentralDensity: 8.087415253997405e-4
+  #   EquationOfState:
+  #     PolytropicFluid:
+  #       PolytropicConstant: 123.6489
+  #       PolytropicExponent: 2.
+  #   Coordinates: Isotropic
+
+RaySource:
+  # Camera:
+  #   Position: [30, 0, 0]
+  #   Focus: [0, 0, 0]
+  #   Up: [0, 0, 1]
+  #   OpeningAngle: 1.0
+  #   Resolution: [100, 100]
+  #   TimeRange: [500, 1000]
+  #   Interval: 10 # 100 M/s at 10 FPS
+  #   IntegrationTime: 100
+  #   InitialDt: 0.1
+  Camera:
+    Position: [30, 0, 0]
+    Focus: [0, 0, 0]
+    Up: [0, 0, 1]
+    ParallelRays: True
+    OpeningAngle: 10.0
+    Resolution: [200, 1]
+    IntegrationTime: 100
+    TimeRange: [0, 10]
+    Interval: 10 # 100 M/s at 10 FPS
+    OnlyUpperHalf: False
+
+RayTracer:
+  AbsoluteTolerance: 1e-4
+  RelativeTolerance: 1e-4
+  NumOutputSteps: 1000
+
+Observers:
+  VolumeFileName: "RayTraces"
+
+ResourceInfo:
+  AvoidGlobalProc0: False

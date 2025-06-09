@@ -22,6 +22,7 @@
 #include "IO/H5/VolumeData.hpp"
 #include "NumericalAlgorithms/Interpolation/IrregularInterpolant.hpp"
 #include "NumericalAlgorithms/Interpolation/PolynomialInterpolation.hpp"
+#include "Parallel/Printf/Printf.hpp"
 #include "Utilities/FileSystem.hpp"
 #include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/GetOutput.hpp"
@@ -636,6 +637,7 @@ PointwiseInterpolator<Dim, Frame>::PointwiseInterpolator(
   functions_of_time_ = std::move(std::get<4>(bindings));
 
   // Load tensor data into memory
+  Parallel::printf("Loading volume data at time %f...\n", time_);
   element_ids_.reserve(filenames.size());
   element_search_trees_.reserve(filenames.size());
   meshes_.reserve(filenames.size());
@@ -765,8 +767,10 @@ void PointwiseInterpolator<Dim, Frame>::interpolate_to_point(
     interpolate_to_point_impl(
         result, x_element_logical, get<0>(mesh_offset_length),
         get<1>(mesh_offset_length), get<2>(mesh_offset_length), tensor_data);
-    break;
+    return;
   }
+  ERROR("Point is not in any element loaded from volume data files:\n"
+        << target_point << "\n");
 }
 
 // Generate instantiations

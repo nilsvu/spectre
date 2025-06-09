@@ -252,10 +252,13 @@ EventsAndTriggersAtIterations:
           VariablesToObserve:
             - ConformalFactor
             - Lapse
+            - deriv(Lapse)
             - Shift
+            - deriv(Shift)
             - ShiftExcess
             - SpatialMetric
             - InverseSpatialMetric
+            - deriv(InverseSpatialMetric)
             - SpatialChristoffelSecondKind
             - ExtrinsicCurvature
             - SpatialRicci

@@ -181,3 +181,33 @@ cross_product(const Tensor<DataType, Symmetry<1>, index_list<Index>>& vector_a,
   }
   return cross_product;
 }
+
+template <typename DataType, typename Index>
+void cross_product(
+    const gsl::not_null<Tensor<DataType, Symmetry<1>, index_list<Index>>*>
+        result,
+    const Tensor<DataType, Symmetry<1>, index_list<Index>>& vector_a,
+    const Tensor<DataType, Symmetry<1>, index_list<Index>>& vector_b,
+    const Tensor<DataType, Symmetry<1>, index_list<Index>>& vector_c,
+    const Tensor<DataType, Symmetry<1, 1>, index_list<Index, Index>>&
+        metric_or_inverse_metric,
+    const Scalar<DataType>& metric_determinant) {
+  static_assert(Index::dim == 4,
+                "cross_product vectors must have spacetime dimension 4");
+  static_assert(Index::index_type == IndexType::Spacetime,
+                "cross product of 3 vectors must be spacetime");
+
+  for (size_t i = 0; i < Index::dim; ++i) {
+    result->get(i) = 0.0;
+    for (LeviCivitaIterator<4> it; it; ++it) {
+      result->get(i) += it.sign() * vector_a.get(it[1]) * vector_b.get(it[2]) *
+                        vector_c.get(it[3]) *
+                        metric_or_inverse_metric.get(it[0], i);
+    }
+    if (Index::ul == UpLo::Up) {
+      result->get(i) *= sqrt(abs(get(metric_determinant)));
+    } else {
+      result->get(i) /= sqrt(abs(get(metric_determinant)));
+    }
+  }
+}

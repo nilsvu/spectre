@@ -220,6 +220,14 @@ decltype(auto) dot(const std::array<T, 3>& first,
 }
 /// @}
 
+template <typename T, typename R>
+decltype(auto) cross_product(const std::array<T, 3>& first,
+                             const std::array<R, 3>& second) {
+  return first[1] * second[2] - first[2] * second[1],
+         first[2] * second[0] - first[0] * second[2],
+         first[0] * second[1] - first[1] * second[0];
+}
+
 namespace std_array_helpers_detail {
 template <typename T, size_t Dim, typename F, size_t... Indices>
 auto map_array_impl(const std::array<T, Dim>& array, const F& f,

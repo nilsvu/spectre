@@ -65,7 +65,9 @@ void magnitude(const gsl::not_null<Scalar<DataType>*> magnitude,
                             index_list<change_index_up_lo<Index>,
                                        change_index_up_lo<Index>>>& metric) {
   dot_product(magnitude, vector, vector, metric);
-  get(*magnitude) = sqrt(get(*magnitude));
+  // Spacetime dot product can be negative, so take the absolute value to define
+  // the magnitude
+  get(*magnitude) = sqrt(abs(get(*magnitude)));
 }
 /// @}
 
