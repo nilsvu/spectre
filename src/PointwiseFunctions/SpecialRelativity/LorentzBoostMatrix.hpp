@@ -8,6 +8,7 @@
 
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Utilities/Gsl.hpp"
+#include "Utilities/Kokkos/KokkosCore.hpp"
 #include "Utilities/MakeArray.hpp"
 
 /// \cond
@@ -49,17 +50,18 @@ namespace sr {
  * symmetric tensors unless both indices have the same valence.
  */
 template <size_t SpatialDim>
-tnsr::Ab<double, SpatialDim, Frame::NoFrame> lorentz_boost_matrix(
+KOKKOS_FUNCTION tnsr::Ab<double, SpatialDim, Frame::NoFrame>
+lorentz_boost_matrix(
     const tnsr::I<double, SpatialDim, Frame::NoFrame>& velocity);
 
 template <size_t SpatialDim>
-void lorentz_boost_matrix(
+KOKKOS_FUNCTION void lorentz_boost_matrix(
     gsl::not_null<tnsr::Ab<double, SpatialDim, Frame::NoFrame>*> boost_matrix,
     const tnsr::I<double, SpatialDim, Frame::NoFrame>& velocity);
 
 template <size_t SpatialDim>
-tnsr::Ab<double, SpatialDim, Frame::NoFrame> lorentz_boost_matrix(
-    const std::array<double, SpatialDim>& velocity);
+KOKKOS_FUNCTION tnsr::Ab<double, SpatialDim, Frame::NoFrame>
+lorentz_boost_matrix(const std::array<double, SpatialDim>& velocity);
 /// @}
 
 /// @{
@@ -70,16 +72,16 @@ tnsr::Ab<double, SpatialDim, Frame::NoFrame> lorentz_boost_matrix(
  * additional argument.
  */
 template <typename DataType, size_t SpatialDim, typename Frame>
-void lorentz_boost(gsl::not_null<tnsr::I<DataType, SpatialDim, Frame>*> result,
-                   const tnsr::I<DataType, SpatialDim, Frame>& vector,
-                   double vector_component_0,
-                   const std::array<double, SpatialDim>& velocity);
+KOKKOS_FUNCTION void lorentz_boost(
+    gsl::not_null<tnsr::I<DataType, SpatialDim, Frame>*> result,
+    const tnsr::I<DataType, SpatialDim, Frame>& vector,
+    double vector_component_0, const std::array<double, SpatialDim>& velocity);
 
 /*!
  * \brief Apply a Lorentz boost to a one form.
  */
 template <typename DataType, size_t SpatialDim, typename Frame>
-void lorentz_boost(
+KOKKOS_FUNCTION void lorentz_boost(
     gsl::not_null<tnsr::a<DataType, SpatialDim, Frame>*> result,
     const tnsr::a<DataType, SpatialDim, Frame>& one_form,
     const std::array<double, SpatialDim>& velocity);
@@ -91,8 +93,9 @@ void lorentz_boost(
  * a tensor of arbitrary rank.
  */
 template <typename DataType, size_t SpatialDim, typename Frame>
-void lorentz_boost(gsl::not_null<tnsr::ab<DataType, SpatialDim, Frame>*> result,
-                   const tnsr::ab<DataType, SpatialDim, Frame>& tensor,
-                   const std::array<double, SpatialDim>& velocity);
+KOKKOS_FUNCTION void lorentz_boost(
+    gsl::not_null<tnsr::ab<DataType, SpatialDim, Frame>*> result,
+    const tnsr::ab<DataType, SpatialDim, Frame>& tensor,
+    const std::array<double, SpatialDim>& velocity);
 /// @}
 }  // namespace sr

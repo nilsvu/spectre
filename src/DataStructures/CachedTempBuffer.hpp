@@ -32,11 +32,12 @@ class CachedTempBuffer {
 
   /// Construct the buffer with the given computer.  `size` is passed
   /// to the underlying `TempBuffer` constructor.
-  CachedTempBuffer(const size_t size) : data_(size) {}
+  KOKKOS_FUNCTION CachedTempBuffer(const size_t size) : data_(size) {}
 
   /// Obtain a value from the buffer, computing it if necessary.
   template <typename Computer, typename Tag>
-  const typename Tag::type& get_var(const Computer& computer, Tag /*meta*/) {
+  KOKKOS_FUNCTION const typename Tag::type& get_var(const Computer& computer,
+                                                    Tag /*meta*/) {
     static_assert(tmpl::list_contains_v<tmpl::list<Tags...>, Tag>,
                   "The requested tag is not available. See the template "
                   "parameters of 'CachedTempBuffer' for the computer type and "
@@ -50,7 +51,9 @@ class CachedTempBuffer {
     }
     return get<Tag>(data_);
   }
-  size_t number_of_grid_points() const { return data_.number_of_grid_points(); }
+  KOKKOS_FUNCTION size_t number_of_grid_points() const {
+    return data_.number_of_grid_points();
+  }
 
  private:
   template <typename Tag>

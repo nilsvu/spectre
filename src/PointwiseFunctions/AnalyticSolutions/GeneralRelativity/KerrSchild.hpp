@@ -291,7 +291,7 @@ class KerrSchild : public AnalyticSolution<3_st>,
   ~KerrSchild() = default;
 
   template <typename DataType, typename Frame, typename... Tags>
-  tuples::TaggedTuple<Tags...> variables(
+  KOKKOS_FUNCTION tuples::TaggedTuple<Tags...> variables(
       const tnsr::I<DataType, volume_dim, Frame>& x, double /*t*/,
       tmpl::list<Tags...> /*meta*/) const {
     static_assert(
@@ -307,16 +307,19 @@ class KerrSchild : public AnalyticSolution<3_st>,
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p);
 
-  double mass() const { return mass_; }
-  const std::array<double, volume_dim>& center() const { return center_; }
-  const std::array<double, volume_dim>& dimensionless_spin() const {
+  KOKKOS_FUNCTION double mass() const { return mass_; }
+  KOKKOS_FUNCTION const std::array<double, volume_dim>& center() const {
+    return center_;
+  }
+  KOKKOS_FUNCTION const std::array<double, volume_dim>& dimensionless_spin()
+      const {
     return dimensionless_spin_;
   }
-  const std::array<double, volume_dim>& boost_velocity() const {
+  KOKKOS_FUNCTION const std::array<double, volume_dim>& boost_velocity() const {
     return boost_velocity_;
   }
-  bool zero_spin() const { return zero_spin_; }
-  bool zero_velocity() const { return zero_velocity_; }
+  KOKKOS_FUNCTION bool zero_spin() const { return zero_spin_; }
+  KOKKOS_FUNCTION bool zero_velocity() const { return zero_velocity_; }
 
   struct internal_tags {
     template <typename DataType, typename Frame = ::Frame::Inertial>
@@ -415,178 +418,195 @@ class KerrSchild : public AnalyticSolution<3_st>,
    public:
     using CachedBuffer = KerrSchild::CachedBuffer<DataType, Frame>;
 
-    IntermediateComputer(const KerrSchild& solution,
-                         const tnsr::I<DataType, 3, Frame>& x);
+    KOKKOS_FUNCTION IntermediateComputer(const KerrSchild& solution,
+                                         const tnsr::I<DataType, 3, Frame>& x);
 
     const KerrSchild& solution() const { return solution_; }
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::I<DataType, 3, Frame>*> x_minus_center,
         gsl::not_null<CachedBuffer*> /*cache*/,
         internal_tags::x_minus_center_unboosted<DataType, Frame> /*meta*/)
         const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::I<DataType, 3, Frame>*> x_minus_center_boosted,
         gsl::not_null<CachedBuffer*> /*cache*/,
         internal_tags::x_minus_center<DataType, Frame> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> a_dot_x,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::a_dot_x<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> a_dot_x,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::a_dot_x<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> a_dot_x_squared,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::a_dot_x_squared<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> a_dot_x_squared,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::a_dot_x_squared<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> half_xsq_minus_asq,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::half_xsq_minus_asq<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> half_xsq_minus_asq,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::half_xsq_minus_asq<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> r_squared,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::r_squared<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> r_squared,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::r_squared<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> r,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::r<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(gsl::not_null<Scalar<DataType>*> r,
+                                    gsl::not_null<CachedBuffer*> cache,
+                                    internal_tags::r<DataType> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<Scalar<DataType>*> a_dot_x_over_rsquared,
         gsl::not_null<CachedBuffer*> cache,
         internal_tags::a_dot_x_over_rsquared<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> deriv_log_r_denom,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::deriv_log_r_denom<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> deriv_log_r_denom,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::deriv_log_r_denom<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<tnsr::i<DataType, 3, Frame>*> deriv_log_r,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::deriv_log_r<DataType, Frame> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<tnsr::i<DataType, 3, Frame>*> deriv_log_r,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::deriv_log_r<DataType, Frame> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> H_denom,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::H_denom<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> H_denom,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::H_denom<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> H,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::H<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(gsl::not_null<Scalar<DataType>*> H,
+                                    gsl::not_null<CachedBuffer*> cache,
+                                    internal_tags::H<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> deriv_H_temp1,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::deriv_H_temp1<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> deriv_H_temp1,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::deriv_H_temp1<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> deriv_H_temp2,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::deriv_H_temp2<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> deriv_H_temp2,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::deriv_H_temp2<DataType> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::a<DataType, 3, Frame>*> deriv_H,
         gsl::not_null<CachedBuffer*> cache,
         internal_tags::deriv_H_unboosted<DataType, Frame> /*meta*/) const;
 
-    void operator()(gsl::not_null<tnsr::a<DataType, 3, Frame>*> deriv_H_boosted,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::deriv_H<DataType, Frame> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<tnsr::a<DataType, 3, Frame>*> deriv_H_boosted,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::deriv_H<DataType, Frame> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> denom,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::denom<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> denom,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::denom<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> a_dot_x_over_r,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::a_dot_x_over_r<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> a_dot_x_over_r,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::a_dot_x_over_r<DataType> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::a<DataType, 3, Frame>*> null_form,
         gsl::not_null<CachedBuffer*> cache,
         internal_tags::null_form_unboosted<DataType, Frame> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::a<DataType, 3, Frame>*> null_form_boosted,
         gsl::not_null<CachedBuffer*> cache,
         internal_tags::null_form<DataType, Frame> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::ab<DataType, 3, Frame>*> deriv_null_form,
         gsl::not_null<CachedBuffer*> cache,
         internal_tags::deriv_null_form_unboosted<DataType, Frame> /*meta*/)
         const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::ab<DataType, 3, Frame>*> deriv_null_form_boosted,
         gsl::not_null<CachedBuffer*> cache,
         internal_tags::deriv_null_form<DataType, Frame> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> lapse_squared,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::lapse_squared<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> lapse_squared,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::lapse_squared<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> lapse,
-                    gsl::not_null<CachedBuffer*> cache,
-                    gr::Tags::Lapse<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(gsl::not_null<Scalar<DataType>*> lapse,
+                                    gsl::not_null<CachedBuffer*> cache,
+                                    gr::Tags::Lapse<DataType> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<Scalar<DataType>*> deriv_lapse_multiplier,
         gsl::not_null<CachedBuffer*> cache,
         internal_tags::deriv_lapse_multiplier<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<Scalar<DataType>*> shift_multiplier,
-                    gsl::not_null<CachedBuffer*> cache,
-                    internal_tags::shift_multiplier<DataType> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<Scalar<DataType>*> shift_multiplier,
+        gsl::not_null<CachedBuffer*> cache,
+        internal_tags::shift_multiplier<DataType> /*meta*/) const;
 
-    void operator()(gsl::not_null<tnsr::I<DataType, 3, Frame>*> shift,
-                    gsl::not_null<CachedBuffer*> cache,
-                    gr::Tags::Shift<DataType, 3, Frame> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<tnsr::I<DataType, 3, Frame>*> shift,
+        gsl::not_null<CachedBuffer*> cache,
+        gr::Tags::Shift<DataType, 3, Frame> /*meta*/) const;
 
-    void operator()(gsl::not_null<tnsr::iJ<DataType, 3, Frame>*> deriv_shift,
-                    gsl::not_null<CachedBuffer*> cache,
-                    DerivShift<DataType, Frame> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<tnsr::iJ<DataType, 3, Frame>*> deriv_shift,
+        gsl::not_null<CachedBuffer*> cache,
+        DerivShift<DataType, Frame> /*meta*/) const;
 
-    void operator()(gsl::not_null<tnsr::ii<DataType, 3, Frame>*> spatial_metric,
-                    gsl::not_null<CachedBuffer*> cache,
-                    gr::Tags::SpatialMetric<DataType, 3, Frame> /*meta*/) const;
+    KOKKOS_FUNCTION void operator()(
+        gsl::not_null<tnsr::ii<DataType, 3, Frame>*> spatial_metric,
+        gsl::not_null<CachedBuffer*> cache,
+        gr::Tags::SpatialMetric<DataType, 3, Frame> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::II<DataType, 3, Frame>*> spatial_metric,
         gsl::not_null<CachedBuffer*> cache,
         gr::Tags::InverseSpatialMetric<DataType, 3, Frame> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::ijj<DataType, 3, Frame>*> deriv_spatial_metric,
         gsl::not_null<CachedBuffer*> cache,
         DerivSpatialMetric<DataType, Frame> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::ii<DataType, 3, Frame>*> dt_spatial_metric,
         gsl::not_null<CachedBuffer*> cache,
         ::Tags::dt<gr::Tags::SpatialMetric<DataType, 3, Frame>> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<Scalar<DataType>*> null_form_dot_deriv_H,
         gsl::not_null<CachedBuffer*> cache,
         internal_tags::null_form_dot_deriv_H<DataType> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::i<DataType, 3, Frame>*>
             null_form_dot_deriv_null_form,
         gsl::not_null<CachedBuffer*> cache,
         internal_tags::null_form_dot_deriv_null_form<DataType, Frame> /*meta*/)
         const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::ii<DataType, 3, Frame>*> extrinsic_curvature,
         gsl::not_null<CachedBuffer*> cache,
         gr::Tags::ExtrinsicCurvature<DataType, 3, Frame> /*meta*/) const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::ijj<DataType, 3, Frame>*>
             spatial_christoffel_first_kind,
         gsl::not_null<CachedBuffer*> cache,
         gr::Tags::SpatialChristoffelFirstKind<DataType, 3, Frame> /*meta*/)
         const;
 
-    void operator()(
+    KOKKOS_FUNCTION void operator()(
         gsl::not_null<tnsr::Ijj<DataType, 3, Frame>*>
             spatial_christoffel_second_kind,
         gsl::not_null<CachedBuffer*> cache,
@@ -609,35 +629,35 @@ class KerrSchild : public AnalyticSolution<3_st>,
     using CachedBuffer::CachedBuffer;
     using CachedBuffer::get_var;
 
-    tnsr::i<DataType, 3, Frame> get_var(
+    KOKKOS_FUNCTION tnsr::i<DataType, 3, Frame> get_var(
         const IntermediateComputer<DataType, Frame>& computer,
         DerivLapse<DataType, Frame> /*meta*/);
 
-    Scalar<DataType> get_var(
+    KOKKOS_FUNCTION Scalar<DataType> get_var(
         const IntermediateComputer<DataType, Frame>& computer,
         ::Tags::dt<gr::Tags::Lapse<DataType>> /*meta*/);
 
-    tnsr::I<DataType, 3, Frame> get_var(
+    KOKKOS_FUNCTION tnsr::I<DataType, 3, Frame> get_var(
         const IntermediateComputer<DataType, Frame>& computer,
         ::Tags::dt<gr::Tags::Shift<DataType, 3, Frame>> /*meta*/);
 
-    Scalar<DataType> get_var(
+    KOKKOS_FUNCTION Scalar<DataType> get_var(
         const IntermediateComputer<DataType, Frame>& computer,
         gr::Tags::SqrtDetSpatialMetric<DataType> /*meta*/);
 
-    tnsr::i<DataType, 3, Frame> get_var(
+    KOKKOS_FUNCTION tnsr::i<DataType, 3, Frame> get_var(
         const IntermediateComputer<DataType, Frame>& computer,
         gr::Tags::DerivDetSpatialMetric<DataType, 3, Frame> /*meta*/);
 
-    Scalar<DataType> get_var(
+    KOKKOS_FUNCTION Scalar<DataType> get_var(
         const IntermediateComputer<DataType, Frame>& computer,
         gr::Tags::TraceExtrinsicCurvature<DataType> /*meta*/);
 
-    tnsr::I<DataType, 3, Frame> get_var(
+    KOKKOS_FUNCTION tnsr::I<DataType, 3, Frame> get_var(
         const IntermediateComputer<DataType, Frame>& computer,
         gr::Tags::TraceSpatialChristoffelSecondKind<DataType, 3,
                                                     Frame> /*meta*/);
-    tnsr::Abb<DataType, 3, Frame> get_var(
+    KOKKOS_FUNCTION tnsr::Abb<DataType, 3, Frame> get_var(
         const IntermediateComputer<DataType, Frame>& computer,
         gr::Tags::SpacetimeChristoffelSecondKind<DataType, 3, Frame> /*meta*/);
 

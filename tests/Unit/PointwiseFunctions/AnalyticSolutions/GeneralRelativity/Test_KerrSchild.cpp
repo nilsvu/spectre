@@ -3,6 +3,7 @@
 
 #include "Framework/TestingFramework.hpp"
 
+#include <Kokkos_Core.hpp>
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -13,11 +14,13 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/TaggedTuple.hpp"
+#include "DataStructures/Tensor/AtIndex.hpp"
 #include "DataStructures/Tensor/EagerMath/Determinant.hpp"
 #include "DataStructures/Tensor/EagerMath/DeterminantAndInverse.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
+#include "DataStructures/VariablesKokkos.hpp"
 #include "Domain/CoordinateMaps/Affine.hpp"
 #include "Domain/CoordinateMaps/CoordinateMap.hpp"
 #include "Domain/CoordinateMaps/CoordinateMap.tpp"
@@ -25,6 +28,7 @@
 #include "Domain/CoordinateMaps/ProductMaps.tpp"
 #include "Framework/TestCreation.hpp"
 #include "Framework/TestHelpers.hpp"
+#include "Helpers/DataStructures/MakeWithRandomValues.hpp"
 #include "Helpers/PointwiseFunctions/AnalyticSolutions/GeneralRelativity/VerifyGrSolution.hpp"
 #include "Helpers/PointwiseFunctions/AnalyticSolutions/TestHelpers.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
@@ -36,6 +40,7 @@
 #include "PointwiseFunctions/GeneralRelativity/Tags.hpp"
 #include "PointwiseFunctions/SpecialRelativity/LorentzBoostMatrix.hpp"
 #include "Utilities/ConstantExpressions.hpp"
+#include "Utilities/Kokkos/KokkosCore.hpp"
 #include "Utilities/MakeWithValue.hpp"
 #include "Utilities/TMPL.hpp"
 
@@ -528,6 +533,43 @@ void test_construct_from_options() {
                                              {{0.5, 0.4, 0.3}}));
 }
 
+void test_on_device() {
+  const gr::Solutions::KerrSchild solution{1., {{0., 0., 0.9}}, {{0., 0., 0.}}};
+  // Generate random coords on host
+  const size_t num_points = 10;
+  MAKE_GENERATOR(gen);
+  std::uniform_real_distribution<> dist(-10.0, 10.0);
+  const auto all_coords =
+      make_with_random_values<tnsr::I<DataVector, 3, Frame::Inertial>>(
+      make_not_null(&gen), make_not_null(&dist), num_points);
+  // Copy coordinates to device
+  const auto x_device = copy_to_device(all_coords);
+  // Evaluate Kerr solution on device
+  Variables<tmpl::list<gr::Tags::Lapse<Kokkos::View<double*>>>> vars(
+      num_points);
+  auto lapse = get<gr::Tags::Lapse<Kokkos::View<double*>>>(vars);
+  Kokkos::parallel_for(
+      "evaluate_kerr_schild", num_points, KOKKOS_LAMBDA(int i) {
+        const auto x_i = make_at_index(x_device, i);
+        const auto vars_i =
+            solution.variables(x_i, 0.0, tmpl::list<gr::Tags::Lapse<double>>{});
+        set_at_index(make_not_null(&lapse),
+                     get<gr::Tags::Lapse<double>>(vars_i), i);
+  });
+  Kokkos::fence();
+  // Copy data back to host
+  const auto host_vars = vars.create_mirror_view_and_copy(Kokkos::HostSpace{});
+  const auto host_data =
+      get(get<::Tags::MirrorView<gr::Tags::Lapse<Kokkos::View<double*>>,
+                                 Kokkos::HostSpace>>(host_vars));
+  // Compare to expected value
+  const auto expected = get(get<gr::Tags::Lapse<DataVector>>(solution.variables(
+      all_coords, 0.0, tmpl::list<gr::Tags::Lapse<DataVector>>{})));
+  for (size_t i = 0; i < num_points; ++i) {
+    CHECK(host_data(i) == approx(expected[i]));
+  }
+}
+
 }  // namespace
 
 SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.KerrSchild",
@@ -588,4 +630,6 @@ SPECTRE_TEST_CASE("Unit.PointwiseFunctions.AnalyticSolutions.Gr.KerrSchild",
           "Center: [1.0,3.0,2.0]\n"
           "Velocity: [0,0,0]"),
       Catch::Matchers::ContainsSubstring("Spin magnitude must be < 1"));
+
+  test_on_device();
 }
