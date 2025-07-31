@@ -8,6 +8,7 @@
 #include "Evolution/DiscontinuousGalerkin/TimeDerivativeDecisions.hpp"
 #include "Evolution/Systems/ScalarWave/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
+#include "Utilities/Kokkos/KokkosCore.hpp"
 #include "Utilities/TMPL.hpp"
 
 /// \cond
@@ -29,24 +30,25 @@ struct TimeDerivative {
   using argument_tags =
       tmpl::list<Tags::Pi, Tags::Phi<Dim>, Tags::ConstraintGamma2>;
 
-  static evolution::dg::TimeDerivativeDecisions<Dim> apply(
+  template <typename DataType>
+  KOKKOS_FUNCTION static evolution::dg::TimeDerivativeDecisions<Dim> apply(
       // Time derivatives returned by reference. All the tags in the
       // variables_tag in the system struct.
-      gsl::not_null<Scalar<DataVector>*> dt_psi,
-      gsl::not_null<Scalar<DataVector>*> dt_pi,
-      gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*> dt_phi,
+      gsl::not_null<Scalar<DataType>*> dt_psi,
+      gsl::not_null<Scalar<DataType>*> dt_pi,
+      gsl::not_null<tnsr::i<DataType, Dim, Frame::Inertial>*> dt_phi,
 
-      gsl::not_null<Scalar<DataVector>*> result_gamma2,
+      gsl::not_null<Scalar<DataType>*> result_gamma2,
 
       // Partial derivative arguments. Listed in the system struct as
       // gradient_variables.
-      const tnsr::i<DataVector, Dim, Frame::Inertial>& d_psi,
-      const tnsr::i<DataVector, Dim, Frame::Inertial>& d_pi,
-      const tnsr::ij<DataVector, Dim, Frame::Inertial>& d_phi,
+      const tnsr::i<DataType, Dim, Frame::Inertial>& d_psi,
+      const tnsr::i<DataType, Dim, Frame::Inertial>& d_pi,
+      const tnsr::ij<DataType, Dim, Frame::Inertial>& d_phi,
 
       // Terms list in argument_tags above
-      const Scalar<DataVector>& pi,
-      const tnsr::i<DataVector, Dim, Frame::Inertial>& phi,
-      const Scalar<DataVector>& gamma2);
+      const Scalar<DataType>& pi,
+      const tnsr::i<DataType, Dim, Frame::Inertial>& phi,
+      const Scalar<DataType>& gamma2);
 };
 }  // namespace ScalarWave

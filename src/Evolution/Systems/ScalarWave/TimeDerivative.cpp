@@ -7,24 +7,26 @@
 
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Utilities/GenerateInstantiations.hpp"
 #include "Utilities/Gsl.hpp"
 
 namespace ScalarWave {
 template <size_t Dim>
+template <typename DataType>
 evolution::dg::TimeDerivativeDecisions<Dim> TimeDerivative<Dim>::apply(
-    const gsl::not_null<Scalar<DataVector>*> dt_psi,
-    const gsl::not_null<Scalar<DataVector>*> dt_pi,
-    const gsl::not_null<tnsr::i<DataVector, Dim, Frame::Inertial>*> dt_phi,
+    const gsl::not_null<Scalar<DataType>*> dt_psi,
+    const gsl::not_null<Scalar<DataType>*> dt_pi,
+    const gsl::not_null<tnsr::i<DataType, Dim, Frame::Inertial>*> dt_phi,
 
-    const gsl::not_null<Scalar<DataVector>*> result_gamma2,
+    const gsl::not_null<Scalar<DataType>*> result_gamma2,
 
-    const tnsr::i<DataVector, Dim, Frame::Inertial>& d_psi,
-    const tnsr::i<DataVector, Dim, Frame::Inertial>& d_pi,
-    const tnsr::ij<DataVector, Dim, Frame::Inertial>& d_phi,
+    const tnsr::i<DataType, Dim, Frame::Inertial>& d_psi,
+    const tnsr::i<DataType, Dim, Frame::Inertial>& d_pi,
+    const tnsr::ij<DataType, Dim, Frame::Inertial>& d_phi,
 
-    const Scalar<DataVector>& pi,
-    const tnsr::i<DataVector, Dim, Frame::Inertial>& phi,
-    const Scalar<DataVector>& gamma2) {
+    const Scalar<DataType>& pi,
+    const tnsr::i<DataType, Dim, Frame::Inertial>& phi,
+    const Scalar<DataType>& gamma2) {
   // The constraint damping parameter gamma2 is needed for boundary corrections,
   // which means we need it as a temporary tag in order to project it to the
   // boundary. We prevent slicing/projecting directly from the volume to prevent
@@ -48,4 +50,27 @@ evolution::dg::TimeDerivativeDecisions<Dim> TimeDerivative<Dim>::apply(
 template class TimeDerivative<1>;
 template class TimeDerivative<2>;
 template class TimeDerivative<3>;
+
+#define DIM(data) BOOST_PP_TUPLE_ELEM(0, data)
+#define DTYPE(data) BOOST_PP_TUPLE_ELEM(1, data)
+
+#define INSTANTIATION(_, data)                                                \
+  template evolution::dg::TimeDerivativeDecisions<DIM(data)>                  \
+  TimeDerivative<DIM(data)>::apply(                                           \
+      const gsl::not_null<Scalar<DTYPE(data)>*>,                              \
+      const gsl::not_null<Scalar<DTYPE(data)>*>,                              \
+      const gsl::not_null<tnsr::i<DTYPE(data), DIM(data), Frame::Inertial>*>, \
+      const gsl::not_null<Scalar<DTYPE(data)>*>,                              \
+      const tnsr::i<DTYPE(data), DIM(data), Frame::Inertial>&,                \
+      const tnsr::i<DTYPE(data), DIM(data), Frame::Inertial>&,                \
+      const tnsr::ij<DTYPE(data), DIM(data), Frame::Inertial>&,               \
+      const Scalar<DTYPE(data)>&,                                             \
+      const tnsr::i<DTYPE(data), DIM(data), Frame::Inertial>&,                \
+      const Scalar<DTYPE(data)>&);
+
+GENERATE_INSTANTIATIONS(INSTANTIATION, (1, 2, 3), (double, DataVector))
+
+#undef INSTANTIATION
+#undef DIM
+#undef DTYPE
 }  // namespace ScalarWave

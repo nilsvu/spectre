@@ -12,9 +12,11 @@
 #include "DataStructures/DataBox/PrefixHelpers.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
+#include "DataStructures/Tensor/AtIndex.hpp"
 #include "DataStructures/Tensor/EagerMath/DeterminantAndInverse.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
+#include "DataStructures/VariablesKokkos.hpp"
 #include "Evolution/DiscontinuousGalerkin/TimeDerivativeDecisions.hpp"
 #include "Evolution/PassVariables.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Formulation.hpp"
@@ -31,6 +33,77 @@
 #include "Utilities/TMPL.hpp"
 
 namespace evolution::dg::Actions::detail {
+
+template <typename ComputeVolumeTimeDerivativeTerms, size_t Dim,
+          typename TimeDerivativeArguments, typename VariablesTags,
+          typename PartialDerivTags, typename FluxVariablesTags,
+          typename TemporaryTags,
+          typename Is = std::make_index_sequence<
+              tmpl::size<TimeDerivativeArguments>::value>>
+struct ComputeVolumeTermsOnDevice;
+
+template <typename ComputeVolumeTimeDerivativeTerms, size_t Dim,
+          typename... TimeDerivativeArguments, typename... VariablesTags,
+          typename... PartialDerivTags, typename... FluxVariablesTags,
+          typename... TemporaryTags, size_t... Is>
+struct ComputeVolumeTermsOnDevice<
+    ComputeVolumeTimeDerivativeTerms, Dim,
+    tmpl::list<TimeDerivativeArguments...>, tmpl::list<VariablesTags...>,
+    tmpl::list<PartialDerivTags...>, tmpl::list<FluxVariablesTags...>,
+    tmpl::list<TemporaryTags...>, std::index_sequence<Is...>> {
+  KOKKOS_FUNCTION void operator()(const size_t i) const {
+    tuples::TaggedTuple<::Tags::AtIndex<::Tags::dt<VariablesTags>>...>
+        dt_vars_i{};
+    tuples::TaggedTuple<::Tags::AtIndex<
+        ::Tags::Flux<FluxVariablesTags, tmpl::size_t<Dim>, Frame::Inertial>>...>
+        volume_fluxes_i{};
+    tuples::TaggedTuple<::Tags::AtIndex<TemporaryTags>...> temporaries_i{};
+    ComputeVolumeTimeDerivativeTerms::apply(
+        make_not_null(
+            &get<::Tags::AtIndex<::Tags::dt<VariablesTags>>>(dt_vars_i))...,
+        make_not_null(
+            &get<::Tags::AtIndex<::Tags::Flux<
+                FluxVariablesTags, tmpl::size_t<Dim>, Frame::Inertial>>>(
+                volume_fluxes_i))...,
+        make_not_null(&get<::Tags::AtIndex<TemporaryTags>>(temporaries_i))...,
+        make_at_index(
+            get<::Tags::MirrorView<::Tags::deriv<
+                PartialDerivTags, tmpl::size_t<Dim>, Frame::Inertial>>>(
+                partial_derivs),
+            i)...,
+        make_at_index(get<Is>(time_derivative_args), i)...);
+    (..., set_at_index(
+              make_not_null(
+                  &get<::Tags::MirrorView<::Tags::dt<VariablesTags>>>(dt_vars)),
+              get<::Tags::AtIndex<::Tags::dt<VariablesTags>>>(dt_vars_i), i));
+    (...,
+     set_at_index(
+         make_not_null(
+             &get<::Tags::MirrorView<::Tags::Flux<
+                 FluxVariablesTags, tmpl::size_t<Dim>, Frame::Inertial>>>(
+                 volume_fluxes)),
+         get<::Tags::AtIndex<::Tags::Flux<FluxVariablesTags, tmpl::size_t<Dim>,
+                                          Frame::Inertial>>>(volume_fluxes_i),
+         i));
+    (...,
+     set_at_index(
+         make_not_null(&get<::Tags::MirrorView<TemporaryTags>>(temporaries)),
+         get<::Tags::AtIndex<TemporaryTags>>(temporaries_i), i));
+  }
+
+  Variables<tmpl::list<::Tags::MirrorView<::Tags::dt<VariablesTags>>...>>
+      dt_vars;
+  Variables<tmpl::list<::Tags::MirrorView<
+      ::Tags::Flux<FluxVariablesTags, tmpl::size_t<Dim>, Frame::Inertial>>...>>
+      volume_fluxes;
+  Variables<tmpl::list<::Tags::MirrorView<TemporaryTags>...>> temporaries;
+  Variables<tmpl::list<::Tags::MirrorView<
+      ::Tags::deriv<PartialDerivTags, tmpl::size_t<Dim>, Frame::Inertial>>...>>
+      partial_derivs;
+  std::tuple<TensorMetafunctions::swap_type<Kokkos::View<double*>,
+                                            TimeDerivativeArguments>...>
+      time_derivative_args;
+};
 /*
  * Computes the volume terms for a discontinuous Galerkin scheme.
  *
@@ -125,7 +198,8 @@ void volume_terms(
 
   // For now just zero dt_vars. If this is a performance bottle neck we
   // can re-evaluate in the future.
-  dt_vars_ptr->initialize(mesh.number_of_grid_points(), 0.0);
+  const size_t num_points = mesh.number_of_grid_points();
+  dt_vars_ptr->initialize(num_points, 0.0);
   evolution::dg::TimeDerivativeDecisions<Dim> time_derivative_decisions{};
 
   // Compute volume du/dt and fluxes
@@ -145,6 +219,24 @@ void volume_terms(
           time_derivative_args...);
     }
   } else {
+#ifdef SPECTRE_KOKKOS
+    auto dt_vars_on_device = copy_to_device(*dt_vars_ptr);
+    auto volume_fluxes_on_device = copy_to_device(*volume_fluxes);
+    auto temporaries_on_device = copy_to_device(*temporaries);
+    ComputeVolumeTermsOnDevice<
+        ComputeVolumeTimeDerivativeTerms, Dim,
+        tmpl::list<TimeDerivativeArguments...>, tmpl::list<VariablesTags...>,
+        tmpl::list<PartialDerivTags...>, tmpl::list<FluxVariablesTags...>,
+        tmpl::list<TemporaryTags...>>
+        functor{dt_vars_on_device, volume_fluxes_on_device,
+                temporaries_on_device, copy_to_device(*partial_derivs),
+                std::make_tuple(copy_to_device(time_derivative_args)...)};
+    Kokkos::parallel_for("compute_volume_time_derivative_terms", num_points,
+                         functor);
+    copy_to_host(dt_vars_ptr, dt_vars_on_device);
+    copy_to_host(volume_fluxes, volume_fluxes_on_device);
+    copy_to_host(temporaries, temporaries_on_device);
+#else   // SPECTRE_KOKKOS
     time_derivative_decisions = ComputeVolumeTimeDerivativeTerms::apply(
         make_not_null(&get<::Tags::dt<VariablesTags>>(*dt_vars_ptr))...,
         make_not_null(&get<::Tags::Flux<FluxVariablesTags, tmpl::size_t<Dim>,
@@ -153,6 +245,7 @@ void volume_terms(
         get<::Tags::deriv<PartialDerivTags, tmpl::size_t<Dim>,
                           Frame::Inertial>>(*partial_derivs)...,
         time_derivative_args...);
+#endif  // SPECTRE_KOKKOS
   }
 
   // Add volume terms for moving meshes
