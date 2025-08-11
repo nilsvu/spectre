@@ -276,6 +276,9 @@ class Tensor<X, Symm, IndexList<Indices...>> {
   }
   /// @}
 
+  const storage_type& data() const { return data_; }
+  storage_type& data() { return data_; }
+
   /// Return the number of independent components of the Tensor
   ///
   /// \details

@@ -184,12 +184,12 @@ std::array<Variables<DerivativeTags>, Dim> logical_partial_derivatives(
 }
 
 template <typename ResultTags, typename DerivativeTags, size_t Dim,
-          typename DerivativeFrame>
+          typename DerivativeFrame, typename DataType>
 void partial_derivatives(
     const gsl::not_null<Variables<ResultTags>*> du,
     const std::array<Variables<DerivativeTags>, Dim>&
         logical_partial_derivatives_of_u,
-    const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
+    const InverseJacobian<DataType, Dim, Frame::ElementLogical,
                           DerivativeFrame>& inverse_jacobian) {
   using ValueType = typename Variables<DerivativeTags>::value_type;
   auto& partial_derivatives_of_u = *du;
@@ -642,11 +642,11 @@ void cartoon_partial_derivatives(
 }
 
 template <typename ResultTags, typename VariableTags, size_t Dim,
-          typename DerivativeFrame>
+          typename DerivativeFrame, typename DataType>
 void partial_derivatives(
     const gsl::not_null<Variables<ResultTags>*> du,
     const Variables<VariableTags>& u, const Mesh<Dim>& mesh,
-    const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
+    const InverseJacobian<DataType, Dim, Frame::ElementLogical,
                           DerivativeFrame>& inverse_jacobian) {
   using DerivativeTags =
       tmpl::front<tmpl::split_at<VariableTags, tmpl::size<ResultTags>>>;
@@ -659,48 +659,95 @@ void partial_derivatives(
   using ValueType = typename Variables<VariableTags>::value_type;
   auto& partial_derivatives_of_u = *du;
   // For mutating compute items we must set the size.
+  const size_t num_points = mesh.number_of_grid_points();
   if (UNLIKELY(partial_derivatives_of_u.number_of_grid_points() !=
-               mesh.number_of_grid_points())) {
-    partial_derivatives_of_u.initialize(mesh.number_of_grid_points());
+               num_points)) {
+    partial_derivatives_of_u.initialize(num_points);
   }
 
-  const size_t vars_size =
-      u.number_of_grid_points() *
-      Variables<DerivativeTags>::number_of_independent_components;
-  const auto logical_derivs_data =
-      cpp20::make_unique_for_overwrite<ValueType[]>(
-          (Dim > 1 ? (Dim + 1) : Dim) * vars_size);
-  std::array<ValueType*, Dim> logical_derivs{};
-  for (size_t i = 0; i < Dim; ++i) {
-    gsl::at(logical_derivs, i) = &(logical_derivs_data[i * vars_size]);
-  }
-  Variables<DerivativeTags> temp{};
-  if constexpr (Dim > 1) {
-    temp.set_data_ref(&logical_derivs_data[Dim * vars_size], vars_size);
-  }
-  partial_derivatives_detail::LogicalImpl<
-      Dim, VariableTags, DerivativeTags>::apply(make_not_null(&logical_derivs),
-                                                &partial_derivatives_of_u,
-                                                &temp, u, mesh);
+#ifdef SPECTRE_KOKKOS
+  if constexpr (std::is_same_v<DataType, Kokkos::View<double*>>) {
+    // Select only the differentiated components of the input data
+    const auto u_subview = Kokkos::subview(
+        u.view(), Kokkos::ALL(),
+        std::make_pair(
+            0_st, Variables<DerivativeTags>::number_of_independent_components));
+    // Sweep over the data in each dimension and assemble the derivative:
+    //   \partial_i u = J^\hat{j}_i \partial_\hat{j} u
+    // See notes in `apply_matrix_in_dim` for details.
+    if constexpr (Dim == 1) {
+      partial_derivatives_detail::apply_matrix_in_dim<0, Dim, false>(
+          du->view(), u_subview,
+          Spectral::differentiation_matrix_on_device(mesh.slice_through(0)),
+          mesh, inverse_jacobian.data());
+    } else if constexpr (Dim == 2) {
+      partial_derivatives_detail::apply_matrix_in_dim<0, Dim, false>(
+          du->view(), u_subview,
+          Spectral::differentiation_matrix_on_device(mesh.slice_through(0)),
+          mesh, inverse_jacobian.data());
+      partial_derivatives_detail::apply_matrix_in_dim<1, Dim, true>(
+          du->view(), u_subview,
+          Spectral::differentiation_matrix_on_device(mesh.slice_through(1)),
+          mesh, inverse_jacobian.data());
+    } else if constexpr (Dim == 3) {
+      if (mesh.basis(1) == Spectral::Basis::SphericalHarmonic) {
+        ERROR(
+            "Spherical harmonic differentiation on GPUs is not yet "
+            "implemented.");
+      }
+      partial_derivatives_detail::apply_matrix_in_dim<0, Dim, false>(
+          du->view(), u_subview,
+          Spectral::differentiation_matrix_on_device(mesh.slice_through(0)),
+          mesh, inverse_jacobian.data());
+      partial_derivatives_detail::apply_matrix_in_dim<1, Dim, true>(
+          du->view(), u_subview,
+          Spectral::differentiation_matrix_on_device(mesh.slice_through(1)),
+          mesh, inverse_jacobian.data());
+      partial_derivatives_detail::apply_matrix_in_dim<2, Dim, true>(
+          du->view(), u_subview,
+          Spectral::differentiation_matrix_on_device(mesh.slice_through(2)),
+          mesh, inverse_jacobian.data());
+    }
+  } else {
+#endif  // SPECTRE_KOKKOS
+    const size_t vars_size =
+        u.number_of_grid_points() *
+        Variables<DerivativeTags>::number_of_independent_components;
+    const auto logical_derivs_data =
+        cpp20::make_unique_for_overwrite<ValueType[]>(
+            (Dim > 1 ? (Dim + 1) : Dim) * vars_size);
+    std::array<ValueType*, Dim> logical_derivs{};
+    for (size_t i = 0; i < Dim; ++i) {
+      gsl::at(logical_derivs, i) = &(logical_derivs_data[i * vars_size]);
+    }
+    Variables<DerivativeTags> temp{};
+    if constexpr (Dim > 1) {
+      temp.set_data_ref(&logical_derivs_data[Dim * vars_size], vars_size);
+    }
+    partial_derivatives_detail::LogicalImpl<Dim, VariableTags, DerivativeTags>::
+        apply(make_not_null(&logical_derivs), &partial_derivatives_of_u, &temp,
+              u, mesh);
 
-  std::array<const ValueType*, Dim> const_logical_derivs{};
-  for (size_t i = 0; i < Dim; ++i) {
-    gsl::at(const_logical_derivs, i) = gsl::at(logical_derivs, i);
+    std::array<const ValueType*, Dim> const_logical_derivs{};
+    for (size_t i = 0; i < Dim; ++i) {
+      gsl::at(const_logical_derivs, i) = gsl::at(logical_derivs, i);
+    }
+    partial_derivatives_detail::partial_derivatives_impl(
+        make_not_null(&partial_derivatives_of_u), const_logical_derivs,
+        Variables<DerivativeTags>::number_of_independent_components,
+        inverse_jacobian);
+#ifdef SPECTRE_KOKKOS
   }
-  partial_derivatives_detail::partial_derivatives_impl(
-      make_not_null(&partial_derivatives_of_u), const_logical_derivs,
-      Variables<DerivativeTags>::number_of_independent_components,
-      inverse_jacobian);
+#endif  // SPECTRE_KOKKOS
 }
 
 template <typename DerivativeTags, typename VariableTags, size_t Dim,
-          typename DerivativeFrame>
+          typename DerivativeFrame, typename DataType>
 Variables<db::wrap_tags_in<Tags::deriv, DerivativeTags, tmpl::size_t<Dim>,
                            DerivativeFrame>>
-partial_derivatives(
-    const Variables<VariableTags>& u, const Mesh<Dim>& mesh,
-    const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
-                          DerivativeFrame>& inverse_jacobian) {
+partial_derivatives(const Variables<VariableTags>& u, const Mesh<Dim>& mesh,
+                    const InverseJacobian<DataType, Dim, Frame::ElementLogical,
+                                          DerivativeFrame>& inverse_jacobian) {
   Variables<db::wrap_tags_in<Tags::deriv, DerivativeTags, tmpl::size_t<Dim>,
                              DerivativeFrame>>
       partial_derivatives_of_u(u.number_of_grid_points());

@@ -86,6 +86,197 @@ void apply_matrix_in_first_dim(std::complex<double>* result,
   //   raw_transpose(make_not_null(reinterpret_cast<double*>(result)),
   //                 buffer.data(), size, 2);
 }
+#ifdef SPECTRE_KOKKOS
+template <size_t DerivDim, size_t Dim, bool AddToResult>
+void apply_matrix_in_dim(
+    Kokkos::View<double**> result,        // [total_num_points, num_components]
+    const Kokkos::View<double**>& input,  // [total_num_points, num_components]
+    const MatrixViewRO& matrix,           // [num_points_this_dim^2]
+    const Mesh<Dim>& mesh,
+    const std::array<Kokkos::View<double*>,  // [total_num_points]
+                     Dim * Dim>& inv_jacobian) {
+  const size_t num_components = input.extent(1);
+  const std::array<size_t, Dim> extents = mesh.extents().indices();
+  const std::array<size_t, Dim - 1> extents_transverse =
+      all_but_specified_element_of(extents, DerivDim);
+  const size_t total_num_points = mesh.extents().product();
+  const size_t num_points_this_dim = extents[DerivDim];
+  const size_t num_points_transverse = total_num_points / num_points_this_dim;
+  ASSERT(input.extent(0) == total_num_points,
+         "Input has " << input.extent(0) << " points, but mesh has "
+                      << total_num_points << " points.");
+  ASSERT(matrix.extent(0) == matrix.extent(1), "Matrix must be square, but has "
+                                                   << matrix.extent(0) << "x"
+                                                   << matrix.extent(1));
+  ASSERT(matrix.extent(0) == num_points_this_dim,
+         "Matrix has " << matrix.extent(0) << " rows, but mesh has "
+                       << num_points_this_dim << " points in dim " << DerivDim
+                       << '.');
+
+  // Precompute strides for column-major flattening
+  std::array<size_t, Dim> strides;
+  {
+    size_t s = 1;
+    for (size_t d = 0; d < Dim; ++d) {
+      strides[d] = s;
+      s *= extents[d];
+    }
+  }
+
+  // Precompute storage indices for the inverse Jacobian. Also store as pointers
+  // because capturing the full `inv_jacobian` by value and indexing it in
+  // nested Kokkos lambdas has a surprisingly large overhead.
+  using JacobianStructure = Tensor_detail::Structure<
+      Symmetry<1, 2>,
+      Tensor_detail::TensorIndexType<Dim, UpLo::Up, Frame::NoFrame,
+                                     IndexType::Spatial>,
+      Tensor_detail::TensorIndexType<Dim, UpLo::Lo, Frame::NoFrame,
+                                     IndexType::Spatial>>;
+  std::array<const double*, Dim> inv_jac_components{};
+  for (size_t d = 0; d < Dim; ++d) {
+    gsl::at(inv_jac_components, d) =
+        inv_jacobian[JacobianStructure::get_storage_index(DerivDim, d)].data();
+  }
+
+  // Parallelization strategy on GPU hardware:
+  //
+  // We currently sweep over the tensor data Dim times, once for each logical
+  // dimension, and assemble the result by contracting with the Jacobian:
+  //   \partial_i u = J^\hat{j}_i \partial_\hat{j} u
+  // (calling this function Dim times, the first time with AddToResult=false and
+  // then later with AddToResult=true to do the sum over $\hat{j}$). In each
+  // sweep we parallelize over all independent "stripes" of tensor data in the
+  // derivative dimension (typically O(10^3) stripes of length N~6-20 per DG
+  // element) by assigning a team of threads (thread block) to each stripe. We
+  // load the stripe data into shared team memory, then apply the
+  // differentiation matrix to the stripe by parallelizing over the N outputs /
+  // rows of the matrix with the thread team (TeamThreadRange) and parallelizing
+  // over the N inputs / columns of the matrix with a vectorized sum
+  // (ThreadVectorRange). The number of threads in a team (team size) and the
+  // number of vector lanes (vector length) are configurable via the TeamPolicy.
+  // Currently we just let Kokkos pick the team size automatically and set the
+  // vector length to 1 because that gave the best result in a preliminary
+  // benchmark with 32 random tensor components in a 3D element with 20^3 grid
+  // points (18.5 us on an A100).
+  //
+  // Notes on performance and possible improvements:
+  //
+  // - We currently parallelize a single element over GPU threads. It would be
+  //   better to batch elements together to saturate the GPU with more work.
+  //   This would just extend the `num_components` over the tensor data in all
+  //   batched elements to apply the logical differentiation, with the caveat
+  //   that the Jacobian data has to be strided over the different elements.
+  // - Currently the amount of work per team is very small because it works only
+  //   on a single stripe of tensor data with length N~6-20. It could be better
+  //   to have each team work on multiple stripes at once, each thread in the
+  //   team working on one stripe, and to batch these threads/stripes into
+  //   vector lanes so that one warp completes multiple stripes at once (doing
+  //   the full matrix multiply in one vector lane). This approach probably
+  //   needs to batch elements together or launch kernels for multiple elements
+  //   at once to saturate the GPU with enough teams (thread blocks).
+  // - The data layout of the input and output data is very important and hasn't
+  //   been tested very thoroughly yet, in particular in situations where memory
+  //   bandwidth is the bottleneck. It is also important to balance the optimal
+  //   data layout for differentiation with the optimal layout for pointwise RHS
+  //   evaluations, which is likely different (differentiation prefers locality
+  //   of grid points and pointwise evaluations prefer locality of tensor
+  //   components). Also, large systems of PDEs like GH might prefer locality of
+  //   tensor components whereas small systems like scalar wave might prefer
+  //   locality of grid points.
+
+  const size_t num_teams = num_components * num_points_transverse;
+  const size_t shmem_size = num_points_this_dim * (1 + Dim) * sizeof(double);
+  using TeamPolicy = Kokkos::TeamPolicy<>;
+  TeamPolicy team_policy(num_teams, Kokkos::AUTO);
+  team_policy = team_policy.set_scratch_size(0, Kokkos::PerTeam(shmem_size));
+
+  Kokkos::parallel_for(
+      "apply_matrix_in_dim", team_policy,
+      KOKKOS_LAMBDA(const TeamPolicy::member_type& team_member) {
+        const size_t team_rank = team_member.league_rank();
+        const size_t component_index = team_rank / num_points_transverse;
+        size_t remaining = team_rank % num_points_transverse;
+        // Decode stripe index in the transverse dims
+        std::array<size_t, Dim - 1> stripe_index{};
+        for (size_t t = 0; t < Dim - 1; ++t) {
+          stripe_index[t] = remaining % extents_transverse[t];
+          remaining /= extents_transverse[t];
+        }
+        // Map stripe to an offset and stride into the column-major data layout
+        size_t base_offset = 0;
+        {
+          size_t t = 0;
+          for (size_t d = 0; d < Dim; ++d) {
+            if (d == DerivDim) {
+              continue;
+            }
+            base_offset += stripe_index[t++] * strides[d];
+          }
+        }
+        const size_t stride = strides[DerivDim];
+
+        // Preload the input data for this component and stripe
+        double* shmem = (double*)team_member.team_shmem().get_shmem(shmem_size);
+        Kokkos::View<double*, Kokkos::MemoryUnmanaged> input_stripe(
+            shmem, num_points_this_dim);
+        Kokkos::View<double* [Dim], Kokkos::MemoryUnmanaged> inv_jac_stripe(
+            shmem + num_points_this_dim, num_points_this_dim);
+
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team_member, num_points_this_dim),
+            [=](int j) {
+              const size_t point_index =
+                  base_offset + static_cast<size_t>(j) * stride;
+              input_stripe[j] = input(point_index, component_index);
+              for (size_t d = 0; d < Dim; ++d) {
+                inv_jac_stripe(j, d) = inv_jac_components[d][point_index];
+              }
+            });
+
+        team_member.team_barrier();
+
+        // Apply the differentiation matrix and the Jacobian
+        Kokkos::parallel_for(
+            Kokkos::TeamThreadRange(team_member, num_points_this_dim),
+            [=](int i) {
+              // Dense matrix-vector product along DerivDim
+              double sum = 0.0;
+              Kokkos::parallel_reduce(
+                  Kokkos::ThreadVectorRange(team_member, num_points_this_dim),
+                  [=](int j, double& local_sum) {
+                    local_sum += matrix(i, j) * input_stripe[j];
+                  },
+                  sum);
+              // Contract with Jacobian and write out to result
+              const size_t point_index =
+                  base_offset + static_cast<size_t>(i) * stride;
+              for (size_t d = 0; d < Dim; ++d) {
+                const double contracted = inv_jac_stripe(i, d) * sum;
+                const size_t deriv_component_index = component_index * Dim + d;
+                (void)result;  // capture `result` for `if constexpr`
+                if constexpr (AddToResult) {
+                  result(point_index, deriv_component_index) += contracted;
+                } else {
+                  result(point_index, deriv_component_index) = contracted;
+                }
+              }
+            });
+      });
+}
+// generate instantations
+#define INSTANTIATE_APPLY_MATRIX_IN_DIM(DerivDim, Dim, AddToResult)       \
+  template void apply_matrix_in_dim<DerivDim, Dim, AddToResult>(          \
+      Kokkos::View<double**> result, const Kokkos::View<double**>& input, \
+      const MatrixViewRO& matrix, const Mesh<Dim>& mesh,                  \
+      const std::array<Kokkos::View<double*>, Dim * Dim>& inv_jacobian);
+INSTANTIATE_APPLY_MATRIX_IN_DIM(0, 1, false)
+INSTANTIATE_APPLY_MATRIX_IN_DIM(0, 2, false)
+INSTANTIATE_APPLY_MATRIX_IN_DIM(0, 3, false)
+INSTANTIATE_APPLY_MATRIX_IN_DIM(1, 2, true)
+INSTANTIATE_APPLY_MATRIX_IN_DIM(1, 3, true)
+INSTANTIATE_APPLY_MATRIX_IN_DIM(2, 3, true)
+#undef INSTANTIATE_APPLY_MATRIX_IN_DIM
+#endif  // SPECTRE_KOKKOS
 }  // namespace partial_derivatives_detail
 
 template <typename DataType, typename SymmList, typename IndexList, size_t Dim>

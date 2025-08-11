@@ -5,6 +5,8 @@
 
 #include <cstddef>
 
+#include "Utilities/Kokkos/KokkosCore.hpp"
+
 /// \cond
 class Matrix;
 template <size_t>
@@ -37,6 +39,10 @@ template <Basis BasisType, Quadrature QuadratureType>
 const Matrix& differentiation_matrix(size_t num_points);
 template <Basis BasisType, Quadrature QuadratureType>
 const Matrix& differentiation_matrix_transpose(size_t num_points);
+#ifdef SPECTRE_KOKKOS
+template <Basis BasisType, Quadrature QuadratureType>
+const MatrixViewRO& differentiation_matrix_on_device(size_t num_points);
+#endif  // SPECTRE_KOKKOS
 /// @}
 
 /*!
@@ -63,6 +69,9 @@ const Matrix& differentiation_matrix(size_t num_points, Parity parity);
  */
 const Matrix& differentiation_matrix(const Mesh<1>& mesh);
 const Matrix& differentiation_matrix_transpose(const Mesh<1>& mesh);
+#ifdef SPECTRE_KOKKOS
+const MatrixViewRO& differentiation_matrix_on_device(const Mesh<1>& mesh);
+#endif  // SPECTRE_KOKKOS
 /// @}
 
 /*!

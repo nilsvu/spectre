@@ -25,6 +25,7 @@
 #include "DataStructures/Tensor/Metafunctions.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "DataStructures/Variables.hpp"
+#include "DataStructures/VariablesKokkos.hpp"
 #include "DataStructures/VariablesTag.hpp"
 #include "Domain/CoordinateMaps/Affine.hpp"
 #include "Domain/CoordinateMaps/CoordinateMap.hpp"
@@ -42,6 +43,7 @@
 #include "Evolution/DgSubcell/Tags/ObserverMesh.hpp"
 #include "Framework/TestHelpers.hpp"
 #include "Helpers/DataStructures/DataBox/TestHelpers.hpp"
+#include "Helpers/DataStructures/MakeWithRandomValues.hpp"
 #include "Helpers/NumericalAlgorithms/Spectral/DiskTestFunctions.hpp"
 #include "Helpers/NumericalAlgorithms/SphericalHarmonics/YlmTestFunctions.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
@@ -766,6 +768,19 @@ void test_partial_derivatives_1d(const Mesh<1>& mesh) {
     // We've checked that du is correct, now test that taking derivatives of
     // individual tensors gets the matching result.
     test_partial_derivative_per_tensor(expected_du, u, mesh, inverse_jacobian);
+
+#ifdef SPECTRE_KOKKOS
+    if constexpr (std::is_same_v<typename Variables<VariableTags>::value_type,
+                                 double>) {
+      const auto u_device = copy_to_device(u);
+      const auto inv_jacobian_on_device = copy_to_device(inverse_jacobian);
+      const auto du_device = partial_derivatives<
+          db::wrap_tags_in<::Tags::MirrorView, GradientTags>>(
+          u_device, mesh, inv_jacobian_on_device);
+      copy_to_host(make_not_null(&du), du_device);
+      CHECK_VARIABLES_CUSTOM_APPROX(du, expected_du, local_approx);
+    }
+#endif
   }
 }
 
@@ -816,6 +831,19 @@ void test_partial_derivatives_2d(const Mesh<2>& mesh) {
       // We've checked that du is correct, now test that taking derivatives of
       // individual tensors gets the matching result.
       test_partial_derivative_per_tensor(du, u, mesh, inverse_jacobian);
+
+#ifdef SPECTRE_KOKKOS
+      if constexpr (std::is_same_v<typename Variables<VariableTags>::value_type,
+                                   double>) {
+        const auto u_device = copy_to_device(u);
+        const auto inv_jacobian_on_device = copy_to_device(inverse_jacobian);
+        const auto du_device = partial_derivatives<
+            db::wrap_tags_in<::Tags::MirrorView, GradientTags>>(
+            u_device, mesh, inv_jacobian_on_device);
+        copy_to_host(make_not_null(&du), du_device);
+        CHECK_VARIABLES_CUSTOM_APPROX(du, expected_du, local_approx);
+      }
+#endif
     }
   }
 }
@@ -871,9 +899,67 @@ void test_partial_derivatives_3d(const Mesh<3>& mesh) {
         // We've checked that du is correct, now test that taking derivatives of
         // individual tensors gets the matching result.
         test_partial_derivative_per_tensor(du, u, mesh, inverse_jacobian);
+
+#ifdef SPECTRE_KOKKOS
+        if constexpr (std::is_same_v<
+                          typename Variables<VariableTags>::value_type,
+                          double>) {
+          const auto u_device = copy_to_device(u);
+          const auto inv_jacobian_on_device = copy_to_device(inverse_jacobian);
+          auto du_device = partial_derivatives<
+              db::wrap_tags_in<::Tags::MirrorView, GradientTags>>(
+              u_device, mesh, inv_jacobian_on_device);
+          copy_to_host(make_not_null(&du), du_device);
+          CHECK_VARIABLES_CUSTOM_APPROX(du, expected_du, local_approx);
+        }
+#endif
       }
     }
   }
+}
+
+template <typename VariableTags, typename GradientTags = VariableTags>
+void benchmark_partial_derivatives_3d(const Mesh<3>& mesh) {
+  const size_t num_points = mesh.number_of_grid_points();
+  MAKE_GENERATOR(gen);
+  std::uniform_real_distribution<double> dist{-5, 10};
+  // Generate random Jacobian data
+  InverseJacobian<DataVector, 3, Frame::ElementLogical, Frame::Grid>
+      inv_jacobian(num_points);
+  fill_with_random_values(make_not_null(&inv_jacobian), make_not_null(&gen),
+                          make_not_null(&dist));
+  // Generate random variable data
+  Variables<VariableTags> u(num_points);
+  Variables<
+      db::wrap_tags_in<Tags::deriv, GradientTags, tmpl::size_t<3>, Frame::Grid>>
+      du(num_points);
+  // Compute derivatives on host
+  BENCHMARK_ADVANCED("Partial derivatives on host")
+  (Catch::Benchmark::Chronometer meter) {
+    fill_with_random_values(make_not_null(&u), make_not_null(&gen),
+                            make_not_null(&dist));
+    meter.measure([&]() {
+      partial_derivatives(make_not_null(&du), u, mesh, inv_jacobian);
+    });
+  };
+  // Compute derivatives on device
+#ifdef SPECTRE_KOKKOS
+  if constexpr (std::is_same_v<typename Variables<VariableTags>::value_type,
+                               double>) {
+    auto du_device = copy_to_device(du);
+    const auto inv_jacobian_on_device = copy_to_device(inv_jacobian);
+    BENCHMARK_ADVANCED("Partial derivatives on device")
+    (Catch::Benchmark::Chronometer meter) {
+      fill_with_random_values(make_not_null(&u), make_not_null(&gen),
+                              make_not_null(&dist));
+      const auto u_device = copy_to_device(u);
+      meter.measure([&]() {
+        partial_derivatives(make_not_null(&du_device), u_device, mesh,
+                            inv_jacobian_on_device);
+      });
+    };
+  }
+#endif
 }
 
 template <typename VariableTags, typename GradientTags = VariableTags>
@@ -2274,6 +2360,13 @@ SPECTRE_TEST_CASE("Unit.Numerical.LinearOperators.PartialDerivs",
                         Spectral::Basis::Legendre,
                         Spectral::Quadrature::GaussLobatto};
   test_partial_derivatives_3d<two_vars<DataVector, 3>>(mesh_3d);
+  benchmark_partial_derivatives_3d<
+      tmpl::list<::Tags::TempTensor<0, tnsr::ii<DataVector, 3>>,
+                 ::Tags::TempTensor<1, tnsr::I<DataVector, 3>>,
+                 ::Tags::TempTensor<2, Scalar<DataVector>>,
+                 ::Tags::TempTensor<3, tnsr::ii<DataVector, 3>>,
+                 ::Tags::TempTensor<4, tnsr::ijj<DataVector, 3>>>>(Mesh<3>{
+      20, Spectral::Basis::Legendre, Spectral::Quadrature::GaussLobatto});
   test_partial_derivatives_3d<two_vars<DataVector, 3>, one_var<DataVector, 3>>(
       mesh_3d);
   test_partial_derivatives_3d<two_vars<ComplexDataVector, 3>,

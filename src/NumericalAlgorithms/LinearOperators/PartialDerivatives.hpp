@@ -15,6 +15,7 @@
 #include "DataStructures/DataBox/Tag.hpp"
 #include "DataStructures/DataBox/TagName.hpp"
 #include "DataStructures/Variables.hpp"
+#include "Utilities/Kokkos/KokkosCore.hpp"
 #include "Utilities/Requires.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TypeTraits/IsA.hpp"
@@ -45,6 +46,13 @@ void apply_matrix_in_first_dim(std::complex<double>* result,
                                const std::complex<double>* input,
                                const Matrix& matrix, size_t size,
                                bool add_to_result = false);
+#ifdef SPECTRE_KOKKOS
+template <size_t DerivDim, size_t Dim, bool AddToResult = false>
+void apply_matrix_in_dim(
+    Kokkos::View<double**> result, const Kokkos::View<double**>& input,
+    const MatrixViewRO& matrix, const Mesh<Dim>& mesh,
+    const std::array<Kokkos::View<double*>, Dim * Dim>& inv_jacobian);
+#endif  // SPECTRE_KOKKOS
 }  // namespace partial_derivatives_detail
 
 /// @{
@@ -201,27 +209,27 @@ void cartoon_partial_derivatives(
 /// specified explicitly as the first template parameter. It returns a
 /// `Variables` with the `DerivativeTags` wrapped in `Tags::deriv`.
 template <typename ResultTags, typename DerivativeTags, size_t Dim,
-          typename DerivativeFrame>
+          typename DerivativeFrame, typename DataType>
 void partial_derivatives(
     gsl::not_null<Variables<ResultTags>*> du,
     const std::array<Variables<DerivativeTags>, Dim>&
         logical_partial_derivatives_of_u,
-    const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
+    const InverseJacobian<DataType, Dim, Frame::ElementLogical,
                           DerivativeFrame>& inverse_jacobian);
 
 template <typename ResultTags, typename VariableTags, size_t Dim,
-          typename DerivativeFrame>
+          typename DerivativeFrame, typename DataType>
 void partial_derivatives(
     gsl::not_null<Variables<ResultTags>*> du, const Variables<VariableTags>& u,
     const Mesh<Dim>& mesh,
-    const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
+    const InverseJacobian<DataType, Dim, Frame::ElementLogical,
                           DerivativeFrame>& inverse_jacobian);
 
 template <typename DerivativeTags, typename VariableTags, size_t Dim,
-          typename DerivativeFrame>
+          typename DerivativeFrame, typename DataType>
 auto partial_derivatives(
     const Variables<VariableTags>& u, const Mesh<Dim>& mesh,
-    const InverseJacobian<DataVector, Dim, Frame::ElementLogical,
+    const InverseJacobian<DataType, Dim, Frame::ElementLogical,
                           DerivativeFrame>& inverse_jacobian)
     -> Variables<db::wrap_tags_in<Tags::deriv, DerivativeTags,
                                   tmpl::size_t<Dim>, DerivativeFrame>>;

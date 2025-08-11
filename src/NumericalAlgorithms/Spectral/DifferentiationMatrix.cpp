@@ -21,6 +21,7 @@
 #include "NumericalAlgorithms/Spectral/QuadratureWeights.hpp"
 #include "NumericalAlgorithms/Spectral/SpectralQuantityForMesh.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
+#include "Utilities/Kokkos/KokkosCore.hpp"
 
 namespace Spectral {
 namespace {
@@ -363,6 +364,31 @@ struct DifferentiationMatrixGenerator {
   }
 };
 
+#ifdef SPECTRE_KOKKOS
+template <Basis BasisType, Quadrature QuadratureType>
+struct DifferentiationMatrixOnDeviceGenerator {
+  MatrixViewRO operator()(const size_t num_points) const {
+    Matrix diff_matrix =
+        DifferentiationMatrixGenerator<BasisType, QuadratureType>{}.operator()(
+            num_points);
+    // Copy into Kokkos mirror on host
+    Kokkos::View<double**, Kokkos::LayoutLeft, Kokkos::HostSpace>
+        diff_matrix_host("Dx_h", num_points, num_points);
+    for (size_t i = 0; i < num_points; ++i) {
+      for (size_t j = 0; j < num_points; ++j) {
+        diff_matrix_host(i, j) = diff_matrix(i, j);
+      }
+    }
+    // Copy to device
+    Kokkos::View<double**, Kokkos::LayoutLeft> diff_matrix_on_device(
+        "Dx", num_points, num_points);
+    Kokkos::deep_copy(diff_matrix_on_device, diff_matrix_host);
+    // Return a read-only view
+    return MatrixViewRO(diff_matrix_on_device);
+  }
+};
+#endif  // SPECTRE_KOKKOS
+
 template <Basis BasisType, Quadrature QuadratureType>
 struct DifferentiationMatrixTransposeGenerator {
   Matrix operator()(const size_t num_points) const {
@@ -426,6 +452,10 @@ PRECOMPUTED_SPECTRAL_QUANTITY(differentiation_matrix_transpose, Matrix,
                               DifferentiationMatrixTransposeGenerator)
 PRECOMPUTED_SPECTRAL_QUANTITY(weak_flux_differentiation_matrix, Matrix,
                               WeakFluxDifferentiationMatrixGenerator)
+#ifdef SPECTRE_KOKKOS
+PRECOMPUTED_SPECTRAL_QUANTITY(differentiation_matrix_on_device, MatrixViewRO,
+                              DifferentiationMatrixOnDeviceGenerator)
+#endif  // SPECTRE_KOKKOS
 
 #undef PRECOMPUTED_SPECTRAL_QUANTITY
 
@@ -437,6 +467,9 @@ PRECOMPUTED_SPECTRAL_QUANTITY_WITH_PARITY(
 SPECTRAL_QUANTITY_FOR_MESH(differentiation_matrix, Matrix)
 SPECTRAL_QUANTITY_FOR_MESH(differentiation_matrix_transpose, Matrix)
 SPECTRAL_QUANTITY_FOR_MESH(weak_flux_differentiation_matrix, Matrix)
+#ifdef SPECTRE_KOKKOS
+SPECTRAL_QUANTITY_FOR_MESH(differentiation_matrix_on_device, MatrixViewRO)
+#endif  // SPECTRE_KOKKOS
 
 #undef SPECTRAL_QUANTITY_FOR_MESH
 
@@ -461,6 +494,11 @@ template const Matrix& differentiation_matrix<
     Basis::ZernikeB2, Quadrature::GaussRadauUpper>(size_t, Parity);
 template const Matrix& differentiation_matrix<
     Basis::ZernikeB3, Quadrature::GaussRadauUpper>(size_t, Parity);
+
+#ifdef SPECTRE_KOKKOS
+template const MatrixViewRO& differentiation_matrix_on_device<
+    Basis::Legendre, Quadrature::GaussLobatto>(size_t);
+#endif  // SPECTRE_KOKKOS
 
 template const Matrix& weak_flux_differentiation_matrix<
     Basis::Chebyshev, Quadrature::Gauss>(size_t);
