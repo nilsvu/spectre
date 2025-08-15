@@ -11,9 +11,9 @@
 
 #include <complex>
 
-#ifndef SPECTRE_DEBUG
-#include <libxsmm.h>
-#endif  // ifndef SPECTRE_DEBUG
+// #ifndef SPECTRE_DEBUG
+// #include <libxsmm.h>
+// #endif  // ifndef SPECTRE_DEBUG
 #include <gsl/gsl_cblas.h>
 
 #include "Utilities/ErrorHandling/Assert.hpp"
@@ -199,39 +199,39 @@ inline void zgemm_(const char& TRANSA, const char& TRANSB, const size_t& M,
 
 // libxsmm is disabled in DEBUG builds because backtraces (from, for
 // example, FPEs) do not work when the error occurs in libxsmm code.
-#ifndef SPECTRE_DEBUG
-template <>
-inline void dgemm_<true>(const char& TRANSA, const char& TRANSB,
-                         const size_t& M, const size_t& N, const size_t& K,
-                         const double& ALPHA, const double* A,
-                         const size_t& LDA, const double* B, const size_t& LDB,
-                         const double& BETA, double* C, const size_t& LDC) {
-  ASSERT('N' == TRANSA or 'n' == TRANSA or 'T' == TRANSA or 't' == TRANSA or
-             'C' == TRANSA or 'c' == TRANSA,
-         "TRANSA must be upper or lower case N, T, or C. See the BLAS "
-         "documentation for help.");
-  ASSERT('N' == TRANSB or 'n' == TRANSB or 'T' == TRANSB or 't' == TRANSB or
-             'C' == TRANSB or 'c' == TRANSB,
-         "TRANSB must be upper or lower case N, T, or C. See the BLAS "
-         "documentation for help.");
+// #ifndef SPECTRE_DEBUG
+// template <>
+// inline void dgemm_<true>(const char& TRANSA, const char& TRANSB,
+//                          const size_t& M, const size_t& N, const size_t& K,
+//                          const double& ALPHA, const double* A,
+//                          const size_t& LDA, const double* B, const size_t& LDB,
+//                          const double& BETA, double* C, const size_t& LDC) {
+//   ASSERT('N' == TRANSA or 'n' == TRANSA or 'T' == TRANSA or 't' == TRANSA or
+//              'C' == TRANSA or 'c' == TRANSA,
+//          "TRANSA must be upper or lower case N, T, or C. See the BLAS "
+//          "documentation for help.");
+//   ASSERT('N' == TRANSB or 'n' == TRANSB or 'T' == TRANSB or 't' == TRANSB or
+//              'C' == TRANSB or 'c' == TRANSB,
+//          "TRANSB must be upper or lower case N, T, or C. See the BLAS "
+//          "documentation for help.");
 
-  // On some BLAS implementations (e.g. Accelerate.framework on macOS) a call
-  // with a zero-sized dimension aborts instead of acting as a no-op.  Treat
-  // these cases explicitly so we behave consistently across platforms.
-  if (M == 0 or N == 0 or K == 0) {
-    return;
-  }
+//   // On some BLAS implementations (e.g. Accelerate.framework on macOS) a call
+//   // with a zero-sized dimension aborts instead of acting as a no-op.  Treat
+//   // these cases explicitly so we behave consistently across platforms.
+//   if (M == 0 or N == 0 or K == 0) {
+//     return;
+//   }
 
-  const auto m = gsl::narrow_cast<int>(M);
-  const auto n = gsl::narrow_cast<int>(N);
-  const auto k = gsl::narrow_cast<int>(K);
-  const auto lda = gsl::narrow_cast<int>(LDA);
-  const auto ldb = gsl::narrow_cast<int>(LDB);
-  const auto ldc = gsl::narrow_cast<int>(LDC);
-  libxsmm_dgemm(&TRANSA, &TRANSB, &m, &n, &k, &ALPHA, A, &lda, B, &ldb, &BETA,
-                C, &ldc);
-}
-#endif  // ifndef SPECTRE_DEBUG
+//   const auto m = gsl::narrow_cast<int>(M);
+//   const auto n = gsl::narrow_cast<int>(N);
+//   const auto k = gsl::narrow_cast<int>(K);
+//   const auto lda = gsl::narrow_cast<int>(LDA);
+//   const auto ldb = gsl::narrow_cast<int>(LDB);
+//   const auto ldc = gsl::narrow_cast<int>(LDC);
+//   libxsmm_dgemm(&TRANSA, &TRANSB, &m, &n, &k, &ALPHA, A, &lda, B, &ldb, &BETA,
+//                 C, &ldc);
+// }
+// #endif  // ifndef SPECTRE_DEBUG
 /// @}
 
 /// @{
