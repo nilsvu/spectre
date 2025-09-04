@@ -283,6 +283,7 @@ struct InitializeSubdomain {
             // this is also what the DG operator currently does. The result is
             // the same on Gauss-Lobatto grids, but may need adjusting when
             // adding support for Gauss grids.
+            // TODO: Fix this for Gauss grids!
             face_background_fields[direction].initialize(
                 mesh.slice_away(direction.dimension()).number_of_grid_points());
             ::dg::project_contiguous_data_to_boundary(

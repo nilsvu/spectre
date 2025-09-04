@@ -673,6 +673,7 @@ struct SubdomainOperator
         // volume.
         // Possible performance optimization: this copy can be avoided if the
         // overlap covers the full neighbor, so no restriction is needed.
+        // TODO: test if restriction works on Gauss grids
         if (UNLIKELY(
                 result->overlap_data[overlap_id].number_of_grid_points() !=
                 operand.overlap_data.at(overlap_id).number_of_grid_points())) {
