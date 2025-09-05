@@ -116,6 +116,7 @@ LinearSolver:
               ExplicitInverse:
                 WriteMatrixToFile: None
             BoundaryConditions: Auto
+    SubdomainBoundaryConditions: None
     ObservePerCoreReductions: False
     OutputVolumeData: False
 

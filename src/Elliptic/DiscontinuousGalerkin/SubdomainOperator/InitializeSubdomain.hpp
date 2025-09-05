@@ -95,6 +95,37 @@ struct InitializeOverlapGeometry {
       const ElementId<Dim>& element_id, const Direction<Dim>& overlap_direction,
       std::optional<size_t> max_overlap) const;
 };
+
+// Set subdomain boundaries to external so user-specified boundary conditions
+// can be imposed there (instead of clamping the fields to zero outside the
+// subdomain)
+template <size_t Dim>
+struct SetSubdomainBoundariesToExternal
+    : tt::ConformsTo<::amr::protocols::Projector> {
+  using return_tags = tmpl::list<domain::Tags::Element<Dim>>;
+  using argument_tags = tmpl::list<>;
+  using volume_tags = tmpl::list<>;
+
+  static void apply(gsl::not_null<Element<Dim>*> element,
+                    const Direction<Dim>& direction_to_central_element) {
+    // This is running on a neighbor of the central element. We need to set all
+    // boundaries to external, except the boundary to the central element.
+    DirectionMap<Dim, Neighbors<Dim>> new_neighbors{};
+    const auto& neighbors_to_center =
+        element->neighbors().at(direction_to_central_element);
+    if (neighbors_to_center.size() > 1) {
+      // Can support this by imposing external boundary conditions on
+      // the mortar, but not yet implemented.
+      ERROR(
+          "An element in the subdomain has more than one neighbor in the "
+          "direction of the central element. "
+          "This is in principle possible but not yet supported.");
+    }
+    new_neighbors[direction_to_central_element] = neighbors_to_center;
+    *element = Element<Dim>{element->id(), std::move(new_neighbors),
+                            element->topologies()};
+  }
+};
 }  // namespace detail
 
 /*!
@@ -150,6 +181,7 @@ struct InitializeSubdomain {
                           elliptic::dg::InitializeGeometry<Dim>,
                           elliptic::dg::ProjectGeometry<Dim>>;
   using InitializeOverlapGeometry = detail::InitializeOverlapGeometry<Dim>;
+  using SetSubdomainBoundaries = detail::SetSubdomainBoundariesToExternal<Dim>;
   using InitializeFacesAndMortars = elliptic::dg::InitializeFacesAndMortars<
       Dim, typename System::inv_metric_tag, BackgroundTag>;
 
@@ -173,8 +205,10 @@ struct InitializeSubdomain {
   using simple_tags_from_options =
       tmpl::list<domain::Tags::InitialExtents<Dim>,
                  domain::Tags::InitialRefinementLevels<Dim>>;
-  using const_global_cache_tags =
-      tmpl::list<LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>>;
+  using const_global_cache_tags = tmpl::list<
+      LinearSolver::Schwarz::Tags::MaxOverlap<OptionsGroup>,
+      elliptic::dg::subdomain_operator::Tags::SubdomainBoundaryConditions<
+          Dim, typename System::boundary_conditions_base, OptionsGroup>>;
   using simple_tags = db::wrap_tags_in<
       overlaps_tag,
       tmpl::append<
@@ -196,12 +230,34 @@ struct InitializeSubdomain {
       const ElementId<Dim>& /*element_id*/, const ActionList /*meta*/,
       const ParallelComponent* const /*meta*/) {
     const auto& element = db::get<domain::Tags::Element<Dim>>(box);
+    const auto& subdomain_boundary_conditions = db::get<
+        elliptic::dg::subdomain_operator::Tags::SubdomainBoundaryConditions<
+            Dim, typename System::boundary_conditions_base, OptionsGroup>>(box);
     for (const auto& [direction, neighbors] : element.neighbors()) {
       for (const auto& neighbor_id : neighbors) {
         const auto& orientation = neighbors.orientation(neighbor_id);
         const auto direction_from_neighbor = orientation(direction.opposite());
         const LinearSolver::Schwarz::OverlapId<Dim> overlap_id{direction,
                                                                neighbor_id};
+        if (subdomain_boundary_conditions.has_value()) {
+          // We're using the full element as overlap, so we can impose boundary
+          // conditions on the subdomain rather than just clamp the fields to
+          // zero outside. Here we set the neighbor information to treat
+          // subdomain boundaries as external.
+          elliptic::util::mutate_apply_at<
+              db::wrap_tags_in<overlaps_tag,
+                               typename SetSubdomainBoundaries::return_tags>,
+              tmpl::append<
+                  db::wrap_tags_in<
+                      overlaps_tag,
+                      tmpl::list_difference<
+                          typename SetSubdomainBoundaries::argument_tags,
+                          typename SetSubdomainBoundaries::volume_tags>>,
+                  typename SetSubdomainBoundaries::volume_tags>,
+              typename SetSubdomainBoundaries::volume_tags>(
+              SetSubdomainBoundaries{}, make_not_null(&box), overlap_id,
+              direction_from_neighbor);
+        }
         // Initialize background-agnostic geometry on overlaps
         elliptic::util::mutate_apply_at<
             db::wrap_tags_in<overlaps_tag,

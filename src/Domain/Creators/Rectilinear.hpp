@@ -257,11 +257,10 @@ class Rectilinear : public DomainCreator<Dim> {
   // constructor
   template <typename BoundaryConditionsBase>
   static auto transform_boundary_conditions(
-      std::array<
+      const std::array<
           std::variant<std::unique_ptr<BoundaryConditionsBase>,
                        LowerUpperBoundaryCondition<BoundaryConditionsBase>>,
-          Dim>
-          boundary_conditions)
+          Dim>& boundary_conditions)
       -> std::array<
           std::array<
               std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>,
@@ -289,11 +288,10 @@ class Rectilinear : public DomainCreator<Dim> {
 template <size_t Dim>
 template <typename BoundaryConditionsBase>
 auto Rectilinear<Dim>::transform_boundary_conditions(
-    std::array<
+    const std::array<
         std::variant<std::unique_ptr<BoundaryConditionsBase>,
                      LowerUpperBoundaryCondition<BoundaryConditionsBase>>,
-        Dim>
-        boundary_conditions)
+        Dim>& boundary_conditions)
     -> std::array<
         std::array<
             std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>, 2>,
@@ -306,15 +304,16 @@ auto Rectilinear<Dim>::transform_boundary_conditions(
   for (size_t d = 0; d < Dim; ++d) {
     if (std::holds_alternative<std::unique_ptr<BoundaryConditionsBase>>(
             boundary_conditions[d])) {
-      auto bc = std::move(std::get<std::unique_ptr<BoundaryConditionsBase>>(
-          boundary_conditions[d]));
-      result[d][0] = bc->get_clone();
-      result[d][1] = std::move(bc);
-    } else {
-      auto& bc = std::get<LowerUpperBoundaryCondition<BoundaryConditionsBase>>(
+      const auto& bc = std::get<std::unique_ptr<BoundaryConditionsBase>>(
           boundary_conditions[d]);
-      result[d][0] = std::move(bc.lower);
-      result[d][1] = std::move(bc.upper);
+      result[d][0] = bc->get_clone();
+      result[d][1] = bc->get_clone();
+    } else {
+      const auto& bc =
+          std::get<LowerUpperBoundaryCondition<BoundaryConditionsBase>>(
+              boundary_conditions[d]);
+      result[d][0] = bc.lower->get_clone();
+      result[d][1] = bc.upper->get_clone();
     }
   }
   return result;

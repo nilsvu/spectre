@@ -562,12 +562,18 @@ void test_subdomain_operator(
     const bool use_massive_dg_operator = true,
     const Spectral::Quadrature quadrature = Spectral::Quadrature::GaussLobatto,
     const bool override_boundary_conditions = false,
+    const bool impose_subdomain_boundary_conditions = false,
     // NOLINTNEXTLINE(readability-avoid-const-params-in-decls)
     const std::optional<size_t> max_overlap = 3,
     const double penalty_parameter = 1.2) {
   CAPTURE(Dim);
   CAPTURE(penalty_parameter);
   CAPTURE(use_massive_dg_operator);
+  CAPTURE(quadrature);
+  CAPTURE(override_boundary_conditions);
+  CAPTURE(impose_subdomain_boundary_conditions);
+  CAPTURE(max_overlap);
+  CAPTURE(penalty_parameter);
 
   using SubdomainOperator =
       elliptic::dg::subdomain_operator::SubdomainOperator<System,
@@ -584,6 +590,7 @@ void test_subdomain_operator(
       SubdomainDataTag<Dim, typename fields_tag::tags_list>;
   using subdomain_operator_applied_to_fields_tag =
       typename element_array::subdomain_operator_applied_to_fields_tag;
+  using BoundaryConditionsBase = typename System::boundary_conditions_base;
 
   register_factory_classes_with_charm<metavariables>();
 
@@ -619,9 +626,29 @@ void test_subdomain_operator(
                 {::amr::Flag::IncreaseResolution, 1},
                 {::amr::Flag::DoNothing, 1}}));
 
+    std::optional<std::vector<DirectionMap<
+        Dim, std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>>>>
+        subdomain_boundary_conditions{};
+    if (impose_subdomain_boundary_conditions) {
+      const size_t num_blocks = domain.blocks().size();
+      subdomain_boundary_conditions = std::vector<DirectionMap<
+          Dim, std::unique_ptr<domain::BoundaryConditions::BoundaryCondition>>>(
+          num_blocks);
+      const auto subdomain_bc = make_boundary_condition<System>(
+          elliptic::BoundaryConditionType::Dirichlet);
+      for (size_t block_id = 0; block_id < num_blocks; block_id++) {
+        for (const auto& direction : Direction<Dim>::all_directions()) {
+          (*subdomain_boundary_conditions)[block_id][direction] =
+              subdomain_bc->get_clone();
+        }
+      }
+    }
+
     ActionTesting::MockRuntimeSystem<metavariables> runner{tuples::TaggedTuple<
         domain::Tags::Domain<Dim>, domain::Tags::FunctionsOfTimeInitialize,
         domain::Tags::ExternalBoundaryConditions<Dim>,
+        elliptic::dg::subdomain_operator::Tags::SubdomainBoundaryConditions<
+            Dim, BoundaryConditionsBase, DummyOptionsGroup>,
         elliptic::Tags::Background<elliptic::analytic_data::Background>,
         LinearSolver::Schwarz::Tags::MaxOverlap<DummyOptionsGroup>,
         logging::Tags::Verbosity<DummyOptionsGroup>,
@@ -631,6 +658,7 @@ void test_subdomain_operator(
         logging::Tags::Verbosity<::amr::OptionTags::AmrGroup>>{
         std::move(domain), domain_creator.functions_of_time(),
         std::move(boundary_conditions),
+        std::move(subdomain_boundary_conditions),
         std::make_unique<RandomBackground<Dim>>(),
         max_overlap.has_value() ? std::optional<size_t>(overlap) : std::nullopt,
         ::Verbosity::Verbose, penalty_parameter, use_massive_dg_operator,
@@ -911,7 +939,7 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.SubdomainOperator", "[Unit][Elliptic]") {
                           Spectral::Quadrature::Gauss),
                std::array<std::optional<size_t>, 2>{{3, std::nullopt}})) {
         test_subdomain_operator<system>(domain_creator, use_massive_dg_operator,
-                                        quadrature, false, max_overlap);
+                                        quadrature, false, false, max_overlap);
       }
     }
     {
@@ -929,6 +957,9 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.SubdomainOperator", "[Unit][Elliptic]") {
       test_subdomain_operator<system>(domain_creator);
       test_subdomain_operator<system>(domain_creator, true,
                                       Spectral::Quadrature::GaussLobatto, true);
+      test_subdomain_operator<system>(domain_creator, true,
+                                      Spectral::Quadrature::GaussLobatto, false,
+                                      true);
     }
     {
       INFO("3D");
@@ -1154,7 +1185,7 @@ SPECTRE_TEST_CASE("Unit.Elliptic.DG.SubdomainOperator", "[Unit][Elliptic]") {
                         Spectral::Quadrature::Gauss),
              std::array<std::optional<size_t>, 2>{{3, std::nullopt}})) {
       test_subdomain_operator<system>(domain_creator, true, quadrature, false,
-                                      std::nullopt);
+                                      false, std::nullopt);
     }
   }
 }

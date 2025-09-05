@@ -249,6 +249,8 @@ struct SubdomainOperator
     // Retrieve data out of the DataBox
     using tags_to_retrieve = tmpl::flatten<tmpl::list<
         domain::Tags::ExternalBoundaryConditions<Dim>,
+        elliptic::dg::subdomain_operator::Tags::SubdomainBoundaryConditions<
+            Dim, BoundaryConditionsBase, OptionsGroup>,
         domain::Tags::Element<Dim>,
         ::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>,
         // Data on overlaps with neighbors
@@ -268,8 +270,8 @@ struct SubdomainOperator
                         ::Tags::MortarSize<Dim - 1>>,
                     make_neighbor_mortars_tag>>>,
             make_overlap_tag>>>;
-    const auto& [external_boundary_conditions, central_element,
-                 central_mortar_meshes, all_overlap_extents,
+    const auto& [external_boundary_conditions, subdomain_boundary_conditions,
+                 central_element, central_mortar_meshes, all_overlap_extents,
                  all_neighbor_elements, all_neighbor_meshes,
                  all_neighbor_face_normal_magnitudes,
                  all_neighbor_mortar_meshes, all_neighbor_mortar_sizes,
@@ -292,6 +294,8 @@ struct SubdomainOperator
     // Setup boundary conditions
     const auto apply_boundary_condition =
         [&box, &all_boundary_conditions = external_boundary_conditions,
+         &subdomain_boundary_conditions_captured =
+             subdomain_boundary_conditions,
          &override_boundary_conditions](const ElementId<Dim>& local_element_id,
                                         const Direction<Dim>& local_direction,
                                         auto is_overlap, const auto& map_keys,
@@ -300,9 +304,10 @@ struct SubdomainOperator
               std::decay_t<decltype(is_overlap)>::value;
           // Get boundary conditions from domain, or use overridden boundary
           // conditions
-          const auto& boundary_condition = [&all_boundary_conditions,
-                                            &local_element_id, &local_direction,
-                                            &override_boundary_conditions]()
+          const auto& boundary_condition =
+              [&all_boundary_conditions, &local_element_id, &local_direction,
+               &subdomain_boundary_conditions_captured,
+               &override_boundary_conditions]()
               -> const BoundaryConditionsBase& {
             if (not override_boundary_conditions.empty()) {
               const auto found_overridden_boundary_conditions =
@@ -319,6 +324,12 @@ struct SubdomainOperator
                             "intentional, add support to "
                             "elliptic::dg::SubdomainOperator.");
               return found_overridden_boundary_conditions->second;
+            }
+            if (subdomain_boundary_conditions_captured.has_value()) {
+              return dynamic_cast<const BoundaryConditionsBase&>(
+                  *subdomain_boundary_conditions_captured.value()
+                       .at(local_element_id.block_id())
+                       .at(local_direction));
             }
             const auto& boundary_conditions =
                 all_boundary_conditions.at(local_element_id.block_id());
