@@ -148,7 +148,6 @@ void test_interpolate_volume_vars() {
   ah::interpolate_volume_data(make_not_null(&current_iteration),
                               make_not_null(&all_volume_variables), time,
                               domain, functions_of_time);
-  CHECK(current_iteration.interpolation_is_done_for_these_elements.empty());
   CHECK(current_iteration.indices_interpolated_to_thus_far.empty());
   CHECK(current_iteration.interpolated_vars.number_of_grid_points() == 0_st);
 
@@ -168,8 +167,6 @@ void test_interpolate_volume_vars() {
 
     // Check that we finished interpolation and that the points we interpolated
     // to aren't the default fill value
-    CHECK(current_iteration.interpolation_is_done_for_these_elements.contains(
-        element_id));
     // We could in theory figure out which points are in which element for a
     // given l_max, but that's quite tedious and we don't need such a stringent
     // test
@@ -220,8 +217,6 @@ void test_interpolate_volume_vars() {
                               domain, functions_of_time);
 
   // Check interpolation is still done
-  CHECK(current_iteration.interpolation_is_done_for_these_elements.contains(
-      element_id));
   // This shouldn't have changed
   CHECK(current_iteration.indices_interpolated_to_thus_far.size() ==
         num_previous_indices_interpolated_to);

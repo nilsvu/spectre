@@ -32,11 +32,10 @@ namespace ah {
  * interpolated to the target points and stored in \p current_iteration_storage.
  */
 template <typename Fr>
-void interpolate_volume_data(
+bool interpolate_volume_data(
     gsl::not_null<ah::Storage::Iteration<Fr>*> current_iteration_storage,
-    gsl::not_null<
-        std::unordered_map<ElementId<3>, ah::Storage::VolumeVariables<Fr>>*>
-        all_volume_variables,
-    const LinkedMessageId<double>& time, const Domain<3>& domain,
+    gsl::not_null<ah::Storage::VolumeVariables<Fr>*> volume_vars_storage,
+    const ElementId<3>& element_id, const LinkedMessageId<double>& time,
+    const Domain<3>& domain,
     const domain::FunctionsOfTimeMap& functions_of_time);
 }  // namespace ah

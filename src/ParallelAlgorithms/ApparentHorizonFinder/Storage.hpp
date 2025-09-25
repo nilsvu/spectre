@@ -93,17 +93,22 @@ struct Iteration {
    * already been interpolated to.
    */
   std::vector<bool> indices_interpolated_to_thus_far{};
-  /*!
-   * \brief Holds the `ElementId`s of `Element`s for which interpolation has
-   * already been done.
-   */
-  std::unordered_set<ElementId<3>> interpolation_is_done_for_these_elements;
+  /// Offsets of newly interpolated points in the overall tensor (used as memory
+  /// buffer)
+  std::vector<size_t> offsets_of_newly_interpolated_points{};
+  /// Logical coordinates of newly interpolated points (used as memory buffer)
+  std::array<std::vector<double>, 3>
+      x_element_logical_of_newly_interpolated_points{};
+  /// Buffer for newly interpolated variables (used as memory buffer)
+  std::vector<double> newly_interpolated_vars_buffer{};
 
   /*!
    * \brief How many times we've tried to compute the coordinates for this
    * iteration.
    */
   size_t compute_coords_retries = 0;
+
+  bool interpolation_is_complete() const;
 
   void reset_for_next_iteration();
 
@@ -128,6 +133,9 @@ struct SingleTimeStorage {
    * \brief Map between `ElementId`s and the volume variables from that element.
    */
   std::unordered_map<ElementId<3>, VolumeVariables<Fr>> all_volume_variables;
+  /// Elements in which we have found points to interpolate to in previous
+  /// iterations, to try first before searching all elements
+  std::vector<ElementId<3>> element_order{};
 
   /*!
    * \brief The `Iteration` data for the current fast flow iteration.

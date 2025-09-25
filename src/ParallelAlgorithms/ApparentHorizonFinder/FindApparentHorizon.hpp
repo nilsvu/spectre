@@ -240,28 +240,64 @@ struct FindApparentHorizon {
           }
         }
 
-        // Interpolate new elements to points
-        interpolate_volume_data(make_not_null(&current_iteration_storage),
-                                make_not_null(&all_volume_variables),
-                                current_time, domain, functions_of_time);
-
-        // Sanity check
-        ASSERT(
-            current_iteration_storage.indices_interpolated_to_thus_far.size() ==
-                current_iteration_storage.block_coord_holders.value().size(),
-            "The number of indices being interpolated to is not the number of "
-            "coordinates. This is an internal error. Please file an issue.");
-
-        if (alg::any_of(
-                current_iteration_storage.indices_interpolated_to_thus_far,
-                [](const bool filled) { return not filled; })) {
-          if (debug_print) {
-            Parallel::printf(
-                "%s: For current time %s, at iteration %zu, need more volume "
-                "data.\n",
-                name, current_time, fast_flow.current_iteration());
+        // Interpolate to the current iteration points
+        if (fast_flow.current_iteration() == 0 and
+            not source_vars_have_already_been_received) {
+          // Data is coming in one element at a time, so try to interpolate
+          // only from the incoming element
+          const bool interpolated_any_points = interpolate_volume_data(
+              make_not_null(&current_iteration_storage),
+              make_not_null(&all_volume_variables.at(incoming_element_id)),
+              incoming_element_id, current_time, domain, functions_of_time);
+          // Store which elements we found points in for next iteration
+          if (interpolated_any_points) {
+            current_time_storage.element_order.push_back(incoming_element_id);
           }
-          return;
+          // If we still need more points, return and wait for more volume data
+          if (not current_iteration_storage.interpolation_is_complete()) {
+            if (debug_print) {
+              Parallel::printf(
+                  "%s: For current time %s, at iteration %zu, need more volume "
+                  "data.\n",
+                  name, current_time, fast_flow.current_iteration());
+            }
+            return;
+          }
+        } else {
+          // We already have all element data, so go through the elements in
+          // the order we found points in before, then the rest of the elements
+          for (const auto& element_id : current_time_storage.element_order) {
+            interpolate_volume_data(
+                make_not_null(&current_iteration_storage),
+                make_not_null(&all_volume_variables.at(element_id)), element_id,
+                current_time, domain, functions_of_time);
+            if (not current_iteration_storage.interpolation_is_complete()) {
+              break;
+            }
+          }
+          if (not current_iteration_storage.interpolation_is_complete()) {
+            for (auto& [element_id, volume_vars_storage] :
+                 all_volume_variables) {
+              const bool interpolated_any_points = interpolate_volume_data(
+                  make_not_null(&current_iteration_storage),
+                  make_not_null(&volume_vars_storage), element_id, current_time,
+                  domain, functions_of_time);
+              if (interpolated_any_points) {
+                current_time_storage.element_order.push_back(element_id);
+              }
+              if (not current_iteration_storage.interpolation_is_complete()) {
+                break;
+              }
+            }
+          }
+          // Check that we have interpolated to all points
+          if (not current_iteration_storage.interpolation_is_complete()) {
+            ERROR("" << name << ": For current time " << current_time
+                     << ", at iteration " << fast_flow.current_iteration()
+                     << ", even with all volume data we are missing some "
+                        "points. Maybe the region has moved out of the "
+                        "'BlocksForHorizonFind'.");
+          }
         }
 
         // Set this before we iterate the fast flow. Note that this will have to
