@@ -110,6 +110,9 @@ struct FindApparentHorizon {
 
     auto& all_storage = db::get_mutable_reference<ah::Tags::Storage<frame>>(
         make_not_null(&box));
+    auto& block_search_order =
+        db::get_mutable_reference<ah::Tags::BlockSearchOrder>(
+            make_not_null(&box));
 
     // Add volume variables and destination to the box if they haven't already
     // been received
@@ -201,8 +204,9 @@ struct FindApparentHorizon {
         // Points haven't been set for this iteration so need to do so now
         if (not current_iteration_storage.block_coord_holders.has_value()) {
           const bool coords_set_successfully = set_current_iteration_coords(
-              make_not_null(&current_iteration_storage), current_time,
-              fast_flow, options.initial_guess, previous_iteration_surface,
+              make_not_null(&current_iteration_storage),
+              make_not_null(&block_search_order), current_time, fast_flow,
+              options.initial_guess, previous_iteration_surface,
               previous_surfaces, options.max_compute_coords_retries, domain,
               functions_of_time);
 
