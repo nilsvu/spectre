@@ -44,11 +44,11 @@ namespace ah {
  * volume data, finds the apparent horizon, and calls the callbacks after the
  * horizon is found.
  *
- * \details First, the volume source variables `ah::source_vars` are put into
- * the `ah::Tags::Storage`. Then, we try to set the `ah::Tags::CurrentTime` with
- * the `ah::set_current_time` function. Once we have a current time, we ensure
- * the functions of time are up-to-date at this current time with
- * `ah::check_if_current_time_is_ready`.
+ * \details First, the volume variables `ah::vars_to_interpolate_to_target` are
+ * put into the `ah::Tags::Storage`. Then, we try to set the
+ * `ah::Tags::CurrentTime` with the `ah::set_current_time` function. Once we
+ * have a current time, we ensure the functions of time are up-to-date at this
+ * current time with `ah::check_if_current_time_is_ready`.
  *
  * Once we ensure the functions of time are ready, we compute the cartesian
  * coordinates for the current fast-flow iteration surface with
@@ -74,9 +74,10 @@ struct FindApparentHorizon {
                     const LinkedMessageId<double>& incoming_time,
                     const ElementId<3>& incoming_element_id,
                     const ::Mesh<3>& incoming_mesh,
-                    Variables<ah::source_vars<3>>&& incoming_source_vars,
+                    Variables<ah::vars_to_interpolate_to_target<3, frame>>&&
+                        incoming_vars_to_interpolate,
                     const std::optional<std::string>& dependency,
-                    const bool source_vars_have_already_been_received = false) {
+                    const bool vars_have_already_been_received = false) {
     const auto& verbosity = db::get<ah::Tags::Verbosity>(box);
     const bool quiet_print = verbosity >= ::Verbosity::Quiet;
     const bool verbose_print = verbosity >= ::Verbosity::Verbose;
@@ -116,17 +117,16 @@ struct FindApparentHorizon {
 
     // Add volume variables and destination to the box if they haven't already
     // been received
-    if (not source_vars_have_already_been_received) {
-      auto& current_time_storage = all_storage[incoming_time];
-      current_time_storage.all_volume_variables.emplace(
+    if (not vars_have_already_been_received) {
+      all_storage[incoming_time].all_volume_variables.emplace(
           incoming_element_id,
-          ah::Storage::VolumeVariables<frame>{incoming_mesh,
-                                              std::move(incoming_source_vars)});
-      current_time_storage.destination = HorizonMetavars::destination;
+          ah::Storage::VolumeVariables<frame>{
+              incoming_mesh, std::move(incoming_vars_to_interpolate)});
+      all_storage.at(incoming_time).destination = HorizonMetavars::destination;
     }
 
     // ========================================================================
-    // The incoming source vars are moved and used in the above code. Below, we
+    // The incoming vars are moved and used in the above code. Below, we
     // only use quantities at the current time, except for forwarding the
     // incoming quantities to a callback for checking if the functions of time
     // are ready.
@@ -134,7 +134,7 @@ struct FindApparentHorizon {
 
     // Keep trying to find horizons for as long as we can
     bool interpolate_only_from_incoming_element =
-        not source_vars_have_already_been_received;
+        not vars_have_already_been_received;
     while (true) {
       // Set current time using the pending times if it isn't already set
       set_current_time(make_not_null(&current_time_optional),
@@ -252,7 +252,7 @@ struct FindApparentHorizon {
           const bool interpolated_any_points = interpolate_volume_data(
               make_not_null(&current_iteration_storage),
               make_not_null(&all_volume_variables.at(incoming_element_id)),
-              incoming_element_id, current_time, domain, functions_of_time);
+              incoming_element_id);
           // Store which elements we found points in for next iteration
           if (interpolated_any_points) {
             element_order.push_back(incoming_element_id);
@@ -265,8 +265,8 @@ struct FindApparentHorizon {
           for (const auto& element_id : element_order) {
             interpolate_volume_data(
                 make_not_null(&current_iteration_storage),
-                make_not_null(&all_volume_variables.at(element_id)), element_id,
-                current_time, domain, functions_of_time);
+                make_not_null(&all_volume_variables.at(element_id)),
+                element_id);
             interpolation_is_complete =
                 current_iteration_storage.interpolation_is_complete();
             if (interpolation_is_complete) {
@@ -285,8 +285,7 @@ struct FindApparentHorizon {
               }
               const bool interpolated_any_points = interpolate_volume_data(
                   make_not_null(&current_iteration_storage),
-                  make_not_null(&volume_vars_storage), element_id, current_time,
-                  domain, functions_of_time);
+                  make_not_null(&volume_vars_storage), element_id);
               if (interpolated_any_points) {
                 element_order.push_back(element_id);
               }

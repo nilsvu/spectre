@@ -31,9 +31,7 @@ bool interpolate_volume_data(
     // const when compute_vars_to_interpolate_to_target is moved to the
     // elements.
     const gsl::not_null<ah::Storage::VolumeVariables<Fr>*> volume_vars_storage,
-    const ElementId<3>& element_id, const LinkedMessageId<double>& time,
-    const Domain<3>& domain,
-    const domain::FunctionsOfTimeMap& functions_of_time) {
+    const ElementId<3>& element_id) {
   ASSERT(current_iteration_storage->block_coord_holders.has_value(),
          "Block logical coordinates of horizon have not been set!");
 
@@ -92,16 +90,6 @@ bool interpolate_volume_data(
     return false;
   }
 
-  // This element contains points to interpolate to.
-  // Take the ah::source_vars and convert to
-  // ah::vars_to_interpolate_to_target.
-  // But only do this once.
-  if (not volume_vars_storage->done_computing_vars_to_interpolate_to_target) {
-    ah::compute_vars_to_interpolate_to_target(volume_vars_storage, time, domain,
-                                              element_id, functions_of_time);
-    volume_vars_storage->done_computing_vars_to_interpolate_to_target = true;
-  }
-
   // Interpolate!
   // Use non-owning wrappers around memory buffers to avoid allocations
   tnsr::I<DataVector, 3, Frame::ElementLogical> element_logical_coords{};
@@ -154,9 +142,7 @@ bool interpolate_volume_data(
           current_iteration_storage,                                       \
       const gsl::not_null<ah::Storage::VolumeVariables<FRAME(data)>*>      \
           volume_vars_storage,                                             \
-      const ElementId<3>& element_id, const LinkedMessageId<double>& time, \
-      const Domain<3>& domain,                                             \
-      const domain::FunctionsOfTimeMap& functions_of_time);
+      const ElementId<3>& element_id);
 
 GENERATE_INSTANTIATIONS(INSTANTIATE,
                         (Frame::Inertial, Frame::Distorted, Frame::Grid))

@@ -42,7 +42,9 @@ namespace {
 // they won't be needed
 template <bool ForceInertialFrame = false, typename Fr>
 void compute_vars_to_interpolate_to_target_impl(
-    const gsl::not_null<ah::Storage::VolumeVariables<Fr>*> volume_vars_storage,
+    const gsl::not_null<Variables<ah::vars_to_interpolate_to_target<3, Fr>>*>
+        target_vars,
+    const Variables<ah::source_vars<3>>& source_vars, const Mesh<3>& mesh,
     const Jacobian<DataVector, 3, Fr, Frame::Inertial>& jac_frame_to_inertial =
         {},
     const InverseJacobian<DataVector, 3, Frame::ElementLogical, Fr>&
@@ -53,12 +55,8 @@ void compute_vars_to_interpolate_to_target_impl(
       tmpl::conditional_t<ForceInertialFrame, ::Frame::Inertial, Fr>;
   Variables<ah::vars_to_interpolate_to_target<3, FrameToUse>>
       vars_to_interpolate_to_target;
-  vars_to_interpolate_to_target.set_data_ref(
-      volume_vars_storage->vars_to_interpolate_to_target.data(),
-      volume_vars_storage->vars_to_interpolate_to_target.size());
-
-  const auto& source_vars = volume_vars_storage->source_vars;
-  const auto& mesh = volume_vars_storage->mesh;
+  vars_to_interpolate_to_target.set_data_ref(target_vars->data(),
+                                             target_vars->size());
 
   const auto& spacetime_metric =
       get<gr::Tags::SpacetimeMetric<DataVector, 3>>(source_vars);
@@ -178,29 +176,36 @@ void compute_vars_to_interpolate_to_target_impl(
 
 template <typename Fr>
 void compute_vars_to_interpolate_to_target(
-    const gsl::not_null<ah::Storage::VolumeVariables<Fr>*> volume_vars_storage,
+    const gsl::not_null<Variables<ah::vars_to_interpolate_to_target<3, Fr>>*>
+        target_vars,
+    const Variables<ah::source_vars<3>>& source_vars,
     const LinkedMessageId<double>& time, const Domain<3>& domain,
-    const ElementId<3>& element_id,
-    const domain::FunctionsOfTimeMap& functions_of_time) {
+    const Mesh<3>& mesh, const ElementId<3>& element_id,
+    const domain::FunctionsOfTimeMap* functions_of_time) {
   // This will only change the size if it isn't already the correct size
-  volume_vars_storage->vars_to_interpolate_to_target.initialize(
-      volume_vars_storage->source_vars.number_of_grid_points());
+  target_vars->initialize(source_vars.number_of_grid_points());
 
-  const auto& mesh = volume_vars_storage->mesh;
   const auto& block = domain.blocks()[element_id.block_id()];
   if (block.is_time_dependent()) {
+    ASSERT(functions_of_time != nullptr,
+           "Functions of time are not passed to "
+           "compute_vars_to_interpolate_to_target but the block is "
+           "time-dependent.");
+    const auto& functions_of_time_ref = *functions_of_time;
     if constexpr (std::is_same_v<Fr, ::Frame::Grid>) {
       const ElementMap<3, Fr> map_logical_to_grid{
           element_id, block.moving_mesh_logical_to_grid_map().get_clone()};
       const auto logical_coords = logical_coordinates(mesh);
       const auto jac_grid_to_inertial =
           block.moving_mesh_grid_to_inertial_map().jacobian(
-              map_logical_to_grid(logical_coords), time.id, functions_of_time);
+              map_logical_to_grid(logical_coords), time.id,
+              functions_of_time_ref);
       const auto invjac_logical_to_grid =
           map_logical_to_grid.inv_jacobian(logical_coords);
 
-      compute_vars_to_interpolate_to_target_impl(
-          volume_vars_storage, jac_grid_to_inertial, invjac_logical_to_grid);
+      compute_vars_to_interpolate_to_target_impl(target_vars, source_vars, mesh,
+                                                 jac_grid_to_inertial,
+                                                 invjac_logical_to_grid);
     } else if constexpr (std::is_same_v<Fr, ::Frame::Distorted>) {
       ASSERT(block.has_distorted_frame(),
              "Block doesn't have a distorted frame but this horizon is in the "
@@ -217,17 +222,18 @@ void compute_vars_to_interpolate_to_target(
       const auto jac_distorted_to_inertial =
           block.moving_mesh_distorted_to_inertial_map().jacobian(
               element_logical_to_distorted_map(logical_coords, time.id,
-                                               functions_of_time),
-              time.id, functions_of_time);
+                                               functions_of_time_ref),
+              time.id, functions_of_time_ref);
       const auto invjac_logical_to_distorted =
-          element_logical_to_distorted_map.inv_jacobian(logical_coords, time.id,
-                                                        functions_of_time);
+          element_logical_to_distorted_map.inv_jacobian(
+              logical_coords, time.id, functions_of_time_ref);
 
-      compute_vars_to_interpolate_to_target_impl(volume_vars_storage,
+      compute_vars_to_interpolate_to_target_impl(target_vars, source_vars, mesh,
                                                  jac_distorted_to_inertial,
                                                  invjac_logical_to_distorted);
     } else {
-      compute_vars_to_interpolate_to_target_impl(volume_vars_storage);
+      compute_vars_to_interpolate_to_target_impl(target_vars, source_vars,
+                                                 mesh);
     }
   } else {
     // No frame transformations needed, since the maps are time-independent
@@ -235,19 +241,22 @@ void compute_vars_to_interpolate_to_target(
     //
     // The frame tags may be different, but the source vars should all be in the
     // Inertial frame, so we force the inertial frame (True template).
-    compute_vars_to_interpolate_to_target_impl<true>(volume_vars_storage);
+    compute_vars_to_interpolate_to_target_impl<true>(target_vars, source_vars,
+                                                     mesh);
   }
 }
 
 #define FRAME(data) BOOST_PP_TUPLE_ELEM(0, data)
 
-#define INSTANTIATE(_, data)                                          \
-  template void compute_vars_to_interpolate_to_target(                \
-      const gsl::not_null<ah::Storage::VolumeVariables<FRAME(data)>*> \
-          volume_vars_storage,                                        \
-      const LinkedMessageId<double>& time, const Domain<3>& domain,   \
-      const ElementId<3>& element_id,                                 \
-      const domain::FunctionsOfTimeMap& functions_of_time);
+#define INSTANTIATE(_, data)                                             \
+  template void compute_vars_to_interpolate_to_target(                   \
+      const gsl::not_null<                                               \
+          Variables<ah::vars_to_interpolate_to_target<3, FRAME(data)>>*> \
+          target_vars,                                                   \
+      const Variables<ah::source_vars<3>>& source_vars,                  \
+      const LinkedMessageId<double>& time, const Domain<3>& domain,      \
+      const Mesh<3>& mesh, const ElementId<3>& element_id,               \
+      const domain::FunctionsOfTimeMap* functions_of_time);
 
 GENERATE_INSTANTIATIONS(INSTANTIATE,
                         (Frame::Inertial, Frame::Distorted, Frame::Grid))
