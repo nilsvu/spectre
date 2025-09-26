@@ -43,7 +43,7 @@ void test_storage() {
       ylm::Strahlkorper<Fr>{4_st, 3.0, std::array{0.0, 0.1, 0.2}},
       std::optional<std::vector<BlockLogicalCoords<3>>>{{std::nullopt}},
       Variables<ah::vars_to_interpolate_to_target<3, Fr>>{6, 9.876},
-      std::set<size_t>{1_st, 4_st, 5_st},
+      std::vector<bool>{false, true, false, false, true, true},
       std::unordered_set<ElementId<3>>{ElementId<3>{0}, ElementId<3>{1}},
       {2}};
   test_serialization(iteration);
