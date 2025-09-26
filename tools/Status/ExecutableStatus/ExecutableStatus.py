@@ -310,18 +310,20 @@ class EvolutionStatus(ExecutableStatus):
         import plotly.graph_objects as go
 
         fig = go.Figure()
-        for reduction_file, time_steps in zip(reduction_files, all_time_steps):
+        for reduction_file, local_time_steps in zip(
+            reduction_files, all_time_steps
+        ):
             spectre_out = reduction_file.parent / "spectre.out"
             start_time = get_start_time(spectre_out)
             if not start_time:
                 continue
             calendar_time = start_time + pd.to_timedelta(
-                time_steps["Maximum Walltime"], unit="s"
+                local_time_steps["Maximum Walltime"], unit="s"
             )
             fig.add_trace(
                 go.Scatter(
                     x=calendar_time,
-                    y=time_steps.index,
+                    y=local_time_steps.index,
                     mode="lines",
                     name=reduction_file.parent.name,
                 )
@@ -332,6 +334,86 @@ class EvolutionStatus(ExecutableStatus):
             showlegend=False,
         )
         st.plotly_chart(fig)
+
+        # AMR
+        def get_amr_steps(reductions_file):
+            with h5py.File(reductions_file, "r") as open_h5file:
+                if "Amr.dat" in open_h5file:
+                    return to_dataframe(open_h5file["Amr.dat"]).set_index(
+                        "Time"
+                    )
+                else:
+                    return None
+
+        all_amr_steps = list(
+            filter(lambda x: x is not None, map(get_amr_steps, reduction_files))
+        )
+        if len(all_amr_steps) > 0:
+            amr_steps = pd.concat(all_amr_steps)
+            st.subheader("AMR")
+            fig = px.line(time_steps["NumberOfPoints"])
+            fig.add_scatter(
+                x=amr_steps.index,
+                y=amr_steps["TotalNumPoints"],
+                mode="lines+markers",
+            )
+            fig.update_layout(
+                xaxis_title="Time [M]",
+                yaxis_title="Number of grid points",
+                showlegend=False,
+            )
+            st.plotly_chart(fig)
+
+            import plotly.colors as pc
+
+            fig = go.Figure()
+            colors = pc.qualitative.Plotly
+            for dim in range((len(amr_steps.columns) - 3) // 3):
+                avg_p = (
+                    amr_steps[f"NumPointsPerDim_{dim}"]
+                    / amr_steps["NumElements"]
+                )
+                min_p = amr_steps[f"MinPointsPerDim_{dim}"]
+                max_p = amr_steps[f"MaxPointsPerDim_{dim}"]
+                color = colors[dim]
+                fig.add_scatter(
+                    x=amr_steps.index,
+                    y=avg_p,
+                    mode="lines",
+                    name=f"Avg points per element (d={dim})",
+                    line=dict(color=color),
+                )
+                fig.add_scatter(
+                    x=amr_steps.index,
+                    y=min_p,
+                    mode="lines",
+                    opacity=0.5,
+                    name=f"Min points per element (d={dim})",
+                    line=dict(color=color),
+                )
+                fig.add_scatter(
+                    x=amr_steps.index,
+                    y=max_p,
+                    mode="lines",
+                    opacity=0.5,
+                    name=f"Max points per element (d={dim})",
+                    line=dict(color=color),
+                    fill="tonexty",
+                )
+            fig.update_layout(
+                xaxis_title="Time [M]",
+                yaxis_title="Points per element",
+                showlegend=False,
+            )
+            st.plotly_chart(fig)
+        else:
+            fig = px.line(time_steps["NumberOfPoints"])
+            fig.update_layout(
+                xaxis_title="Time [M]",
+                yaxis_title="Number of grid points",
+                showlegend=False,
+            )
+            st.plotly_chart(fig)
 
     def render_dashboard(self, job: dict, input_file: dict, metadata: dict):
         return self.render_time_steps(
