@@ -138,6 +138,7 @@ def schedule(
     clean_output: bool = False,
     force: bool = False,
     validate: Optional[bool] = True,
+    enable_profiling: bool = False,
     extra_params: dict = {},
     **kwargs,
 ) -> Optional[subprocess.CompletedProcess]:
@@ -310,6 +311,12 @@ def schedule(
         in the 'run_dir' instead of raising an error when they already exist.
       validate: Optional. When 'True', validate that the input file is parsed
         correctly. When 'False' skip this step.
+      enable_profiling: When 'True', enable profiling with HPCToolkit.
+        The executable must be compiled so that it's compatible with
+        HPCToolkit (see https://spectre-code.org/profiling.html).
+        This will modify the submit script to run the executable with 'hpcrun'
+        and postprocess the profiling data with 'hpcstruct' and 'hpcprof'.
+        (Default: False).
       extra_params: Optional. Dictionary of extra parameters passed to input
         file and submit script templates. Parameters can also be passed as
         keyword arguments to this function instead.
@@ -587,11 +594,16 @@ def schedule(
             f"Run '{executable.name}' in '{run_dir}' on {provision_info}."
         )
         machine = this_machine(raise_exception=False)
-        run_command = (machine.launch_command if machine else []) + [
-            str(executable),
-            "--input-file",
-            str(input_file_path.resolve()),
-        ]
+        profiling_command = ["hpcrun", "-t", "-o", "hpctoolkit-measurements"]
+        run_command = (
+            (machine.launch_command if machine else [])
+            + (profiling_command if enable_profiling else [])
+            + [
+                str(executable),
+                "--input-file",
+                str(input_file_path.resolve()),
+            ]
+        )
         if auto_provision:
             run_command += ["+auto-provision"]
         else:
@@ -610,6 +622,22 @@ def schedule(
         if process.returncode != 0:
             raise subprocess.CalledProcessError(
                 returncode=process.returncode, cmd=run_command
+            )
+        if enable_profiling:
+            subprocess.run(
+                ["hpcstruct", "hpctoolkit-measurements"],
+                cwd=run_dir,
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "hpcprof",
+                    "-o",
+                    "hpctoolkit-database",
+                    "hpctoolkit-measurements",
+                ],
+                cwd=run_dir,
+                check=True,
             )
         # Run the 'Next' entrypoint listed in the input file metadata
         if metadata and "Next" in metadata:
@@ -856,6 +884,17 @@ def scheduler_options(f):
         "--validate/--no-validate",
         default=True,
         help="Validate or skip the validation of the input file.",
+    )
+    @click.option(
+        "--enable-profiling",
+        is_flag=True,
+        help=(
+            "Enable profiling with HPCToolkit. The executable must be compiled"
+            " so that it's compatible with HPCToolkit (see"
+            " https://spectre-code.org/profiling.html). This will modify the"
+            " submit script to run the executable with 'hpcrun' and postprocess"
+            " the profiling data with 'hpcstruct' and 'hpcprof'."
+        ),
     )
     # Scheduling options
     @click.option(
