@@ -289,6 +289,7 @@ EventsRunAtCleanup:
         CoordinatesFloatingPointType: Float
 
 Interpolator:
+  DumpVolumeDataOnFailure: false
   Verbosity: Silent
 
 ApparentHorizons:
@@ -307,8 +308,8 @@ ApparentHorizons:
       DivergenceIter: 5
       MaxIts: 100
     Verbosity: Quiet
-    MaxComputeCoordsRetries: 3
-    BlocksForHorizonFind: ["Shell0"]
+    MaxInterpolationRetries: 3
+    BlocksForInterpolation: ["Shell0"]
   ControlSystemSingleAh: *Ah
   ControlSystemCharSpeedAh: *Ah
 

@@ -233,6 +233,7 @@ Observers:
   SurfaceFileName: "GhKerrSchildSurfaces"
 
 Interpolator:
+  DumpVolumeDataOnFailure: false
   Verbosity: Silent
 
 ApparentHorizons:
@@ -251,8 +252,8 @@ ApparentHorizons:
       DivergenceIter: 5
       MaxIts: 100
     Verbosity: Verbose
-    MaxComputeCoordsRetries: 3
-    BlocksForHorizonFind: All
+    MaxInterpolationRetries: 3
+    BlocksForInterpolation: All
   ControlSystemSingleAh: *Ah
   ControlSystemCharSpeedAh: *Ah
 
