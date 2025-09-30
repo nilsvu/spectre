@@ -47,6 +47,7 @@ chmod u+x ${RUN_DIR}/runscript.${SLURM_JOBID}
 
 # Run
 charmrun ++runscript ${RUN_DIR}/runscript.${SLURM_JOBID} \
+          ${SPECTRE_PROFILING_PREFIX} \
           ${SPECTRE_COMMAND} --input-file ${SPECTRE_INPUT_FILE} \
           ${SPECTRE_CHECKPOINT:+ +restart "${SPECTRE_CHECKPOINT}"}
 {% endblock %}

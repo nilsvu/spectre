@@ -57,12 +57,25 @@ echo
 
 cd ${RUN_DIR}
 
+{% if enable_profiling %}
+# Enable profiling with HPCToolkit
+# - Enable time tracing with '-t'
+export SPECTRE_PROFILING_PREFIX="hpcrun -t -o hpctoolkit-measurements"
+{% endif %}
+
 {% block run_command %}
 mpirun -n ${SLURM_NTASKS} \
+  ${SPECTRE_PROFILING_PREFIX} \
   ${SPECTRE_EXECUTABLE} --input-file ${SPECTRE_INPUT_FILE} \
   ++ppn ${CHARM_PPN} +setcpuaffinity \
   ${SPECTRE_CHECKPOINT:+ +restart "${SPECTRE_CHECKPOINT}"}
 {% endblock %}
+
+{% if enable_profiling %}
+# Postprocess profiling data
+hpcstruct hpctoolkit-measurements
+hpcprof -o hpctoolkit-database hpctoolkit-measurements
+{% endif %}
 
 exit_code=$?
 
