@@ -97,15 +97,6 @@ class FindApparentHorizon : public Event {
       return;
     }
 
-    // Put everything into a single variables
-    Variables<ah::source_vars<3>> source_vars{mesh.number_of_grid_points()};
-    get<gr::Tags::SpacetimeMetric<DataVector, 3>>(source_vars) =
-        spacetime_metric;
-    get<gh::Tags::Pi<DataVector, 3>>(source_vars) = pi;
-    get<gh::Tags::Phi<DataVector, 3>>(source_vars) = phi;
-    get<::Tags::deriv<gh::Tags::Phi<DataVector, 3>, tmpl::size_t<3>,
-                      Frame::Inertial>>(source_vars) = deriv_phi;
-
     // Make Variables<ah::vars_to_interpolate_to_target> and
     // fill it by calling compute_vars_to_interpolate_to_target().
     // Then pass this variables to the FindApparentHorizon simple action.
@@ -125,8 +116,8 @@ class FindApparentHorizon : public Event {
     Variables<ah::vars_to_interpolate_to_target<3, horizon_frame>>
         vars_to_interpolate_to_target{mesh.number_of_grid_points()};
     ah::compute_vars_to_interpolate_to_target(
-        make_not_null(&vars_to_interpolate_to_target), source_vars, time,
-        domain, mesh, array_index, functions_of_time);
+        make_not_null(&vars_to_interpolate_to_target), spacetime_metric, pi,
+        phi, deriv_phi, time, domain, mesh, array_index, functions_of_time);
 
     auto& horizon_finder_proxy = Parallel::get_parallel_component<
         ah::Component<Metavariables, HorizonMetavars>>(cache);
