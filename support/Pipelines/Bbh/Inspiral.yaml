@@ -649,4 +649,70 @@ ControlSystems:
 
 ResourceInfo:
   AvoidGlobalProc0: false
-  Singletons: Auto
+  Singletons:
+    ControlSystemAhA:
+      Proc: 0
+      Exclusive: true
+    ControlSystemAhB:
+      Proc: 1
+      Exclusive: true
+    ControlSystemCharSpeedAhA:
+      Proc: 2
+      Exclusive: true
+    ControlSystemCharSpeedAhB:
+      Proc: 3
+      Exclusive: true
+    ObservationAhA:
+      Proc: 4
+      Exclusive: true
+    ObservationAhB:
+      Proc: 5
+      Exclusive: true
+    ObservationAhC:
+      Proc: 6
+      Exclusive: true
+    ObservationExcisionBoundaryA:
+      Proc: 7
+      Exclusive: true
+    ObservationExcisionBoundaryB:
+      Proc: 8
+      Exclusive: true
+    Component:
+      Proc: Auto
+      Exclusive: false
+    MemoryMonitor:
+      Proc: Auto
+      Exclusive: false
+    ShapeA:
+      Proc: Auto
+      Exclusive: false
+    ShapeB:
+      Proc: Auto
+      Exclusive: false
+    Translation:
+      Proc: Auto
+      Exclusive: false
+    Rotation:
+      Proc: Auto
+      Exclusive: false
+    Expansion:
+      Proc: Auto
+      Exclusive: false
+    SizeA:
+      Proc: Auto
+      Exclusive: false
+    SizeB:
+      Proc: Auto
+      Exclusive: false
+    Skew:
+      Proc: Auto
+      Exclusive: false
+    ControlSystemCharSpeedExcisionA:
+      Proc: Auto
+      Exclusive: false
+    ControlSystemCharSpeedExcisionB:
+      Proc: Auto
+      Exclusive: false
+    BondiSachsInterpolation:
+      Proc: Auto
+      Exclusive: false
