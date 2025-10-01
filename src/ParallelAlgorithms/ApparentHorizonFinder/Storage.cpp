@@ -30,12 +30,17 @@ bool operator!=(const VolumeVariables<Fr>& lhs,
 }
 
 template <typename Fr>
+bool Iteration<Fr>::interpolation_is_complete() const {
+  return alg::all_of(indices_interpolated_to_thus_far,
+                     [](const bool filled) { return filled; });
+}
+
+template <typename Fr>
 void Iteration<Fr>::reset_for_next_iteration() {
   // Leave the strahlkorper because this was set by FastFlow and is already
   // the next surface
   this->block_coord_holders.reset();
   this->indices_interpolated_to_thus_far.clear();
-  this->interpolation_is_done_for_these_elements.clear();
   this->compute_coords_retries = 0;
 }
 
@@ -45,7 +50,6 @@ void Iteration<Fr>::pup(PUP::er& p) {
   p | block_coord_holders;
   p | interpolated_vars;
   p | indices_interpolated_to_thus_far;
-  p | interpolation_is_done_for_these_elements;
   p | compute_coords_retries;
 }
 
@@ -56,8 +60,6 @@ bool operator==(const Iteration<Fr>& lhs, const Iteration<Fr>& rhs) {
          lhs.interpolated_vars == rhs.interpolated_vars and
          lhs.indices_interpolated_to_thus_far ==
              rhs.indices_interpolated_to_thus_far and
-         lhs.interpolation_is_done_for_these_elements ==
-             rhs.interpolation_is_done_for_these_elements and
          lhs.compute_coords_retries == rhs.compute_coords_retries;
 }
 template <typename Fr>

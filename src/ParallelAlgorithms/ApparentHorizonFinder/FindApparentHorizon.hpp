@@ -143,6 +143,8 @@ struct FindApparentHorizon {
     // ========================================================================
 
     // Keep trying to find horizons for as long as we can
+    bool interpolate_only_from_incoming_element =
+        not vars_have_already_been_received;
     while (true) {
       // Set current time using the pending times if it isn't already set
       set_current_time(make_not_null(&current_time_optional),
@@ -232,6 +234,7 @@ struct FindApparentHorizon {
               current_time_storage.current_iteration;
           auto& previous_iteration_surface =
               current_time_storage.previous_iteration_surface;
+          auto& element_order = current_time_storage.element_order;
 
           // Points haven't been set for this iteration so need to do so now
           if (not current_iteration_storage.block_coord_holders.has_value() or
@@ -276,22 +279,66 @@ struct FindApparentHorizon {
             }
           }
 
-          // Interpolate new elements to points
-          interpolate_volume_data(make_not_null(&current_iteration_storage),
-                                  make_not_null(&all_volume_variables));
+          // Interpolate to the current iteration points
+          bool interpolation_is_complete = false;
+          if (interpolate_only_from_incoming_element) {
+            // Data is coming in one element at a time, so try to interpolate
+            // only from the incoming element
+            const bool interpolated_any_points = interpolate_volume_data(
+                make_not_null(&current_iteration_storage),
+                all_volume_variables.at(incoming_element_id),
+                incoming_element_id);
+            // Store which elements we found points in for next iteration
+            if (interpolated_any_points) {
+              element_order.push_back(incoming_element_id);
+            }
+            interpolation_is_complete =
+                current_iteration_storage.interpolation_is_complete();
+          } else {
+            // We already have some element data, so go through the elements in
+            // the order we found points in before
+            for (const auto& element_id : element_order) {
+              interpolate_volume_data(make_not_null(&current_iteration_storage),
+                                      all_volume_variables.at(element_id),
+                                      element_id);
+              interpolation_is_complete =
+                  current_iteration_storage.interpolation_is_complete();
+              if (interpolation_is_complete) {
+                break;
+              }
+            }
+            // If we still need more points, try going through all the elements
+            // that we have received data from so far
+            if (not interpolation_is_complete) {
+              for (const auto& [element_id, volume_vars_storage] :
+                   all_volume_variables) {
+                if (std::find(element_order.begin(), element_order.end(),
+                              element_id) != element_order.end()) {
+                  // Already tried this element above
+                  continue;
+                }
+                const bool interpolated_any_points = interpolate_volume_data(
+                    make_not_null(&current_iteration_storage),
+                    volume_vars_storage, element_id);
+                if (interpolated_any_points) {
+                  element_order.push_back(element_id);
+                }
+                interpolation_is_complete =
+                    current_iteration_storage.interpolation_is_complete();
+                if (interpolation_is_complete) {
+                  break;
+                }
+              }
+            }
+          }
 
-          // Sanity check
-          ASSERT(
-              current_iteration_storage.indices_interpolated_to_thus_far
-                      .size() ==
-                  current_iteration_storage.block_coord_holders.value().size(),
-              "The number of indices being interpolated to is not the number "
-              "of coordinates. This is an internal error. Please file an "
-              "issue.");
-
-          if (alg::any_of(
-                  current_iteration_storage.indices_interpolated_to_thus_far,
-                  [](const bool filled) { return not filled; })) {
+          if (interpolation_is_complete) {
+            // Next iteration try to interpolate from all elements
+            interpolate_only_from_incoming_element = false;
+          } else {
+            // We need more points, return and wait for more volume data.
+            // When this action is called again, we'll try to interpolate only
+            // from the incoming element until we have enough data.
             if (debug_print) {
               Parallel::printf(
                   "%s: For current time %s, at iteration %zu, need more volume "
