@@ -129,6 +129,10 @@ struct PreviousSurfaces : db::SimpleTag {
   using type = std::deque<ah::Storage::PreviousSurface<Fr>>;
 };
 
+struct IntersectingElementIds : db::SimpleTag {
+  using type = std::unordered_set<ElementId<3>>;
+};
+
 /*!
  * \brief Global cache tag that holds horizon finder options
  */

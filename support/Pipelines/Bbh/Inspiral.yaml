@@ -411,7 +411,7 @@ EventsAndTriggersAtSlabs:
           StepChoosers:
             - Constant: 0.01
       - ObservationAhC:
-          SubfileName: ForContinuation
+          SubfileName: ForRingdown
           VariablesToObserve:
             - SpacetimeMetric
             - Pi
@@ -437,7 +437,7 @@ EventsAndTriggersAtSlabs:
     Events:
       # Save volume data for continuation
       - ObserveFields:
-          SubfileName: VolumeData
+          SubfileName: ForContinuation
           VariablesToObserve:
             - SpacetimeMetric
             - Pi

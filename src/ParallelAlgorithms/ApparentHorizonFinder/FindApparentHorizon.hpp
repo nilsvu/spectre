@@ -470,6 +470,9 @@ struct FindApparentHorizon {
 
           // We have converged to the apparent horizon. Invoke the callbacks and
           // clean up for the next horizon find
+          Parallel::mutate<Tags::IntersectingElementIds,
+                           UpdateIntersectingElementIds>(
+              cache, intersecting_element_ids);
           invoke_callbacks<HorizonMetavars>(make_not_null(&box), cache,
                                             dependency, status_and_info.first);
 

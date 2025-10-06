@@ -94,7 +94,8 @@ def postprocess_id(
     """
     # Read input file
     with open(id_input_file_path, "r") as open_input_file:
-        _, id_input_file = yaml.safe_load_all(open_input_file)
+        id_metadata, id_input_file = yaml.safe_load_all(open_input_file)
+    target_params = id_metadata["TargetParams"]
     x_B, x_A = id_input_file["Background"]["Binary"]["XCoords"]
     y_offset, z_offset = id_input_file["Background"]["Binary"][
         "CenterOfMassOffset"

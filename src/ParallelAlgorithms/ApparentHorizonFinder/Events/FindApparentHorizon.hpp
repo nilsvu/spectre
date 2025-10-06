@@ -78,9 +78,10 @@ class FindApparentHorizon : public Event {
                   const tnsr::iaa<DataVector, 3>& phi,
                   const tnsr::ijaa<DataVector, 3>& deriv_phi,
                   Parallel::GlobalCache<Metavariables>& cache,
-                  const ElementId<3>& array_index,
+                  const ElementId<3>& element_id,
                   const ParallelComponent* const /*meta*/,
                   const ObservationValue& /*observation_value*/) const {
+    // TODO: can replace this with any distorted-frame block?
     const auto& blocks_to_interpolate =
         Parallel::get<ah::Tags::BlocksForHorizonFind>(cache);
     ASSERT(blocks_to_interpolate.contains(name()),
@@ -89,11 +90,25 @@ class FindApparentHorizon : public Event {
         blocks_to_interpolate.at(name());
     const auto& domain = Parallel::get<domain::Tags::Domain<3>>(cache);
     const auto& blocks = domain.blocks();
-    const auto& block = blocks[array_index.block_id()];
+    const auto& block = blocks[element_id.block_id()];
     const auto& block_name = block.name();
 
     // Only send data if this target needs this blocks data
     if (not blocks_to_interpolate_for_this_target.contains(block_name)) {
+      return;
+    }
+
+    // TODO: check up-to-date. Careful: should not add any waiting!
+    // If it adds waiting, maybe just send data instead of waiting?
+    const auto& intersecting_element_ids =
+        Parallel::get<ah::Tags::IntersectingElementIds>(cache);
+    // TODO: If we already found a horizon after the current time, skip sending
+    // anything (won't be needed anymore). Unlikely to occur.
+    // TODO: Send volume data if this element intersected with the previous
+    // horizon or if it's a neighbor of an intersecting element. Handle
+    // h-refinement as well.
+    const bool send_volume_data = intersecting_element_ids.contains(element_id);
+    if (not send_volume_data) {
       return;
     }
 
@@ -110,7 +125,7 @@ class FindApparentHorizon : public Event {
             Parallel::get<domain::Tags::FunctionsOfTime>(cache);
         ah::compute_vars_to_interpolate_to_target(
             make_not_null(&vars_to_interpolate_to_target), spacetime_metric, pi,
-            phi, deriv_phi, time, domain, mesh, array_index, functions_of_time);
+            phi, deriv_phi, time, domain, mesh, element_id, functions_of_time);
       } else {
         ERROR(
             "Block is time-dependent but FunctionsOfTime are not available "
@@ -119,14 +134,14 @@ class FindApparentHorizon : public Event {
     } else {
       ah::compute_vars_to_interpolate_to_target(
           make_not_null(&vars_to_interpolate_to_target), spacetime_metric, pi,
-          phi, deriv_phi, time, domain, mesh, array_index, {});
+          phi, deriv_phi, time, domain, mesh, element_id, {});
     }
 
     auto& horizon_finder_proxy = Parallel::get_parallel_component<
         ah::Component<Metavariables, HorizonMetavars>>(cache);
 
     Parallel::simple_action<ah::FindApparentHorizon<HorizonMetavars>>(
-        horizon_finder_proxy, time, array_index, mesh,
+        horizon_finder_proxy, time, element_id, mesh,
         std::move(vars_to_interpolate_to_target), dependency_);
   }
 
@@ -134,7 +149,7 @@ class FindApparentHorizon : public Event {
 
   template <typename Metavariables, typename ArrayIndex, typename Component>
   bool is_ready(Parallel::GlobalCache<Metavariables>& /*cache*/,
-                const ArrayIndex& /*array_index*/,
+                const ArrayIndex& /*element_id*/,
                 const Component* const /*component*/) const {
     return true;
   }

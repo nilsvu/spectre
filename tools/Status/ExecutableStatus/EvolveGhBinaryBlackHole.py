@@ -107,8 +107,9 @@ class EvolveGhBinaryBlackHole(EvolutionStatus):
             eccentricity_control_params,
         )
         from spectre.Visualization.GenerateXdmf import generate_xdmf
-        from spectre.Visualization.PlotControlSystem import plot_control_system
-        from spectre.Visualization.PlotSizeControl import plot_size_control
+        from spectre.Visualization.PlotControlSystem import (
+            get_control_system_data,
+        )
         from spectre.Visualization.PlotTrajectories import (
             import_A_and_B,
             plot_trajectory,
@@ -207,14 +208,45 @@ class EvolveGhBinaryBlackHole(EvolutionStatus):
         traj_A, traj_B = import_A_and_B(reduction_files)
         st.pyplot(plot_trajectory(traj_A, traj_B))
         coord_separation = np.linalg.norm(traj_A[:, 1:] - traj_B[:, 1:], axis=1)
-        fig = px.line(
-            x=traj_A[:, 0],
-            y=coord_separation,
-            labels={"y": "Coordinate separation [M]"},
-        )
+        fig = px.line(x=traj_A[:, 0], y=coord_separation)
         fig.update_layout(xaxis_title="Time [M]", legend=legend_layout)
-        fig.update_yaxes(title=None)
+        fig.update_yaxes(title="Coordinate separation [M]")
         st.plotly_chart(fig)
+
+        # # AH finding
+        # st.subheader("Apparent horizon finding")
+        # fig = px.line(constraints.iloc[1:], log_y=True)
+        # fig.update_layout(xaxis_title="Time [M]", legend=legend_layout)
+        # fig.update_yaxes(exponentformat="e", title=None)
+        # st.plotly_chart(fig)
+
+        # Control systems
+        st.subheader("Control systems")
+
+        @st.fragment
+        def render_control_systems():
+            control_system_data = get_control_system_data(
+                reduction_files,
+                with_shape=st.checkbox("With shape", True),
+                show_all_m=st.checkbox("Show all m", True),
+                shape_l_max=st.number_input(
+                    "Shape l max", value=2, min_value=0
+                ),
+            )
+            df = control_system_data.filter(regex="_DampingTimescale$")
+            df.columns = [
+                col.replace("_DampingTimescale", "")
+                .replace("_", " ")
+                .replace(" Expansion", "")
+                .replace(" Size", "")
+                for col in df.columns
+            ]
+            fig = px.line(df, log_y=True)
+            fig.update_layout(xaxis_title="Time [M]", legend=legend_layout)
+            fig.update_yaxes(exponentformat="e", title="Damping timescale [M]")
+            st.plotly_chart(fig)
+
+        render_control_systems()
 
         # Grid
         st.subheader("Grid")
@@ -241,29 +273,6 @@ class EvolveGhBinaryBlackHole(EvolutionStatus):
                 st.image(str(run_dir / "domain.png"))
 
         render_grid()
-
-        # Control systems
-        st.subheader("Control systems")
-
-        @st.fragment
-        def render_control_systems():
-            if st.checkbox("Show control systems"):
-                st.pyplot(
-                    plot_control_system(
-                        reduction_files,
-                        with_shape=st.checkbox("With shape", True),
-                        show_all_m=st.checkbox("Show all m", False),
-                        shape_l_max=st.number_input(
-                            "Shape l max", value=2, min_value=0
-                        ),
-                    )
-                )
-                with st.expander("Size control A", expanded=False):
-                    st.pyplot(plot_size_control(reduction_files, "A"))
-                with st.expander("Size control B", expanded=False):
-                    st.pyplot(plot_size_control(reduction_files, "B"))
-
-        render_control_systems()
 
         # Eccentricity
         st.subheader("Eccentricity")

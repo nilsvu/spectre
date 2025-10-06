@@ -22,30 +22,13 @@ from spectre.Visualization.ReadH5 import available_subfiles, to_dataframe
 logger = logging.getLogger(__name__)
 
 
-def plot_control_system(
+def get_control_system_data(
     reduction_files: Sequence[str],
     with_shape: bool = True,
     show_all_m: bool = False,
     shape_l_max: int = 2,
     x_bounds: Optional[Sequence[float]] = None,
-    x_label: Optional[str] = None,
-    title: Optional[str] = None,
 ):
-    """
-    Plot diagnostic information regarding all control systems except size
-    control. If you want size control diagnostics use
-    `spectre plot size-control`.
-
-    This tool assumes there are subfiles in each of the "reduction-files" with
-    the path `/ControlSystems/{Name}/*.dat`, where `{NAME}` is the name of the
-    control system and `*.dat` are all the components of that control system.
-
-    Shape control is a bit special because it has a large number of components.
-    Control whether or not you plot shape, and how many of these components you
-    plot, with the `--with-shape/--without-shape`, `--shape-l_max`, and
-    `--show-all-m` options.
-    """
-
     # Given an h5 file, make sure that the "ControlSystems" group exists. Then
     # return the list of control systems in that group, excluding size control
     def check_control_system_dir(h5_filename: str):
@@ -61,7 +44,7 @@ def plot_control_system(
             )
 
         # No size control
-        return [key for key in control_system_dir.keys() if "Size" not in key]
+        return list(control_system_dir.keys())
 
     # Given an h5 file and a subfile, make sure that the subfile exists inside
     # the h5 file. Then return the subfile as a DataFrame (with "Time" as the
@@ -105,6 +88,8 @@ def plot_control_system(
                 for key in keys
                 if 2 <= int(key.split("l")[1].split("m")[0]) <= shape_l_max
             ]
+        elif "Size" in control_system_name:
+            return ["Size"]
         else:
             return keys
 
@@ -115,7 +100,9 @@ def plot_control_system(
     def extract_relevant_columns(
         df: pd.DataFrame, name: str, component_name: str
     ):
-        return df[relevant_columns].add_prefix(name + component_name)
+        return df[relevant_columns].add_prefix(
+            name + "_" + component_name + "_"
+        )
 
     # Get a list of all control systems (excluding size) that we have from the
     # first reductions file and a map to all of their components
@@ -156,35 +143,62 @@ def plot_control_system(
                 component_prefix = f"l{l}m"
                 for column in relevant_columns:
                     components_to_norm = [
-                        f"{system}{component_prefix}{m}{column}"
+                        f"{system}_{component_prefix}{m}_{column}"
                         for m in range(-l, l + 1)
                     ]
 
-                    file_df[f"{system}{component_prefix}{column}"] = np.sqrt(
+                    file_df[f"{system}_{component_prefix}_{column}"] = np.sqrt(
                         np.square(file_df[components_to_norm].to_numpy()).sum(
                             axis=1
                         )
                     )
 
+                    if not show_all_m:
+                        # Drop the individual m components if we aren't
+                        # showing them
+                        file_df.drop(columns=components_to_norm, inplace=True)
+
         # When concating the large DataFrames from each H5 file together, we
         # assume all the columns are the same so we concat along axis=0
         data = pd.concat([data, file_df])
 
-    # If we aren't showing all m for shape control, modify the shape components
-    # that are being plotted
-    if with_shape and not show_all_m:
-        for system in control_systems:
-            if "Shape" not in system:
-                continue
-
-            # Overwrite existing components with empty list
-            control_system_components[system] = []
-            for l in range(2, shape_l_max + 1):
-                control_system_components[system].append(f"l{l}m")
-
     # Restrict data to bounds
     if x_bounds:
         data = data[(data.index >= x_bounds[0]) & (data.index <= x_bounds[1])]
+
+    return data
+
+
+def plot_control_system(
+    reduction_files: Sequence[str],
+    with_shape: bool = True,
+    show_all_m: bool = False,
+    shape_l_max: int = 2,
+    x_bounds: Optional[Sequence[float]] = None,
+    x_label: Optional[str] = None,
+    title: Optional[str] = None,
+):
+    """
+    Plot diagnostic information regarding all control systems except size
+    control. If you want size control diagnostics use
+    `spectre plot size-control`.
+
+    This tool assumes there are subfiles in each of the "reduction-files" with
+    the path `/ControlSystems/{Name}/*.dat`, where `{NAME}` is the name of the
+    control system and `*.dat` are all the components of that control system.
+
+    Shape control is a bit special because it has a large number of components.
+    Control whether or not you plot shape, and how many of these components you
+    plot, with the `--with-shape/--without-shape`, `--shape-l_max`, and
+    `--show-all-m` options.
+    """
+    data = get_control_system_data(
+        reduction_files,
+        with_shape=with_shape,
+        show_all_m=show_all_m,
+        shape_l_max=shape_l_max,
+        x_bounds=x_bounds,
+    )
 
     # Set up plots
     fig, axes = plt.subplots(2, 1, sharex=True)
