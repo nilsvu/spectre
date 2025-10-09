@@ -90,6 +90,11 @@ struct Iteration {
   /*!
    * \brief Logical coordinates of newly interpolated points (used as memory
    * buffer)
+   *
+   * These `std::vector`s are used to reserve memory and then append points to
+   * them as we find them in an element. The memory is reused for each element.
+   * Then, a non-owning DataVector is created by pointing into this memory.
+   * That's why this is a `std::array` of `std::vector`s, not vice versa.
    */
   std::array<std::vector<double>, 3>
       x_element_logical_of_newly_interpolated_points{};

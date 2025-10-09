@@ -48,7 +48,7 @@ bool interpolate_volume_data(
     interpolated_vars.initialize(expected_num_points);
     offsets.reserve(expected_num_points);
     for (size_t d = 0; d < 3; ++d) {
-      x_element_logical[d].reserve(expected_num_points);
+      gsl::at(x_element_logical, d).reserve(expected_num_points);
     }
   }
   if (indices_interpolated_to_thus_far.size() != expected_num_points) {
@@ -58,7 +58,7 @@ bool interpolate_volume_data(
   // Find points in this element
   offsets.clear();
   for (size_t d = 0; d < 3; ++d) {
-    x_element_logical[d].clear();
+    gsl::at(x_element_logical, d).clear();
   }
   for (size_t p = 0; p < expected_num_points; ++p) {
     if (indices_interpolated_to_thus_far[p]) {
@@ -78,7 +78,7 @@ bool interpolate_volume_data(
     // Collect points in this element
     offsets.push_back(p);
     for (size_t d = 0; d < 3; ++d) {
-      x_element_logical[d].push_back(element_logical_coords->get(d));
+      gsl::at(x_element_logical, d).push_back(element_logical_coords->get(d));
     }
   }  // for block_logical_coords
 
@@ -91,8 +91,9 @@ bool interpolate_volume_data(
   // Use non-owning wrappers around memory buffers to avoid allocations
   tnsr::I<DataVector, 3, Frame::ElementLogical> element_logical_coords{};
   for (size_t d = 0; d < 3; ++d) {
-    element_logical_coords.get(d).set_data_ref(x_element_logical[d].data(),
-                                               x_element_logical[d].size());
+    element_logical_coords.get(d).set_data_ref(
+        gsl::at(x_element_logical, d).data(),
+        gsl::at(x_element_logical, d).size());
   }
   const intrp::Irregular<3> interpolator(volume_vars_storage.mesh,
                                          element_logical_coords);
