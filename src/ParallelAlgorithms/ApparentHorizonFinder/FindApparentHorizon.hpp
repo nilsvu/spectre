@@ -57,7 +57,9 @@ struct get_tags {
  * put into the `ah::Tags::Storage`. Then, we try to set the
  * `ah::Tags::CurrentTime` with the `ah::set_current_time` function. Once we
  * have a current time, we ensure the functions of time are up-to-date at this
- * current time with `ah::check_if_current_time_is_ready`.
+ * current time with `ah::check_if_current_time_is_ready`. If they are not,
+ * we re-trigger this action with `vars_have_already_been_received` set to
+ * true and not sending any new volume data.
  *
  * Once we ensure the functions of time are ready, we compute the cartesian
  * coordinates for the current fast-flow iteration surface with
@@ -142,7 +144,12 @@ struct FindApparentHorizon {
     // are ready.
     // ========================================================================
 
-    // Keep trying to find horizons for as long as we can
+    // Keep trying to find horizons for as long as we can.
+    // In the first pass, interpolate only from the incoming element because
+    // this was missing data. On subsequent passes, interpolate from all
+    // elements. The `vars_have_already_been_received` flag is used only in
+    // `check_if_current_time_is_ready` to re-trigger the AH find in a callback
+    // but not sending any new data.
     bool interpolate_only_from_incoming_element =
         not vars_have_already_been_received;
     while (true) {
