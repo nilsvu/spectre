@@ -42,7 +42,7 @@ namespace ah {
  *
  * \param current_iteration The returned pointer to the current Iteration object
  * \param block_order Priority order to search blocks for containing points
- * (see `block_logical_coordinates` for details)
+ * (see `::block_logical_coordinates` for details)
  * \param time The current time
  * \param fast_flow The FastFlow object for the current horizon find
  * \param initial_guess If the current iteration number is zero and
