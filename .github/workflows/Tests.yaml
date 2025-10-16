@@ -1030,8 +1030,8 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
       fail-fast: false
       matrix:
         os:
-          - macos-15-intel
           - macos-15
+          - macos-26
     runs-on: ${{ matrix.os }}
     env:
       # We install some low-level dependencies with Homebrew. We could install
