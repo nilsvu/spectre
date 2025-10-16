@@ -1029,9 +1029,13 @@ ${{ matrix.build_type }}-pch-${{ matrix.use_pch || 'ON' }}"
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - macos-15-intel
-          - macos-15
+        include:
+          # The number of cores is given at:
+          # https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+          - os: macos-14
+            NUM_CORES: 3
+          - os: macos-26
+            NUM_CORES: 3
     runs-on: ${{ matrix.os }}
     env:
       # We install some low-level dependencies with Homebrew. They get picked up
