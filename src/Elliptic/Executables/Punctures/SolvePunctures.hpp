@@ -63,7 +63,8 @@ struct Metavariables {
       typename solver::observe_fields, observe_integral_fields,
       tmpl::list<domain::Tags::Coordinates<volume_dim, Frame::Inertial>,
                  domain::Tags::RadiallyCompressedCoordinatesCompute<
-                     volume_dim, Frame::Inertial>>>;
+                     volume_dim, Frame::Inertial>,
+                 Punctures::Tags::ConformalFactorMinusOneCompute>>;
   using observer_compute_tags =
       tmpl::list<::Events::Tags::ObserverMeshCompute<volume_dim>,
                  ::Events::Tags::ObserverDetInvJacobianCompute<

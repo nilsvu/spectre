@@ -33,7 +33,9 @@ struct FirstOrderSystem
   using primal_fluxes =
       tmpl::list<::Tags::Flux<Tags::Field, tmpl::size_t<3>, Frame::Inertial>>;
 
-  using background_fields = tmpl::list<Tags::Alpha, Tags::Beta>;
+  using background_fields =
+      tmpl::list<Tags::Alpha, Tags::Beta,
+                 Tags::TracelessConformalExtrinsicCurvature>;
   using inv_metric_tag = void;
 
   using fluxes_computer = Poisson::Fluxes<3, Poisson::Geometry::FlatCartesian>;

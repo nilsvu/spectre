@@ -50,5 +50,29 @@ struct TracelessConformalExtrinsicCurvature : db::SimpleTag {
   using type = tnsr::II<DataVector, 3>;
 };
 
+/// @{
+/*!
+ * \brief The conformal factor minus one, $\psi - 1 = u + \frac{1}{\alpha}$
+ *
+ * \see Punctures
+ */
+struct ConformalFactorMinusOne : db::SimpleTag {
+  using type = Scalar<DataVector>;
+};
+
+struct ConformalFactorMinusOneCompute : ConformalFactorMinusOne,
+                                        db::ComputeTag {
+  using base = ConformalFactorMinusOne;
+  using return_type = Scalar<DataVector>;
+  using argument_tags = tmpl::list<Field, Alpha>;
+
+  static void function(const gsl::not_null<Scalar<DataVector>*> result,
+                       const Scalar<DataVector>& field,
+                       const Scalar<DataVector>& alpha) {
+    get(*result) = get(field) + 1. / get(alpha);
+  }
+};
+/// @}
+
 }  // namespace Tags
 }  // namespace Punctures

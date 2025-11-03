@@ -31,17 +31,83 @@ ResourceInfo:
   Singletons: Auto
 
 DomainCreator:
-  Brick:
-    LowerBound: [-0.5, -0.5, -0.5]
-    UpperBound: [0.5, 0.5, 0.5]
-    Distribution: [Linear, Linear, Linear]
-    IsPeriodicIn: [false, false, false]
-    InitialRefinement: [0, 0, 0]
-    InitialGridPoints: [3, 3, 3]
-    TimeDependence:
-      UniformTranslation:
-        InitialTime: 0.0
-        Velocity: [0.5, 0.0, 0.0]
+  BinaryCompactObject:
+    ObjectA:
+      InnerRadius: &ExcisionRadiusA 1.1829529058507846
+      # Found that the max allowable value for the OuterRadius is 6.0. Higher
+      # values cause the constraints to blow up the cubes around each object.
+      OuterRadius: 5.2
+      XCoord: &XCoordA 2.61231861319449
+      ExciseInterior: True
+      UseLogarithmicMap: true
+    ObjectB:
+      InnerRadius: &ExcisionRadiusB 0.31930495372176954
+      # Found that the max allowable value for the OuterRadius is 6.0. Higher
+      # values cause the constraints to blow up the cubes around each object.
+      OuterRadius: 5.2
+      XCoord: &XCoordB -10.387681386805511
+      ExciseInterior: True
+      UseLogarithmicMap: true
+    CenterOfMassOffset:
+      - &YOffset 0.050537055963123204
+      - &ZOffset 6.268482385452571e-11
+    Envelope:
+      Radius: 86.66666666666667
+      # Radial distribution is logarithmic to transition from grid point
+      # spacing around the excisions to the grid point spacing in the
+      # outer shell
+      RadialDistribution: Logarithmic
+    OuterShell:
+      Radius: 520.0
+      # Radial distribution is linear to resolve gravitational waves
+      RadialPartitioning: []
+      RadialDistribution: Linear
+      OpeningAngle: 120.0
+    UseEquiangularMap: True
+    # Found that a CubeScale of 1.2 worked well for equal mass non-spinning
+    # inspirals and allowed for more common horizon finds.
+    CubeScale: 1.2
+    # These values have been tested to be stable for full equal mass mergers
+    # with constraints ~10^-7 for L=1, P=10
+    InitialRefinement:
+      ObjectAShell:   [2, 2, 2]
+      ObjectACube:    [3, 3, 2]
+      ObjectBShell:   [2, 2, 3]
+      ObjectBCube:    [3, 3, 2]
+      Envelope:       [2, 2, 2]
+      OuterShell0:    [1, 1, 3]
+    InitialGridPoints:
+      ObjectAShell:   [11, 11, 9]
+      ObjectACube:    [8, 8, 7]
+      ObjectBShell:   [11, 11, 9]
+      ObjectBCube:    [8, 8, 7]
+      Envelope:       [11, 11, 13]
+      OuterShell0:    [11, 11, 12]
+    TimeDependentMaps:
+      InitialTime: &InitialTime 3399.999999998003
+      ExpansionMap:
+        H5Filename: "/resnick/groups/sxs/nilsvu/Runs/2025-09-bbh-opt/21_q4/Segment_0002/BbhVolume0.h5"
+        SubfileName: "VolumeData"
+      RotationMap:
+        H5Filename: "/resnick/groups/sxs/nilsvu/Runs/2025-09-bbh-opt/21_q4/Segment_0002/BbhVolume0.h5"
+        SubfileName: "VolumeData"
+      TranslationMap:
+        H5Filename: "/resnick/groups/sxs/nilsvu/Runs/2025-09-bbh-opt/21_q4/Segment_0002/BbhVolume0.h5"
+        SubfileName: "VolumeData"
+      SkewMap:
+        H5Filename: "/resnick/groups/sxs/nilsvu/Runs/2025-09-bbh-opt/21_q4/Segment_0002/BbhVolume0.h5"
+        SubfileName: "VolumeData"
+      ShapeMapA:
+        H5Filename: "/resnick/groups/sxs/nilsvu/Runs/2025-09-bbh-opt/21_q4/Segment_0002/BbhVolume0.h5"
+        SubfileName: "VolumeData"
+        LMax: Auto
+        TransitionEndsAtCube: True
+      ShapeMapB:
+        H5Filename: "/resnick/groups/sxs/nilsvu/Runs/2025-09-bbh-opt/21_q4/Segment_0002/BbhVolume0.h5"
+        SubfileName: "VolumeData"
+        LMax: Auto
+        TransitionEndsAtCube: True
+      GridCenters: None
 
 SpatialDiscretization:
   ActiveGrid: Dg
@@ -49,7 +115,7 @@ SpatialDiscretization:
     Quadrature: GaussLobatto
 
 Evolution:
-  InitialTime: 0.0
+  InitialTime: *InitialTime
   InitialTimeStep: 0.1
   TimeStepper:
     AdamsBashforth:
@@ -57,9 +123,9 @@ Evolution:
 
 EventsAndTriggersAtSlabs:
   - Trigger:
-      TimeCompares:
-        Comparison: GreaterThanOrEqualTo
-        Value: 1.0
+      SlabCompares:
+        Comparison: EqualTo
+        Value: 1
     Events:
       - Completion
 
