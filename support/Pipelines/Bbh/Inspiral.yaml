@@ -516,7 +516,11 @@ ApparentHorizons:
       MaxIts: 100
     Verbosity: Quiet
     MaxComputeCoordsRetries: 3
-    BlocksForHorizonFind: ["ObjectAShell", "ObjectACube"]
+    BlocksForHorizonFind:
+      - ObjectAShell
+      - ObjectACube
+      - ObjectBShell
+      - ObjectBCube
   ObservationAhB: &AhB
     Criteria:
     InitialGuess:
@@ -526,7 +530,11 @@ ApparentHorizons:
     FastFlow: *DefaultFastFlow
     Verbosity: Quiet
     MaxComputeCoordsRetries: 3
-    BlocksForHorizonFind: ["ObjectBShell", "ObjectBCube"]
+    BlocksForHorizonFind:
+      - ObjectAShell
+      - ObjectACube
+      - ObjectBShell
+      - ObjectBCube
   ObservationAhC:
     Criteria:
     InitialGuess:
@@ -537,11 +545,11 @@ ApparentHorizons:
     Verbosity: Quiet
     MaxComputeCoordsRetries: 3
     BlocksForHorizonFind:
-      - "ObjectAShell"
-      - "ObjectACube"
-      - "ObjectBShell"
-      - "ObjectBCube"
-      - "Envelope"
+      - ObjectAShell
+      - ObjectACube
+      - ObjectBShell
+      - ObjectBCube
+      - Envelope
   ControlSystemAhA: *AhA
   ControlSystemAhB: *AhB
   ControlSystemCharSpeedAhA: *AhA
