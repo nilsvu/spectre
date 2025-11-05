@@ -175,10 +175,20 @@ def inspiral_parameters(
     excision_radius_factor_b = (
         1.0 if (id_from_evolution or mass_ratio > 2.0) else 1.0385
     )
-    initial_separation = (
-        id_domain_creator["ObjectA"]["XCoord"]
-        - id_domain_creator["ObjectB"]["XCoord"]
-    )
+    x_A = id_domain_creator["ObjectA"]["XCoord"]
+    x_B = id_domain_creator["ObjectB"]["XCoord"]
+    initial_separation = x_A - x_B
+    # Place the cutting plane such that it is at the point of contact of two
+    # spheres orbiting around their the Newtonian center-of-mass
+    cutting_plane_position = x_A * mass_b + x_B * mass_a
+    # The excision in the grid frame will grow during the inspiral by a factor
+    # of initial_separation / 2 due to the expansion map, so we have to make
+    # sure that the cubes are large enough to contain the excisions plus some
+    # buffer. The length of the cubes is the initial separation times the cube
+    # scale factor, and we find that for equal masses a scale factor of 1.2
+    # works well. To handle unequal masses, we scale the cube also with the
+    # excision radius, which is a factor of approx. 2 M_A = 2 q / (1 + q).
+    cube_scale = 1.2 * 2.0 * mass_a
 
     # Resolve subfile name in the H5 files
     id_file_glob = str(
@@ -218,9 +228,11 @@ def inspiral_parameters(
             id_domain_creator["ObjectB"]["InnerRadius"]
             * excision_radius_factor_b
         ),
-        "ObjectOuterRadius": initial_separation / 2.5,
-        "XCoordA": id_domain_creator["ObjectA"]["XCoord"],
-        "XCoordB": id_domain_creator["ObjectB"]["XCoord"],
+        "ObjectOuterRadius": initial_separation / 3.0,
+        "XCoordA": x_A,
+        "XCoordB": x_B,
+        "CubeScale": cube_scale,
+        "CuttingPlanePosition": cutting_plane_position,
         "CenterOfMassOffset_y": id_domain_creator["CenterOfMassOffset"][0],
         "CenterOfMassOffset_z": id_domain_creator["CenterOfMassOffset"][1],
         "EnvelopeRadius": 100.0 / 15.0 * initial_separation,
@@ -344,6 +356,8 @@ def inspiral_parameters_spec(
     spin_magnitude_left = id_params["ID_chiBMagnitude"]
     spin_magnitude_right = id_params["ID_chiAMagnitude"]
     initial_separation = id_params["ID_d"]
+    x_A = id_params["ID_cA"][0]
+    x_B = id_params["ID_cB"][0]
 
     params = {
         # Initial data files
@@ -354,9 +368,11 @@ def inspiral_parameters_spec(
         # or about 0.9434 * horizon radius.
         "ExcisionRadiusA": id_params["ID_rExcA"] * 1.06,
         "ExcisionRadiusB": id_params["ID_rExcB"] * 1.06,
-        "ObjectOuterRadius": initial_separation / 2.5,
-        "XCoordA": id_params["ID_cA"][0],
-        "XCoordB": id_params["ID_cB"][0],
+        "ObjectOuterRadius": initial_separation / 3.0,
+        "XCoordA": x_A,
+        "XCoordB": x_B,
+        "CubeScale": 1.2 * 2.0 * mass_right,
+        "CuttingPlanePosition": x_A * mass_left + x_B * mass_right,
         # COM offset in y and z is the same for both objects
         "CenterOfMassOffset_y": id_params["ID_cA"][1],
         "CenterOfMassOffset_z": id_params["ID_cA"][2],

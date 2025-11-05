@@ -512,6 +512,7 @@ std::string create_option_string(
          interior_B +
          "    UseLogarithmicMap: " + stringize(use_logarithmic_map_AB) +
          "\n"
+         "  CuttingPlanePosition: Auto\n"
          "  CenterOfMassOffset: [0.1, 0.2]\n"
          "  Envelope:\n"
          "    Radius: 22.0\n"

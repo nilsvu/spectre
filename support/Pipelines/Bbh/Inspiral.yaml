@@ -94,6 +94,7 @@ DomainCreator:
         ExciseWithBoundaryCondition:
           DemandOutgoingCharSpeeds:
       UseLogarithmicMap: true
+    CuttingPlanePosition: {{ CuttingPlanePosition }}
     CenterOfMassOffset:
       - &YOffset {{ CenterOfMassOffset_y }}
       - &ZOffset {{ CenterOfMassOffset_z }}
@@ -113,9 +114,7 @@ DomainCreator:
         ConstraintPreservingBjorhus:
           Type: ConstraintPreservingPhysical
     UseEquiangularMap: True
-    # Found that a CubeScale of 1.2 worked well for equal mass non-spinning
-    # inspirals and allowed for more common horizon finds.
-    CubeScale: 1.2
+    CubeScale: {{ CubeScale }}
     # These values have been tested to be stable for full equal mass mergers
     # with constraints ~10^-7 for L=1, P=10
     InitialRefinement:
