@@ -163,41 +163,45 @@ class EvolveGhBinaryBlackHole(EvolutionStatus):
         st.subheader("Horizon parameters")
 
         def get_horizons_data(reductions_file):
-            with h5py.File(reductions_file, "r") as open_h5file:
-                horizons_data = []
-                for ab in "AB":
-                    ah_subfile = open_h5file.get(f"ObservationAh{ab}.dat")
-                    if ah_subfile is not None:
-                        horizons_data.append(
-                            to_dataframe(ah_subfile)
-                            .set_index("Time")
-                            .add_prefix(f"Ah{ab} ")
-                        )
-                if not horizons_data:
-                    return None
-                return pd.concat(horizons_data, axis=1)
+            for reductions_file in reduction_files:
+                with h5py.File(reductions_file, "r") as open_h5file:
+                    horizons_data = []
+                    for ab in "AB":
+                        ah_subfile = open_h5file.get(f"ObservationAh{ab}.dat")
+                        if ah_subfile is not None:
+                            horizons_data.append(
+                                to_dataframe(ah_subfile)
+                                .set_index("Time")
+                                .add_prefix(f"Ah{ab} ")
+                            )
+                    if horizons_data:
+                        yield pd.concat(horizons_data, axis=1)
 
-        horizon_params = pd.concat(map(get_horizons_data, reduction_files))
-        for label, name, col in zip(
-            ["AhA mass", "AhB mass", "AhA spin", "AhB spin"],
-            [
-                "AhA ChristodoulouMass",
-                "AhB ChristodoulouMass",
-                "AhA DimensionlessSpinMagnitude",
-                "AhB DimensionlessSpinMagnitude",
-            ],
-            st.columns(4),
-        ):
-            col.metric(label, f"{horizon_params.iloc[-1][name]:.4g}")
-        fig = px.line(
-            np.abs(horizon_params.iloc[1:] - horizon_params.iloc[0]),
-            log_y=True,
-        )
-        fig.update_layout(xaxis_title="Time [M]", legend=legend_layout)
-        fig.update_yaxes(
-            exponentformat="e", title="Difference to initial values"
-        )
-        st.plotly_chart(fig)
+        all_horizons_data = list(get_horizons_data(reduction_files))
+        if all_horizons_data:
+            horizon_params = pd.concat(all_horizons_data)
+            for label, name, col in zip(
+                ["AhA mass", "AhB mass", "AhA spin", "AhB spin"],
+                [
+                    "AhA ChristodoulouMass",
+                    "AhB ChristodoulouMass",
+                    "AhA DimensionlessSpinMagnitude",
+                    "AhB DimensionlessSpinMagnitude",
+                ],
+                st.columns(4),
+            ):
+                col.metric(label, f"{horizon_params.iloc[-1][name]:.4g}")
+            fig = px.line(
+                np.abs(horizon_params.iloc[1:] - horizon_params.iloc[0]),
+                log_y=True,
+            )
+            fig.update_layout(xaxis_title="Time [M]", legend=legend_layout)
+            fig.update_yaxes(
+                exponentformat="e", title="Difference to initial values"
+            )
+            st.plotly_chart(fig)
+        else:
+            st.info("No apparent horizon data (yet).")
 
         # Time steps
         super().render_time_steps(input_file, reduction_files)
