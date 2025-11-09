@@ -48,6 +48,28 @@
 
 namespace ScalarSelfForce::Events {
 
+/*!
+ * \brief An event that observes the self-force at the position of the scalar
+ * charge.
+ *
+ * \details This event interpolates the scalar m-mode field and its derivatives
+ * to the position of the scalar charge (puncture) and computes the m-mode
+ * contribution to the self-force acting on the charge. The self-force is then
+ * written to a reduction file.
+ *
+ * The self-force is computed in the Boyer-Lindquist `r` and `theta`
+ * coordinates (for scalar charge $q=1$) following Eq. (3.10) in
+ * \cite Osburn:2022bby :
+ * \begin{align}
+ *   F_r^m &= \partial_r (\Psi_m^R / r) = \frac{1}{r \alpha}
+ *     \partial_{r_*} \Psi_m^R - \frac{1}{r^2} \Psi_m^R \\
+ *   F_\theta^m &= \partial_\theta (\Psi_m^R / r) = -\frac{1}{r}
+ *     \partial_{\cos\theta} \Psi_m
+ * \end{align}
+ * with $\alpha = 1 - 2 M r / (r^2 + a^2)$. For modes $m > 0$ the self-force
+ * includes an additional factor of 2 and a complex rotation by
+ * $m \Delta\phi = \frac{m a}{r_+ - r_-}\ln\frac{r - r_+}{r - r_-}$.
+ */
 template <typename BackgroundTag, typename ArraySectionIdTag = void>
 class ObserveSelfForce : public Event {
  public:
@@ -58,31 +80,33 @@ class ObserveSelfForce : public Event {
   using options = tmpl::list<>;
 
   static constexpr Options::String help =
-      "Observe the self force at the position of the scalar charge.";
+      "Observe the self-force at the position of the scalar charge.";
 
   ObserveSelfForce() = default;
 
   using compute_tags_for_observation_box = tmpl::list<>;
 
   using return_tags = tmpl::list<>;
-  using argument_tags = tmpl::list<
-      Tags::MMode, domain::Tags::Mesh<2>,
-      domain::Tags::InverseJacobian<2, Frame::ElementLogical, Frame::Inertial>,
-      domain::Tags::Domain<2>, BackgroundTag>;
+  using argument_tags = tmpl::list<::Tags::ObservationBox>;
 
-  template <typename Background, typename Metavariables,
-            typename ParallelComponent>
-  void operator()(const Scalar<ComplexDataVector>& field, const Mesh<2>& mesh,
-                  const InverseJacobian<DataVector, 2, Frame::ElementLogical,
-                                        Frame::Inertial>& inv_jacobian,
-                  const Domain<2>& domain, const Background& background,
+  template <typename ComputeTagsList, typename DataBoxType,
+            typename Metavariables, typename ParallelComponent>
+  void operator()(const ObservationBox<ComputeTagsList, DataBoxType>& box,
                   Parallel::GlobalCache<Metavariables>& cache,
                   const ElementId<2>& element_id,
                   const ParallelComponent* const /*meta*/,
                   const ObservationValue& observation_value) const {
+    // Skip observation on elements that are not part of the section
+    const std::optional<std::string> section_observation_key =
+        observers::get_section_observation_key<ArraySectionIdTag>(box);
+    if (not section_observation_key.has_value()) {
+      return;
+    }
+    const auto& background = get<BackgroundTag>(box);
     const auto& circular_orbit =
         dynamic_cast<const AnalyticData::CircularOrbit&>(background);
     // Get element-logical coords of puncture
+    const auto& domain = get<domain::Tags::Domain<2>>(box);
     const auto puncture_position = circular_orbit.puncture_position();
     const auto& block = domain.blocks()[element_id.block_id()];
     const auto block_logical_coords =
@@ -96,14 +120,14 @@ class ObserveSelfForce : public Event {
       return;
     }
     // Interpolate field and field derivative to puncture position
+    const auto& field = get<Tags::MMode>(box);
+    const auto& mesh = get<domain::Tags::Mesh<2>>(box);
+    const auto& inv_jacobian =
+        get<domain::Tags::InverseJacobian<2, Frame::ElementLogical,
+                                          Frame::Inertial>>(box);
     const auto deriv_field = partial_derivative(field, mesh, inv_jacobian);
-    tnsr::I<DataVector, 2, Frame::ElementLogical> puncture_logical_coords_value{
-        1_st};
-    for (size_t i = 0; i < 2; ++i) {
-      puncture_logical_coords_value.get(i) =
-          puncture_logical_coords.value().get(i);
-    }
-    const intrp::Irregular<2> interpolator(mesh, puncture_logical_coords_value);
+    const intrp::Irregular<2> interpolator(mesh,
+                                           puncture_logical_coords.value());
     ComplexDataVector intrp_result{1_st};
     Scalar<std::complex<double>> field_at_puncture{};
     interpolator.interpolate(make_not_null(&intrp_result), get(field));
@@ -114,7 +138,7 @@ class ObserveSelfForce : public Event {
                                deriv_field.get(i));
       deriv_field_at_puncture.get(i) = intrp_result[0];
     }
-    // Calculate self force in r and theta coordinates
+    // Calculate self-force in r and theta coordinates
     tnsr::i<std::complex<double>, 2> self_force = deriv_field_at_puncture;
     const double r0 = circular_orbit.orbital_radius();
     const double M = circular_orbit.black_hole_mass();
@@ -126,7 +150,7 @@ class ObserveSelfForce : public Event {
     const double alpha = 1. - 2. * M * r0 / (square(r0) + square(a));
     get<0>(self_force) /= r0 * alpha;
     get<0>(self_force) -= get(field_at_puncture) / square(r0);
-    get<1>(self_force) *= -1.;
+    get<1>(self_force) /= -r0;
     if (m_mode > 0) {
       const double delta_phi =
           m_mode * a / (r_plus - r_minus) * log((r0 - r_plus) / (r0 - r_minus));
