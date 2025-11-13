@@ -40,7 +40,7 @@ std::string AhSpeed::update(const gsl::not_null<Info*> info,
   constexpr double time_tolerance_for_delta_r_in_danger = 20.0;
   const bool delta_radius_is_in_danger =
       crossing_time_info.horizon_will_hit_excision_boundary_first and
-      crossing_time_info.t_delta_radius.value_or(
+      crossing_time_info.t_delta_radius_shrinking.value_or(
           std::numeric_limits<double>::infinity()) <
           info->damping_time * time_tolerance_for_delta_r_in_danger;
 
@@ -106,14 +106,15 @@ std::string AhSpeed::update(const gsl::not_null<Info*> info,
         0.25 * time_tolerance_for_delta_r_in_danger;
     ss << "Current state AhSpeed. Delta radius in danger.";
     if ((crossing_time_info.t_char_speed.has_value() and
-         crossing_time_info.t_delta_radius.value_or(-1.0) >
+         crossing_time_info.t_delta_radius_shrinking.value_or(-1.0) >
              info->damping_time * time_tolerance_for_delta_r) or
         update_args.min_comoving_char_speed < 0.0) {
       info->discontinuous_change_has_occurred = true;
       info->target_char_speed = min_char_speed * target_speed_decrease_factor;
-      info->suggested_time_scale = std::min(
-          info->damping_time, crossing_time_info.t_delta_radius.value_or(
-                                  std::numeric_limits<double>::infinity()));
+      info->suggested_time_scale =
+          std::min(info->damping_time,
+                   crossing_time_info.t_delta_radius_shrinking.value_or(
+                       std::numeric_limits<double>::infinity()));
 
       ss << " Staying in AhSpeed.\n";
       if (update_args.min_comoving_char_speed < 0.0) {
@@ -122,7 +123,7 @@ std::string AhSpeed::update(const gsl::not_null<Info*> info,
       } else {
         ss << " Char speed X time " << crossing_time_info.t_char_speed.value()
            << " exists and delta radius X time "
-           << crossing_time_info.t_delta_radius.value()
+           << crossing_time_info.t_delta_radius_shrinking.value()
            << " > damping time * tolerance "
            << info->damping_time * time_tolerance_for_delta_r << "\n";
       }
@@ -131,7 +132,7 @@ std::string AhSpeed::update(const gsl::not_null<Info*> info,
     } else if (should_activate_inward_drift(update_args)) {
       info->discontinuous_change_has_occurred = true;
       info->state = std::make_unique<States::DeltaRDriftInward>();
-      info->suggested_time_scale = crossing_time_info.t_delta_radius;
+      info->suggested_time_scale = crossing_time_info.t_delta_radius_shrinking;
       info->target_char_speed = target_speed_for_inward_drift(
           update_args.avg_distorted_normal_dot_unit_coord_vector,
           update_args.min_char_speed,
@@ -141,7 +142,7 @@ std::string AhSpeed::update(const gsl::not_null<Info*> info,
     } else {
       info->discontinuous_change_has_occurred = true;
       info->state = std::make_unique<States::DeltaR>();
-      info->suggested_time_scale = crossing_time_info.t_delta_radius;
+      info->suggested_time_scale = crossing_time_info.t_delta_radius_shrinking;
       info->target_char_speed = 0.0;
       ss << " Switching to DeltaR.\n";
       ss << " Suggested timescale = " << info->suggested_time_scale;

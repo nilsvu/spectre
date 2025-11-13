@@ -31,7 +31,7 @@ std::string DeltaRDriftOutward::update(
   constexpr double time_tolerance_for_delta_r_in_danger = 0.99;
   const bool delta_radius_is_in_danger =
       crossing_time_info.horizon_will_hit_excision_boundary_first and
-      crossing_time_info.t_delta_radius.value_or(
+      crossing_time_info.t_delta_radius_shrinking.value_or(
           std::numeric_limits<double>::infinity()) <
           info->damping_time * time_tolerance_for_delta_r_in_danger;
   const bool char_speed_is_in_danger =
@@ -67,7 +67,7 @@ std::string DeltaRDriftOutward::update(
     info->suggested_time_scale = crossing_time_info.t_char_speed;
     ss << " Suggested timescale = " << info->suggested_time_scale;
   } else if (delta_radius_is_in_danger) {
-    info->suggested_time_scale = crossing_time_info.t_delta_radius;
+    info->suggested_time_scale = crossing_time_info.t_delta_radius_shrinking;
     ss << "Current state DeltaRDriftOutward. Delta radius in danger. Staying "
           "in DeltaRDriftOutward.\n";
     ss << " Suggested timescale = " << info->suggested_time_scale;

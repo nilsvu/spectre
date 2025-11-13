@@ -155,8 +155,20 @@ def plot_size_control(
         label="Comoving char speed crossing time",
     )
     axes[4].plot(
-        times, data["DeltaRCrossingTime"], label="Delta R crossing time"
+        times,
+        (
+            data["DeltaRCrossingTimeZero"]
+            if "DeltaRCrossingTimeZero" in data.columns
+            else data["DeltaRCrossingTime"]
+        ),
+        label="Delta R crossing time (zero)",
     )
+    if "DeltaRCrossingTimeMax" in data.columns:
+        axes[4].plot(
+            times,
+            data["DeltaRCrossingTimeMax"],
+            label="Delta R crossing time (max)",
+        )
     axes[4].set_yscale("log")
 
     # Lambda and horizon

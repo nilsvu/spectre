@@ -79,7 +79,8 @@ void do_test(const TestParams& test_params,
       test_params.crossing_time_info.horizon_will_hit_excision_boundary_first);
   CAPTURE(test_params.crossing_time_info.t_char_speed);
   CAPTURE(test_params.crossing_time_info.t_comoving_char_speed);
-  CAPTURE(test_params.crossing_time_info.t_delta_radius);
+  CAPTURE(test_params.crossing_time_info.t_delta_radius_shrinking);
+  CAPTURE(test_params.crossing_time_info.t_delta_radius_growing);
   CAPTURE(test_params.crossing_time_info.t_drift_limit_delta_radius);
   CAPTURE(test_params.crossing_time_info.t_drift_limit);
   CAPTURE(test_params.comoving_char_speed_increasing_inward);

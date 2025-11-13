@@ -65,7 +65,8 @@ struct CrossingTimeInfo {
   CrossingTimeInfo(
       const std::optional<double>& char_speed_crossing_time,
       const std::optional<double>& comoving_char_speed_crossing_time,
-      const std::optional<double>& delta_radius_crossing_time,
+      const std::optional<double>& delta_radius_crossing_time_shrinking,
+      const std::optional<double>& delta_radius_crossing_time_growing,
       const std::optional<double>& drift_limit_char_speed_crossing_time,
       const std::optional<double>& drift_limit_delta_radius_crossing_time);
   /// t_char_speed is the time (relative to the current time) when the
@@ -76,11 +77,15 @@ struct CrossingTimeInfo {
   /// minimum comoving characteristic speed is predicted to cross zero
   /// (or nullopt if the minimum comoving characteristic speed is increasing).
   std::optional<double> t_comoving_char_speed;
-  /// t_delta_radius is the time (relative to the current time) when the
-  /// minimum distance between the horizon and the excision boundary is
+  /// t_delta_radius_shrinking is the time (relative to the current time) when
+  /// the minimum distance between the horizon and the excision boundary is
   /// predicted to cross zero (or nullopt if the minimum distance is
   /// increasing).
-  std::optional<double> t_delta_radius;
+  std::optional<double> t_delta_radius_shrinking;
+  /// t_delta_radius_growing is the time (relative to the current time) when the
+  /// distance between the horizon and the excision boundary is predicted to
+  /// exceed the threshold (or nullopt if the distance is shrinking).
+  std::optional<double> t_delta_radius_growing;
   /// t_drift_limit_delta_radius is the time (relative to the current time) when
   /// the minimum distance between the horizon and the excision boundary is
   /// predicted to cross the min_allowed_radial_distance associated with the
@@ -98,5 +103,6 @@ struct CrossingTimeInfo {
   /// expected to cross zero soon.
   bool char_speed_will_hit_zero_first{false};
   bool horizon_will_hit_excision_boundary_first{false};
+  bool horizon_is_expanding_too_fast{false};
 };
 }  // namespace control_system::size

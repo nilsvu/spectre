@@ -40,7 +40,8 @@ struct ErrorDiagnostics {
   double min_comoving_char_speed;
   double char_speed_crossing_time;
   double comoving_char_speed_crossing_time;
-  double delta_r_crossing_time;
+  double delta_r_crossing_time_zero;
+  double delta_r_crossing_time_max;
   double target_char_speed;
   double suggested_timescale;
   double damping_timescale;
@@ -60,8 +61,10 @@ struct ErrorDiagnostics {
  *          speed.
  * \param predictor_comoving_char_speed ZeroCrossingPredictor for the
  *        comoving characteristic speed.
- * \param predictor_delta_radius ZeroCrossingPredictor for the difference
- *        in radius between the horizon and the excision boundary.
+ * \param predictor_delta_radius_shrinking ZeroCrossingPredictor for the
+ *        difference in radius between the horizon and the excision boundary.
+ * \param predictor_delta_radius_growing ZeroCrossingPredictor for the
+ *        difference in radius between the horizon and the max allowed distance.
  * \param predictor_drift_limit_char_speed ZeroCrossingPredictor for the
  *        difference between the characteristic speed and
  *        min_allowed_char_speed.
@@ -161,15 +164,17 @@ template <typename Frame>
 ErrorDiagnostics control_error(
     gsl::not_null<Info*> info,
     gsl::not_null<intrp::ZeroCrossingPredictor*> predictor_char_speed,
+    gsl::not_null<intrp::ZeroCrossingPredictor*> predictor_comoving_char_speed,
     gsl::not_null<intrp::ZeroCrossingPredictor*>
-        predictor_comoving_char_speed,
-    gsl::not_null<intrp::ZeroCrossingPredictor*> predictor_delta_radius,
+        predictor_delta_radius_shrinking,
+    gsl::not_null<intrp::ZeroCrossingPredictor*> predictor_delta_radius_growing,
     gsl::not_null<intrp::ZeroCrossingPredictor*>
         predictor_drift_limit_char_speed,
     gsl::not_null<intrp::ZeroCrossingPredictor*>
         predictor_drift_limit_delta_radius,
     double time, double control_error_delta_r,
     std::optional<double> control_error_delta_r_outward,
+    std::optional<double> max_relative_delta_r,
     std::optional<double> max_allowed_radial_distance,
     std::optional<double> inward_drift_velocity,
     std::optional<double> min_allowed_radial_distance,

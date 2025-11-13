@@ -42,7 +42,7 @@ std::string DeltaRDriftInward::update(
   constexpr double time_tolerance_for_delta_r_in_danger = 0.99;
   const bool delta_radius_is_in_danger =
       crossing_time_info.horizon_will_hit_excision_boundary_first and
-      crossing_time_info.t_delta_radius.value_or(
+      crossing_time_info.t_delta_radius_shrinking.value_or(
           std::numeric_limits<double>::infinity()) <
           info->damping_time * time_tolerance_for_delta_r_in_danger;
   const bool char_speed_is_in_danger =
@@ -83,7 +83,8 @@ std::string DeltaRDriftInward::update(
     info->suggested_time_scale = crossing_time_info.t_char_speed.value();
     ss << " Suggested timescale = " << info->suggested_time_scale;
   } else if (delta_radius_is_in_danger) {
-    info->suggested_time_scale = crossing_time_info.t_delta_radius.value();
+    info->suggested_time_scale =
+        crossing_time_info.t_delta_radius_shrinking.value();
     ss << "Current state DeltaRDriftInward. Delta radius in danger. Staying "
           "in DeltaRDriftInward.\n";
     ss << " Suggested timescale = " << info->suggested_time_scale;
@@ -94,16 +95,16 @@ std::string DeltaRDriftInward::update(
     info->discontinuous_change_has_occurred = true;
     info->state = std::make_unique<States::DeltaRNoDrift>();
     info->suggested_time_scale = crossing_time_info.t_drift_limit;
-  } else if (crossing_time_info.t_delta_radius.has_value() and
+  } else if (crossing_time_info.t_delta_radius_shrinking.has_value() and
              info->damping_time >
                  2.0 * spherepack_factor * update_args.horizon_00 * Y00) {
-    // Explaination of the above 'if':
+    // Explanation of the above 'if':
     //
-    // If crossing_time_info.t_delta_radius has a value, this means
+    // If crossing_time_info.t_delta_radius_shrinking has a value, this means
     // that delta_radius is decreasing.  But the entire point of state
     // DeltaRDriftInward is to make delta_radius increase, not
     // decrease.  So if we are in state DeltaRDriftInward and
-    // crossing_time_info.t_delta_radius has a value
+    // crossing_time_info.t_delta_radius_shrinking has a value
     // (i.e. delta_radius is decreasing), something is wrong.
     //
     // The thing that is usually wrong is that damping_time is too

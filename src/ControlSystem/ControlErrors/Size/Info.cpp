@@ -64,12 +64,14 @@ void Info::set_all_but_state(const Info& info) {
 CrossingTimeInfo::CrossingTimeInfo(
     const std::optional<double>& char_speed_crossing_time,
     const std::optional<double>& comoving_char_speed_crossing_time,
-    const std::optional<double>& delta_radius_crossing_time,
+    const std::optional<double>& delta_radius_crossing_time_shrinking,
+    const std::optional<double>& delta_radius_crossing_time_growing,
     const std::optional<double>& drift_limit_char_speed_crossing_time,
     const std::optional<double>& drift_limit_delta_radius_crossing_time)
     : t_char_speed(char_speed_crossing_time),
       t_comoving_char_speed(comoving_char_speed_crossing_time),
-      t_delta_radius(delta_radius_crossing_time),
+      t_delta_radius_shrinking(delta_radius_crossing_time_shrinking),
+      t_delta_radius_growing(delta_radius_crossing_time_growing),
       t_drift_limit_delta_radius(drift_limit_delta_radius_crossing_time),
       t_drift_limit((drift_limit_char_speed_crossing_time.has_value() or
                      drift_limit_delta_radius_crossing_time.has_value())
@@ -80,14 +82,19 @@ CrossingTimeInfo::CrossingTimeInfo(
                                   std::numeric_limits<double>::max())))
                         : std::nullopt) {
   if (t_char_speed.value_or(-1.0) > 0.0) {
-    if (t_delta_radius.value_or(-1.0) > 0.0 and
-        t_delta_radius.value() <= t_char_speed.value()) {
+    if (t_delta_radius_shrinking.value_or(-1.0) > 0.0 and
+        t_delta_radius_shrinking.value() <= t_char_speed.value()) {
       horizon_will_hit_excision_boundary_first = true;
+    } else if (t_delta_radius_growing.value_or(-1.0) > 0.0 and
+               t_delta_radius_growing.value() <= t_char_speed.value()) {
+      horizon_is_expanding_too_fast = true;
     } else {
       char_speed_will_hit_zero_first = true;
     }
-  } else if (t_delta_radius.value_or(-1.0) > 0.0) {
+  } else if (t_delta_radius_shrinking.value_or(-1.0) > 0.0) {
     horizon_will_hit_excision_boundary_first = true;
+  } else if (t_delta_radius_growing.value_or(-1.0) > 0.0) {
+    horizon_is_expanding_too_fast = true;
   }
 }
 }  // namespace control_system::size

@@ -36,13 +36,17 @@ ErrorDiagnostics control_error(
     const gsl::not_null<intrp::ZeroCrossingPredictor*> predictor_char_speed,
     const gsl::not_null<intrp::ZeroCrossingPredictor*>
         predictor_comoving_char_speed,
-    const gsl::not_null<intrp::ZeroCrossingPredictor*> predictor_delta_radius,
+    const gsl::not_null<intrp::ZeroCrossingPredictor*>
+        predictor_delta_radius_shrinking,
+    const gsl::not_null<intrp::ZeroCrossingPredictor*>
+        predictor_delta_radius_growing,
     const gsl::not_null<intrp::ZeroCrossingPredictor*>
         predictor_drift_limit_char_speed,
     const gsl::not_null<intrp::ZeroCrossingPredictor*>
         predictor_drift_limit_delta_radius,
     const double time, const double control_error_delta_r,
     const std::optional<double> control_error_delta_r_outward,
+    const std::optional<double> max_relative_delta_r,
     const std::optional<double> max_allowed_radial_distance,
     const std::optional<double> inward_drift_velocity,
     const std::optional<double> min_allowed_radial_distance,
@@ -196,7 +200,11 @@ ErrorDiagnostics control_error(
   predictor_char_speed->add(time,
                             get(characteristic_speed_on_excision_boundary));
   predictor_comoving_char_speed->add(time, get(comoving_char_speed));
-  predictor_delta_radius->add(time, get(radial_distance));
+  predictor_delta_radius_shrinking->add(time, get(radial_distance));
+  if (max_relative_delta_r.has_value()) {
+    predictor_delta_radius_growing->add(
+        time, max_relative_delta_r.value() - get(radial_distance));
+  }
   if (min_allowed_char_speed.has_value()) {
     predictor_drift_limit_char_speed->add(
         time, min_allowed_char_speed.value() -
@@ -212,8 +220,13 @@ ErrorDiagnostics control_error(
       predictor_char_speed->min_positive_zero_crossing_time(time);
   const std::optional<double> comoving_char_speed_crossing_time =
       predictor_comoving_char_speed->min_positive_zero_crossing_time(time);
-  const std::optional<double> delta_radius_crossing_time =
-      predictor_delta_radius->min_positive_zero_crossing_time(time);
+  const std::optional<double> delta_radius_crossing_time_zero =
+      predictor_delta_radius_shrinking->min_positive_zero_crossing_time(time);
+  const std::optional<double> delta_radius_crossing_time_max =
+      max_relative_delta_r.has_value()
+          ? predictor_delta_radius_growing->min_positive_zero_crossing_time(
+                time)
+          : std::nullopt;
   const std::optional<double> drift_limit_delta_radius_crossing_time =
       min_allowed_radial_distance.has_value()
           ? predictor_drift_limit_delta_radius->min_positive_zero_crossing_time(
@@ -259,7 +272,8 @@ ErrorDiagnostics control_error(
                       comoving_char_speed_increasing_inward},
       CrossingTimeInfo{
           char_speed_crossing_time, comoving_char_speed_crossing_time,
-          delta_radius_crossing_time, drift_limit_char_speed_crossing_time,
+          delta_radius_crossing_time_zero, delta_radius_crossing_time_max,
+          drift_limit_char_speed_crossing_time,
           drift_limit_delta_radius_crossing_time});
 
   const ControlErrorArgs control_error_args{
@@ -277,7 +291,8 @@ ErrorDiagnostics control_error(
       min_comoving_char_speed,
       char_speed_crossing_time.value_or(0.0),
       comoving_char_speed_crossing_time.value_or(0.0),
-      delta_radius_crossing_time.value_or(0.0),
+      delta_radius_crossing_time_zero.value_or(0.0),
+      delta_radius_crossing_time_max.value_or(0.0),
       info->target_char_speed,
       info->suggested_time_scale.value_or(0.0),
       info->damping_time,
@@ -297,13 +312,16 @@ ErrorDiagnostics control_error(
       const gsl::not_null<intrp::ZeroCrossingPredictor*>                       \
           predictor_comoving_char_speed,                                       \
       const gsl::not_null<intrp::ZeroCrossingPredictor*>                       \
-          predictor_delta_radius,                                              \
+          predictor_delta_radius_shrinking,                                    \
+      const gsl::not_null<intrp::ZeroCrossingPredictor*>                       \
+          predictor_delta_radius_growing,                                      \
       const gsl::not_null<intrp::ZeroCrossingPredictor*>                       \
           predictor_drift_limit_char_speed,                                    \
       const gsl::not_null<intrp::ZeroCrossingPredictor*>                       \
           predictor_drift_limit_delta_radius,                                  \
       double time, double control_error_delta_r,                               \
       std::optional<double> control_error_delta_r_outward,                     \
+      std::optional<double> max_relative_delta_r,                              \
       std::optional<double> max_allowed_radial_distance,                       \
       std::optional<double> inward_drift_velocity,                             \
       std::optional<double> min_allowed_radial_distance,                       \

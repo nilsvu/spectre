@@ -40,10 +40,14 @@ std::string DeltaR::update(const gsl::not_null<Info*> info,
   // sensitive to small changes in this value.
   constexpr double time_tolerance_for_delta_r_in_danger = 0.99;
   const bool delta_radius_is_in_danger =
-      crossing_time_info.horizon_will_hit_excision_boundary_first and
-      crossing_time_info.t_delta_radius.value_or(
-          std::numeric_limits<double>::infinity()) <
-          info->damping_time * time_tolerance_for_delta_r_in_danger;
+      (crossing_time_info.horizon_will_hit_excision_boundary_first and
+       crossing_time_info.t_delta_radius_shrinking.value_or(
+           std::numeric_limits<double>::infinity()) <
+           info->damping_time * time_tolerance_for_delta_r_in_danger) or
+      (crossing_time_info.horizon_is_expanding_too_fast and
+       crossing_time_info.t_delta_radius_growing.value_or(
+           std::numeric_limits<double>::infinity()) <
+           info->damping_time * time_tolerance_for_delta_r_in_danger);
   const bool char_speed_is_in_danger =
       crossing_time_info.char_speed_will_hit_zero_first and
       crossing_time_info.t_char_speed.value_or(
@@ -99,7 +103,11 @@ std::string DeltaR::update(const gsl::not_null<Info*> info,
     info->suggested_time_scale = crossing_time_info.t_char_speed;
     ss << " Suggested timescale = " << info->suggested_time_scale;
   } else if (delta_radius_is_in_danger) {
-    info->suggested_time_scale = crossing_time_info.t_delta_radius;
+    if (crossing_time_info.horizon_will_hit_excision_boundary_first) {
+      info->suggested_time_scale = crossing_time_info.t_delta_radius_shrinking;
+    } else {
+      info->suggested_time_scale = crossing_time_info.t_delta_radius_growing;
+    }
     ss << "Current state DeltaR. Delta radius in danger. Staying in DeltaR.\n";
     ss << " Suggested timescale = " << info->suggested_time_scale;
   } else if (update_args.min_comoving_char_speed > 0.0 and
@@ -108,6 +116,38 @@ std::string DeltaR::update(const gsl::not_null<Info*> info,
     // delta_r_state_decrease_factor should be slightly less than unity.
     // The value of 0.99 below was chosen arbitrarily in SpEC and never
     // needed to be changed.
+    //
+    // Note that this state is used in SpEC to reduce the timescale when the
+    // control error grows too large, so the control system can react faster and
+    // bring the control error down. This happens during plunge, for example,
+    // when the horizon grows in the grid frame and the excision must follow
+    // this growth.
+    // However, there's a difference between SpEC and SpECTRE that changes how
+    // often the `delta_r_state_decrease_factor` is applied: the _update
+    // timescale_ is much smaller in SpEC than it is in SpECTRE, because in SpEC
+    // it is tied to the timestep (an update happens every 3 or 4 timesteps, and
+    // the timestep can decrease to lower the update timescale if needed)
+    // whereas in SpECTRE the update timescale is a fixed fraction of the
+    // damping time (see `Controller::UpdateFraction`). Therefore, the factor
+    // `delta_r_state_decrease_factor` is applied much more frequently in SpEC
+    // and so the timescale can decrease much faster in SpEC than in SpECTRE. We
+    // want to keep the update timescale this large to avoid more frequent
+    // horizon finds, but need to be able to reduce the timescale of size
+    // control when the horizon is growing too quickly. Therefore, we added a
+    // predictor similar to the zero-crossing predictor for a shrinking horizon
+    // that estimates when the control error will exceed the threshold, and
+    // uses that to set the timescale. This happens in the
+    // `delta_radius_is_in_danger` block above. Therefore, this block here is
+    // only reached if the control error is currently too large, but the horizon
+    // is not predicted to cross the threshold within the damping time (unclear
+    // if this can actually happen).
+    //
+    // For low spins it's not super important that the excision
+    // follows the horizon very closely, but for high spins it's more important
+    // because the excision should not cross into the inner Kerr horizon.
+    // Therefore, for low spins it's probably enough to decrease the timescale
+    // and try to keep DeltaR constant, whereas for high spins we may have to
+    // switch to DeltaRDriftOutward (state 5) to decrease DeltaR.
     constexpr double delta_r_state_decrease_factor = 0.99;
     info->suggested_time_scale =
         info->damping_time * delta_r_state_decrease_factor;

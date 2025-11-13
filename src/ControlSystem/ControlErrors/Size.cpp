@@ -44,11 +44,13 @@ namespace ControlErrors {
 template <size_t DerivOrder, ::domain::ObjectLabel Horizon>
 Size<DerivOrder, Horizon>::Size(
     const int max_times, const double smooth_avg_timescale_frac,
+    const std::optional<double> max_relative_delta_r,
     TimescaleTuner<true> smoother_tuner,
     std::unique_ptr<size::State> initial_state,
     std::optional<DeltaRDriftOutwardOptions> delta_r_drift_outward_options,
     std::optional<DeltaRDriftInwardOptions> delta_r_drift_inward_options)
     : smoother_tuner_(std::move(smoother_tuner)),
+      max_relative_delta_r_(max_relative_delta_r),
       delta_r_drift_outward_options_(delta_r_drift_outward_options),
       delta_r_drift_inward_options_(delta_r_drift_inward_options) {
   if (not smoother_tuner_.timescales_have_been_set()) {
@@ -61,7 +63,10 @@ Size<DerivOrder, Horizon>::Size(
   char_speed_predictor_ = intrp::ZeroCrossingPredictor{3, max_times_size_t};
   comoving_char_speed_predictor_ =
       intrp::ZeroCrossingPredictor{3, max_times_size_t};
-  delta_radius_predictor_ = intrp::ZeroCrossingPredictor{3, max_times_size_t};
+  delta_radius_predictor_zero_ =
+      intrp::ZeroCrossingPredictor{3, max_times_size_t};
+  delta_radius_predictor_max_ =
+      intrp::ZeroCrossingPredictor{3, max_times_size_t};
   drift_limit_char_speed_predictor_ =
       intrp::ZeroCrossingPredictor{3, max_times_size_t};
   drift_limit_delta_radius_predictor_ =
@@ -87,7 +92,8 @@ Size<DerivOrder, Horizon>::Size(
                                      "MinComovingCharSpeed",
                                      "CharSpeedCrossingTime",
                                      "ComovingCharSpeedCrossingTime",
-                                     "DeltaRCrossingTime",
+                                     "DeltaRCrossingTimeZero",
+                                     "DeltaRCrossingTimeMax",
                                      "SuggestedTimescale",
                                      "DampingTime"};
   subfile_name_ = "/ControlSystems/Size" + get_output(Horizon) + "/Diagnostics";
@@ -104,9 +110,11 @@ Size<DerivOrder, Horizon>& Size<DerivOrder, Horizon>::operator=(
   smoother_tuner_ = rhs.smoother_tuner_;
   horizon_coef_averager_ = rhs.horizon_coef_averager_;
   info_ = rhs.info_;
+  max_relative_delta_r_ = rhs.max_relative_delta_r_;
   char_speed_predictor_ = rhs.char_speed_predictor_;
   comoving_char_speed_predictor_ = rhs.comoving_char_speed_predictor_;
-  delta_radius_predictor_ = rhs.delta_radius_predictor_;
+  delta_radius_predictor_zero_ = rhs.delta_radius_predictor_zero_;
+  delta_radius_predictor_max_ = rhs.delta_radius_predictor_max_;
   state_history_ = rhs.state_history_;
   legend_ = rhs.legend_;
   subfile_name_ = rhs.subfile_name_;
@@ -147,9 +155,11 @@ void Size<DerivOrder, Horizon>::pup(PUP::er& p) {
   p | smoother_tuner_;
   p | horizon_coef_averager_;
   p | info_;
+  p | max_relative_delta_r_;
   p | char_speed_predictor_;
   p | comoving_char_speed_predictor_;
-  p | delta_radius_predictor_;
+  p | delta_radius_predictor_zero_;
+  p | delta_radius_predictor_max_;
   p | drift_limit_char_speed_predictor_;
   p | drift_limit_delta_radius_predictor_;
   p | state_history_;
