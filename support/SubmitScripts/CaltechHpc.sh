@@ -21,6 +21,8 @@
 #SBATCH --exclusive
 {% if reservation is defined %}
 #SBATCH --reservation={{ reservation }}
+{% else %}
+#SBATCH --reservation sxs_standing
 {% endif %}
 {% endblock %}
 
