@@ -643,6 +643,7 @@ ControlSystems:
     ControlError:
       MaxNumTimesForZeroCrossingPredictor: 4
       SmoothAvgTimescaleFraction: 0.25
+      MaxRelativeDeltaR: None
       DeltaRDriftOutwardOptions: None
       DeltaRDriftInwardOptions: None
       InitialState: Initial
@@ -666,6 +667,7 @@ ControlSystems:
     ControlError:
       MaxNumTimesForZeroCrossingPredictor: 4
       SmoothAvgTimescaleFraction: 0.25
+      MaxRelativeDeltaR: None
       DeltaRDriftOutwardOptions: None
       DeltaRDriftInwardOptions: None
       InitialState: Initial
