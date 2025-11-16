@@ -190,6 +190,7 @@ void test_connectivity() {
                                             : nullptr})
                                   : std::nullopt,
                  false},
+          std::nullopt,
           center_of_mass_offset,
           envelope_radius,
           outer_radius,
@@ -329,7 +330,8 @@ void test_connectivity() {
                                            create_inner_boundary_condition()})
                                      : std::nullopt,
                     false},
-                center_of_mass_offset, envelope_radius, outer_radius,
+                std::nullopt, center_of_mass_offset, envelope_radius,
+                outer_radius,
                 (excise_interiorA and excise_interiorB) ? cube_scale
                                                         : cube_scales[0],
                 refinement, grid_points, use_equiangular_map,
@@ -355,7 +357,8 @@ void test_connectivity() {
                                                 std::make_unique<PeriodicBc>()})
                                           : std::nullopt,
                          false},
-                  center_of_mass_offset, envelope_radius, outer_radius,
+                  std::nullopt, center_of_mass_offset, envelope_radius,
+                  outer_radius,
                   (excise_interiorA and excise_interiorB) ? cube_scale
                                                           : cube_scales[0],
                   refinement, grid_points, use_equiangular_map,
@@ -383,7 +386,8 @@ void test_connectivity() {
                                    Excision{create_inner_boundary_condition()})
                              : std::nullopt,
                          false},
-                  center_of_mass_offset, envelope_radius, outer_radius,
+                  std::nullopt, center_of_mass_offset, envelope_radius,
+                  outer_radius,
                   (excise_interiorA and excise_interiorB) ? cube_scale
                                                           : cube_scales[0],
                   refinement, grid_points, use_equiangular_map,
@@ -408,7 +412,8 @@ void test_connectivity() {
                              ? std::make_optional(Excision{nullptr})
                              : std::nullopt,
                          false},
-                  center_of_mass_offset, envelope_radius, outer_radius,
+                  std::nullopt, center_of_mass_offset, envelope_radius,
+                  outer_radius,
                   (excise_interiorA and excise_interiorB) ? cube_scale
                                                           : cube_scales[0],
                   refinement, grid_points, use_equiangular_map,
@@ -512,6 +517,7 @@ std::string create_option_string(
          interior_B +
          "    UseLogarithmicMap: " + stringize(use_logarithmic_map_AB) +
          "\n"
+         "  CuttingPlanePosition: Auto\n"
          "  CenterOfMassOffset: [0.1, 0.2]\n"
          "  Envelope:\n"
          "    Radius: 22.0\n"
@@ -587,6 +593,7 @@ void test_bns_domain_with_cubes() {
     const domain::creators::BinaryCompactObject binary_compact_object{
         CartesianCubeAtXCoord{xcoord_objectA},
         CartesianCubeAtXCoord{xcoord_objectB},
+        std::nullopt,
         center_of_mass_offset,
         envelope_radius,
         outer_radius,
@@ -809,8 +816,8 @@ void test_parse_errors() {
       domain::creators::BinaryCompactObject(
           Object{0.5, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.3, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{20.0},
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{20.0},
           Distribution::Linear, 120.0, std::nullopt,
           create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
@@ -819,8 +826,8 @@ void test_parse_errors() {
       domain::creators::BinaryCompactObject(
           Object{0.5, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.3, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{40.0},
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{40.0},
           Distribution::Linear, 120.0, std::nullopt,
           create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
@@ -829,50 +836,52 @@ void test_parse_errors() {
       domain::creators::BinaryCompactObject(
           Object{0.5, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.3, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{28.0, 28.0},
-          Distribution::Linear, 120.0, std::nullopt,
-          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective,
+          std::vector<double>{28.0, 28.0}, Distribution::Linear, 120.0,
+          std::nullopt, create_outer_boundary_condition(),
+          Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "Radial partitioning contains duplicate element"));
   CHECK_THROWS_WITH(
       domain::creators::BinaryCompactObject(
           Object{0.5, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.3, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{28.0, 29.0},
-          std::vector{Distribution::Linear}, 120.0, std::nullopt,
-          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective,
+          std::vector<double>{28.0, 29.0}, std::vector{Distribution::Linear},
+          120.0, std::nullopt, create_outer_boundary_condition(),
+          Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "Specify a 'RadialDistribution' for every spherical shell."));
   CHECK_THROWS_WITH(
       domain::creators::BinaryCompactObject(
           Object{0.5, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.3, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{}, Distribution::Linear,
-          120.0, std::nullopt, create_outer_boundary_condition(),
-          Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{},
+          Distribution::Linear, 120.0, std::nullopt,
+          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "The x-coordinate of ObjectA's center is expected to be positive."));
   CHECK_THROWS_WITH(
       domain::creators::BinaryCompactObject(
           Object{0.5, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.3, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{}, Distribution::Linear,
-          120.0, std::nullopt, create_outer_boundary_condition(),
-          Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{},
+          Distribution::Linear, 120.0, std::nullopt,
+          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "The x-coordinate of ObjectB's center is expected to be negative."));
   CHECK_THROWS_WITH(
       domain::creators::BinaryCompactObject(
           Object{0.3, 1.0, 8.0, {{create_inner_boundary_condition()}}, false},
           Object{0.5, 1.0, -7.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{}, Distribution::Linear,
-          120.0, std::nullopt, create_outer_boundary_condition(),
-          Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{},
+          Distribution::Linear, 120.0, std::nullopt,
+          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "The radius for the enveloping cube is too "
           "small! The Frustums will be malformed."));
@@ -880,10 +889,10 @@ void test_parse_errors() {
       domain::creators::BinaryCompactObject(
           Object{0.3, 1.0, 8.0, {{create_inner_boundary_condition()}}, false},
           Object{0.5, 1.0, -7.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 0.5, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{}, Distribution::Linear,
-          120.0, std::nullopt, create_outer_boundary_condition(),
-          Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 0.5,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{},
+          Distribution::Linear, 120.0, std::nullopt,
+          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "The cube length should be greater than or equal to the initial "
           "separation between the two objects."));
@@ -891,30 +900,30 @@ void test_parse_errors() {
       domain::creators::BinaryCompactObject(
           Object{0.3, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{1.5, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{}, Distribution::Linear,
-          120.0, std::nullopt, create_outer_boundary_condition(),
-          Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{},
+          Distribution::Linear, 120.0, std::nullopt,
+          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "ObjectB's inner radius must be less than its outer radius."));
   CHECK_THROWS_WITH(
       domain::creators::BinaryCompactObject(
           Object{3.3, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.5, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{}, Distribution::Linear,
-          120.0, std::nullopt, create_outer_boundary_condition(),
-          Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{},
+          Distribution::Linear, 120.0, std::nullopt,
+          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "ObjectA's inner radius must be less than its outer radius."));
   CHECK_THROWS_WITH(
       domain::creators::BinaryCompactObject(
           Object{0.3, 1.0, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.5, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{}, Distribution::Linear,
-          120.0, std::nullopt, create_outer_boundary_condition(),
-          Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{},
+          Distribution::Linear, 120.0, std::nullopt,
+          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "ObjectA's outer radius is too large for the given separation,  try "
           "using 0.8"));
@@ -922,17 +931,17 @@ void test_parse_errors() {
       domain::creators::BinaryCompactObject(
           Object{0.3, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.5, 1.0, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{}, Distribution::Linear,
-          120.0, std::nullopt, create_outer_boundary_condition(),
-          Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{},
+          Distribution::Linear, 120.0, std::nullopt,
+          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "ObjectB's outer radius is too large for the given separation,  try "
           "using 0.8"));
   CHECK_THROWS_WITH(
       domain::creators::BinaryCompactObject(
           Object{0.3, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
-          Object{0.5, 0.8, -1.0, std::nullopt, true},
+          Object{0.5, 0.8, -1.0, std::nullopt, true}, std::nullopt,
           std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, true, 6_st,
           Distribution::Projective, std::vector<double>{}, Distribution::Linear,
           120.0, std::nullopt, create_outer_boundary_condition(),
@@ -945,10 +954,10 @@ void test_parse_errors() {
       domain::creators::BinaryCompactObject(
           Object{0.3, 0.8, 1.0, std::nullopt, true},
           Object{0.5, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st, 6_st, true,
-          Distribution::Projective, std::vector<double>{}, Distribution::Linear,
-          120.0, std::nullopt, create_outer_boundary_condition(),
-          Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, 6_st, true, Distribution::Projective, std::vector<double>{},
+          Distribution::Linear, 120.0, std::nullopt,
+          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring(
           "Using a logarithmically spaced radial grid in the "
           "part of Layer 1 enveloping Object A requires excising the interior "
@@ -956,7 +965,7 @@ void test_parse_errors() {
   CHECK_THROWS_WITH(
       domain::creators::BinaryCompactObject(
           Object{0.3, 0.8, 1.0, false, false},
-          Object{0.5, 0.8, -1.0, false, false},
+          Object{0.5, 0.8, -1.0, false, false}, std::nullopt,
           std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.2, 2_st, 6_st),
       Catch::Matchers::ContainsSubstring(
           "A filled object cannot be offset within its cube."));
@@ -964,7 +973,7 @@ void test_parse_errors() {
       domain::creators::BinaryCompactObject(
           Object{0.3, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.5, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
           std::vector<std::array<size_t, 3>>{}, 6_st, true,
           Distribution::Projective, std::vector<double>{}, Distribution::Linear,
           120.0, std::nullopt, create_outer_boundary_condition(),
@@ -974,10 +983,11 @@ void test_parse_errors() {
       domain::creators::BinaryCompactObject(
           Object{0.3, 0.8, 1.0, {{create_inner_boundary_condition()}}, false},
           Object{0.5, 0.8, -1.0, {{create_inner_boundary_condition()}}, false},
-          std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0, 2_st,
-          std::vector<std::array<size_t, 3>>{}, true, Distribution::Projective,
-          std::vector<double>{}, Distribution::Linear, 120.0, std::nullopt,
-          create_outer_boundary_condition(), Options::Context{false, {}, 1, 1}),
+          std::nullopt, std::array<double, 2>{{0.1, 0.2}}, 25.5, 32.4, 1.0,
+          2_st, std::vector<std::array<size_t, 3>>{}, true,
+          Distribution::Projective, std::vector<double>{}, Distribution::Linear,
+          120.0, std::nullopt, create_outer_boundary_condition(),
+          Options::Context{false, {}, 1, 1}),
       Catch::Matchers::ContainsSubstring("Invalid 'InitialGridPoints'"));
   // Note: the boundary condition-related parse errors are checked in the
   // test_connectivity function.
@@ -1005,6 +1015,7 @@ void test_kerr_horizon_conforming() {
   domain::creators::BinaryCompactObject domain_creator{
       Object{inner_radius_A, 4., x_pos_A, true, true},
       Object{inner_radius_B, 4., x_pos_B, true, true},
+      std::nullopt,
       std::array<double, 2>{{0.1, 0.2}},
       40.,
       200.,
