@@ -177,6 +177,7 @@ Observers:
 
 Amr:
   Criteria:
+  EnableInBlocks: All
   Policies:
     EnforceTwoToOneBalanceInNormalDirection: true
     Isotropy: Anisotropic

@@ -10,6 +10,8 @@
 #include <unordered_set>
 
 #include "DataStructures/DataBox/Tag.hpp"
+#include "Domain/Creators/OptionTags.hpp"
+#include "Domain/Structure/BlockGroups.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
 #include "IO/Observer/Tags.hpp"
@@ -38,6 +40,19 @@ struct MaxCoarseLevels {
   using group = AmrGroup;
 };
 
+struct All {};
+
+struct AmrBlocks {
+  static std::string name() { return "EnableInBlocks"; }
+  using type = Options::Auto<std::vector<std::string>, All>;
+  static constexpr Options::String help =
+      "Blocks in which AMR is enabled. Note that blocks that do not have AMR "
+      "enabled can still be refined to satisfy 2:1 balance. When this happens, "
+      "they won't coarsen back since 'do nothing' has higher priority than "
+      "coarsening. This behavior can be changed if needed.";
+  using group = AmrGroup;
+};
+
 }  // namespace amr::OptionTags
 
 /// AMR tags
@@ -51,6 +66,34 @@ struct MaxCoarseLevels : db::SimpleTag {
   static constexpr bool pass_metavariables = false;
   using option_tags = tmpl::list<OptionTags::MaxCoarseLevels>;
   static type create_from_options(const type value) { return value; };
+};
+
+/// The set of block IDs in which AMR is enabled. If `std::nullopt`, AMR is
+/// enabled in all blocks.
+template <size_t Dim>
+struct AmrBlocks : db::SimpleTag {
+  using type = std::optional<std::unordered_set<size_t>>;
+  static constexpr bool pass_metavariables = false;
+  using option_tags = tmpl::list<OptionTags::AmrBlocks,
+                                 ::domain::OptionTags::DomainCreator<Dim>>;
+  static type create_from_options(
+      const std::optional<std::vector<std::string>>& block_names,
+      const std::unique_ptr<::DomainCreator<Dim>>& domain_creator) {
+    if (not block_names.has_value()) {
+      return std::nullopt;
+    }
+    // Resolve block names and IDs
+    const auto all_block_names = domain_creator->block_names();
+    std::unordered_set<size_t> result{};
+    for (const auto& name : domain::expand_block_groups_to_block_names(
+             block_names.value(), all_block_names,
+             domain_creator->block_groups())) {
+      result.insert(static_cast<size_t>(std::distance(
+          all_block_names.begin(),
+          std::find(all_block_names.begin(), all_block_names.end(), name))));
+    }
+    return result;
+  };
 };
 
 /// All element IDs grouped by grid index are stored in this tag. The element
