@@ -145,16 +145,31 @@ class EvolveGhBinaryBlackHole(EvolutionStatus):
         # Constraints
         st.subheader("Constraints")
 
-        def get_constraints_data(reductions_file):
-            with h5py.File(reductions_file, "r") as open_h5file:
-                return to_dataframe(open_h5file["Norms.dat"]).set_index("Time")
+        def get_constraints_data(reduction_files):
+            for reductions_file in reduction_files:
+                with h5py.File(reductions_file, "r") as open_h5file:
+                    dfs = []
+                    if "Norms.dat" in open_h5file:
+                        dfs.append(
+                            to_dataframe(open_h5file["Norms.dat"])
+                            .set_index("Time")
+                            .filter(like="Constraint")
+                            # Skip t=0 (identically zero for some constraints)
+                            .iloc[1:]
+                        )
+                    if "ConstraintEnergy.dat" in open_h5file:
+                        dfs.append(
+                            to_dataframe(open_h5file["ConstraintEnergy.dat"])
+                            .set_index("Time")
+                            .filter(like="Constraint")
+                        )
+                    if dfs:
+                        yield pd.concat(dfs, axis=1)
 
-        constraints = pd.concat(map(get_constraints_data, reduction_files))
+        constraints = pd.concat(get_constraints_data(reduction_files))
         constraints.sort_index(inplace=True)
-        constraints = constraints[
-            [col for col in constraints.columns if "Constraint" in col]
-        ]
-        fig = px.line(constraints.iloc[1:], log_y=True)
+        fig = px.line(constraints, log_y=True)
+        fig.update_traces(connectgaps=True)
         fig.update_layout(xaxis_title="Time [M]", legend=legend_layout)
         fig.update_yaxes(exponentformat="e", title=None)
         st.plotly_chart(fig)
