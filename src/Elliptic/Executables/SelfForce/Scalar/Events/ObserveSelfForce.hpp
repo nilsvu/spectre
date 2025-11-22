@@ -64,7 +64,7 @@ namespace ScalarSelfForce::Events {
  *   F_r^m &= \partial_r (\Psi_m^R / r) = \frac{1}{r \alpha}
  *     \partial_{r_*} \Psi_m^R - \frac{1}{r^2} \Psi_m^R \\
  *   F_\theta^m &= \partial_\theta (\Psi_m^R / r) = -\frac{1}{r}
- *     \partial_{\cos\theta} \Psi_m
+ *     \partial_{\cos\theta} \Psi_m^R
  * \end{align}
  * with $\alpha = 1 - 2 M r / (r^2 + a^2)$. For modes $m > 0$ the self-force
  * includes an additional factor of 2 and a complex rotation by
