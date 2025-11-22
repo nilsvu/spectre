@@ -214,6 +214,8 @@ EventsAndTriggersAtIterations:
             - Gamma
             - SingularField
             - BoyerLindquistRadius
+            - BoostFunction
+            - BoostFunctionDeriv
           BlocksToObserve: All
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Double

@@ -226,8 +226,8 @@ struct InitializeEffectiveSource : tt::ConformsTo<::amr::protocols::Projector> {
       const auto vars_on_mortar = circular_orbit.variables(
           mortar_inertial_coords, analytic_tags_list{});
       const auto background_on_mortar = circular_orbit.variables(
-          mortar_inertial_coords,
-          tmpl::list<Tags::Alpha, Tags::Beta, Tags::Gamma>{});
+          mortar_inertial_coords, typename ScalarSelfForce::AnalyticData::
+                                      CircularOrbit::background_tags{});
       auto& singular_vars_on_mortar = (*singular_vars_on_mortars)[mortar_id];
       singular_vars_on_mortar.initialize(
           mortar_inertial_coords.begin()->size());

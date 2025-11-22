@@ -73,7 +73,9 @@ struct FirstOrderSystem
   using primal_fluxes =
       tmpl::list<::Tags::Flux<Tags::MMode, tmpl::size_t<2>, Frame::Inertial>>;
 
-  using background_fields = tmpl::list<Tags::Alpha, Tags::Beta, Tags::Gamma>;
+  using background_fields =
+      tmpl::list<Tags::Alpha, Tags::Beta, Tags::Gamma, Tags::BoostFunction,
+                 Tags::BoostFunctionDeriv>;
   using inv_metric_tag = void;
 
   using fluxes_computer = Fluxes;

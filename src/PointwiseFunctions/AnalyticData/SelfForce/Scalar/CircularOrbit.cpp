@@ -24,15 +24,18 @@
 namespace ScalarSelfForce::AnalyticData {
 
 namespace {
+template <size_t Order>
 std::pair<DataVector, DataVector> boost_function_and_deriv(
     const DataVector& r_star, const std::array<double, 4>& transition_points) {
   return {
-      smoothstep<1>(transition_points[0], transition_points[1], r_star) +
-          smoothstep<1>(transition_points[2], transition_points[3], r_star) -
+      smoothstep<Order>(transition_points[0], transition_points[1], r_star) +
+          smoothstep<Order>(transition_points[2], transition_points[3],
+                            r_star) -
           1.0,
-      smoothstep_deriv<1>(transition_points[0], transition_points[1], r_star) +
-          smoothstep_deriv<1>(transition_points[2], transition_points[3],
-                              r_star)};
+      smoothstep_deriv<Order>(transition_points[0], transition_points[1],
+                              r_star) +
+          smoothstep_deriv<Order>(transition_points[2], transition_points[3],
+                                  r_star)};
 }
 }  // namespace
 
@@ -62,10 +65,9 @@ tnsr::I<double, 2> CircularOrbit::puncture_position() const {
 }
 
 // Background
-tuples::TaggedTuple<Tags::Alpha, Tags::Beta, Tags::Gamma>
-CircularOrbit::variables(
-    const tnsr::I<DataVector, 2>& x,
-    tmpl::list<Tags::Alpha, Tags::Beta, Tags::Gamma> /*meta*/) const {
+tuples::tagged_tuple_from_typelist<typename CircularOrbit::background_tags>
+CircularOrbit::variables(const tnsr::I<DataVector, 2>& x,
+                         background_tags /*meta*/) const {
   const double a = black_hole_spin_ * black_hole_mass_;
   const double M = black_hole_mass_;
   const double r_plus = M * (1. + sqrt(1. - square(black_hole_spin_)));
@@ -84,7 +86,7 @@ CircularOrbit::variables(
   const DataVector sin_theta_squared = 1. - square(cos_theta);
   const DataVector sigma_squared =
       r_sq_plus_a_sq_sq - square(a) * delta * sin_theta_squared;
-  tuples::TaggedTuple<Tags::Alpha, Tags::Beta, Tags::Gamma> result{};
+  tuples::tagged_tuple_from_typelist<background_tags> result{};
   auto& alpha = get<Tags::Alpha>(result);
   auto& beta = get<Tags::Beta>(result);
   auto& gamma = get<Tags::Gamma>(result);
@@ -103,12 +105,19 @@ CircularOrbit::variables(
   get(alpha) *= sin_theta_squared;
   // Hyperboloidal slicing
   if (hyperboloidal_slicing_transitions_.has_value()) {
-    const auto [H, dH] = boost_function_and_deriv(
+    const auto [H, dH] = boost_function_and_deriv<2>(
         r_star, hyperboloidal_slicing_transitions_.value());
+    get(get<Tags::BoostFunction>(result)) = H;
+    get(get<Tags::BoostFunctionDeriv>(result)) = dH;
     const double k = m_mode_number_ * omega;
     get(beta) += std::complex<double>(0., -k) * dH + square(k) * square(H) +
                  std::complex<double>(0., k) * get<0>(gamma) * H;
     get<0>(gamma) += std::complex<double>(0., -2. * k) * H;
+  } else {
+    get(get<Tags::BoostFunction>(result)) =
+        ComplexDataVector{r_star.size(), 0.};
+    get(get<Tags::BoostFunctionDeriv>(result)) =
+        ComplexDataVector{r_star.size(), 0.};
   }
   return result;
 }

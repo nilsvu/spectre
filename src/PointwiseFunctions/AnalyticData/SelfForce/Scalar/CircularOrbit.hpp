@@ -12,6 +12,7 @@
 
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
+#include "Elliptic/Systems/SelfForce/Scalar/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/SelfForce/Scalar/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "NumericalAlgorithms/Spectral/Mesh.hpp"
@@ -192,7 +193,8 @@ class CircularOrbit : public elliptic::analytic_data::Background,
     return hyperboloidal_slicing_transitions_;
   }
 
-  using background_tags = tmpl::list<Tags::Alpha, Tags::Beta, Tags::Gamma>;
+  using background_tags =
+      typename ScalarSelfForce::FirstOrderSystem::background_fields;
   using source_tags = tmpl::list<
       ::Tags::FixedSource<Tags::MMode>, Tags::SingularField,
       ::Tags::deriv<Tags::SingularField, tmpl::size_t<2>, Frame::Inertial>,
