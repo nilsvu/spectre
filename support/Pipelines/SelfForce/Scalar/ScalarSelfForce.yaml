@@ -87,12 +87,22 @@ DomainCreator:
         Refinement: [ {{ L + 1 }}, 0 ]
     BoundaryConditions: &boundary_conditions
       # Radial boundary conditions
-      - Sommerfeld:
-          BlackHoleMass: *bh_mass
-          BlackHoleSpin: *bh_spin
-          OrbitalRadius: *orbital_radius
-          MModeNumber: *m_mode_number
-          HyperboloidalSlicing: True
+      - Lower:
+          Sommerfeld:
+            BlackHoleMass: *bh_mass
+            BlackHoleSpin: *bh_spin
+            OrbitalRadius: *orbital_radius
+            MModeNumber: *m_mode_number
+            HyperboloidalSlicing: False
+            Order: 1
+        Upper:
+          Sommerfeld:
+            BlackHoleMass: *bh_mass
+            BlackHoleSpin: *bh_spin
+            OrbitalRadius: *orbital_radius
+            MModeNumber: *m_mode_number
+            HyperboloidalSlicing: False
+            Order: 2
       # Angular boundary conditions
       - Angular:
           MModeNumber: *m_mode_number
