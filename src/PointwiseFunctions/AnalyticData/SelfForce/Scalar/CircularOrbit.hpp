@@ -31,6 +31,7 @@ namespace ScalarSelfForce::AnalyticData {
  * This class implements Eq. (2.9) in \cite Osburn:2022bby . It does so by
  * defining the background fields $\alpha$, $\beta$, and $\gamma_i$ in the
  * general form of the equations
+ *
  * \begin{equation}
  * -\partial_i F^i + \beta \Psi_m + \gamma_i F^i = S_m
  * \text{.}
@@ -40,20 +41,41 @@ namespace ScalarSelfForce::AnalyticData {
  * F^i = \{\partial_{r_\star}, \alpha \partial_{\cos\theta}\} \Psi_m
  * \text{.}
  * \end{equation}
- * Note that we use $\cos\theta$ as angular coordinate but \cite Osburn:2022bby
- * uses $\theta$. We also multiply Eq. (2.9) by the factor $\Sigma^2 / (r^2 +
- * a^2)^2$ so we can easily write it in first-order flux form. The resulting
- * factors in the equation are:
+
+ * We make the following changes compared to \cite Osburn:2022bby :
  *
+ * - Multiply by the factor $\Sigma^2 / (r^2 + a^2)^2$ so that we can easily
+ *   write the equations in first-order flux form.
+ * - Use $\cos\theta$ as angular coordinate instead of $\theta$. This avoids
+ *   the $\cot\theta$ term by rewriting the angular derivatives as:
+ *   $$\partial_\theta^2+\cot\theta\partial_\theta =
+ *   \partial_{\cos\theta}\sin^2\theta\partial_{\cos\theta}$$
+ * - Decompose $\Psi_m = \sin(\theta)^m u_m(r_\star, \theta)$. This avoids the
+ *   $m^2/\sin^2\theta$ term by factoring out the singular behavior at the
+ *   poles. The equations transform as:
+ *   $$-\partial_{\cos\theta}\sin^2\theta\partial_{\cos\theta} \Psi_m +
+ *   \frac{m^2}{\sin^2\theta}\Psi_m = \sin(\theta)^m \left( m(m+1)
+ *   + 2m \cos\theta \partial_{\cos\theta} -
+ *   - \partial_{\cos\theta}\sin^2\theta\partial_{\cos\theta} u_m \right)$$
+ *   We divide by $\sin(\theta)^m$ to get the equations for $u_m$.
+ *
+ * Written this way, the equations are regular at the poles and converge
+ * exponentially. We also don't have to apply angular boundary conditions
+ * because regularity at the poles is automatically enforced by the
+ * $\sin^2\theta$ factor in the flux.
+ *
+ * The resulting factors in the equation are:
  * \begin{align}
  * &\alpha = \frac{\Delta}{(r^2 + a^2)^2} \sin^2\theta \\
  * &\beta = \left(-m^2\Omega^2 \Sigma^2 + 4a m^2 \Omega M r + \Delta \left[
- *   \frac{m^2}{\sin^2\theta} + \frac{2M}{r}(1-\frac{a^2}{Mr}) + \frac{2iam}{r}
+ *   m (m + 1) + \frac{2M}{r}(1-\frac{a^2}{Mr}) + \frac{2iam}{r}
  *   \right]\right) \frac{1}{(r^2 + a^2)^2} \\
  * &\gamma_{r_\star} = -\frac{2iam}{r^2+a^2} + \frac{2a^2}{r}
  *   \frac{\alpha}{\sin^2\theta} \\
- * &\gamma_{\cos\theta} = 0
+ * &\gamma_{\cos\theta} = 2 m \frac{\cos\theta}{\sin^2\theta}
  * \end{align}
+ * Note that the factor $1/\sin^2\theta$ cancels when multiplied with
+ * $F^{\cos\theta}$, so the equations for $u_m$ are regular at the poles.
  *
  * This class also provides the effective source $S_m^\mathrm{eff} = \Delta_m
  * \Psi_m^P$ and the singular field $\Psi_m^P$ in the regularized region (see
@@ -71,6 +93,8 @@ namespace ScalarSelfForce::AnalyticData {
  * \end{align}
  * where $\Delta\phi = \frac{a}{r_+ - r_-} \ln(\frac{r-r_+}{r-r_-})$ (Eq. (2.7)
  * in \cite Osburn:2022bby ).
+ * We also divide by $\sin(\theta)^m$ to account for the change of variable from
+ * $\Psi_m$ to $u_m$ described above.
  *
  * \par Hyperboloidal slicing
  * Transforming to a hyperboloidal time coordinate $s = t - h(r_*)$ can simplify

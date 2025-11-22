@@ -155,6 +155,10 @@ class ObserveSelfForce : public Event {
       const double delta_phi =
           m_mode * a / (r_plus - r_minus) * log((r0 - r_plus) / (r0 - r_minus));
       const double delta_phi_dr = m_mode * a / (r0 - r_minus) / (r0 - r_plus);
+      if (not equal_within_roundoff(puncture_position[1], 0.0)) {
+        ERROR("Assuming puncture is at cos(theta) = 0, but puncture is at "
+              << puncture_position[1]);
+      }
       get<0>(self_force) +=
           std::complex<double>{0., delta_phi_dr / r0} * get(field_at_puncture);
       const std::complex<double> rotation =

@@ -18,11 +18,14 @@ void Angular::apply(
     const gsl::not_null<Scalar<ComplexDataVector>*> field,
     const gsl::not_null<Scalar<ComplexDataVector>*> n_dot_field_gradient,
     const tnsr::i<ComplexDataVector, 2>& /*deriv_field*/) const {
-  if (m_mode_number_ == 0) {
-    get(*n_dot_field_gradient) = 0.;
-  } else {
-    get(*field) = 0.;
-  }
+  // for (size_t i = 0; i < get(*field).size(); ++i) {
+  //   if (not equal_within_roundoff(get(*n_dot_field_gradient)[i], 0.0)) {
+  //     ERROR(
+  //         "Angular boundary condition should only be applied at poles, "
+  //         "where the flux through the boundary is zero, but it is "
+  //         << get(*n_dot_field_gradient)[i]);
+  //   }
+  // }
 }
 
 void Angular::apply_linearized(

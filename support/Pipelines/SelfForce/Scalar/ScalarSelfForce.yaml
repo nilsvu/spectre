@@ -100,22 +100,21 @@ DomainCreator:
 Amr:
   Verbosity: Quiet
   Criteria:
-    # - IncreaseResolution
-    # - RefineAtPuncture
-    # - RefineAtBoundaryY
-    - TruncationError:
-        VariablesToMonitor: [MMode]
-        AbsoluteTarget: 1.e-8
-        RelativeTarget: 1.e-8
-    - Persson:
-        VariablesToMonitor: [MMode]
-        NumHighestModes: 1
-        Exponent: 4.
-        AbsoluteTolerance: 0.
-        CoarseningFactor: 0.1
+    - IncreaseResolution
+    - RefineAtPuncture
+    # - TruncationError:
+    #     VariablesToMonitor: [MMode]
+    #     AbsoluteTarget: 1.e-8
+    #     RelativeTarget: 1.e-8
+    # - Persson:
+    #     VariablesToMonitor: [MMode]
+    #     NumHighestModes: 1
+    #     Exponent: 4.
+    #     AbsoluteTolerance: 0.
+    #     CoarseningFactor: 0.1
   Policies:
     Isotropy: Anisotropic
-    EnforceTwoToOneBalanceInNormalDirection: False
+    EnforceTwoToOneBalanceInNormalDirection: True
     Limits:
       NumGridPoints: Auto
       RefinementLevel: Auto
@@ -168,7 +167,7 @@ LinearSolver:
   SchwarzSmoother:
     Iterations: 2
     MaxOverlap: Auto
-    Verbosity: Quiet
+    Verbosity: Silent
     SubdomainSolver:
       ExplicitInverse:
         WriteMatrixToFile: None
@@ -222,7 +221,7 @@ EventsAndTriggersAtIterations:
 
 BuildMatrix:
   MatrixSubfileName: None
-  Verbosity: Verbose
+  Verbosity: Silent
   EnableDirectSolve: True
 
 Parallelization:

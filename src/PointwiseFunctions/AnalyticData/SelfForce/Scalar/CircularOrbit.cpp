@@ -9,6 +9,7 @@
 #include <gsl/gsl_errno.h>
 #include <utility>
 
+#include "DataStructures/Blaze/IntegerPow.hpp"
 #include "DataStructures/ComplexDataVector.hpp"
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/DataVector.hpp"
@@ -92,13 +93,13 @@ CircularOrbit::variables(
       1. / r * std::complex<double>(0., 2. * a * m_mode_number_);
   get(beta) = (-square(m_mode_number_ * omega) * sigma_squared +
                4. * a * square(m_mode_number_) * omega * M * r +
-               delta * (square(m_mode_number_) / sin_theta_squared +
+               delta * (m_mode_number_ * (m_mode_number_ + 1) +
                         2. * M / r * (1. - square(a) / M / r) + temp1)) /
               r_sq_plus_a_sq_sq;
   get<0>(gamma) =
       -1. / r_sq_plus_a_sq * std::complex<double>(0., 2. * a * m_mode_number_) +
       2. * square(a) * get(alpha) / r;
-  get<1>(gamma) = ComplexDataVector{cos_theta.size(), 0.};
+  get<1>(gamma) = 2. * m_mode_number_ * cos_theta / sin_theta_squared;
   get(alpha) *= sin_theta_squared;
   // Hyperboloidal slicing
   if (hyperboloidal_slicing_transitions_.has_value()) {
@@ -174,6 +175,8 @@ CircularOrbit::variables(
   const DataVector delta = r_minus_r_plus * (r - r_minus);
   const DataVector r_sq_plus_a_sq = square(r) + square(a);
   const DataVector r_sq_plus_a_sq_sq = square(r_sq_plus_a_sq);
+  const DataVector sin_theta = sqrt(1. - square(cos_theta));
+  const DataVector sin_theta_pow_m = integer_pow(sin_theta, m_mode_number_);
   const DataVector delta_phi = m_mode_number_ * a / (r_plus - r_minus) *
                                log((r - r_plus) / (r - r_minus));
   const ComplexDataVector rotation =
@@ -221,16 +224,19 @@ CircularOrbit::variables(
   get(effective_source) *= rotation * 0.5 * r / M_PI;
   // Factor Delta * (r^2 + a^2 cos^2(theta)) / Sigma^2
   // Factor Sigma^2 / (r^2 + a^2)^2 from first-order formulation
-  get(effective_source) *=
-      delta * (square(r) + square(a * cos_theta)) / r_sq_plus_a_sq_sq;
-  get(singular_field) *= rotation * 0.5 * r / M_PI;
-  get<0>(deriv_singular_field) *= rotation * 0.5 * r / M_PI;
+  // Factor 1/sin(theta)^m from change of variables
+  get(effective_source) *= delta * (square(r) + square(a * cos_theta)) /
+                           r_sq_plus_a_sq_sq / sin_theta_pow_m;
+  get(singular_field) *= rotation * 0.5 * r / M_PI / sin_theta_pow_m;
+  get<0>(deriv_singular_field) *= rotation * 0.5 * r / M_PI / sin_theta_pow_m;
   get<0>(deriv_singular_field) +=
       get(singular_field) / r - std::complex<double>(0., a * m_mode_number_) /
                                     delta * get(singular_field);
   get<0>(deriv_singular_field) *= delta / r_sq_plus_a_sq;
-  get<1>(deriv_singular_field) *= rotation * 0.5 * r / M_PI;
-  get<1>(deriv_singular_field) /= -sqrt(1. - square(cos_theta));
+  get<1>(deriv_singular_field) *= rotation * 0.5 * r / M_PI / sin_theta_pow_m;
+  get<1>(deriv_singular_field) /= -sin_theta;
+  get<1>(deriv_singular_field) +=
+      m_mode_number_ * cos_theta / square(sin_theta) * get(singular_field);
   return result;
 }
 
