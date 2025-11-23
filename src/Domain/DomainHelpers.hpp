@@ -13,6 +13,7 @@
 #include <memory>
 #include <vector>
 
+#include "CoordinateMaps/Distribution.hpp"
 #include "DataStructures/Index.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Domain/CoordinateMaps/Distribution.hpp"
@@ -382,10 +383,12 @@ template <typename TargetFrame, size_t VolumeDim>
 auto maps_for_rectilinear_domains(
     const Index<VolumeDim>& domain_extents,
     const std::array<std::vector<double>, VolumeDim>& block_demarcations,
-    const std::vector<Index<VolumeDim>>& block_indices_to_exclude = {},
-    const std::vector<OrientationMap<VolumeDim>>& orientations_of_all_blocks =
-        {},
-    bool use_equiangular_map = false)
+    const std::vector<Index<VolumeDim>>& block_indices_to_exclude,
+    const std::vector<OrientationMap<VolumeDim>>& orientations_of_all_blocks,
+    const std::array<std::vector<domain::CoordinateMaps::Distribution>,
+                     VolumeDim>& distributions,
+    const std::array<std::vector<std::optional<double>>, VolumeDim>&
+        singularity_positions)
     -> std::vector<std::unique_ptr<domain::CoordinateMapBase<
         Frame::BlockLogical, TargetFrame, VolumeDim>>>;
 
@@ -418,7 +421,10 @@ Domain<VolumeDim> rectilinear_domain(
     const std::array<bool, VolumeDim>& dimension_is_periodic =
         make_array<VolumeDim>(false),
     const std::vector<PairOfFaces>& identifications = {},
-    bool use_equiangular_map = false);
+    const std::array<std::vector<domain::CoordinateMaps::Distribution>,
+                     VolumeDim>& distributions = {},
+    const std::array<std::vector<std::optional<double>>, VolumeDim>&
+        singularity_positions = {});
 
 /// \ingroup ComputationalDomainGroup
 /// Iterates over the corners of a VolumeDim-dimensional cube.
