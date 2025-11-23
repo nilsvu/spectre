@@ -38,7 +38,15 @@ void Sommerfeld::apply(
     const tnsr::I<DataVector, 2>& /*x*/, const Scalar<ComplexDataVector>& beta,
     const tnsr::i<ComplexDataVector, 2>& gamma) const {
   if (hyperboloidal_slicing_) {
-    get(*n_dot_field_gradient) = 0.;
+    if (order_ == 1) {
+      get(*n_dot_field_gradient) = 0.;
+    } else if (order_ == 2) {
+      get(*n_dot_field_gradient) = -get(beta) / get<0>(gamma) * get(*field);
+    } else {
+      ERROR("Order " << order_
+                     << " not implemented for Sommerfeld boundary condition "
+                        "with hyperboloidal slicing.");
+    }
     return;
   }
   const double a = black_hole_spin_ * black_hole_mass_;
