@@ -105,14 +105,14 @@ CircularOrbit::variables(const tnsr::I<DataVector, 2>& x,
   get(alpha) *= sin_theta_squared;
   // Hyperboloidal slicing
   if (hyperboloidal_slicing_transitions_.has_value()) {
-    const auto [H, dH] = boost_function_and_deriv<2>(
+    const auto [H, dH] = boost_function_and_deriv<1>(
         r_star, hyperboloidal_slicing_transitions_.value());
     get(get<Tags::BoostFunction>(result)) = H;
     get(get<Tags::BoostFunctionDeriv>(result)) = dH;
     const double k = m_mode_number_ * omega;
     get(beta) += std::complex<double>(0., -k) * dH + square(k) * square(H) +
                  std::complex<double>(0., k) * get<0>(gamma) * H;
-    get<0>(gamma) += std::complex<double>(0., -2. * k) * H;
+    get<0>(gamma) -= std::complex<double>(0., 2. * k) * H;
   } else {
     get(get<Tags::BoostFunction>(result)) =
         ComplexDataVector{r_star.size(), 0.};
