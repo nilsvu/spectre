@@ -166,8 +166,12 @@ CircularOrbit::variables(
   }
   const auto& r_star = get<0>(x);
   if (hyperboloidal_slicing_transitions_.has_value() and
-      (min(r_star) < (*hyperboloidal_slicing_transitions_)[1] or
-       max(r_star) > (*hyperboloidal_slicing_transitions_)[2])) {
+      not((min(r_star) >= (*hyperboloidal_slicing_transitions_)[1] or
+           equal_within_roundoff(min(r_star),
+                                 (*hyperboloidal_slicing_transitions_)[1])) and
+          (max(r_star) <= (*hyperboloidal_slicing_transitions_)[2] or
+           equal_within_roundoff(max(r_star),
+                                 (*hyperboloidal_slicing_transitions_)[2])))) {
     ERROR(
         "The effective source is only valid where no hyperboloidal slicing is "
         "applied, which is in the r_* range ["
