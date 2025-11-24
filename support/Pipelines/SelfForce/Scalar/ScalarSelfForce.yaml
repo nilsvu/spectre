@@ -33,7 +33,7 @@ Background: &background
       - {{ puncture_position - worldtube_radius - 25 }}
       - {{ puncture_position - worldtube_radius }}
       - {{ puncture_position + worldtube_radius }}
-      - {{ puncture_position + worldtube_radius + 50 }}
+      - {{ puncture_position + worldtube_radius + 25 }}
 
 InitialGuess: *background
 
@@ -45,20 +45,21 @@ DomainCreator:
     BlockBounds:
       # rstar
       - - {{ inner_radius }}
+        - {{ puncture_position - worldtube_radius - 25 }}
         - {{ puncture_position - worldtube_radius }}
         - {{ puncture_position + worldtube_radius }}
-        - {{ puncture_position + worldtube_radius + 50 }}
+        - {{ puncture_position + worldtube_radius + 25 }}
         - {{ outer_radius }}
       # cos(theta)
       - [-1., {{ -worldtube_dcostheta}} , {{ worldtube_dcostheta }}, 1.]
     Distributions:
       # rstar
-      - [Linear, Linear, Linear, Inverse]
+      - [Linear, Linear, Linear, Linear, Inverse]
       # cos(theta)
       - [Linear, Linear, Linear]
     SingularityPositions:
       # rstar
-      - [0., 0., 0., 0.]
+      - [0., 0., 0., 0., 0.]
       # cos(theta)
       - [0., 0., 0.]
     InitialGridPoints: [{{ P }}, {{ P }}]
@@ -69,41 +70,50 @@ DomainCreator:
       # bottom row
       - LowerCornerIndex: [0, 0] # bottom left
         UpperCornerIndex: [1, 1]
-        Refinement: [ {{ L }}, {{ L_theta }} ]
-      - LowerCornerIndex: [1, 0] # bottom middle
+        Refinement: [ {{ L - 1 }}, {{ L_theta }} ]
+      - LowerCornerIndex: [1, 0] # bottom transition left
         UpperCornerIndex: [2, 1]
-        Refinement: [ {{ L }}, {{ L_theta }} ]
-      - LowerCornerIndex: [2, 0] # bottom transition
+        Refinement: [ {{ L - 1 }}, {{ L_theta }} ]
+      - LowerCornerIndex: [2, 0] # bottom middle
         UpperCornerIndex: [3, 1]
         Refinement: [ {{ L }}, {{ L_theta }} ]
-      - LowerCornerIndex: [3, 0] # bottom right
+      - LowerCornerIndex: [3, 0] # bottom transition right
         UpperCornerIndex: [4, 1]
+        Refinement: [ {{ L - 1 }}, {{ L_theta }} ]
+      - LowerCornerIndex: [4, 0] # bottom right
+        UpperCornerIndex: [5, 1]
         Refinement: [ {{ L }}, {{ L_theta - 1 }} ]
       # middle row
       - LowerCornerIndex: [0, 1] # middle left
         UpperCornerIndex: [1, 2]
-        Refinement: [ {{ L }}, {{ L_theta }} ]
-      - LowerCornerIndex: [1, 1] # source region
+        Refinement: [ {{ L - 1 }}, {{ L_theta }} ]
+      - LowerCornerIndex: [1, 1] # middle transition left
         UpperCornerIndex: [2, 2]
-        Refinement: [ {{ L }}, {{ L_theta }} ]
-      - LowerCornerIndex: [2, 1] # middle transition
+        Refinement: [ {{ L - 1 }}, {{ L_theta }} ]
+      - LowerCornerIndex: [2, 1] # source region
         UpperCornerIndex: [3, 2]
         Refinement: [ {{ L }}, {{ L_theta }} ]
-      - LowerCornerIndex: [3, 1] # middle right
+      - LowerCornerIndex: [3, 1] # middle transition right
         UpperCornerIndex: [4, 2]
+        Refinement: [ {{ L - 1 }}, {{ L_theta }} ]
+      - LowerCornerIndex: [4, 1] # middle right
+        UpperCornerIndex: [5, 2]
         Refinement: [ {{ L }}, {{ L_theta - 1 }} ]
       # top row
       - LowerCornerIndex: [0, 2] # top left
         UpperCornerIndex: [1, 3]
-        Refinement: [ {{ L }}, {{ L_theta }} ]
-      - LowerCornerIndex: [1, 2] # top middle
+        Refinement: [ {{ L - 1 }}, {{ L_theta }} ]
+      - LowerCornerIndex: [1, 2] # top transition left
         UpperCornerIndex: [2, 3]
-        Refinement: [ {{ L }}, {{ L_theta }} ]
-      - LowerCornerIndex: [2, 2] # top transition
+        Refinement: [ {{ L - 1 }}, {{ L_theta }} ]
+      - LowerCornerIndex: [2, 2] # top middle
         UpperCornerIndex: [3, 3]
         Refinement: [ {{ L }}, {{ L_theta }} ]
-      - LowerCornerIndex: [3, 2] # top right
+      - LowerCornerIndex: [3, 2] # top transition right
         UpperCornerIndex: [4, 3]
+        Refinement: [ {{ L - 1 }}, {{ L_theta }} ]
+      - LowerCornerIndex: [4, 2] # top right
+        UpperCornerIndex: [5, 3]
         Refinement: [ {{ L }}, {{ L_theta - 1 }} ]
     BoundaryConditions: &boundary_conditions
       # Radial boundary conditions
