@@ -160,15 +160,17 @@ struct PrepareAndSendMortarData<
                          typename PrimalMortarFieldsTag::tags_list,
                          typename PrimalMortarFluxesTag::tags_list>;
   using BoundaryConditionsBase = typename System::boundary_conditions_base;
+  using DerivFieldsTag = db::add_tag_prefix<::Tags::deriv, PrimalFieldsTag,
+                                            tmpl::size_t<Dim>, Frame::Inertial>;
 
  public:
   // Request these tags be added to the DataBox. We
   // don't actually need to initialize them, because the
   // `PrimalFieldsTag` will be set by other actions before applying the operator
   // and the remaining tags hold output of the operator.
-  using simple_tags =
-      tmpl::list<TemporalIdTag, PrimalFieldsTag, PrimalFluxesTag,
-                 OperatorAppliedToFieldsTag, all_mortar_data_tag>;
+  using simple_tags = tmpl::list<TemporalIdTag, PrimalFieldsTag, DerivFieldsTag,
+                                 PrimalFluxesTag, OperatorAppliedToFieldsTag,
+                                 all_mortar_data_tag>;
   using compute_tags = tmpl::list<>;
   using const_global_cache_tags =
       tmpl::list<domain::Tags::ExternalBoundaryConditions<Dim>>;
@@ -183,8 +185,6 @@ struct PrepareAndSendMortarData<
       const ParallelComponent* const /*meta*/) {
     const auto& temporal_id = db::get<TemporalIdTag>(box);
     const auto& element = db::get<domain::Tags::Element<Dim>>(box);
-    const auto& mesh = db::get<domain::Tags::Mesh<Dim>>(box);
-    const size_t num_points = mesh.number_of_grid_points();
     const auto& mortar_meshes =
         db::get<::Tags::Mortars<domain::Tags::Mesh<Dim - 1>, Dim>>(box);
     const auto& boundary_conditions =
@@ -222,10 +222,13 @@ struct PrepareAndSendMortarData<
     // dealing with AMR resizing the mortars. When we keep the memory around,
     // its size has to be adjusted when the mesh changes during AMR.
     typename PrimalFluxesTag::type primal_fluxes;
+    typename DerivFieldsTag::type deriv_fields;
     typename all_mortar_data_tag::type all_mortar_data{};
-    db::mutate<PrimalFluxesTag>(
-        [&primal_fluxes](const auto local_primal_fluxes) {
+    db::mutate<PrimalFluxesTag, DerivFieldsTag>(
+        [&primal_fluxes, &deriv_fields](const auto local_primal_fluxes,
+                                        const auto local_deriv_fields) {
           primal_fluxes = std::move(*local_primal_fluxes);
+          deriv_fields = std::move(*local_deriv_fields);
         },
         make_not_null(&box));
 
@@ -234,10 +237,6 @@ struct PrepareAndSendMortarData<
     // These memory buffers will be discarded when the action returns so we
     // don't inflate the memory usage of the simulation when the element is
     // inactive.
-    Variables<db::wrap_tags_in<::Tags::deriv,
-                               typename PrimalFieldsTag::type::tags_list,
-                               tmpl::size_t<Dim>, Frame::Inertial>>
-        deriv_fields{num_points};
     elliptic::dg::prepare_mortar_data<System, Linearized>(
         make_not_null(&deriv_fields), make_not_null(&primal_fluxes),
         make_not_null(&all_mortar_data), db::get<PrimalFieldsTag>(box), element,
@@ -251,10 +250,12 @@ struct PrepareAndSendMortarData<
         std::forward_as_tuple(db::get<FluxesArgsTags>(box)...));
 
     // Move the mutated data back into the DataBox
-    db::mutate<PrimalFluxesTag, all_mortar_data_tag>(
-        [&primal_fluxes, &all_mortar_data](const auto local_primal_fluxes,
-                                           const auto local_all_mortar_data) {
+    db::mutate<PrimalFluxesTag, DerivFieldsTag, all_mortar_data_tag>(
+        [&primal_fluxes, &deriv_fields, &all_mortar_data](
+            const auto local_primal_fluxes, const auto local_deriv_fields,
+            const auto local_all_mortar_data) {
           *local_primal_fluxes = std::move(primal_fluxes);
+          *local_deriv_fields = std::move(deriv_fields);
           *local_all_mortar_data = std::move(all_mortar_data);
         },
         make_not_null(&box));
@@ -324,6 +325,8 @@ struct ReceiveMortarDataAndApplyOperator<
       MortarDataInboxTag<Dim, TemporalIdTag,
                          typename PrimalMortarFieldsTag::tags_list,
                          typename PrimalMortarFluxesTag::tags_list>;
+  using DerivFieldsTag = db::add_tag_prefix<::Tags::deriv, PrimalFieldsTag,
+                                            tmpl::size_t<Dim>, Frame::Inertial>;
 
  public:
   using const_global_cache_tags =
@@ -342,7 +345,7 @@ struct ReceiveMortarDataAndApplyOperator<
     const auto& temporal_id = get<TemporalIdTag>(box);
     const auto& element = get<domain::Tags::Element<Dim>>(box);
 
-    if (not ::dg::has_received_from_all_mortars<mortar_data_inbox_tag>(
+    if (not::dg::has_received_from_all_mortars<mortar_data_inbox_tag>(
             temporal_id, element, inboxes)) {
       return {Parallel::AlgorithmExecution::Retry, std::nullopt};
     }
@@ -387,7 +390,7 @@ struct ReceiveMortarDataAndApplyOperator<
           elliptic::dg::apply_operator<System, Linearized>(args...);
         },
         make_not_null(&box), db::get<PrimalFieldsTag>(box),
-        db::get<PrimalFluxesTag>(box), element,
+        db::get<DerivFieldsTag>(box), db::get<PrimalFluxesTag>(box), element,
         db::get<domain::Tags::Mesh<Dim>>(box),
         db::get<domain::Tags::InverseJacobian<Dim, Frame::ElementLogical,
                                               Frame::Inertial>>(box),
@@ -519,6 +522,8 @@ struct DgOperator {
 
  private:
   static constexpr size_t Dim = System::volume_dim;
+  using DerivVarsTag = db::add_tag_prefix<::Tags::deriv, PrimalFieldsTag,
+                                          tmpl::size_t<Dim>, Frame::Inertial>;
 
  public:
   using apply_actions =
@@ -532,7 +537,7 @@ struct DgOperator {
                      PrimalMortarFieldsTag, PrimalMortarFluxesTag>>;
   using amr_projectors = tmpl::list<
       ::amr::projectors::DefaultInitialize<
-          PrimalFluxesTag, OperatorAppliedToFieldsTag,
+          DerivVarsTag, PrimalFluxesTag, OperatorAppliedToFieldsTag,
           ::Tags::Mortars<elliptic::dg::Tags::MortarData<
                               typename temporal_id_tag::type,
                               typename PrimalMortarFieldsTag::tags_list,

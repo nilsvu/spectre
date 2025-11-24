@@ -44,7 +44,7 @@ void add_sources(gsl::not_null<Scalar<ComplexDataVector>*> source,
                  const Scalar<ComplexDataVector>& beta,
                  const tnsr::i<ComplexDataVector, 2>& gamma,
                  const Scalar<ComplexDataVector>& field,
-                 const tnsr::I<ComplexDataVector, 2>& flux);
+                 const tnsr::i<ComplexDataVector, 2>& field_gradient);
 
 /// Fluxes $F^i$ for the scalar self-force system.
 /// \see ScalarSelfForce::FirstOrderSystem
@@ -74,6 +74,7 @@ struct Sources {
                     const Scalar<ComplexDataVector>& beta,
                     const tnsr::i<ComplexDataVector, 2>& gamma,
                     const Scalar<ComplexDataVector>& field,
+                    const tnsr::i<ComplexDataVector, 2>& field_gradient,
                     const tnsr::I<ComplexDataVector, 2>& flux);
 };
 

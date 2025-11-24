@@ -101,7 +101,7 @@ CircularOrbit::variables(const tnsr::I<DataVector, 2>& x,
   get<0>(gamma) =
       -1. / r_sq_plus_a_sq * std::complex<double>(0., 2. * a * m_mode_number_) +
       2. * square(a) * get(alpha) / r;
-  get<1>(gamma) = 2. * m_mode_number_ * cos_theta / sin_theta_squared;
+  get<1>(gamma) = 2. * m_mode_number_ * cos_theta * get(alpha);
   get(alpha) *= sin_theta_squared;
   // Hyperboloidal slicing
   if (hyperboloidal_slicing_transitions_.has_value()) {
