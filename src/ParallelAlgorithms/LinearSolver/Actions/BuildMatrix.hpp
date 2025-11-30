@@ -127,6 +127,17 @@ struct Matrix : db::SimpleTag {
   using type = blaze::CompressedMatrix<ValueType>;
 };
 
+template <typename InverseMatrixType>
+struct InverseMatrix : db::SimpleTag {
+  struct type {
+    std::optional<InverseMatrixType> inv_matrix;
+    void pup(PUP::er& /*p*/) {
+      // Don't pup the inv_matrix, it will be rebuilt when needed (should never
+      // happen)
+    }
+  };
+};
+
 /// Option for enabling direct solve of the linear problem.
 struct EnableDirectSolve : db::SimpleTag {
   using type = bool;
@@ -527,14 +538,34 @@ struct StoreMatrixColumn {
   }
 };
 
+template <typename BuildMatrixMetavars>
+struct InitializeSingleton {
+  using value_type = typename BuildMatrixMetavars::value_type;
+  using InverseMatrixType = Eigen::SparseLU<Eigen::SparseMatrix<value_type>>;
+  using simple_tags = tmpl::list<Tags::InverseMatrix<InverseMatrixType>>;
+
+  template <typename DbTags, typename... InboxTags, typename Metavariables,
+            typename ArrayIndex, typename ActionList,
+            typename ParallelComponent>
+  static Parallel::iterable_action_return_t apply(
+      db::DataBox<DbTags>& /*box*/,
+      const tuples::TaggedTuple<InboxTags...>& /*inboxes*/,
+      Parallel::GlobalCache<Metavariables>& /*cache*/,
+      const ArrayIndex& /*array_index*/, const ActionList /*meta*/,
+      const ParallelComponent* const /*meta*/) {
+    return {Parallel::AlgorithmExecution::Pause, std::nullopt};
+  }
+};
+
 template <typename Metavariables, typename BuildMatrixMetavars>
 struct BuildMatrixSingleton {
   using chare_type = Parallel::Algorithms::Singleton;
   static constexpr bool checkpoint_data = true;
   using const_global_cache_tags = tmpl::list<>;
   using metavariables = Metavariables;
-  using phase_dependent_action_list = tmpl::list<
-      Parallel::PhaseActions<Parallel::Phase::Initialization, tmpl::list<>>>;
+  using phase_dependent_action_list = tmpl::list<Parallel::PhaseActions<
+      Parallel::Phase::Initialization,
+      tmpl::list<InitializeSingleton<BuildMatrixMetavars>>>>;
   using simple_tags_from_options = Parallel::get_simple_tags_from_options<
       Parallel::get_initialization_actions_list<phase_dependent_action_list>>;
 
@@ -605,8 +636,11 @@ struct InvertMatrix {
   using FixedSourcesTag = typename BuildMatrixMetavars::fixed_sources_tag;
   using ReductionType = std::pair<blaze::CompressedMatrix<value_type>,
                                   typename FixedSourcesTag::type>;
+  using InvMatrixType = Eigen::SparseLU<Eigen::SparseMatrix<value_type>>;
 
  public:
+  using simple_tags = tmpl::list<Tags::InverseMatrix<InvMatrixType>>;
+
   template <typename ParallelComponent, typename DbTagsList,
             typename Metavariables, typename ArrayIndex, size_t Dim>
   static void apply(db::DataBox<DbTagsList>& box,
@@ -614,48 +648,72 @@ struct InvertMatrix {
                     const ArrayIndex& /*array_index*/, const size_t grid_index,
                     const std::map<ElementId<Dim>, ReductionType>&
                         matrix_and_sources_slices) {
+    // Assemble the full matrix if needed. Possible performance optimization:
+    // Don't send the matrix slices again if we have it already.
     const size_t total_num_points =
         matrix_and_sources_slices.begin()->second.first.columns();
-    Eigen::SparseMatrix<value_type> matrix(static_cast<int>(total_num_points),
-                                           static_cast<int>(total_num_points));
-    std::vector<Eigen::Triplet<value_type>> matrix_entries{};
-    matrix_entries.reserve(square(total_num_points));
+    auto& inv_matrix =
+        db::get_mutable_reference<Tags::InverseMatrix<InvMatrixType>>(
+            make_not_null(&box))
+            .inv_matrix;
     Eigen::Vector<value_type, Eigen::Dynamic> source(total_num_points);
-    // Assemble the full matrix and source
-    size_t i = 0;
-    for (const auto& [element_id, slice] : matrix_and_sources_slices) {
-      const auto& [matrix_slice, source_slice] = slice;
-      ASSERT(matrix_slice.rows() == source_slice.size(),
-             "Matrix and source slice have different sizes.");
-      const size_t slice_length = matrix_slice.rows();
-      for (size_t j = 0; j < total_num_points; ++j) {
-        for (auto it = matrix_slice.cbegin(j); it != matrix_slice.cend(j);
-             ++it) {
-          matrix_entries.emplace_back(i + it->index(), j, it->value());
+    if (not inv_matrix.has_value()) {
+      Eigen::SparseMatrix<value_type> matrix(
+          static_cast<int>(total_num_points),
+          static_cast<int>(total_num_points));
+      std::vector<Eigen::Triplet<value_type>> matrix_entries{};
+      matrix_entries.reserve(square(total_num_points));
+      size_t i = 0;
+      for (const auto& [element_id, slice] : matrix_and_sources_slices) {
+        const auto& [matrix_slice, source_slice] = slice;
+        ASSERT(matrix_slice.rows() == source_slice.size(),
+               "Matrix and source slice have different sizes.");
+        const size_t slice_length = matrix_slice.rows();
+        for (size_t j = 0; j < total_num_points; ++j) {
+          for (auto it = matrix_slice.cbegin(j); it != matrix_slice.cend(j);
+               ++it) {
+            matrix_entries.emplace_back(i + it->index(), j, it->value());
+          }
         }
+        for (size_t k = 0; k < slice_length; ++k) {
+          source[static_cast<int>(i + k)] = source_slice.data()[k];
+        }
+        i += slice_length;
       }
-      for (size_t k = 0; k < slice_length; ++k) {
-        source[static_cast<int>(i + k)] = source_slice.data()[k];
+      ASSERT(i == total_num_points,
+             "The matrix is not fully assembled. Expected "
+                 << total_num_points << " rows, got " << i);
+      matrix.setFromTriplets(matrix_entries.begin(), matrix_entries.end());
+      if (get<logging::Tags::Verbosity<OptionTags::BuildMatrixOptionsGroup>>(
+              box) >= Verbosity::Quiet) {
+        Parallel::printf("Inverting matrix of size %zu x %zu\n",
+                         total_num_points, total_num_points);
       }
-      i += slice_length;
+      inv_matrix.emplace();
+      inv_matrix->compute(matrix);
+    } else {
+      // Assemble only the source vector
+      size_t i = 0;
+      for (const auto& [element_id, slice] : matrix_and_sources_slices) {
+        const auto& [matrix_slice, source_slice] = slice;
+        ASSERT(matrix_slice.rows() == source_slice.size(),
+               "Matrix and source slice have different sizes.");
+        const size_t slice_length = matrix_slice.rows();
+        for (size_t k = 0; k < slice_length; ++k) {
+          source[static_cast<int>(i + k)] = source_slice.data()[k];
+        }
+        i += slice_length;
+      }
+      ASSERT(i == total_num_points,
+             "The source vector is not fully assembled. Expected "
+                 << total_num_points << " entries, got " << i);
     }
-    ASSERT(i == total_num_points, "The matrix is not fully assembled. Expected "
-                                      << total_num_points << " rows, got "
-                                      << i);
-    matrix.setFromTriplets(matrix_entries.begin(), matrix_entries.end());
     // Solve the equations Ax = b. Could use a more efficient solver here if
     // needed. But anything iterative could be done with the parallel linear
     // solver, the point here is to assemble the full matrix and invert it
     // directly.
-    if (get<logging::Tags::Verbosity<OptionTags::BuildMatrixOptionsGroup>>(
-            box) >= Verbosity::Quiet) {
-      Parallel::printf("Inverting matrix of size %zu x %zu\n", total_num_points,
-                       total_num_points);
-    }
-    Eigen::SparseLU<Eigen::SparseMatrix<value_type>> solver{};
-    solver.compute(matrix);
     const Eigen::Vector<value_type, Eigen::Dynamic> solution =
-        solver.solve(source);
+        inv_matrix->solve(source);
     // Broadcast the solution to the elements
     blaze::DynamicVector<value_type> solution_blaze(total_num_points);
     for (size_t k = 0; k < total_num_points; ++k) {
