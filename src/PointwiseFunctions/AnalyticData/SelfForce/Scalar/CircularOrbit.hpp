@@ -162,8 +162,16 @@ class CircularOrbit : public elliptic::analytic_data::Background,
         "the second and third points.";
     using type = Options::Auto<std::array<double, 4>, Options::AutoLabel::None>;
   };
-  using options = tmpl::list<BlackHoleMass, BlackHoleSpin, OrbitalRadius,
-                             MModeNumber, HyperboloidalSlicingTransitions>;
+  struct ImposeEquatorialSymmetry {
+    static constexpr Options::String help =
+        "Impose symmetry across the equatorial plane by using cos(theta)^2 "
+        "as the angular coordinate instead of cos(theta). This means the "
+        "domain should span [0, 1] instead of [-1, 1].";
+    using type = bool;
+  };
+  using options =
+      tmpl::list<BlackHoleMass, BlackHoleSpin, OrbitalRadius, MModeNumber,
+                 HyperboloidalSlicingTransitions, ImposeEquatorialSymmetry>;
   static constexpr Options::String help =
       "Quasicircular orbit of a scalar point charge in Kerr spacetime";
 
@@ -177,7 +185,8 @@ class CircularOrbit : public elliptic::analytic_data::Background,
   CircularOrbit(
       double black_hole_mass, double black_hole_spin, double orbital_radius,
       int m_mode_number,
-      std::optional<std::array<double, 4>> hyperboloidal_slicing_transitions);
+      std::optional<std::array<double, 4>> hyperboloidal_slicing_transitions,
+      bool impose_equatorial_symmetry);
 
   explicit CircularOrbit(CkMigrateMessage* m);
   using PUP::able::register_constructor;
@@ -191,6 +200,9 @@ class CircularOrbit : public elliptic::analytic_data::Background,
   std::optional<std::array<double, 4>> hyperboloidal_slicing_transitions()
       const {
     return hyperboloidal_slicing_transitions_;
+  }
+  bool impose_equatorial_symmetry() const {
+    return impose_equatorial_symmetry_;
   }
 
   using background_tags =
@@ -232,6 +244,7 @@ class CircularOrbit : public elliptic::analytic_data::Background,
   double orbital_radius_{std::numeric_limits<double>::signaling_NaN()};
   int m_mode_number_{};
   std::optional<std::array<double, 4>> hyperboloidal_slicing_transitions_{};
+  bool impose_equatorial_symmetry_{false};
 };
 
 bool operator!=(const CircularOrbit& lhs, const CircularOrbit& rhs);

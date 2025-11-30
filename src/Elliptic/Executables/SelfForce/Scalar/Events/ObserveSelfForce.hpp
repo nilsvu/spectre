@@ -133,11 +133,10 @@ class ObserveSelfForce : public Event {
     interpolator.interpolate(make_not_null(&intrp_result), get(field));
     get(field_at_puncture) = intrp_result[0];
     tnsr::i<std::complex<double>, 2> deriv_field_at_puncture{};
-    for (size_t i = 0; i < 2; ++i) {
-      interpolator.interpolate(make_not_null(&intrp_result),
-                               deriv_field.get(i));
-      deriv_field_at_puncture.get(i) = intrp_result[0];
-    }
+    interpolator.interpolate(make_not_null(&intrp_result), get<0>(deriv_field));
+    get<0>(deriv_field_at_puncture) = intrp_result[0];
+    // Assuming equatorial symmetry, so theta derivative is zero
+    get<1>(deriv_field_at_puncture) = 0.;
     // Calculate self-force in r and theta coordinates
     tnsr::i<std::complex<double>, 2> self_force = deriv_field_at_puncture;
     const double r0 = circular_orbit.orbital_radius();
@@ -150,7 +149,6 @@ class ObserveSelfForce : public Event {
     const double alpha = 1. - 2. * M * r0 / (square(r0) + square(a));
     get<0>(self_force) /= r0 * alpha;
     get<0>(self_force) -= get(field_at_puncture) / square(r0);
-    get<1>(self_force) /= -r0;
     if (m_mode > 0) {
       const double delta_phi =
           m_mode * a / (r_plus - r_minus) * log((r0 - r_plus) / (r0 - r_minus));
@@ -164,7 +162,6 @@ class ObserveSelfForce : public Event {
       const std::complex<double> rotation =
           cos(delta_phi) + std::complex<double>(0., 1.) * sin(delta_phi);
       get<0>(self_force) *= 2. * rotation;
-      get<1>(self_force) *= 2. * rotation;
     }
     // Write result to file
     auto& reduction_writer = Parallel::get_parallel_component<
