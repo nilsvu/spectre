@@ -34,6 +34,7 @@ Background: &background
       - {{ puncture_position - worldtube_radius }}
       - {{ puncture_position + worldtube_radius }}
       - {{ puncture_position + worldtube_radius + 25 }}
+    ImposeEquatorialSymmetry: False
 
 InitialGuess: *background
 
