@@ -125,7 +125,8 @@ class CircularOrbit : public elliptic::analytic_data::Background,
 
   // Fixed sources
   tuples::tagged_tuple_from_typelist<source_tags> variables(
-      const tnsr::I<DataVector, 2>& x, source_tags /*meta*/) const;
+      const tnsr::I<DataVector, 2>& x, source_tags /*meta*/,
+      const bool field_is_regularized) const;
 
   template <typename... RequestedTags>
   tuples::TaggedTuple<RequestedTags...> variables(

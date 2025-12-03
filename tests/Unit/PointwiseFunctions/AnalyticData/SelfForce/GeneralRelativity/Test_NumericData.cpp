@@ -17,13 +17,13 @@
 #include "NumericalAlgorithms/LinearOperators/Divergence.tpp"
 #include "NumericalAlgorithms/LinearOperators/PartialDerivatives.hpp"
 #include "NumericalAlgorithms/Spectral/LogicalCoordinates.hpp"
-#include "PointwiseFunctions/AnalyticData/SelfForce/GeneralRelativity/CircularOrbit.hpp"
+#include "PointwiseFunctions/AnalyticData/SelfForce/GeneralRelativity/NumericData.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TaggedTuple.hpp"
 
 namespace GrSelfForce::AnalyticData {
 
-SPECTRE_TEST_CASE("Unit.PointwiseFunctions.GrSelfForce.CircularOrbit",
+SPECTRE_TEST_CASE("Unit.PointwiseFunctions.GrSelfForce.NumericData",
                   "[PointwiseFunctions][Unit]") {
   // This test checks both the self-force equations and the effective source
   // computation in a very robust way: it ensures that the elliptic operator
@@ -60,15 +60,17 @@ SPECTRE_TEST_CASE("Unit.PointwiseFunctions.GrSelfForce.CircularOrbit",
   // Get the analytic fields
   for (int m_mode_number = 0; m_mode_number < 3; ++m_mode_number) {
     CAPTURE(m_mode_number);
-    const auto circular_orbit = CircularOrbit{1., 0.9, 6., m_mode_number};
+    const auto circular_orbit =
+        NumericData{"/Users/nilsvu/Downloads/D2G_m2_a0.600_r8.000.h5", 1., 0.6,
+                    8., m_mode_number};
     CAPTURE(circular_orbit.puncture_position());
     const auto background =
-        circular_orbit.variables(x, CircularOrbit::background_tags{});
+        circular_orbit.variables(x, NumericData::background_tags{});
     const auto& alpha = get<Tags::Alpha>(background);
     const auto& beta = get<Tags::Beta>(background);
     const auto& gamma_rstar = get<Tags::GammaRstar>(background);
     const auto& gamma_theta = get<Tags::GammaTheta>(background);
-    const auto vars = circular_orbit.variables(x, CircularOrbit::source_tags{});
+    const auto vars = circular_orbit.variables(x, NumericData::source_tags{});
     const auto& singular_field = get<Tags::SingularField>(vars);
     const auto& deriv_singular_field = get<
         ::Tags::deriv<Tags::SingularField, tmpl::size_t<2>, Frame::Inertial>>(

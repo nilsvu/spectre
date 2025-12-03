@@ -43,6 +43,7 @@
 #include "ParallelAlgorithms/LinearSolver/Multigrid/ElementsAllocator.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Tags.hpp"
 #include "PointwiseFunctions/AnalyticData/SelfForce/GeneralRelativity/CircularOrbit.hpp"
+#include "PointwiseFunctions/AnalyticData/SelfForce/GeneralRelativity/NumericData.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/AnalyticSolution.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/Background.hpp"
 #include "PointwiseFunctions/InitialDataUtilities/InitialGuess.hpp"
@@ -85,9 +86,11 @@ struct Metavariables {
                    tmpl::list<domain::creators::Rectangle,
                               domain::creators::AlignedLattice<2>>>,
         tmpl::pair<elliptic::analytic_data::Background,
-                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit>>,
+                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit,
+                              GrSelfForce::AnalyticData::NumericData>>,
         tmpl::pair<elliptic::analytic_data::InitialGuess,
-                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit>>,
+                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit,
+                              GrSelfForce::AnalyticData::NumericData>>,
         tmpl::pair<elliptic::analytic_data::AnalyticSolution, tmpl::list<>>,
         tmpl::pair<elliptic::BoundaryConditions::BoundaryCondition<volume_dim>,
                    tmpl::list<GrSelfForce::BoundaryConditions::Angular,

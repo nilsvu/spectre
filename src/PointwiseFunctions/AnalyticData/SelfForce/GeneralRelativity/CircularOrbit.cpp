@@ -212,7 +212,31 @@ CircularOrbit::variables(
     tmpl::list<
         ::Tags::FixedSource<Tags::MMode>, Tags::SingularField,
         ::Tags::deriv<Tags::SingularField, tmpl::size_t<2>, Frame::Inertial>,
-        Tags::BoyerLindquistRadius> /*meta*/) const {
+        Tags::BoyerLindquistRadius> /*meta*/,
+    const bool field_is_regularized) const {
+  tuples::TaggedTuple<
+      ::Tags::FixedSource<Tags::MMode>, Tags::SingularField,
+      ::Tags::deriv<Tags::SingularField, tmpl::size_t<2>, Frame::Inertial>,
+      Tags::BoyerLindquistRadius>
+      result{};
+  const size_t num_points = get<0>(x).size();
+  if (not field_is_regularized) {
+    // If not regularized, return zeros
+    get(get<Tags::BoyerLindquistRadius>(result)) = DataVector{num_points, 0.};
+    auto& effective_source = get<::Tags::FixedSource<Tags::MMode>>(result);
+    auto& singular_field = get<Tags::SingularField>(result);
+    for (size_t i = 0; i < singular_field.size(); i++) {
+      effective_source[i] = DataVector{num_points, 0.};
+      singular_field[i] = DataVector{num_points, 0.};
+    }
+    auto& deriv_singular_field = get<
+        ::Tags::deriv<Tags::SingularField, tmpl::size_t<2>, Frame::Inertial>>(
+        result);
+    for (size_t i = 0; i < deriv_singular_field.size(); i++) {
+      deriv_singular_field[i] = DataVector{num_points, 0.};
+    }
+    return result;
+  }
   const double a = black_hole_spin_ * black_hole_mass_;
   const double M = black_hole_mass_;
   const double r_0 = orbital_radius_;
@@ -263,13 +287,7 @@ CircularOrbit::variables(
                                log((r - r_plus) / (r - r_minus));
   const ComplexDataVector rotation =
       cos(delta_phi) - std::complex<double>(0., 1.) * sin(delta_phi);
-  tuples::TaggedTuple<
-      ::Tags::FixedSource<Tags::MMode>, Tags::SingularField,
-      ::Tags::deriv<Tags::SingularField, tmpl::size_t<2>, Frame::Inertial>,
-      Tags::BoyerLindquistRadius>
-      result{};
   get(get<Tags::BoyerLindquistRadius>(result)) = r;
-  const size_t num_points = get<0>(x).size();
   tnsr::aa<ComplexDataVector, 3>& effective_source =
       get<::Tags::FixedSource<Tags::MMode>>(result);
   tnsr::aa<ComplexDataVector, 3>& singular_field =

@@ -11,6 +11,7 @@ spectre_target_sources(
   CircularOrbit.cpp
   CircularOrbitCoeffs.cpp
   CircularOrbitConvertEffsource.cpp
+  NumericData.cpp
   )
 
 spectre_target_headers(
@@ -20,15 +21,18 @@ spectre_target_headers(
   CircularOrbit.hpp
   CircularOrbitCoeffs.hpp
   CircularOrbitConvertEffsource.hpp
+  NumericData.hpp
   )
 
 target_link_libraries(
   ${LIBRARY}
   PUBLIC
+  H5
   DataStructures
   ErrorHandling
   GeneralRelativity
   GravitationalEffectiveSource
   Options
   Utilities
+  Interpolation
   )

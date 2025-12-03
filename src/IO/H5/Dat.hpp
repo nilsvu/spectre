@@ -122,6 +122,8 @@ class Dat : public h5::Object {
 
   const std::string& subfile_path() const override { return path_; }
 
+  hid_t dataset_id() const { return dataset_id_; }
+
  private:
   /// \cond HIDDEN_SYMBOLS
   detail::OpenGroup group_;
