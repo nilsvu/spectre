@@ -13,11 +13,14 @@ namespace GrSelfForce::BoundaryConditions {
 
 Sommerfeld::Sommerfeld(const double black_hole_mass,
                        const double black_hole_spin,
-                       const double orbital_radius, const int m_mode_number)
+                       const double orbital_radius, const int m_mode_number,
+                       const bool hyperboloidal_slicing, const int order)
     : black_hole_mass_(black_hole_mass),
       black_hole_spin_(black_hole_spin),
       orbital_radius_(orbital_radius),
-      m_mode_number_(m_mode_number) {}
+      m_mode_number_(m_mode_number),
+      hyperboloidal_slicing_(hyperboloidal_slicing),
+      order_(order) {}
 
 Sommerfeld::Sommerfeld(CkMigrateMessage* m) : Base(m) {}
 
@@ -30,13 +33,30 @@ void Sommerfeld::apply(
     const gsl::not_null<tnsr::aa<ComplexDataVector, 3>*> field,
     const gsl::not_null<tnsr::aa<ComplexDataVector, 3>*> n_dot_field_gradient,
     const GradTensorType& /*deriv_field*/) const {
+  if (hyperboloidal_slicing_) {
+    if (order_ == 1) {
+      for (size_t i = 0; i < field->size(); ++i) {
+        (*n_dot_field_gradient)[i] = 0.;
+      }
+    } else {
+      ERROR("Order " << order_
+                     << " not implemented for Sommerfeld boundary condition "
+                        "with hyperboloidal slicing.");
+    }
+    return;
+  }
   const double a = black_hole_spin_ * black_hole_mass_;
   const double M = black_hole_mass_;
   const double r_0 = orbital_radius_;
   const double omega = 1. / (a + sqrt(cube(r_0) / M));
-  for (size_t i = 0; i < field->size(); ++i) {
-    (*n_dot_field_gradient)[i] =
-        std::complex<double>(0.0, m_mode_number_ * omega) * (*field)[i];
+  if (order_ == 1) {
+    for (size_t i = 0; i < field->size(); ++i) {
+      (*n_dot_field_gradient)[i] =
+          std::complex<double>(0.0, m_mode_number_ * omega) * (*field)[i];
+    }
+  } else {
+    ERROR("Order " << order_
+                   << " not implemented for Sommerfeld boundary condition.");
   }
 }
 
@@ -54,13 +74,17 @@ void Sommerfeld::pup(PUP::er& p) {
   p | black_hole_spin_;
   p | orbital_radius_;
   p | m_mode_number_;
+  p | hyperboloidal_slicing_;
+  p | order_;
 }
 
 bool operator==(const Sommerfeld& lhs, const Sommerfeld& rhs) {
   return lhs.black_hole_mass_ == rhs.black_hole_mass_ and
          lhs.black_hole_spin_ == rhs.black_hole_spin_ and
          lhs.orbital_radius_ == rhs.orbital_radius_ and
-         lhs.m_mode_number_ == rhs.m_mode_number_;
+         lhs.m_mode_number_ == rhs.m_mode_number_ and
+         lhs.hyperboloidal_slicing_ == rhs.hyperboloidal_slicing_ and
+         lhs.order_ == rhs.order_;
 }
 
 bool operator!=(const Sommerfeld& lhs, const Sommerfeld& rhs) {

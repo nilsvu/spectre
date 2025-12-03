@@ -117,6 +117,8 @@ DomainCreator:
           BlackHoleSpin: *bh_spin
           OrbitalRadius: *orbital_radius
           MModeNumber: *m_mode_number
+          HyperboloidalSlicing: True
+          Order: 1
       # Angular boundary conditions
       - Angular:
           MModeNumber: *m_mode_number

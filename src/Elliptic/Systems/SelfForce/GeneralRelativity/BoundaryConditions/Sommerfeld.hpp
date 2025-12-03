@@ -60,12 +60,24 @@ class Sommerfeld : public elliptic::BoundaryConditions::BoundaryCondition<2> {
         "Mode number 'm' of the scalar field";
     using type = int;
   };
+  struct HyperboloidalSlicing {
+    static constexpr Options::String help =
+        "Whether hyperboloidal slicing is applied. If true, a simple Neumann "
+        "boundary condition is applied.";
+    using type = bool;
+  };
+  struct Order {
+    static constexpr Options::String help =
+        "Order of the boundary condition. First order (Order=1) implements "
+        "just the leading 'i m Omega' term. Second order (Order=2) includes "
+        "the next-to-leading '1/r' term as well (Robin-type).";
+    using type = int;
+  };
 
   static constexpr Options::String help =
       "Radial Sommerfeld boundary condition";
-  using options =
-      tmpl::list<BlackHoleMass, BlackHoleSpin, OrbitalRadius, MModeNumber>;
-
+  using options = tmpl::list<BlackHoleMass, BlackHoleSpin, OrbitalRadius,
+                             MModeNumber, HyperboloidalSlicing, Order>;
   Sommerfeld() = default;
   Sommerfeld(const Sommerfeld&) = default;
   Sommerfeld& operator=(const Sommerfeld&) = default;
@@ -74,12 +86,15 @@ class Sommerfeld : public elliptic::BoundaryConditions::BoundaryCondition<2> {
   ~Sommerfeld() override = default;
 
   explicit Sommerfeld(double black_hole_mass, double black_hole_spin,
-                      double orbital_radius, int m_mode_number);
+                      double orbital_radius, int m_mode_number,
+                      bool hyperboloidal_slicing, int order);
 
   double black_hole_mass() const { return black_hole_mass_; }
   double black_hole_spin() const { return black_hole_spin_; }
   double orbital_radius() const { return orbital_radius_; }
   int m_mode_number() const { return m_mode_number_; }
+  bool hyperboloidal_slicing() const { return hyperboloidal_slicing_; }
+  int order() const { return order_; }
 
   /// \cond
   explicit Sommerfeld(CkMigrateMessage* m);
@@ -122,6 +137,8 @@ class Sommerfeld : public elliptic::BoundaryConditions::BoundaryCondition<2> {
   double black_hole_spin_{std::numeric_limits<double>::signaling_NaN()};
   double orbital_radius_{std::numeric_limits<double>::signaling_NaN()};
   int m_mode_number_{};
+  bool hyperboloidal_slicing_{false};
+  int order_{1};
 };
 
 bool operator!=(const Sommerfeld& lhs, const Sommerfeld& rhs);
