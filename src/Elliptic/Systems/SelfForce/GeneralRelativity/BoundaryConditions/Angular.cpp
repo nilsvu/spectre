@@ -21,7 +21,18 @@ void Angular::apply(
   // Ordering of numbered variables in comments below:
   // tt, tr, ttheta, tphi, rr, rtheta, rphi, theta theta, theta phi, phi phi
   if (m_mode_number_ == 0) {
-    ERROR("Not yet implemented for m=0.");
+    // Dirichlet for components 2, 3, 5-9
+    // Neumann for components 0, 1, 4
+    get<0, 0>(*n_dot_field_gradient) = 0.;
+    get<0, 1>(*n_dot_field_gradient) = 0.;
+    get<0, 2>(*field) = 0.;
+    get<0, 3>(*n_dot_field_gradient) = 0.;
+    get<1, 1>(*field) = 0.;
+    get<1, 2>(*field) = 0.;
+    get<1, 3>(*field) = 0.;
+    get<2, 2>(*field) = 0.;
+    get<2, 3>(*field) = 0.;
+    get<3, 3>(*field) = 0.;
   } else if (m_mode_number_ == 1) {
     // Dirichlet for components 0, 1, 4, 7, 8, 9
     // Neumann for components 2, 3, 5, 6
