@@ -213,6 +213,7 @@ EventsAndTriggersAtIterations:
               NormType: Max
               Components: Individual
       # - ObserveSelfForce
+      - ObserveFlux
       - ObserveFields:
           SubfileName: VolumeData
           VariablesToObserve:
