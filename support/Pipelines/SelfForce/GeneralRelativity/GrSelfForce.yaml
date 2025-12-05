@@ -141,7 +141,7 @@ Amr:
     #     CoarseningFactor: 0.1
   Policies:
     Isotropy: Anisotropic
-    EnforceTwoToOneBalanceInNormalDirection: False
+    EnforceTwoToOneBalanceInNormalDirection: True
     Limits:
       NumGridPoints: Auto
       RefinementLevel: Auto
@@ -176,7 +176,7 @@ Observers:
 LinearSolver:
   Gmres:
     ConvergenceCriteria:
-      MaxIterations: 100
+      MaxIterations: 500
       RelativeResidual: 0
       AbsoluteResidual: 1.e-10
     Verbosity: Verbose
@@ -184,22 +184,22 @@ LinearSolver:
   Multigrid:
     Iterations: 1
     InitialCoarseLevels: 0
-    PreSmoothing: False
+    PreSmoothing: True
     UseBottomSolver: True
     PostSmoothingAtBottom: False
-    Verbosity: Verbose
+    Verbosity: Silent
     OutputVolumeData: False
     ComplexShift: 0.
 
   SchwarzSmoother:
-    Iterations: 3
-    MaxOverlap: 2
-    Verbosity: Verbose
+    Iterations: 2
+    MaxOverlap: Auto
+    Verbosity: Silent
     SubdomainSolver:
       # TODO: Reconsider this
       ExplicitInverse:
         WriteMatrixToFile: None
-        ComplexShift: 0.0
+        ComplexShift: 0.01
     ObservePerCoreReductions: False
     OutputVolumeData: False
 
@@ -219,10 +219,10 @@ EventsAndTriggersAtIterations:
           VariablesToObserve:
             - MMode
             - FixedSource(MMode)
-            - Alpha
-            - Beta
-            - GammaRstar
-            - GammaTheta
+            # - Alpha
+            # - Beta
+            # - GammaRstar
+            # - GammaTheta
             - SingularField
             - BoyerLindquistRadius
           BlocksToObserve: All
