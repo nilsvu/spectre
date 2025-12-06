@@ -20,10 +20,11 @@ PYBIND11_MODULE(_Pybindings, m) {  // NOLINT
 
   py::class_<CircularOrbit>(m, "CircularOrbit")
       .def(py::init<double, double, double, int,
-                    std::optional<std::array<double, 4>>>(),
+                    std::optional<std::array<double, 4>>, bool>(),
            py::arg("black_hole_mass"), py::arg("black_hole_spin"),
            py::arg("orbital_radius"), py::arg("m_mode_number"),
-           py::arg("hyperboloidal_slicing_transitions"))
+           py::arg("hyperboloidal_slicing_transitions"),
+           py::arg("impose_equatorial_symmetry"))
       .def_property_readonly("black_hole_mass", &CircularOrbit::black_hole_mass)
       .def_property_readonly("black_hole_spin", &CircularOrbit::black_hole_spin)
       .def_property_readonly("orbital_radius", &CircularOrbit::orbital_radius)
