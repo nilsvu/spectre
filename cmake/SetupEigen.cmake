@@ -16,10 +16,10 @@ if (NOT Eigen3_FOUND)
     GIT_SHALLOW TRUE
     ${SPECTRE_FETCHCONTENT_BASE_ARGS}
   )
-  set(EIGEN_BUILD_TESTING OFF)
-  set(EIGEN_BUILD_PKGCONFIG OFF)
-  set(EIGEN_BUILD_DOC OFF)
-  set(EIGEN_DONT_PARALLELIZE ON)
+  set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Disable Eigen tests")
+  set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "Disable Eigen pkgconfig")
+  set(EIGEN_BUILD_DOC OFF CACHE BOOL "Disable Eigen documentation")
+  set(EIGEN_DONT_PARALLELIZE ON CACHE BOOL "Disable Eigen multithreading")
   FetchContent_MakeAvailable(Eigen3)
 else()
   target_compile_definitions(
