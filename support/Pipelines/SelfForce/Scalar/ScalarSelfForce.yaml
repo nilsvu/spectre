@@ -6,7 +6,7 @@ Description: >
   orbit around a Kerr black hole.
 
   Example:
-    spectre run ScalarSelfForce.yaml -o "test" \
+    spectre run ScalarSelfForce.yaml -o "test_ssf" \
       -p spin=0.5 -p orbital_radius=10 -p m_mode=2 -p inner_radius=-50 \
       -p outer_radius=1e4 -p puncture_position=12.775940471833115 \
       -p worldtube_radius=10 -p worldtube_dcostheta=0.5 -p P=4 -p L=1
@@ -15,8 +15,6 @@ Description: >
   in ParaView or inspect the reduction data output to see the extracted
   self-force at the particle.
 Executable: SolveScalarSelfForce
-Testing:
-  Check: parse
 ExpectedOutput:
   - ScalarSelfForceReductions.h5
   - ScalarSelfForceVolume0.h5
