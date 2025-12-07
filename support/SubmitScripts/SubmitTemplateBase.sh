@@ -45,6 +45,10 @@ echo
 module list
 {% endblock %}
 
+OMP_NUM_THREADS=1
+OPENBLAS_NUM_THREADS=1
+MKL_NUM_THREADS=1
+
 ############################################################################
 # Set desired permissions for files created with this script
 umask 0022
