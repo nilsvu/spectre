@@ -84,7 +84,11 @@ target_link_libraries(
   Charmxx::charmxx
   )
 add_dependencies(${BUNDLED_EXPORTER_LIB} ${LIBRARY})
-# Also export the public header so that external programs can include it
+# Also export the public headers so that external programs can include it
+configure_file(
+  Exporter.h
+  ${CMAKE_BINARY_DIR}/include/spectre/Exporter.h
+  COPYONLY)
 configure_file(
   Exporter.hpp
   ${CMAKE_BINARY_DIR}/include/spectre/Exporter.hpp
