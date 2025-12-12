@@ -15,6 +15,7 @@
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/Executables/SelfForce/GeneralRelativity/Actions/InitializeEffectiveSource.hpp"
 #include "Elliptic/Executables/SelfForce/GeneralRelativity/Events/ObserveFlux.hpp"
+#include "Elliptic/Executables/SelfForce/GeneralRelativity/Events/ObserveRedshift.hpp"
 #include "Elliptic/Executables/Solver.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/Angular.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/Sommerfeld.hpp"
@@ -99,15 +100,18 @@ struct Metavariables {
         tmpl::pair<::amr::Criterion,
                    ::amr::Criteria::standard_criteria<
                        volume_dim, typename system::primal_fields>>,
-        tmpl::pair<Event,
-                   tmpl::flatten<tmpl::list<
-                       Events::Completion,
-                       dg::Events::field_observations<
-                           volume_dim, observe_fields, observer_compute_tags,
-                           amr::Tags::IsFinestGrid>,
-                       GrSelfForce::Events::ObserveFlux<
-                           typename solver::background_tag,
-                           amr::Tags::IsFinestGrid>>>>,
+        tmpl::pair<
+            Event,
+            tmpl::flatten<tmpl::list<
+                Events::Completion,
+                dg::Events::field_observations<volume_dim, observe_fields,
+                                               observer_compute_tags,
+                                               amr::Tags::IsFinestGrid>,
+                GrSelfForce::Events::ObserveFlux<
+                    typename solver::background_tag, amr::Tags::IsFinestGrid>,
+                GrSelfForce::Events::ObserveRedshift<
+                    typename solver::background_tag,
+                    amr::Tags::IsFinestGrid>>>>,
         tmpl::pair<Trigger, elliptic::Triggers::all_triggers<
                                 ::amr::OptionTags::AmrGroup>>,
         tmpl::pair<

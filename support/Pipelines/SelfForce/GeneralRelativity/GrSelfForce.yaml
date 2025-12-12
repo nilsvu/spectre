@@ -223,17 +223,17 @@ EventsAndTriggersAtIterations:
             - Name: MMode
               NormType: Max
               Components: Individual
-      # - ObserveSelfForce
       - ObserveFlux
+      - ObserveRedshift
       - ObserveFields:
           SubfileName: VolumeData
           VariablesToObserve:
             - MMode
             - FixedSource(MMode)
-            # - Alpha
-            # - Beta
-            # - GammaRstar
-            # - GammaTheta
+            - Alpha
+            - Beta
+            - GammaRstar
+            - GammaTheta
             - SingularField
             - BoyerLindquistRadius
           BlocksToObserve: All
