@@ -11,6 +11,7 @@
 #include "DataStructures/Tensor/EagerMath/CrossProduct.hpp"
 #include "DataStructures/Tensor/EagerMath/DeterminantAndInverse.hpp"
 #include "DataStructures/Tensor/EagerMath/DotProduct.hpp"
+#include "DataStructures/Tensor/EagerMath/GramSchmidtOrthonormalize.hpp"
 #include "DataStructures/Tensor/EagerMath/Magnitude.hpp"
 #include "DataStructures/Tensor/EagerMath/RaiseOrLowerIndex.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
@@ -21,40 +22,6 @@
 #include "Utilities/GetOutput.hpp"
 #include "Utilities/StdArrayHelpers.hpp"
 #include "Utilities/TaggedTuple.hpp"
-
-namespace {
-
-void gram_schmidt_orthonormalize(
-    const gsl::not_null<
-        std::vector<std::reference_wrapper<tnsr::A<double, 3>>>*>
-        basis,
-    const tnsr::aa<double, 3>& spacetime_metric) {
-  {  // Normalize the first vector
-    auto& first = basis->front().get();
-    const auto norm = magnitude(first, spacetime_metric);
-    for (size_t k = 0; k < 4; ++k) {
-      first.get(k) /= get(norm);
-    }
-  }
-  // Orthogonalize the remaining vectors
-  for (size_t i = 1; i < basis->size(); ++i) {
-    auto& v = (*basis)[i].get();
-    for (size_t j = 0; j < i; ++j) {
-      auto& w = (*basis)[j].get();
-      const auto projection = get(dot_product(v, w, spacetime_metric)) /
-                              get(dot_product(w, w, spacetime_metric));
-      for (size_t k = 0; k < 4; ++k) {
-        v.get(k) -= projection * w.get(k);
-      }
-      const auto norm = magnitude(v, spacetime_metric);
-      for (size_t k = 0; k < 4; ++k) {
-        v.get(k) /= get(norm);
-      }
-    }
-  }
-}
-
-}  // namespace
 
 namespace ray_tracing {
 
@@ -131,9 +98,10 @@ void Camera::initialize(const size_t frame,
   determinant_and_inverse(make_not_null(&det_spacetime_metric),
                           make_not_null(&spacetime_metric_),
                           inv_spacetime_metric);
-  std::vector<std::reference_wrapper<tnsr::A<double, 3>>> basis{
-      four_velocity_, direction_, up_};
-  gram_schmidt_orthonormalize(make_not_null(&basis), spacetime_metric_);
+  gram_schmidt_orthonormalize(
+      std::array{make_not_null(&four_velocity_), make_not_null(&direction_),
+                 make_not_null(&up_)},
+      spacetime_metric_);
   cross_product(make_not_null(&right_), four_velocity_, direction_, up_,
                 inv_spacetime_metric, det_spacetime_metric);
 }
