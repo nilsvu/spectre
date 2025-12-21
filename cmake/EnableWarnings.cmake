@@ -7,38 +7,45 @@ include(AddCxxFlag)
 # all the warnings enabled because we get flooded with system warnings.
 option(ENABLE_WARNINGS "Enable the default warning level" ON)
 if(${ENABLE_WARNINGS})
-  create_cxx_flags_target(
-    "-W;\
--Wall;\
--Wcast-align;\
--Wcast-qual;\
--Wdisabled-optimization;\
--Wdocumentation;\
--Wextra;\
--Wformat-nonliteral;\
--Wformat-security;\
--Wformat-y2k;\
--Wformat=2;\
--Winvalid-pch;\
--Wmissing-declarations;\
--Wmissing-field-initializers;\
--Wmissing-format-attribute;\
--Wmissing-include-dirs;\
--Wmissing-noreturn;\
--Wnewline-eof;\
--Wnon-virtual-dtor;\
--Wold-style-cast;\
--Woverloaded-virtual;\
--Wpacked;\
--Wpedantic;\
--Wpointer-arith;\
--Wredundant-decls;\
--Wshadow;\
--Wsign-conversion;\
--Wstack-protector;\
--Wswitch-default;\
--Wunreachable-code;\
--Wwrite-strings" SpectreWarnings)
+  set(_WARN_FLAGS
+    -W
+    -Wall
+    -Wcast-align
+    -Wcast-qual
+    -Wdisabled-optimization
+    -Wdocumentation
+    -Wextra
+    -Wformat-nonliteral
+    -Wformat-security
+    -Wformat-y2k
+    -Wformat=2
+    -Winvalid-pch
+    -Wmissing-field-initializers
+    -Wmissing-format-attribute
+    -Wmissing-include-dirs
+    -Wmissing-noreturn
+    -Wnewline-eof
+    -Wnon-virtual-dtor
+    -Woverloaded-virtual
+    -Wpacked
+    -Wpedantic
+    -Wpointer-arith
+    -Wredundant-decls
+    -Wshadow
+    -Wsign-conversion
+    -Wstack-protector
+    -Wswitch-default
+    -Wunreachable-code
+    -Wwrite-strings
+  )
+  if(NOT ${KOKKOS_CXX_COMPILER_ID} STREQUAL "NVIDIA")
+    # NVCC has many false positives for these warnings
+    list(APPEND _WARN_FLAGS
+      -Wmissing-declarations
+      -Wold-style-cast
+    )
+  endif()
+  create_cxx_flags_target("${_WARN_FLAGS}" SpectreWarnings)
 else()
   add_library(SpectreWarnings INTERFACE)
 endif()
