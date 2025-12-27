@@ -54,20 +54,20 @@ find_path(LIBCXX_INCLUDE_DIR NAMES cmath
 
 if(BUILD_SHARED_LIBS)
   find_library(LIBCXX_LIBRARIES NAMES c++
-      HINTS ${LIBCXX_ROOT}/lib
+      HINTS ${LIBCXX_ROOT}/lib/c++
       ${LIBCXX_PATH_FROM_COMPILER}/lib)
   find_library(LIBCXXABI_LIBRARIES NAMES c++abi
-      HINTS ${LIBCXX_ROOT}/lib
+      HINTS ${LIBCXX_ROOT}/lib/c++
       ${LIBCXX_PATH_FROM_COMPILER}/lib)
 else()
   find_library(LIBCXX_LIBRARIES NAMES libc++.a libc++.so
-      HINTS ${LIBCXX_ROOT}/lib
+      HINTS ${LIBCXX_ROOT}/lib/c++
       ${LIBCXX_PATH_FROM_COMPILER}/lib)
   if(ARCH MATCHES "ppc64")
     set(LIBCXXABI_LIBRARIES " ")
   else()
     find_library(LIBCXXABI_LIBRARIES NAMES libc++abi.a libc++abi.so
-        HINTS ${LIBCXX_ROOT}/lib
+        HINTS ${LIBCXX_ROOT}/lib/c++
         ${LIBCXX_PATH_FROM_COMPILER}/lib)
   endif()
 endif()

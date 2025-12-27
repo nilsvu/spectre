@@ -22,8 +22,14 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
       find_package(LIBCXX REQUIRED)
       set(
         CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}\
- -L${LIBCXXABI_LIBRARIES} -L${LIBCXX_LIBRARIES}"
+ ${LIBCXXABI_LIBRARIES} ${LIBCXX_LIBRARIES}"
         )
+      set(
+        CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}\
+ ${LIBCXXABI_LIBRARIES} ${LIBCXX_LIBRARIES}"
+        )
+# set(CMAKE_EXE_LINKER_FLAGS    "${CMAKE_EXE_LINKER_FLAGS}    -L/opt/homebrew/opt/llvm/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++")
+# set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -L/opt/homebrew/opt/llvm/lib/c++ -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++")
       include_directories(${LIBCXX_INCLUDE_DIRS})
       message(STATUS "libc++ include: ${LIBCXX_INCLUDE_DIRS}")
       message(STATUS "libc++ libraries: ${LIBCXX_LIBRARIES}")
