@@ -20,4 +20,5 @@ target_link_libraries(
   )
 
 add_subdirectory(BackgroundSpacetimes)
+add_subdirectory(Python)
 add_subdirectory(RaySources)
