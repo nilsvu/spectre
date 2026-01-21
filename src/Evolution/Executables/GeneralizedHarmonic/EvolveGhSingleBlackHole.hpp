@@ -323,7 +323,8 @@ struct EvolutionMetavars : public GeneralizedHarmonicTemplateBase<3, UseLts> {
                                tmpl::pin<tmpl::size_t<volume_dim>>>>>,
             Tags::ChangeSlabSize::NumberOfExpectedMessages,
             Tags::ChangeSlabSize::NewSlabSize,
-            ::Filters::Tags::Filter<Filters::Exponential<volume_dim, 0>>>>>;
+            ::Filters::Tags::Filter<Filters::Exponential<volume_dim, 0>>,
+            ::Filters::Tags::Filter<ylm::TensorYlm::TensorYlmFilter>>>>;
     static constexpr bool keep_coarse_grids = false;
     static constexpr bool p_refine_only_in_event = true;
   };

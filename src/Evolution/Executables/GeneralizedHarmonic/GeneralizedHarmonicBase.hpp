@@ -48,6 +48,7 @@
 #include "IO/Observer/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/Tags.hpp"
 #include "NumericalAlgorithms/LinearOperators/ExponentialFilter.hpp"
+#include "NumericalAlgorithms/SphericalHarmonics/ApplyTensorYlmFilter.hpp"
 #include "Options/Protocols/FactoryCreation.hpp"
 #include "Options/String.hpp"
 #include "Parallel/Algorithms/AlgorithmSingleton.hpp"
@@ -411,7 +412,12 @@ struct GeneralizedHarmonicTemplateBase {
           Actions::MutateApply<evolution::dg::CleanMortarHistory<system>>,
           tmpl::list<>>,
       dg::Actions::Filter<
-          Filters::Exponential<0>,
+          Filters::Exponential<volume_dim, 0>,
+          tmpl::list<gr::Tags::SpacetimeMetric<DataVector, volume_dim>,
+                     gh::Tags::Pi<DataVector, volume_dim>,
+                     gh::Tags::Phi<DataVector, volume_dim>>>,
+      dg::Actions::Filter<
+          ylm::TensorYlm::TensorYlmFilter,
           tmpl::list<gr::Tags::SpacetimeMetric<DataVector, volume_dim>,
                      gh::Tags::Pi<DataVector, volume_dim>,
                      gh::Tags::Phi<DataVector, volume_dim>>>>;
