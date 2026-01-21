@@ -20,8 +20,8 @@
 
 namespace Filters {
 
-template <size_t FilterIndex>
-Exponential<FilterIndex>::Exponential(
+template <size_t Dim, size_t FilterIndex>
+Exponential<Dim, FilterIndex>::Exponential(
     const double alpha, const unsigned half_power, const bool enable,
     const std::optional<std::vector<std::string>>& blocks_to_filter,
     const Options::Context& context)
@@ -41,8 +41,8 @@ Exponential<FilterIndex>::Exponential(
   }
 }
 
-template <size_t FilterIndex>
-const Matrix& Exponential<FilterIndex>::filter_matrix(
+template <size_t Dim, size_t FilterIndex>
+const Matrix& Exponential<Dim, FilterIndex>::filter_matrix(
     const Mesh<1>& mesh) const {
   const static double cached_alpha = alpha_;
 
@@ -77,38 +77,39 @@ const Matrix& Exponential<FilterIndex>::filter_matrix(
   return cache(mesh.extents(0), mesh.basis(0), mesh.quadrature(0));
 }
 
-template <size_t FilterIndex>
-void Exponential<FilterIndex>::pup(PUP::er& p) {
+template <size_t Dim, size_t FilterIndex>
+void Exponential<Dim, FilterIndex>::pup(PUP::er& p) {
   p | alpha_;
   p | half_power_;
   p | enable_;
   p | blocks_to_filter_;
 }
 
-template <size_t LocalFilterIndex>
-bool operator==(const Exponential<LocalFilterIndex>& lhs,
-                const Exponential<LocalFilterIndex>& rhs) {
+template <size_t LocalDim, size_t LocalFilterIndex>
+bool operator==(const Exponential<LocalDim, LocalFilterIndex>& lhs,
+                const Exponential<LocalDim, LocalFilterIndex>& rhs) {
   return lhs.alpha_ == rhs.alpha_ and lhs.half_power_ == rhs.half_power_ and
          lhs.enable_ == rhs.enable_ and
          lhs.blocks_to_filter_ == rhs.blocks_to_filter_;
 }
 
-template <size_t FilterIndex>
-bool operator!=(const Exponential<FilterIndex>& lhs,
-                const Exponential<FilterIndex>& rhs) {
+template <size_t LocalDim, size_t LocalFilterIndex>
+bool operator!=(const Exponential<LocalDim, LocalFilterIndex>& lhs,
+                const Exponential<LocalDim, LocalFilterIndex>& rhs) {
   return not(lhs == rhs);
 }
 
-#define FILTER_INDEX(data) BOOST_PP_TUPLE_ELEM(0, data)
-#define GEN_OP(op, filter_index)                                  \
-  template bool operator op(const Exponential<filter_index>& lhs, \
-                            const Exponential<filter_index>& rhs);
-#define INSTANTIATE(_, data)                      \
-  template class Exponential<FILTER_INDEX(data)>; \
-  GEN_OP(==, FILTER_INDEX(data))                  \
-  GEN_OP(!=, FILTER_INDEX(data))
+#define DIM(data) BOOST_PP_TUPLE_ELEM(0, data)
+#define FILTER_INDEX(data) BOOST_PP_TUPLE_ELEM(1, data)
+#define GEN_OP(op, dim, filter_index)                                  \
+  template bool operator op(const Exponential<dim, filter_index>& lhs, \
+                            const Exponential<dim, filter_index>& rhs);
+#define INSTANTIATE(_, data)                                 \
+  template class Exponential<DIM(data), FILTER_INDEX(data)>; \
+  GEN_OP(==, DIM(data), FILTER_INDEX(data))                  \
+  GEN_OP(!=, DIM(data), FILTER_INDEX(data))
 
-GENERATE_INSTANTIATIONS(INSTANTIATE, (0, 1, 2, 3, 4, 5, 6, 7, 8, 9))
+GENERATE_INSTANTIATIONS(INSTANTIATE, (1, 2, 3), (0, 1, 2, 3, 4, 5, 6, 7, 8, 9))
 
 #undef FILTER_INDEX
 #undef INSTANTIATE

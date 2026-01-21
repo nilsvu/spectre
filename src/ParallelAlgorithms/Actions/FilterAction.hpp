@@ -136,52 +136,24 @@ class Filter<FilterType, tmpl::list<TagsToFilter...>> {
       return {Parallel::AlgorithmExecution::Continue, std::nullopt};
     }
 
-    const Mesh<volume_dim> mesh = db::get<domain::Tags::Mesh<volume_dim>>(box);
-    const Matrix empty{};
-    std::array<std::reference_wrapper<const Matrix>, volume_dim> filter =
-        make_array<volume_dim>(std::cref(empty));
-    for (size_t d = 0; d < volume_dim; d++) {
-      gsl::at(filter, d) =
-          std::cref(filter_helper.filter_matrix(mesh.slice_through(d)));
-    }
-
     // In the case that the tags we are filtering are all the evolved variables
     // we filter the entire Variables at once to be more efficient. This case is
     // the first branch of the `if-else`.
-    if (Filter_detail::FilterAllEvolvedVars<
-            sizeof...(TagsToFilter) ==
-                tmpl::size<evolved_vars_tags_list>::value,
-            std::is_same_v<evolved_vars_tags_list,
-                           tmpl::list<TagsToFilter...>>>::
-            template f<evolved_vars_tags_list, TagsToFilter...>::value) {
-      db::mutate<typename Metavariables::system::variables_tag>(
-          [&filter](const gsl::not_null<
-                        typename Metavariables::system::variables_tag::type*>
-                        vars,
-                    const auto& local_mesh) {
-            *vars = apply_matrices(filter, *vars, local_mesh.extents());
-          },
-          make_not_null(&box), mesh);
+    if constexpr (Filter_detail::FilterAllEvolvedVars<
+                      sizeof...(TagsToFilter) ==
+                          tmpl::size<evolved_vars_tags_list>::value,
+                      std::is_same_v<evolved_vars_tags_list,
+                                     tmpl::list<TagsToFilter...>>>::
+                      template f<evolved_vars_tags_list,
+                                 TagsToFilter...>::value) {
+      db::mutate_apply<
+          tmpl::list<typename Metavariables::system::variables_tag>,
+          typename FilterType::argument_tags>(filter_helper,
+                                              make_not_null(&box));
     } else {
-      db::mutate<TagsToFilter...>(
-          [](const gsl::not_null<
-                 typename TagsToFilter::type*>... tensors_to_filter,
-             const Mesh<volume_dim>& local_mesh,
-             const std::array<std::reference_wrapper<const Matrix>, volume_dim>&
-                 local_filter) {
-            DataVector temp(local_mesh.number_of_grid_points(), 0.0);
-            const auto helper = [&local_mesh, &local_filter,
-                                 &temp](const auto tensor) {
-              for (auto& component : *tensor) {
-                temp = 0.0;
-                apply_matrices(make_not_null(&temp), local_filter, component,
-                               local_mesh.extents());
-                component = temp;
-              }
-            };
-            EXPAND_PACK_LEFT_TO_RIGHT(helper(tensors_to_filter));
-          },
-          make_not_null(&box), mesh, filter);
+      db::mutate_apply<tmpl::list<TagsToFilter...>,
+                       typename FilterType::argument_tags>(filter_helper,
+                                                           make_not_null(&box));
     }
     return {Parallel::AlgorithmExecution::Continue, std::nullopt};
   }

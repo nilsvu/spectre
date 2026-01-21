@@ -9,6 +9,8 @@
 #include <string>
 #include <unordered_set>
 
+#include "DataStructures/ApplyMatrices.hpp"
+#include "Domain/Tags.hpp"
 #include "Options/Auto.hpp"
 #include "Options/String.hpp"
 #include "Utilities/TMPL.hpp"
@@ -56,7 +58,7 @@ namespace Filters {
  * the input file these will be specified as `ExpFilterFILTER_INDEX`, e.g.
  * \snippet LinearOperators/Test_Filtering.cpp multiple_exponential_filters
  */
-template <size_t FilterIndex>
+template <size_t Dim, size_t FilterIndex>
 class Exponential {
  public:
   /// \brief The value of `exp(-alpha)` is what the highest modal coefficient is
@@ -122,11 +124,26 @@ class Exponential {
   // NOLINTNEXTLINE(google-runtime-references)
   void pup(PUP::er& p);
 
+ public:
+  using argument_tags = tmpl::list<domain::Tags::Mesh<Dim>>;
+
+  template <typename TagsList>
+  void operator()(const gsl::not_null<Variables<TagsList>*> vars,
+                  const Mesh<Dim>& mesh) const {
+    const Matrix empty{};
+    std::array<std::reference_wrapper<const Matrix>, Dim> filter =
+        make_array<Dim>(std::cref(empty));
+    for (size_t d = 0; d < Dim; d++) {
+      gsl::at(filter, d) = std::cref(filter_matrix(mesh.slice_through(d)));
+    }
+    *vars = apply_matrices(filter, *vars, mesh.extents());
+  }
+
  private:
-  template <size_t LocalFilterIndex>
+  template <size_t LocalDim, size_t LocalFilterIndex>
   // NOLINTNEXTLINE(readability-redundant-declaration)
-  friend bool operator==(const Exponential<LocalFilterIndex>& lhs,
-                         const Exponential<LocalFilterIndex>& rhs);
+  friend bool operator==(const Exponential<LocalDim, LocalFilterIndex>& lhs,
+                         const Exponential<LocalDim, LocalFilterIndex>& rhs);
 
   double alpha_{36.0};
   unsigned half_power_{16};
@@ -134,11 +151,11 @@ class Exponential {
   std::optional<std::unordered_set<std::string>> blocks_to_filter_{};
 };
 
-template <size_t LocalFilterIndex>
-bool operator==(const Exponential<LocalFilterIndex>& lhs,
-                const Exponential<LocalFilterIndex>& rhs);
+template <size_t LocalDim, size_t LocalFilterIndex>
+bool operator==(const Exponential<LocalDim, LocalFilterIndex>& lhs,
+                const Exponential<LocalDim, LocalFilterIndex>& rhs);
 
-template <size_t FilterIndex>
-bool operator!=(const Exponential<FilterIndex>& lhs,
-                const Exponential<FilterIndex>& rhs);
+template <size_t LocalDim, size_t FilterIndex>
+bool operator!=(const Exponential<LocalDim, FilterIndex>& lhs,
+                const Exponential<LocalDim, FilterIndex>& rhs);
 }  // namespace Filters
