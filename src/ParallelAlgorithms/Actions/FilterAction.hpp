@@ -93,7 +93,7 @@ struct Filter;
 template <typename FilterType, typename... TagsToFilter>
 class Filter<FilterType, tmpl::list<TagsToFilter...>> {
  public:
-  using const_global_cache_tags =
+  using simple_tags_from_options =
       tmpl::list<::Filters::Tags::Filter<FilterType>>;
 
   template <typename DbTags, typename... InboxTags, typename ArrayIndex,
@@ -109,7 +109,7 @@ class Filter<FilterType, tmpl::list<TagsToFilter...>> {
     using evolved_vars_tag = typename Metavariables::system::variables_tag;
     using evolved_vars_tags_list = typename evolved_vars_tag::tags_list;
     const FilterType& filter_helper =
-        Parallel::get<::Filters::Tags::Filter<FilterType>>(cache);
+        db::get<::Filters::Tags::Filter<FilterType>>(box);
     const size_t block_id =
         db::get<domain::Tags::Element<volume_dim>>(box).id().block_id();
     const auto& domain = Parallel::get<domain::Tags::Domain<volume_dim>>(cache);
