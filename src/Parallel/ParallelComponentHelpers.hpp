@@ -257,13 +257,7 @@ using get_matching_mutable_tag = typename matching_tag_helper<
 namespace detail {
 template <typename PhaseAction>
 struct get_initialization_actions_list {
-  using type = tmpl::list<>;
-};
-
-template <typename InitializationActionsList>
-struct get_initialization_actions_list<Parallel::PhaseActions<
-    Parallel::Phase::Initialization, InitializationActionsList>> {
-  using type = InitializationActionsList;
+  using type = typename PhaseAction::action_list;
 };
 }  // namespace detail
 
