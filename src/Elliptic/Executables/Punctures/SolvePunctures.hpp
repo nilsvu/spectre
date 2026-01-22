@@ -107,7 +107,8 @@ struct Metavariables {
 
   // Additional items to store in the global cache
   using const_global_cache_tags =
-      tmpl::list<domain::Tags::RadiallyCompressedCoordinatesOptions>;
+      tmpl::list<domain::Tags::RadiallyCompressedCoordinatesOptions,
+                 LinearSolver::multigrid::Tags::PunctureWeight>;
 
   // Collect all reduction tags for observers
   using observed_reduction_data_tags =

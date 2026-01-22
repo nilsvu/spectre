@@ -37,6 +37,7 @@ OutputFileChecks:
 
 Parallelization:
   ElementDistribution: NumGridPoints
+  PunctureWeight: 10.0
 
 ResourceInfo:
   AvoidGlobalProc0: false

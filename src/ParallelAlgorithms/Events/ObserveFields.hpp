@@ -49,6 +49,7 @@
 #include "Utilities/Serialization/CharmPupable.hpp"
 #include "Utilities/Serialization/PupStlCpp17.hpp"
 #include "Utilities/StdHelpers.hpp"
+#include "Utilities/System/ParallelInfo.hpp"
 #include "Utilities/TMPL.hpp"
 #include "Utilities/TypeTraits/IsA.hpp"
 
@@ -280,6 +281,17 @@ class ObserveFields<VolumeDim, tmpl::list<Tensors...>,
                                     std::move(tensor_component));
           }
         };
+
+    DataVector node_dv(
+        interpolation_mesh.value_or(mesh).number_of_grid_points(),
+        static_cast<double>(sys::my_node()));
+    record_tensor_component_impl(std::move(node_dv), FloatingPointType::Float,
+                                 "Node");
+    DataVector proc_dv(
+        interpolation_mesh.value_or(mesh).number_of_grid_points(),
+        static_cast<double>(sys::my_proc()));
+    record_tensor_component_impl(std::move(proc_dv), FloatingPointType::Float,
+                                 "Proc");
 
     const auto record_tensor_components_impl =
         [&record_tensor_component_impl, &interpolant](

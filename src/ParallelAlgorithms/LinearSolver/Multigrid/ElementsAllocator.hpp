@@ -11,13 +11,16 @@
 #include <unordered_set>
 #include <vector>
 
+#include "Domain/BlockLogicalCoordinates.hpp"
 #include "Domain/Creators/Tags/Domain.hpp"
 #include "Domain/Creators/Tags/InitialExtents.hpp"
 #include "Domain/Creators/Tags/InitialRefinementLevels.hpp"
 #include "Domain/ElementDistribution.hpp"
+#include "Domain/ElementLogicalCoordinates.hpp"
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags/ElementDistribution.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
+#include "Elliptic/Tags.hpp"
 #include "NumericalAlgorithms/Convergence/Tags.hpp"
 #include "NumericalAlgorithms/Spectral/Basis.hpp"
 #include "Parallel/GlobalCache.hpp"
@@ -28,6 +31,8 @@
 #include "Parallel/Tags/Section.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Hierarchy.hpp"
 #include "ParallelAlgorithms/LinearSolver/Multigrid/Tags.hpp"
+#include "PointwiseFunctions/AnalyticData/Punctures/MultiplePunctures.hpp"
+#include "PointwiseFunctions/InitialDataUtilities/Background.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/PrettyType.hpp"
 #include "Utilities/ProtocolHelpers.hpp"
@@ -36,6 +41,19 @@
 #include "Utilities/TaggedTuple.hpp"
 
 namespace LinearSolver::multigrid {
+
+namespace Tags {
+struct PunctureWeight : db::SimpleTag {
+  using type = double;
+  using option_tags = tmpl::list<PunctureWeight>;
+  static constexpr Options::String help = {
+      "Factor to increase the load-balancing weight of elements containing a "
+      "puncture."};
+  using group = Parallel::OptionTags::Parallelization;
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(const type& value) { return value; }
+};
+}  // namespace Tags
 
 /*!
  * \brief A `Parallel::protocols::ArrayElementsAllocator` that creates array
@@ -127,6 +145,32 @@ struct ElementsAllocator
     }
     const auto& blocks = domain.blocks();
 
+    // Get puncture positions for weighting
+    const auto& background = Parallel::get<
+        elliptic::Tags::Background<elliptic::analytic_data::Background>>(
+        local_cache);
+    const auto& punctures =
+        dynamic_cast<const Punctures::AnalyticData::MultiplePunctures&>(
+            background)
+            .punctures();
+    const auto has_puncture = [&](const ElementId<Dim>& element_id) -> bool {
+      const auto& block = domain.blocks()[element_id.block_id()];
+      for (const auto& puncture : punctures) {
+        // Check if the puncture is in the block
+        const auto block_logical_coords =
+            block_logical_coordinates_single_point(
+                tnsr::I<double, 3>{puncture.position}, block);
+        if (not block_logical_coords.has_value()) {
+          continue;
+        }
+        // Check if the puncture is in the element
+        if (element_logical_coordinates(*block_logical_coords, element_id)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     // Determine number of initial multigrid levels
     size_t num_levels = 1;
     for (const auto& ref_levs : initial_refinement_levels) {
@@ -164,10 +208,15 @@ struct ElementsAllocator
           static_cast<size_t>(sys::number_of_procs()) - procs_to_ignore.size();
       // Distributed with weighted space filling curve
       if (element_weight.has_value()) {
-        const std::unordered_map<ElementId<Dim>, double> element_costs =
+        std::unordered_map<ElementId<Dim>, double> element_costs =
             domain::get_element_costs(blocks, initial_refinement_levels,
                                       initial_extents, element_weight.value(),
                                       basis, quadrature);
+        for (auto& [element_id, cost] : element_costs) {
+          if (has_puncture(element_id)) {
+            cost *= Parallel::get<Tags::PunctureWeight>(local_cache);
+          }
+        }
         const domain::BlockZCurveProcDistribution<Dim> element_distribution{
             element_costs,   num_of_procs_to_use,
             blocks,          initial_refinement_levels,
