@@ -190,9 +190,9 @@ void test_history() {
           CHECK(v->data() == cached_value);
         }
         // Avoid overwriting the cached allocation for testing.
-        *v = as_const(make_value(2.0));
+        *v = ::as_const(make_value(2.0));
       },
-      [&](const auto d) { *d = as_const(make_deriv(20.0)); });
+      [&](const auto d) { *d = ::as_const(make_deriv(20.0)); });
   // [(-1/2, -3, -300), (-1/4, X, -20), (0, X, -100), (1/4, 1, 10),
   //  (1/2, 2, 20)] []
   CHECK(*const_history.back().value == make_value(2.0));
@@ -260,13 +260,13 @@ void test_history() {
         if constexpr (tt::is_a_v<Variables, Vars>) {
           CHECK(v->data() == cached_value);
         }
-        *v = as_const(make_value(3.0));
+        *v = ::as_const(make_value(3.0));
       },
       [&](const auto d) {
         if constexpr (tt::is_a_v<Variables, Vars>) {
           CHECK(d->data() == cached_deriv);
         }
-        *d = as_const(make_deriv(30.0));
+        *d = ::as_const(make_deriv(30.0));
       });
   // [(-1/4, X, -20), (0, X, -100), (1/4, X, 10), (1/2, 2, 20), (3/4, 3, 30)]
   // []
@@ -298,8 +298,8 @@ void test_history() {
 
   // Now test substeps
 
-  CHECK(as_const(const_history.substeps()).empty());
-  CHECK(as_const(history.substeps()).empty());
+  CHECK(::as_const(const_history.substeps()).empty());
+  CHECK(::as_const(history.substeps()).empty());
 
   const auto step_time = const_history.back().time_step_id.step_time();
   const auto step_size = slab.duration() / 4;
@@ -308,23 +308,24 @@ void test_history() {
                  make_value(4.0), make_deriv(40.0));
   // [(1/4, X, 10), (1/2, 2, 20)] [1/2: (1, 4, 40)]
   CHECK(const_history.back().derivative == make_deriv(20.0));
-  CHECK(as_const(const_history.substeps()).size() == 1);
-  CHECK(as_const(const_history.substeps())[0].derivative == make_deriv(40.0));
-  CHECK(as_const(history.substeps()).size() == 1);
+  CHECK(::as_const(const_history.substeps()).size() == 1);
+  CHECK(::as_const(const_history.substeps())[0].derivative == make_deriv(40.0));
+  CHECK(::as_const(history.substeps()).size() == 1);
   CHECK(&const_history.step_start(0.5) == &const_history[1]);
   CHECK(&const_history.step_start(0.7) == &const_history[1]);
   CHECK(&const_history.step_start(0.3) == &const_history[0]);
 
-  as_const(history.substeps())[0].derivative = make_deriv(400.0);
+  ::as_const(history.substeps())[0].derivative = make_deriv(400.0);
   // [(1/4, X, 10), (1/2, 2, 20)] [1/2: (1, 4, 400)]
-  CHECK(as_const(const_history.substeps())[0].derivative == make_deriv(400.0));
+  CHECK(::as_const(const_history.substeps())[0].derivative ==
+        make_deriv(400.0));
 
   CHECK(not const_history.at_step_start());
   CHECK(not static_cast<const ConstUntyped&>(const_history.untyped())
                 .at_step_start());
   history.undo_latest();
   // [(1/4, X, 10), (1/2, 2, 20)] []
-  CHECK(as_const(const_history.substeps()).empty());
+  CHECK(::as_const(const_history.substeps()).empty());
   CHECK(const_history.at_step_start());
   CHECK(static_cast<const ConstUntyped&>(const_history.untyped())
             .at_step_start());
@@ -408,7 +409,7 @@ void test_history() {
   // [(1/4, X, 10), (1/2, 2, 20), (1, 6, 60)] [1/2: (1, 4, 40), (2, 5, 50)]
 
   CHECK(const_history.size() == 3);
-  CHECK(as_const(const_history.substeps()).size() == 2);
+  CHECK(::as_const(const_history.substeps()).size() == 2);
   CHECK(const_history.at_step_start());
   CHECK(static_cast<const ConstUntyped&>(const_history.untyped())
             .at_step_start());
@@ -593,7 +594,7 @@ void test_history() {
   // [(1/4, X, 10), (1/2, 2, 20)] [1/2: (1, 4, 40), (2, 5, 50)]
 
   CHECK(const_history.size() == 2);
-  CHECK(as_const(const_history.substeps()).size() == 2);
+  CHECK(::as_const(const_history.substeps()).size() == 2);
   CHECK(not const_history.at_step_start());
   CHECK(not static_cast<const ConstUntyped&>(const_history.untyped())
                 .at_step_start());
@@ -609,7 +610,7 @@ void test_history() {
   // [(1/4, X, 10), (1/2, 2, 20), (3/4, 6, 60)] []
 
   CHECK(const_history.size() == 3);
-  CHECK(as_const(const_history.substeps()).empty());
+  CHECK(::as_const(const_history.substeps()).empty());
   CHECK(const_history.at_step_start());
   CHECK(static_cast<const ConstUntyped&>(const_history.untyped())
             .at_step_start());
@@ -621,7 +622,7 @@ void test_history() {
 
   history.shrink_to_fit();
   CHECK(const_history.size() == 3);
-  CHECK(as_const(const_history.substeps()).size() == 1);
+  CHECK(::as_const(const_history.substeps()).size() == 1);
 
   if constexpr (tt::is_a_v<Variables, Vars>) {
     cached_value = const_history.substeps().back().value->data();
@@ -630,14 +631,14 @@ void test_history() {
   history.undo_latest();
   // [(1/4, X, 10), (1/2, 2, 20), (3/4, 6, 60)] []
   CHECK(const_history.size() == 3);
-  CHECK(as_const(const_history.substeps()).empty());
+  CHECK(::as_const(const_history.substeps()).empty());
   history.insert_in_place(
       TimeStepId(true, 1, step_time2, 1, step_size2, slab.end().value()),
       History::no_value, [&](const auto d) {
         if constexpr (tt::is_a_v<Variables, Vars>) {
           CHECK(d->data() == cached_deriv);
         }
-        *d = as_const(make_deriv(70.0));
+        *d = ::as_const(make_deriv(70.0));
       });
   // [(1/4, X, 10), (1/2, 2, 20), (3/4, 6, 60)] [3/4: (1, X, 70)]
   history.insert(
@@ -650,9 +651,9 @@ void test_history() {
         if constexpr (tt::is_a_v<Variables, Vars>) {
           CHECK(v->data() == cached_value);
         }
-        *v = as_const(make_value(9.0));
+        *v = ::as_const(make_value(9.0));
       },
-      [&](const auto d) { *d = as_const(make_deriv(90.0)); });
+      [&](const auto d) { *d = ::as_const(make_deriv(90.0)); });
   // [(1/4, X, 10), (1/2, 2, 20), (3/4, 6, 60)]
   //     [3/4: (1, X, 70), (1, X, 80), (1, 9, 90)]
 
@@ -666,13 +667,13 @@ void test_history() {
         if constexpr (tt::is_a_v<Variables, Vars>) {
           CHECK(v->size() == 0);
         }
-        *v = as_const(make_value(9.0));
+        *v = ::as_const(make_value(9.0));
       },
       [&](const auto d) {
         if constexpr (tt::is_a_v<Variables, Vars>) {
           CHECK(d->size() == 0);
         }
-        *d = as_const(make_deriv(90.0));
+        *d = ::as_const(make_deriv(90.0));
       });
   // [(1/4, X, 10), (1/2, 2, 20), (3/4, 6, 60)]
   //     [3/4: (1, X, 70), (1, X, 80), (1, 8, 80)]
