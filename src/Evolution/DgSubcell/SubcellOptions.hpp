@@ -260,7 +260,7 @@ class SubcellOptions {
 
   bool use_halo() const { return use_halo_; }
 
-  const std::vector<size_t>& only_dg_block_ids() const {
+  const std::set<size_t>& only_dg_block_ids() const {
     ASSERT(only_dg_block_ids_.has_value(),
            "The block IDs on which we are only allowed to do DG have not been "
            "set.");
@@ -308,7 +308,7 @@ class SubcellOptions {
       fd::ReconstructionMethod::AllDimsAtOnce;
   bool use_halo_{false};
   std::optional<std::vector<std::string>> only_dg_block_and_group_names_{};
-  std::optional<std::vector<size_t>> only_dg_block_ids_{};
+  std::optional<std::set<size_t>> only_dg_block_ids_{};
   ::fd::DerivativeOrder finite_difference_derivative_order_{};
   size_t number_of_steps_between_tci_calls_{1};
   size_t min_tci_calls_after_rollback_{1};

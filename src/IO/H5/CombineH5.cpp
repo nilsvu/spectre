@@ -78,7 +78,7 @@ size_t get_number_of_elements(const std::vector<std::string>& input_filenames,
   return total_elements;
 }
 
-std::optional<std::unordered_set<size_t>> get_block_numbers_to_use(
+std::optional<std::set<size_t>> get_block_numbers_to_use(
     const std::string& file_name, const std::string& subfile_name,
     const size_t observation_id,
     const std::optional<std::vector<std::string>>& blocks_to_combine) {
@@ -97,51 +97,34 @@ std::optional<std::unordered_set<size_t>> get_block_numbers_to_use(
           << ". This means we cannot filter based on block names. You can "
              "still combine the files but will need to use all blocks.");
   }
-  std::unordered_set<std::string> block_names_to_combine{};
-  std::vector<std::string> block_names_in_domain{};
   switch (dim) {
     case 1: {
       const auto domain =
           deserialize<Domain<1>>(serialized_domain.value().data());
-      block_names_in_domain = domain.block_names();
-      block_names_to_combine = domain::expand_block_groups_to_block_names(
-          blocks_to_combine.value(), domain.block_names(),
-          domain.block_groups());
+      return domain::block_ids_from_names(blocks_to_combine.value(),
+                                          domain.block_names(),
+                                          domain.block_groups());
       break;
     }
     case 2: {
       const auto domain =
           deserialize<Domain<2>>(serialized_domain.value().data());
-      block_names_in_domain = domain.block_names();
-      block_names_to_combine = domain::expand_block_groups_to_block_names(
-          blocks_to_combine.value(), domain.block_names(),
-          domain.block_groups());
+      return domain::block_ids_from_names(blocks_to_combine.value(),
+                                          domain.block_names(),
+                                          domain.block_groups());
       break;
     }
     case 3: {
       const auto domain =
           deserialize<Domain<3>>(serialized_domain.value().data());
-      block_names_in_domain = domain.block_names();
-      block_names_to_combine = domain::expand_block_groups_to_block_names(
-          blocks_to_combine.value(), domain.block_names(),
-          domain.block_groups());
+      return domain::block_ids_from_names(blocks_to_combine.value(),
+                                          domain.block_names(),
+                                          domain.block_groups());
       break;
     }
     default:
       ERROR("Only can handle 1, 2, or 3d domains not " << dim);
   };
-
-  std::unordered_set<size_t> blocks_to_use{};
-  for (const std::string& block_to_combine : block_names_to_combine) {
-    auto location_it = alg::find(block_names_in_domain, block_to_combine);
-    if (location_it == block_names_in_domain.end()) {
-      ERROR("Block name " << block_to_combine << " not found.");
-    }
-    blocks_to_use.insert(static_cast<size_t>(
-        std::distance(block_names_in_domain.begin(), location_it)));
-  }
-
-  return blocks_to_use;
 }
 }  // namespace
 
@@ -193,7 +176,7 @@ void combine_h5_vol(
     ERROR("No observation IDs found in subfile" << subfile_name);
   }
 
-  const std::optional<std::unordered_set<size_t>> blocks_to_use =
+  const std::optional<std::set<size_t>> blocks_to_use =
       get_block_numbers_to_use(file_names[0], subfile_name,
                                observation_ids_and_values[0].first,
                                blocks_to_combine);
