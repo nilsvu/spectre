@@ -183,7 +183,7 @@ struct SubdomainOperator
   using sources_args_tags =
       elliptic::get_sources_argument_tags<System, linearized>;
   using modify_boundary_data_args_tags =
-      elliptic::get_modify_boundary_data_args_tags<System, true>;
+      elliptic::get_modify_boundary_data_args_tags<System, linearized>;
   // We need the fluxes args also on interfaces (internal and external). The
   // volume tags are the subset that don't have to be taken from interfaces.
   using fluxes_args_volume_tags =
@@ -191,10 +191,13 @@ struct SubdomainOperator
 
   // These tags can be taken directly from the central element's DataBox, even
   // when evaluating neighbors
-  using args_tags_from_center = tmpl::remove_duplicates<tmpl::push_back<
+  using args_tags_from_center = tmpl::remove_duplicates<tmpl::append<
       elliptic::get_fluxes_const_global_cache_tags<System, linearized>,
       elliptic::get_sources_const_global_cache_tags<System, linearized>,
-      elliptic::dg::Tags::Massive, elliptic::dg::Tags::Formulation>>;
+      elliptic::get_modify_boundary_data_const_global_cache_tags<System,
+                                                                 linearized>,
+      tmpl::list<elliptic::dg::Tags::Massive,
+                 elliptic::dg::Tags::Formulation>>>;
 
   // Data on neighbors is stored in the central element's DataBox in
   // `LinearSolver::Schwarz::Tags::Overlaps` maps, so we wrap the argument tags
