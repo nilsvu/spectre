@@ -48,12 +48,12 @@ DomainCreator:
         - {{ puncture_position - worldtube_radius }}
         - {{ puncture_position + worldtube_radius }}
         - *t_to_u_transition
-        - {{ outer_radius }}
+        - &outer_radius {{ outer_radius }}
       # cos(theta)
       - [-1., {{ -worldtube_dcostheta }}, {{ worldtube_dcostheta }}, 1.]
     Distributions:
       # rstar
-      - [Linear, Linear, Linear, Linear, Inverse]
+      - [Linear, Linear, Linear, Linear, &outer_shell_distribution Inverse]
       # cos(theta)
       - [Linear, Linear, Linear]
     SingularityPositions:
@@ -265,10 +265,16 @@ EventsAndTriggersAtIterations:
             - BoyerLindquistRadius
             - BoostFunction
             - BoostFunctionDeriv
+            - RadiallyCompressedCoordinates
           BlocksToObserve: All
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Double
           FloatingPointTypes: [Double]
+
+RadiallyCompressedCoordinates:
+  InnerRadius: *t_to_u_transition
+  OuterRadius: *outer_radius
+  Compression: *outer_shell_distribution
 
 BuildMatrix:
   MatrixSubfileName: None

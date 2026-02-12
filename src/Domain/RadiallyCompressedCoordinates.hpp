@@ -134,6 +134,11 @@ struct RadiallyCompressedCoordinatesOptions : db::SimpleTag {
  * The coordinate map reduces to the identity if no options for radially
  * compressed coordinates were specified in the input file.
  *
+ * The template parameter `RadialDim` determines which dimensions to compress.
+ * If `RadialDim` is `void`, all dimensions are compressed radially (Cartesian
+ * coordinates). If `RadialDim` is a `tmpl::size_t`, only that dimension is
+ * compressed.
+ *
  * \see radially_compressed_coordinates
  */
 template <size_t Dim, typename CoordsFrame>
@@ -141,7 +146,7 @@ struct RadiallyCompressedCoordinates : db::SimpleTag {
   using type = tnsr::I<DataVector, Dim, CoordsFrame>;
 };
 
-template <size_t Dim, typename CoordsFrame>
+template <size_t Dim, typename CoordsFrame, typename RadialDim = void>
 struct RadiallyCompressedCoordinatesCompute
     : RadiallyCompressedCoordinates<Dim, CoordsFrame>,
       db::ComputeTag {
@@ -155,9 +160,20 @@ struct RadiallyCompressedCoordinatesCompute
       const std::optional<domain::RadiallyCompressedCoordinatesOptions>&
           options) {
     if (options.has_value()) {
-      radially_compressed_coordinates(result, coords, options->inner_radius,
-                                      options->outer_radius,
-                                      options->compression);
+      if constexpr (std::is_same_v<RadialDim, void>) {
+        radially_compressed_coordinates(result, coords, options->inner_radius,
+                                        options->outer_radius,
+                                        options->compression);
+      } else {
+        *result = coords;
+        // Only compress the specified radial dimension
+        tnsr::I<DataVector, 1, CoordsFrame> result_radial{};
+        get<0>(result_radial).set_data_ref(&get<RadialDim::value>(*result));
+        radially_compressed_coordinates(
+            make_not_null(&result_radial),
+            tnsr::I<DataVector, 1, CoordsFrame>{get<RadialDim::value>(coords)},
+            options->inner_radius, options->outer_radius, options->compression);
+      }
     } else {
       *result = coords;
     }
