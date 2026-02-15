@@ -86,7 +86,8 @@ struct InitializeEffectiveSource : tt::ConformsTo<::amr::protocols::Projector> {
 
  public:  // Iterable action
   using const_global_cache_tags =
-      tmpl::list<elliptic::dg::Tags::Massive, BackgroundTag>;
+      tmpl::list<elliptic::dg::Tags::Massive, BackgroundTag,
+                 Tags::NullSlicingBlocks>;
   using simple_tags =
       tmpl::list<fields_tag, fixed_sources_tag, singular_vars_tag,
                  ::Tags::Mortars<singular_vars_on_mortars_tag, Dim>,

@@ -11,22 +11,23 @@
 #include "DataStructures/Variables.hpp"
 #include "Domain/Structure/DirectionalId.hpp"
 #include "Domain/Structure/DirectionalIdMap.hpp"
+#include "PointwiseFunctions/AnalyticData/SelfForce/Scalar/CircularOrbit.hpp"
 
 namespace ScalarSelfForce {
 
 void fluxes(const gsl::not_null<tnsr::I<ComplexDataVector, 2>*> flux,
-            const Scalar<ComplexDataVector>& alpha,
+            const tnsr::I<ComplexDataVector, 2>& alpha,
             const tnsr::i<ComplexDataVector, 2>& field_gradient) {
-  get<0>(*flux) = get<0>(field_gradient);
-  get<1>(*flux) = get(alpha) * get<1>(field_gradient);
+  get<0>(*flux) = get<0>(alpha) * get<0>(field_gradient);
+  get<1>(*flux) = get<1>(alpha) * get<1>(field_gradient);
 }
 
 void fluxes_on_face(const gsl::not_null<tnsr::I<ComplexDataVector, 2>*> flux,
-                    const Scalar<ComplexDataVector>& alpha,
+                    const tnsr::I<ComplexDataVector, 2>& alpha,
                     const tnsr::I<DataVector, 2>& face_normal_vector,
                     const Scalar<ComplexDataVector>& field) {
-  get<0>(*flux) = get<0>(face_normal_vector) * get(field);
-  get<1>(*flux) = get(alpha) * get<1>(face_normal_vector) * get(field);
+  get<0>(*flux) = get<0>(alpha) * get<0>(face_normal_vector) * get(field);
+  get<1>(*flux) = get<1>(alpha) * get<1>(face_normal_vector) * get(field);
 }
 
 void add_sources(const gsl::not_null<Scalar<ComplexDataVector>*> source,
@@ -40,14 +41,14 @@ void add_sources(const gsl::not_null<Scalar<ComplexDataVector>*> source,
 }
 
 void Fluxes::apply(const gsl::not_null<tnsr::I<ComplexDataVector, 2>*> flux,
-                   const Scalar<ComplexDataVector>& alpha,
+                   const tnsr::I<ComplexDataVector, 2>& alpha,
                    const Scalar<ComplexDataVector>& /*field*/,
                    const tnsr::i<ComplexDataVector, 2>& field_gradient) {
   fluxes(flux, alpha, field_gradient);
 }
 
 void Fluxes::apply(const gsl::not_null<tnsr::I<ComplexDataVector, 2>*> flux,
-                   const Scalar<ComplexDataVector>& alpha,
+                   const tnsr::I<ComplexDataVector, 2>& alpha,
                    const tnsr::i<DataVector, 2>& /*face_normal*/,
                    const tnsr::I<DataVector, 2>& face_normal_vector,
                    const Scalar<ComplexDataVector>& field) {
@@ -85,6 +86,33 @@ void ModifyBoundaryData::apply(
           singular_vars_on_mortars.at(mortar_id));
   get(*field) += sign * get(singular_field);
   get(*n_dot_flux) -= sign * get(singular_field_n_dot_flux);
+}
+
+void ModifyBoundaryData::apply_linearized(
+    const gsl::not_null<Scalar<ComplexDataVector>*> /*field_remote*/,
+    const gsl::not_null<Scalar<ComplexDataVector>*> n_dot_field_gradient_remote,
+    const gsl::not_null<Scalar<ComplexDataVector>*> /*field_local*/,
+    const gsl::not_null<
+        Scalar<ComplexDataVector>*> /*n_dot_field_gradient_local*/,
+    const Scalar<ComplexDataVector>& avg_field,
+    const DirectionalId<Dim>& mortar_id, const Element<Dim>& element,
+    const std::set<size_t>& null_slicing_blocks,
+    const elliptic::analytic_data::Background& background) {
+  if (null_slicing_blocks.contains(element.id().block_id()) ==
+      null_slicing_blocks.contains(mortar_id.id().block_id())) {
+    // Both elements use the same slicing. Nothing to do.
+    return;
+  }
+  // Apply the jump in the field gradient across the boundary to handle
+  // vtu-slicing. The signs are all the same (on both sides of the boundary and
+  // at both transition points).
+  const auto& circular_orbit =
+      dynamic_cast<const ScalarSelfForce::AnalyticData::CircularOrbit&>(
+          background);
+  const double omega = circular_orbit.omega();
+  const double m_mode_number = circular_orbit.m_mode_number();
+  get(*n_dot_field_gradient_remote) -=
+      std::complex<double>(0.0, m_mode_number * omega) * get(avg_field);
 }
 
 }  // namespace ScalarSelfForce

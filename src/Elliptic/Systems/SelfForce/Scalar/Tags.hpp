@@ -5,6 +5,9 @@
 
 #include "DataStructures/DataBox/Tag.hpp"
 #include "DataStructures/Tensor/TypeAliases.hpp"
+#include "Domain/Creators/DomainCreator.hpp"
+#include "Domain/Creators/OptionTags.hpp"
+#include "Domain/Structure/BlockGroups.hpp"
 
 /// \cond
 class ComplexDataVector;
@@ -18,10 +21,27 @@ class DataVector;
  *
  * \see ScalarSelfForce::FirstOrderSystem
  */
-namespace ScalarSelfForce {}
+namespace ScalarSelfForce {
+
+namespace OptionTags {
+
+struct OptionGroup {
+  static std::string name() { return "ScalarSelfForce"; }
+  static constexpr Options::String help =
+      "Options for the scalar self-force system";
+};
+
+struct NullSlicingBlocks {
+  using group = OptionGroup;
+  using type = std::vector<std::string>;
+  static constexpr Options::String help =
+      "The blocks in which to use null slicing (vtu-slicing).";
+};
+
+}  // namespace OptionTags
 
 /// Tags for the ScalarSelfForce system.
-namespace ScalarSelfForce::Tags {
+namespace Tags {
 
 /*!
  * \brief The complex m-mode field $\Psi_m$.
@@ -42,24 +62,25 @@ struct MMode : db::SimpleTag {
 };
 
 /*!
- * \brief The factor multiplying the angular derivative in the principal part of
+ * \brief The factors multiplying the derivatives in the principal part of
  * the equations.
  *
- * This is the factor $\alpha$ that defines the principal part of the equations
- * and allows to write it in first-order flux form given by
+ * These are the factors $\alpha^i$ that define the principal part of the
+ * equations and allow to write it in first-order flux form given by
  * \begin{equation}
  * -\partial_i F^i + \beta \Psi_m + \gamma_i F^i = S_m
  * \end{equation}
  * with the flux
  * \begin{equation}
- * F^i = \{\partial_{r_\star}, \alpha \partial_{\cos\theta}\} \Psi_m
+ * F^i = \alpha^{ij} \partial_j \Psi_m
  * \text{.}
  * \end{equation}
- * This factor is set by the analytic data class (see
+ * In our case, $\alpha^{ij}$ is diagonal and $\alpha^i$ are the diagonal
+ * elements. They are set by the analytic data class (see
  * `ScalarSelfForce::AnalyticData::CircularOrbit`).
  */
 struct Alpha : db::SimpleTag {
-  using type = Scalar<ComplexDataVector>;
+  using type = tnsr::I<ComplexDataVector, 2>;
 };
 
 /*!
@@ -129,6 +150,23 @@ struct BoyerLindquistRadius : db::SimpleTag {
 };
 
 /*!
+ * \brief Blocks in which we use null slicing (vtu-slicing).
+ */
+struct NullSlicingBlocks : db::SimpleTag {
+  using type = std::set<size_t>;
+  using option_tags = tmpl::list<OptionTags::NullSlicingBlocks,
+                                 domain::OptionTags::DomainCreator<2>>;
+  static constexpr bool pass_metavariables = false;
+  static type create_from_options(
+      const std::vector<std::string>& null_slicing_blocks,
+      const std::unique_ptr<DomainCreator<2>>& domain_creator) {
+    return domain::block_ids_from_names(null_slicing_blocks,
+                                        domain_creator->block_names(),
+                                        domain_creator->block_groups());
+  }
+};
+
+/*!
  * \brief The hyperboloidal boost function $H(r_*)$.
  */
 struct BoostFunction : db::SimpleTag {
@@ -142,4 +180,5 @@ struct BoostFunctionDeriv : db::SimpleTag {
   using type = Scalar<ComplexDataVector>;
 };
 
-}  // namespace ScalarSelfForce::Tags
+}  // namespace Tags
+}  // namespace ScalarSelfForce

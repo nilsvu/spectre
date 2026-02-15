@@ -27,6 +27,8 @@ target_link_libraries(
   DomainStructure
   ErrorHandling
   Utilities
+  PRIVATE
+  ScalarSelfForceAnalyticData
   )
 
 add_subdirectory(AmrCriteria)

@@ -91,7 +91,7 @@ struct FirstOrderSystem
   using sources_computer =
       tmpl::conditional_t<BackgroundGeometry == Geometry::FlatCartesian, void,
                           Sources<Dim, BackgroundGeometry, DataType>>;
-  using modify_boundary_data = ModifyBoundaryData<Dim>;
+  using modify_boundary_data = void;
 
   using boundary_conditions_base =
       elliptic::BoundaryConditions::BoundaryCondition<Dim>;

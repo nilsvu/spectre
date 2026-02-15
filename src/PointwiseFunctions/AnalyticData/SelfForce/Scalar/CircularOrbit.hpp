@@ -157,10 +157,21 @@ class CircularOrbit : public elliptic::analytic_data::Background,
         "Enable hyperboloidal slicing by specifying the transition points for "
         "the boost function. The boost function transitions from -1 to zero "
         "between the first two points and from zero to 1 between the last "
-        "two points. The effective source can only be evaluated where the "
+        "two points. "
+        "The two points can be the same, in which case the transition is "
+        "discontinuous (vtu slicing) and the jump must be handled by the DG "
+        "scheme (see option 'NullSlicingBlocks'). "
+        "The effective source can only be evaluated where the "
         "boost function is zero, so the regularized region must be between "
         "the second and third points.";
     using type = Options::Auto<std::array<double, 4>, Options::AutoLabel::None>;
+  };
+  struct PenetratingHorizon {
+    static constexpr Options::String help =
+        "If 'False', use tortoise radial coordinate where the Kerr horizon is "
+        "at negative infinity. If 'True', use Boyer-Lindquist radial "
+        "coordinate where the Kerr horizon is at r_+.";
+    using type = bool;
   };
   struct ImposeEquatorialSymmetry {
     static constexpr Options::String help =
@@ -169,9 +180,9 @@ class CircularOrbit : public elliptic::analytic_data::Background,
         "domain should span [0, 1] instead of [-1, 1].";
     using type = bool;
   };
-  using options =
-      tmpl::list<BlackHoleMass, BlackHoleSpin, OrbitalRadius, MModeNumber,
-                 HyperboloidalSlicingTransitions, ImposeEquatorialSymmetry>;
+  using options = tmpl::list<BlackHoleMass, BlackHoleSpin, OrbitalRadius,
+                             MModeNumber, HyperboloidalSlicingTransitions,
+                             PenetratingHorizon, ImposeEquatorialSymmetry>;
   static constexpr Options::String help =
       "Quasicircular orbit of a scalar point charge in Kerr spacetime";
 
@@ -186,7 +197,7 @@ class CircularOrbit : public elliptic::analytic_data::Background,
       double black_hole_mass, double black_hole_spin, double orbital_radius,
       int m_mode_number,
       std::optional<std::array<double, 4>> hyperboloidal_slicing_transitions,
-      bool impose_equatorial_symmetry);
+      bool penetrating_horizon, bool impose_equatorial_symmetry);
 
   explicit CircularOrbit(CkMigrateMessage* m);
   using PUP::able::register_constructor;
@@ -196,11 +207,13 @@ class CircularOrbit : public elliptic::analytic_data::Background,
   double black_hole_mass() const { return black_hole_mass_; }
   double black_hole_spin() const { return black_hole_spin_; }
   double orbital_radius() const { return orbital_radius_; }
+  double omega() const;
   int m_mode_number() const { return m_mode_number_; }
   std::optional<std::array<double, 4>> hyperboloidal_slicing_transitions()
       const {
     return hyperboloidal_slicing_transitions_;
   }
+  bool penetrating_horizon() const { return penetrating_horizon_; }
   bool impose_equatorial_symmetry() const {
     return impose_equatorial_symmetry_;
   }
@@ -244,6 +257,7 @@ class CircularOrbit : public elliptic::analytic_data::Background,
   double orbital_radius_{std::numeric_limits<double>::signaling_NaN()};
   int m_mode_number_{};
   std::optional<std::array<double, 4>> hyperboloidal_slicing_transitions_{};
+  bool penetrating_horizon_{false};
   bool impose_equatorial_symmetry_{false};
 };
 

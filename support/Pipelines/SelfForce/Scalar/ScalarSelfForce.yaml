@@ -28,11 +28,26 @@ Background: &background
     OrbitalRadius: &orbital_radius {{ orbital_radius }}
     MModeNumber: &m_mode_number {{ m_mode }}
     HyperboloidalSlicingTransitions:
-      - &v_to_t_transition {{ puncture_position - worldtube_radius - 25 }}
-      - {{ puncture_position - worldtube_radius }}
-      - {{ puncture_position + worldtube_radius }}
-      - &t_to_u_transition {{ puncture_position + worldtube_radius + 25 }}
+      # - &v_to_t_transition {{ orbital_radius - worldtube_radius - 25 }}
+      # - {{ orbital_radius - worldtube_radius }}
+      # - {{ orbital_radius + worldtube_radius }}
+      # - &t_to_u_transition {{ orbital_radius + worldtube_radius + 25 }}
+      - &v_to_t_transition {{ orbital_radius - worldtube_radius - 0.2 }}
+      - *v_to_t_transition
+      - &t_to_u_transition {{ orbital_radius + worldtube_radius + 1 }}
+      - *t_to_u_transition
+    # PenetratingHorizon: False
+    PenetratingHorizon: True
     ImposeEquatorialSymmetry: False
+
+ScalarSelfForce:
+  NullSlicingBlocks:
+    - Block0
+    - Block4
+    - Block5
+    - Block9
+    - Block10
+    - Block14
 
 InitialGuess: *background
 
@@ -45,8 +60,8 @@ DomainCreator:
       # rstar
       - - {{ inner_radius }}
         - *v_to_t_transition
-        - {{ puncture_position - worldtube_radius }}
-        - {{ puncture_position + worldtube_radius }}
+        - {{ orbital_radius - worldtube_radius }}
+        - {{ orbital_radius + worldtube_radius }}
         - *t_to_u_transition
         - &outer_radius {{ outer_radius }}
       # cos(theta)
@@ -72,7 +87,7 @@ DomainCreator:
         Refinement: [ {{ L - 1 }}, {{ L - 1 }} ]
       - LowerCornerIndex: [1, 0] # bottom transition left
         UpperCornerIndex: [2, 1]
-        Refinement: [ {{ L - 1 }}, {{ L }} ]
+        Refinement: [ {{ L - 1 }}, {{ L - 1 }} ]
       - LowerCornerIndex: [2, 0] # bottom middle
         UpperCornerIndex: [3, 1]
         Refinement: [ {{ L }}, {{ L }} ]
@@ -88,7 +103,7 @@ DomainCreator:
         Refinement: [ {{ L - 1 }}, {{ L - 1 }} ]
       - LowerCornerIndex: [1, 1] # middle transition left
         UpperCornerIndex: [2, 2]
-        Refinement: [ {{ L - 1 }}, {{ L }} ]
+        Refinement: [ {{ L - 1 }}, {{ L - 1 }} ]
       - LowerCornerIndex: [2, 1] # source region
         UpperCornerIndex: [3, 2]
         Refinement: [ {{ L }}, {{ L }} ]
@@ -104,7 +119,7 @@ DomainCreator:
         Refinement: [ {{ L - 1 }}, {{ L - 1 }} ]
       - LowerCornerIndex: [1, 2] # top transition left
         UpperCornerIndex: [2, 3]
-        Refinement: [ {{ L - 1 }}, {{ L }} ]
+        Refinement: [ {{ L - 1 }}, {{ L - 1 }} ]
       - LowerCornerIndex: [2, 2] # top middle
         UpperCornerIndex: [3, 3]
         Refinement: [ {{ L }}, {{ L }} ]
@@ -116,15 +131,18 @@ DomainCreator:
         Refinement: [ {{ L }}, {{ L - 1 }} ]
     BoundaryConditions: &boundary_conditions
       # Radial boundary conditions
-      - Lower:
-          Sommerfeld:
-            BlackHoleMass: *bh_mass
-            BlackHoleSpin: *bh_spin
-            OrbitalRadius: *orbital_radius
-            MModeNumber: *m_mode_number
-            HyperboloidalSlicing: True
-            Order: 1
+      - Lower: None
+          # Sommerfeld:
+          #   BlackHoleMass: *bh_mass
+          #   BlackHoleSpin: *bh_spin
+          #   OrbitalRadius: *orbital_radius
+          #   MModeNumber: *m_mode_number
+          #   HyperboloidalSlicing: True
+          #   Order: 1
         Upper:
+{% if m_mode == 0 %}
+          None
+{% else %}
           Sommerfeld:
             BlackHoleMass: *bh_mass
             BlackHoleSpin: *bh_spin
@@ -132,19 +150,19 @@ DomainCreator:
             MModeNumber: *m_mode_number
             HyperboloidalSlicing: True
             Order: 2
+{% endif %}
       # Angular boundary conditions
-      - Angular:
-          MModeNumber: *m_mode_number
+      - None
 
 Amr:
   Verbosity: Quiet
   Criteria:
     - RefineAtPuncture
-    # - IncreaseResolution
-    - TruncationError:
-        VariablesToMonitor: [MMode]
-        AbsoluteTarget: 1.e-10
-        RelativeTarget: 1.e-10
+    - IncreaseResolution
+    # - TruncationError:
+    #     VariablesToMonitor: [MMode]
+    #     AbsoluteTarget: 1.e-8
+    #     RelativeTarget: 1.e-8
     # - Persson:
     #     VariablesToMonitor: [MMode]
     #     NumHighestModes: 1
@@ -160,17 +178,7 @@ Amr:
       ErrorBeyondLimits: True
     AllowCoarsening: True
   MaxCoarseLevels: Auto
-{% if m_mode == 0 %}
-  Iterations: 14
-{% elif m_mode == 1 %}
-  Iterations: 12
-{% elif m_mode == 2 %}
   Iterations: 10
-{% elif m_mode == 3 %}
-  Iterations: 9
-{% else %}
-  Iterations: 8
-{% endif %}
 
 PhaseChangeAndTriggers:
   # Run AMR in every iteration, but not on the initial guess
@@ -211,7 +219,7 @@ LinearSolver:
     PostSmoothingAtBottom: False
     Verbosity: Silent
     OutputVolumeData: False
-    ComplexShift: 0.
+    ComplexShift: 0.0
 
   SchwarzSmoother:
     Iterations: 2
@@ -223,25 +231,6 @@ LinearSolver:
         ComplexShift: 0.0
     ObservePerCoreReductions: False
     OutputVolumeData: False
-    # SubdomainBoundaryConditions: None
-    #   - &subdomain_boundary_conditions
-    #     - Sommerfeld:
-    #         BlackHoleMass: *bh_mass
-    #         BlackHoleSpin: *bh_spin
-    #         OrbitalRadius: *orbital_radius
-    #         MModeNumber: *m_mode_number
-    #         HyperboloidalSlicing: True  # or false?
-    #     - Angular:
-    #         MModeNumber: *m_mode_number
-    #   - *subdomain_boundary_conditions
-    #   - *subdomain_boundary_conditions
-    #   - *subdomain_boundary_conditions
-    #   - *subdomain_boundary_conditions
-    #   - *subdomain_boundary_conditions
-    #   - *subdomain_boundary_conditions
-    #   - *subdomain_boundary_conditions
-    #   - *subdomain_boundary_conditions
-    #   - *subdomain_boundary_conditions
 
 EventsAndTriggersAtIterations:
   - Trigger: Always
