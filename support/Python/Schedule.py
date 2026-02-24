@@ -137,6 +137,7 @@ def schedule(
     submit: Optional[bool] = None,
     clean_output: bool = False,
     force: bool = False,
+    skip_existing: bool = False,
     validate: Optional[bool] = True,
     extra_params: dict = {},
     **kwargs,
@@ -516,6 +517,11 @@ def schedule(
     context.update(out_file=out_file.resolve())
 
     # Create the run directory
+    if skip_existing and run_dir.exists():
+        logger.info(
+            f"Skipping existing run directory '{run_dir}' (use 'force' to overwrite)."
+        )
+        return
     logger.info(f"Configure run directory '{run_dir}'")
     run_dir.mkdir(parents=True, exist_ok=True)
 

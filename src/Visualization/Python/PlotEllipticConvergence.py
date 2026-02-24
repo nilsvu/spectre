@@ -75,11 +75,12 @@ def plot_elliptic_convergence(
     cumulative_linsolv_iterations = [0] + list(
         np.cumsum([len(l) - 1 for l in linear_residuals])
     )
-    norm = (
-        nonlinear_residuals
-        if nonlinear_residuals is not None
-        else linear_residuals
-    )[0]["Residual"].iloc[0]
+    # norm = (
+    #     nonlinear_residuals
+    #     if nonlinear_residuals is not None
+    #     else linear_residuals
+    # )[0]["Residual"].iloc[0]
+    norm = 1.0
     # Plot nonlinear solver residuals
     if fig is None:
         fig = plt.figure()
@@ -151,7 +152,8 @@ def plot_elliptic_convergence(
     ax_residual.set_yscale("log")
     ax_residual.grid()
     ax_residual.legend()
-    ax_residual.set_ylabel("Relative residual")
+    ax_residual.set_ylabel("Absolute residual")
+    ax_residual.axhline(1e-11, color="red", ls="dashed", label="Target residual")
     ax_time.set_yscale("log")
     ax_time.grid()
     ax_time.set_ylabel("Walltime per iteration [s]")

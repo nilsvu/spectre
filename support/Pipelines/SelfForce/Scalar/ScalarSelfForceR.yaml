@@ -6,15 +6,17 @@ Description: >
   orbit around a Kerr black hole.
 
   Example:
-    spectre run ScalarSelfForce.yaml -o "test_ssf" \
-      -p spin=0.5 -p orbital_radius=10 -p m_mode=2 -p inner_radius=-50 \
-      -p outer_radius=1e4 -p puncture_position=12.775940471833115 \
-      -p worldtube_radius=10 -p worldtube_dcostheta=0.5 -p P=4 -p L=1
+    spectre run ScalarSelfForce.yaml -o "test" \
+      -p spin=0.0 -p orbital_radius=10 -p m_mode=2 -p inner_radius=1.9 \
+      -p outer_radius=10000 -p puncture_position=15 -p worldtube_radius=15 \
+      -p worldtube_dcostheta=0.5 -p P=4 -p L=2 -p L_theta=1
 
   Then, for example, run 'spectre generate-id' on the volume data output to view
   in ParaView or inspect the reduction data output to see the extracted
   self-force at the particle.
 Executable: SolveScalarSelfForce
+Testing:
+  Check: parse
 ExpectedOutput:
   - ScalarSelfForceReductions.h5
   - ScalarSelfForceVolume0.h5
@@ -24,30 +26,19 @@ ExpectedOutput:
 Background: &background
   CircularOrbit:
     BlackHoleMass: &bh_mass 1.
-    BlackHoleSpin: &bh_spin {{ spin }}
-    OrbitalRadius: &orbital_radius {{ orbital_radius }}
-    MModeNumber: &m_mode_number {{ m_mode }}
-    HyperboloidalSlicingTransitions:
-      # - &v_to_t_transition {{ orbital_radius - worldtube_radius - 25 }}
-      # - {{ orbital_radius - worldtube_radius }}
-      # - {{ orbital_radius + worldtube_radius }}
-      # - &t_to_u_transition {{ orbital_radius + worldtube_radius + 25 }}
-      - &v_to_t_transition {{ orbital_radius - worldtube_radius * 1.3 }}
-      - *v_to_t_transition
-      - &t_to_u_transition {{ orbital_radius + worldtube_radius * 3 }}
-      - *t_to_u_transition
-    # PenetratingHorizon: False
+    BlackHoleSpin: &bh_spin 0.5
+    OrbitalRadius: &orbital_radius 10
+    MModeNumber: &m_mode_number 2
+    HyperboloidalSlicingTransitions: 
+      - &v_to_t_transition 5  
+      - &worldtube_left 6.5 
+      - &worldtube_right 13.5
+      - &t_to_u_transition 65 
+    HyperboloidalSlicingTransitions_vtu: 
+     - *v_to_t_transition
+     - *t_to_u_transition 
+    ImposeEquatorialSymmetry: False
     PenetratingHorizon: True
-    ImposeEquatorialSymmetry: True
-
-ScalarSelfForce:
-  NullSlicingBlocks:
-    - Block0
-    - Block4
-    - Block5
-    - Block9
-    # - Block10
-    # - Block14
 
 InitialGuess: *background
 
@@ -55,114 +46,104 @@ RandomizeInitialGuess: None
 
 DomainCreator:
   AlignedLattice:
-    # Order of dimensions is (r_*, theta)
+    # Order of dimensions is (r, theta)
     BlockBounds:
-      # rstar
-      - - {{ inner_radius }}
-        - *v_to_t_transition
-        - {{ orbital_radius - worldtube_radius }}
-        - {{ orbital_radius + worldtube_radius }}
-        - *t_to_u_transition
-        - &outer_radius {{ outer_radius }}
+      - - &inner_radius 1.8660254037844385966 
+        - *v_to_t_transition 
+        - *worldtube_left 
+        - *worldtube_right  
+        - *t_to_u_transition 
+        - 1e4
       # cos(theta)
-      - [0., {{ worldtube_dcostheta }}, 1.]
+      - [-1., -0.5 , 0.5, 1.]
     Distributions:
       # rstar
-      - [Linear, Linear, Linear, Linear, &outer_shell_distribution Inverse]
+      - [Linear, Linear, Linear, Linear, Inverse]
       # cos(theta)
-      - [Linear, Linear]
+      - [Linear, Linear, Linear]
     SingularityPositions:
       # rstar
       - [0., 0., 0., 0., 0.]
       # cos(theta)
-      - [0., 0.]
-    InitialGridPoints: [{{ P }}, {{ P }}]
-    InitialLevels: [{{ L }}, {{ L }}]
+      - [0., 0., 0.]
+    InitialGridPoints: [4, 4] # [{{ P }}, {{ P }}]
+    InitialLevels: [2, 1] # [{{ L }}, {{ L_theta }}]
     RefinedGridPoints: []
     BlocksToExclude: []
     RefinedLevels:
       # bottom row
-      # - LowerCornerIndex: [0, 0] # bottom left
-      #   UpperCornerIndex: [1, 1]
-      #   Refinement: [ {{ L }}, {{ L }} ]
-      # - LowerCornerIndex: [1, 0] # bottom transition left
-      #   UpperCornerIndex: [2, 1]
-      #   Refinement: [ {{ L }}, {{ L }} ]
-      # - LowerCornerIndex: [2, 0] # bottom middle
-      #   UpperCornerIndex: [3, 1]
-      #   Refinement: [ {{ L + 1 }}, {{ L + 1 }} ]
-      # - LowerCornerIndex: [3, 0] # bottom transition right
-      #   UpperCornerIndex: [4, 1]
-      #   Refinement: [ {{ L }}, {{ L + 1 }} ]
-      # - LowerCornerIndex: [4, 0] # bottom right
-      #   UpperCornerIndex: [5, 1]
-      #   Refinement: [ {{ L + 1 }}, {{ L }} ]
-      # middle row
-      - LowerCornerIndex: [0, 0] # middle left
+      - LowerCornerIndex: [0, 0] # bottom left
         UpperCornerIndex: [1, 1]
-        Refinement: [ {{ L }}, {{ L }} ]
-      - LowerCornerIndex: [1, 0] # middle transition left
+        Refinement: [ 1, 1 ]
+      - LowerCornerIndex: [1, 0] # bottom transition left
         UpperCornerIndex: [2, 1]
-        Refinement: [ {{ L }}, {{ L }} ]
-      - LowerCornerIndex: [2, 0] # source region
+        Refinement: [ 1, 1 ]
+      - LowerCornerIndex: [2, 0] # bottom middle
         UpperCornerIndex: [3, 1]
-        Refinement: [ {{ L + 1 }}, {{ L + 1 }} ]
-      - LowerCornerIndex: [3, 0] # middle transition right
+        Refinement: [ 2, 1 ]
+      - LowerCornerIndex: [3, 0] # bottom transition right
         UpperCornerIndex: [4, 1]
-        Refinement: [ {{ L }}, {{ L + 1 }} ]
-      - LowerCornerIndex: [4, 0] # middle right
+        Refinement: [ 1, 1 ]
+      - LowerCornerIndex: [4, 0] # bottom right
         UpperCornerIndex: [5, 1]
-        Refinement: [ {{ L + 1 }}, {{ L }} ]
-      # top row
-      - LowerCornerIndex: [0, 1] # top left
+        Refinement: [ 2, 0 ]
+      # middle row
+      - LowerCornerIndex: [0, 1] # middle left
         UpperCornerIndex: [1, 2]
-        Refinement: [ {{ L }}, {{ L }} ]
-      - LowerCornerIndex: [1, 1] # top transition left
+        Refinement: [ 1, 1 ]
+      - LowerCornerIndex: [1, 1] # middle transition left
         UpperCornerIndex: [2, 2]
-        Refinement: [ {{ L }}, {{ L }} ]
-      - LowerCornerIndex: [2, 1] # top middle
+        Refinement: [ 1, 1 ]
+      - LowerCornerIndex: [2, 1] # source region
         UpperCornerIndex: [3, 2]
-        Refinement: [ {{ L + 1 }}, {{ L + 1 }} ]
-      - LowerCornerIndex: [3, 1] # top transition right
+        Refinement: [ 2, 1 ]
+      - LowerCornerIndex: [3, 1] # middle transition right
         UpperCornerIndex: [4, 2]
-        Refinement: [ {{ L }}, {{ L + 1 }} ]
-      - LowerCornerIndex: [4, 1] # top right
+        Refinement: [ 1, 1 ]
+      - LowerCornerIndex: [4, 1] # middle right
         UpperCornerIndex: [5, 2]
-        Refinement: [ {{ L + 1 }}, {{ L }} ]
+        Refinement: [ 2, 0 ]
+      # top row
+      - LowerCornerIndex: [0, 2] # top left
+        UpperCornerIndex: [1, 3]
+        Refinement: [ 1, 1 ]
+      - LowerCornerIndex: [1, 2] # top transition left
+        UpperCornerIndex: [2, 3]
+        Refinement: [ 1, 1 ]
+      - LowerCornerIndex: [2, 2] # top middle
+        UpperCornerIndex: [3, 3]
+        Refinement: [ 2, 1 ]
+      - LowerCornerIndex: [3, 2] # top transition right
+        UpperCornerIndex: [4, 3]
+        Refinement: [ 1, 1 ]
+      - LowerCornerIndex: [4, 2] # top right
+        UpperCornerIndex: [5, 3]
+        Refinement: [ 2, 0 ]
     BoundaryConditions: &boundary_conditions
       # Radial boundary conditions
-      - Lower: None
-          # Sommerfeld:
-          #   BlackHoleMass: *bh_mass
-          #   BlackHoleSpin: *bh_spin
-          #   OrbitalRadius: *orbital_radius
-          #   MModeNumber: *m_mode_number
-          #   HyperboloidalSlicing: True
-          #   Order: 1
+      - Lower: None  # No radial boundary condition at the horizon
         Upper:
-{% if m_mode == 0 %}
-          None
-{% else %}
           Sommerfeld:
             BlackHoleMass: *bh_mass
             BlackHoleSpin: *bh_spin
             OrbitalRadius: *orbital_radius
             MModeNumber: *m_mode_number
             HyperboloidalSlicing: True
+            PenetratingHorizon: True
             Order: 2
-{% endif %}
       # Angular boundary conditions
-      - None
+      - Angular:
+          MModeNumber: *m_mode_number
 
 Amr:
   Verbosity: Quiet
   Criteria:
+    - IncreaseResolution
     - RefineAtPuncture
-    # - IncreaseResolution
-    - TruncationError:
-        VariablesToMonitor: [MMode]
-        AbsoluteTarget: 1.e-11
-        RelativeTarget: 1.e-11
+    # - TruncationError: # --> changed 
+    #     VariablesToMonitor: [MMode]
+    #     AbsoluteTarget: 1.e-10
+    #     RelativeTarget: 1.e-10. # increase resolutions 
     # - Persson:
     #     VariablesToMonitor: [MMode]
     #     NumHighestModes: 1
@@ -176,9 +157,9 @@ Amr:
       NumGridPoints: Auto
       RefinementLevel: Auto
       ErrorBeyondLimits: True
-    AllowCoarsening: True
+    AllowCoarsening: True 
   MaxCoarseLevels: Auto
-  Iterations: 8
+  Iterations: 10 
 
 PhaseChangeAndTriggers:
   # Run AMR in every iteration, but not on the initial guess
@@ -208,18 +189,18 @@ LinearSolver:
     ConvergenceCriteria:
       MaxIterations: 500
       RelativeResidual: 0
-      AbsoluteResidual: 1.e-12
+      AbsoluteResidual: 1.e-10
     Verbosity: Quiet
 
   Multigrid:
     Iterations: 1
-    InitialCoarseLevels: {{ L }}
+    InitialCoarseLevels: 0
     PreSmoothing: True
     UseBottomSolver: True
     PostSmoothingAtBottom: False
     Verbosity: Silent
     OutputVolumeData: False
-    ComplexShift: 0.0
+    ComplexShift: 0.
 
   SchwarzSmoother:
     Iterations: 2
@@ -228,9 +209,28 @@ LinearSolver:
     SubdomainSolver:
       ExplicitInverse:
         WriteMatrixToFile: None
-        ComplexShift: 0.0
+        ComplexShift: 0.01
     ObservePerCoreReductions: False
     OutputVolumeData: False
+    # SubdomainBoundaryConditions: None
+    #   - &subdomain_boundary_conditions
+    #     - Sommerfeld:
+    #         BlackHoleMass: *bh_mass
+    #         BlackHoleSpin: *bh_spin
+    #         OrbitalRadius: *orbital_radius
+    #         MModeNumber: *m_mode_number
+    #         HyperboloidalSlicing: True  # or false?
+    #     - Angular:
+    #         MModeNumber: *m_mode_number
+    #   - *subdomain_boundary_conditions
+    #   - *subdomain_boundary_conditions
+    #   - *subdomain_boundary_conditions
+    #   - *subdomain_boundary_conditions
+    #   - *subdomain_boundary_conditions
+    #   - *subdomain_boundary_conditions
+    #   - *subdomain_boundary_conditions
+    #   - *subdomain_boundary_conditions
+    #   - *subdomain_boundary_conditions
 
 EventsAndTriggersAtIterations:
   - Trigger: Always
@@ -254,16 +254,10 @@ EventsAndTriggersAtIterations:
             - BoyerLindquistRadius
             - BoostFunction
             - BoostFunctionDeriv
-            - RadiallyCompressedCoordinates
           BlocksToObserve: All
           InterpolateToMesh: None
           CoordinatesFloatingPointType: Double
           FloatingPointTypes: [Double]
-
-RadiallyCompressedCoordinates:
-  InnerRadius: *t_to_u_transition
-  OuterRadius: *outer_radius
-  Compression: *outer_shell_distribution
 
 BuildMatrix:
   MatrixSubfileName: None
