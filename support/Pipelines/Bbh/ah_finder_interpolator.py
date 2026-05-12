@@ -17,13 +17,13 @@ Example
 from __future__ import annotations
 
 import argparse
+import math
 import os
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Iterable
 
 import numpy as np
-
 
 DEFAULT_FILENAME = os.environ.get(
     "MBH_Z4C_FILE",
@@ -54,6 +54,32 @@ TENSOR_NAMES = (
     "ExtrinsicCurvature",
     "SpatialChristoffelSecondKind",
     "SpatialRicci",
+)
+
+# Stencil offsets (in units of h) for the 19-point FD stencil used in
+# _metric_derivatives.  Order: center, ±x, ±y, ±z, ±x±y, ±x±z, ±y±z.
+_STENCIL_OFFSETS = np.array(
+    [
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, -1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, -1.0],
+        [1.0, 1.0, 0.0],
+        [1.0, -1.0, 0.0],
+        [-1.0, 1.0, 0.0],
+        [-1.0, -1.0, 0.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 0.0, -1.0],
+        [-1.0, 0.0, 1.0],
+        [-1.0, 0.0, -1.0],
+        [0.0, 1.0, 1.0],
+        [0.0, 1.0, -1.0],
+        [0.0, -1.0, 1.0],
+        [0.0, -1.0, -1.0],
+    ]
 )
 
 
@@ -164,6 +190,7 @@ class AthenaKAdmInterpolator:
             raise ValueError("no meshblocks selected")
         self.blocks = blocks
         self._load_selected_variables()
+        self._build_block_map()
 
     def __call__(
         self,
@@ -304,15 +331,51 @@ class AthenaKAdmInterpolator:
                 selected[block_i] = data[self._var_indices]
         self.data = selected
 
-    def _find_block_index(self, coord: np.ndarray) -> int:
-        matches = [
-            (block.level, i)
-            for i, block in enumerate(self.blocks)
-            if block.contains(coord)
+    def _build_block_map(self) -> None:
+        """Build O(1) block lookup keyed by (level, lx1, lx2, lx3)."""
+        block_nx3, block_nx2, block_nx1 = self.blocks[0].shape
+        nx1_r, nx2_r, nx3_r = self.root_grid_size
+        blk_nx0 = nx1_r // block_nx1
+        blk_ny0 = nx2_r // block_nx2
+        blk_nz0 = nx3_r // block_nx3
+        self._block_map: dict[tuple[int, int, int, int], int] = {}
+        for i, block in enumerate(self.blocks):
+            lx1, lx2, lx3, level = block.logical
+            self._block_map[(level, lx1, lx2, lx3)] = i
+        max_level = max(b.level for b in self.blocks)
+        x0_r, x1_r, y0_r, y1_r, z0_r, z1_r = self.root_grid_extent
+        # Precompute per-level (scale_x, scale_y, scale_z, nx, ny, nz) tuples.
+        self._level_params = [
+            (
+                (blk_nx0 << lv) / (x1_r - x0_r),
+                (blk_ny0 << lv) / (y1_r - y0_r),
+                (blk_nz0 << lv) / (z1_r - z0_r),
+                blk_nx0 << lv,
+                blk_ny0 << lv,
+                blk_nz0 << lv,
+            )
+            for lv in range(max_level, -1, -1)
         ]
-        if not matches:
-            raise ValueError(f"coordinate {coord.tolist()} is outside the loaded meshblocks")
-        return max(matches)[1]
+        self._x0_r = x0_r
+        self._y0_r = y0_r
+        self._z0_r = z0_r
+        self._max_level = max_level
+
+    def _find_block_index(self, coord: np.ndarray) -> int:
+        x, y, z = float(coord[0]), float(coord[1]), float(coord[2])
+        x0_r = self._x0_r
+        y0_r = self._y0_r
+        z0_r = self._z0_r
+        block_map = self._block_map
+        for lv, (sx, sy, sz, nx, ny, nz) in enumerate(self._level_params):
+            level = self._max_level - lv
+            lx1 = math.floor((x - x0_r) * sx)
+            lx2 = math.floor((y - y0_r) * sy)
+            lx3 = math.floor((z - z0_r) * sz)
+            if 0 <= lx1 < nx and 0 <= lx2 < ny and 0 <= lx3 < nz:
+                if (idx := block_map.get((level, lx1, lx2, lx3))) is not None:
+                    return idx
+        raise ValueError(f"coordinate {coord.tolist()} is outside the loaded meshblocks")
 
     def _z4c_at(self, coord: np.ndarray) -> dict[str, float]:
         block_i = self._find_block_index(coord)
@@ -332,30 +395,93 @@ class AthenaKAdmInterpolator:
         ux = (coord[0] - (x0 + 0.5 * dx)) / dx
         uy = (coord[1] - (y0 + 0.5 * dy)) / dy
         uz = (coord[2] - (z0 + 0.5 * dz)) / dz
-        i0, tx = _index_and_fraction(ux, nx1)
-        j0, ty = _index_and_fraction(uy, nx2)
-        k0, tz = _index_and_fraction(uz, nx3)
+        i0 = max(0, min(nx1 - 2, math.floor(ux)))
+        j0 = max(0, min(nx2 - 2, math.floor(uy)))
+        k0 = max(0, min(nx3 - 2, math.floor(uz)))
+        tx = ux - i0
+        ty = uy - j0
+        tz = uz - k0
 
         arr = self.data[block_i]
-        c000 = arr[:, k0, j0, i0]
-        c100 = arr[:, k0, j0, i0 + 1]
-        c010 = arr[:, k0, j0 + 1, i0]
-        c110 = arr[:, k0, j0 + 1, i0 + 1]
-        c001 = arr[:, k0 + 1, j0, i0]
-        c101 = arr[:, k0 + 1, j0, i0 + 1]
-        c011 = arr[:, k0 + 1, j0 + 1, i0]
-        c111 = arr[:, k0 + 1, j0 + 1, i0 + 1]
+        omtx = 1.0 - tx
+        omty = 1.0 - ty
+        omtz = 1.0 - tz
+        c0 = (arr[:, k0, j0, i0] * omtx + arr[:, k0, j0, i0 + 1] * tx) * omty + (
+            arr[:, k0, j0 + 1, i0] * omtx + arr[:, k0, j0 + 1, i0 + 1] * tx
+        ) * ty
+        c1 = (arr[:, k0 + 1, j0, i0] * omtx + arr[:, k0 + 1, j0, i0 + 1] * tx) * omty + (
+            arr[:, k0 + 1, j0 + 1, i0] * omtx + arr[:, k0 + 1, j0 + 1, i0 + 1] * tx
+        ) * ty
+        return c0 * omtz + c1 * tz
 
-        c00 = c000 * (1.0 - tx) + c100 * tx
-        c10 = c010 * (1.0 - tx) + c110 * tx
-        c01 = c001 * (1.0 - tx) + c101 * tx
-        c11 = c011 * (1.0 - tx) + c111 * tx
-        c0 = c00 * (1.0 - ty) + c10 * ty
-        c1 = c01 * (1.0 - ty) + c11 * ty
-        return c0 * (1.0 - tz) + c1 * tz
+    def _interp_block_values_batch(
+        self, block_i: int, block: MeshBlock, coords: np.ndarray
+    ) -> np.ndarray:
+        """Interpolate at N coordinates within a single block.
+
+        coords: shape (N, 3). Returns shape (N, n_vars).
+        Points outside the block are clamped to its boundary.
+        """
+        x0, x1, y0, y1, z0, z1 = block.geometry
+        nx3, nx2, nx1 = block.shape
+        dx = (x1 - x0) / nx1
+        dy = (y1 - y0) / nx2
+        dz = (z1 - z0) / nx3
+
+        ux = (coords[:, 0] - (x0 + 0.5 * dx)) / dx
+        uy = (coords[:, 1] - (y0 + 0.5 * dy)) / dy
+        uz = (coords[:, 2] - (z0 + 0.5 * dz)) / dz
+        i0 = np.clip(np.floor(ux).astype(np.intp), 0, nx1 - 2)
+        j0 = np.clip(np.floor(uy).astype(np.intp), 0, nx2 - 2)
+        k0 = np.clip(np.floor(uz).astype(np.intp), 0, nx3 - 2)
+        tx = (ux - i0)[:, np.newaxis]
+        ty = (uy - j0)[:, np.newaxis]
+        tz = (uz - k0)[:, np.newaxis]
+
+        arr = self.data[block_i]
+        omtx = 1.0 - tx
+        omty = 1.0 - ty
+        omtz = 1.0 - tz
+        # arr[:, k0, j0, i0] has shape (n_vars, N); transpose to (N, n_vars)
+        c0 = (arr[:, k0, j0, i0].T * omtx + arr[:, k0, j0, i0 + 1].T * tx) * omty + (
+            arr[:, k0, j0 + 1, i0].T * omtx + arr[:, k0, j0 + 1, i0 + 1].T * tx
+        ) * ty
+        c1 = (arr[:, k0 + 1, j0, i0].T * omtx + arr[:, k0 + 1, j0, i0 + 1].T * tx) * omty + (
+            arr[:, k0 + 1, j0 + 1, i0].T * omtx + arr[:, k0 + 1, j0 + 1, i0 + 1].T * tx
+        ) * ty
+        return c0 * omtz + c1 * tz
 
     def _adm_at(self, coord: np.ndarray) -> dict[str, np.ndarray]:
-        return self._adm_from_z4c(self._z4c_at(coord))
+        block_i = self._find_block_index(coord)
+        return self._adm_from_vals(self._interp_block_values(block_i, self.blocks[block_i], coord))
+
+    def _adm_from_vals(self, v: np.ndarray) -> dict[str, np.ndarray]:
+        chi = float(v[0])
+        if chi < self.chi_floor:
+            chi = self.chi_floor
+        psi4 = chi ** (4.0 / self.chi_psi_power)
+        gxx = float(v[1]) * psi4
+        gxy = float(v[2]) * psi4
+        gxz = float(v[3]) * psi4
+        gyy = float(v[4]) * psi4
+        gyz = float(v[5]) * psi4
+        gzz = float(v[6]) * psi4
+        gamma = np.array([[gxx, gxy, gxz], [gxy, gyy, gyz], [gxz, gyz, gzz]])
+        trace_k = float(v[7]) + 2.0 * float(v[14])
+        axx = float(v[8]) * psi4
+        axy = float(v[9]) * psi4
+        axz = float(v[10]) * psi4
+        ayy = float(v[11]) * psi4
+        ayz = float(v[12]) * psi4
+        azz = float(v[13]) * psi4
+        atilde_scaled = np.array([[axx, axy, axz], [axy, ayy, ayz], [axz, ayz, azz]])
+        extrinsic_curvature = atilde_scaled + (trace_k / 3.0) * gamma
+        inverse_gamma = _inv3x3_sym(gamma)
+        return {
+            "gamma": gamma,
+            "inverse_gamma": inverse_gamma,
+            "extrinsic_curvature": extrinsic_curvature,
+        }
 
     def _adm_from_z4c(self, z4c: dict[str, float]) -> dict[str, np.ndarray]:
         chi = max(z4c["z4c_chi"], self.chi_floor)
@@ -379,7 +505,7 @@ class AthenaKAdmInterpolator:
         gamma = psi4 * gtilde
         trace_k = z4c["z4c_Khat"] + 2.0 * z4c["z4c_Theta"]
         extrinsic_curvature = psi4 * atilde + (trace_k / 3.0) * gamma
-        inverse_gamma = np.linalg.inv(gamma)
+        inverse_gamma = _inv3x3_sym(gamma)
         return {
             "gamma": gamma,
             "inverse_gamma": inverse_gamma,
@@ -387,54 +513,69 @@ class AthenaKAdmInterpolator:
         }
 
     def _spatial_metric_at(self, coord: np.ndarray) -> np.ndarray:
-        return self._adm_at(coord)["gamma"]
+        block_i = self._find_block_index(coord)
+        v = self._interp_block_values(block_i, self.blocks[block_i], coord)
+        chi = float(v[0])
+        if chi < self.chi_floor:
+            chi = self.chi_floor
+        psi4 = chi ** (4.0 / self.chi_psi_power)
+        return np.array(
+            [
+                [float(v[1]) * psi4, float(v[2]) * psi4, float(v[3]) * psi4],
+                [float(v[2]) * psi4, float(v[4]) * psi4, float(v[5]) * psi4],
+                [float(v[3]) * psi4, float(v[5]) * psi4, float(v[6]) * psi4],
+            ]
+        )
 
     def _metric_derivatives(
         self, coord: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        block = self.blocks[self._find_block_index(coord)]
+        block_i = self._find_block_index(coord)
+        block = self.blocks[block_i]
         h = self.fd_points_per_cell * block.dx
-        gamma = self._spatial_metric_at(coord)
-        inverse_gamma = np.linalg.inv(gamma)
-        dgamma = np.zeros((3, 3, 3))
-        ddgamma = np.zeros((3, 3, 3, 3))
+        hx, hy, hz = float(h[0]), float(h[1]), float(h[2])
+        all_pts = coord + _STENCIL_OFFSETS * h
+        vals = self._interp_block_values_batch(block_i, block, all_pts)
 
-        for axis in range(3):
-            step = np.zeros(3)
-            step[axis] = h[axis]
-            gp = self._spatial_metric_at(coord + step)
-            gm = self._spatial_metric_at(coord - step)
-            dgamma[axis] = (gp - gm) / (2.0 * h[axis])
-            ddgamma[axis, axis] = (gp - 2.0 * gamma + gm) / (h[axis] ** 2)
+        # Vectorized gamma computation for all 19 stencil points at once.
+        # vals[:, 0]=chi, 1=gxx, 2=gxy, 3=gxz, 4=gyy, 5=gyz, 6=gzz
+        psi4 = np.maximum(vals[:, 0], self.chi_floor) ** (4.0 / self.chi_psi_power)
+        g6 = vals[:, 1:7] * psi4[:, np.newaxis]  # (19, 6)
+        # gammas[k] is the 3×3 spatial metric at stencil point k; shape (19, 3, 3)
+        gammas = np.empty((19, 3, 3))
+        gammas[:, 0, 0] = g6[:, 0]
+        gammas[:, 0, 1] = gammas[:, 1, 0] = g6[:, 1]
+        gammas[:, 0, 2] = gammas[:, 2, 0] = g6[:, 2]
+        gammas[:, 1, 1] = g6[:, 3]
+        gammas[:, 1, 2] = gammas[:, 2, 1] = g6[:, 4]
+        gammas[:, 2, 2] = g6[:, 5]
 
-        for a in range(3):
-            for b in range(a + 1, 3):
-                step_a = np.zeros(3)
-                step_b = np.zeros(3)
-                step_a[a] = h[a]
-                step_b[b] = h[b]
-                gpp = self._spatial_metric_at(coord + step_a + step_b)
-                gpm = self._spatial_metric_at(coord + step_a - step_b)
-                gmp = self._spatial_metric_at(coord - step_a + step_b)
-                gmm = self._spatial_metric_at(coord - step_a - step_b)
-                mixed = (gpp - gpm - gmp + gmm) / (4.0 * h[a] * h[b])
-                ddgamma[a, b] = mixed
-                ddgamma[b, a] = mixed
+        gamma = gammas[0]
+        inverse_gamma = _inv3x3_sym(gamma)
+        dgamma = np.empty((3, 3, 3))
+        dgamma[0] = (gammas[1] - gammas[2]) / (2.0 * hx)
+        dgamma[1] = (gammas[3] - gammas[4]) / (2.0 * hy)
+        dgamma[2] = (gammas[5] - gammas[6]) / (2.0 * hz)
+        ddgamma = np.empty((3, 3, 3, 3))
+        ddgamma[0, 0] = (gammas[1] - 2.0 * gamma + gammas[2]) / (hx * hx)
+        ddgamma[1, 1] = (gammas[3] - 2.0 * gamma + gammas[4]) / (hy * hy)
+        ddgamma[2, 2] = (gammas[5] - 2.0 * gamma + gammas[6]) / (hz * hz)
+        mixed = (gammas[7] - gammas[8] - gammas[9] + gammas[10]) / (4.0 * hx * hy)
+        ddgamma[0, 1] = mixed
+        ddgamma[1, 0] = mixed
+        mixed = (gammas[11] - gammas[12] - gammas[13] + gammas[14]) / (4.0 * hx * hz)
+        ddgamma[0, 2] = mixed
+        ddgamma[2, 0] = mixed
+        mixed = (gammas[15] - gammas[16] - gammas[17] + gammas[18]) / (4.0 * hy * hz)
+        ddgamma[1, 2] = mixed
+        ddgamma[2, 1] = mixed
         return gamma, inverse_gamma, dgamma, ddgamma
 
     @staticmethod
     def _christoffel(inverse_gamma: np.ndarray, dgamma: np.ndarray) -> np.ndarray:
-        christoffel = np.zeros((3, 3, 3))
-        for a in range(3):
-            for i in range(3):
-                for j in range(3):
-                    total = 0.0
-                    for ell in range(3):
-                        total += inverse_gamma[a, ell] * (
-                            dgamma[i, j, ell] + dgamma[j, i, ell] - dgamma[ell, i, j]
-                        )
-                    christoffel[a, i, j] = 0.5 * total
-        return christoffel
+        # sym[i,j,l] = dgamma[i,j,l] + dgamma[j,i,l] - dgamma[l,i,j]
+        sym = dgamma + dgamma.transpose(1, 0, 2) - dgamma.transpose(1, 2, 0)
+        return 0.5 * np.einsum("al,ijl->aij", inverse_gamma, sym)
 
     @staticmethod
     def _ricci(
@@ -443,37 +584,24 @@ class AthenaKAdmInterpolator:
         ddgamma: np.ndarray,
         christoffel: np.ndarray,
     ) -> np.ndarray:
-        d_inverse = np.zeros((3, 3, 3))
-        for m in range(3):
-            d_inverse[m] = -inverse_gamma @ dgamma[m] @ inverse_gamma
+        # d_inverse[m,a,b] = -inv[a,p] * dgamma[m,p,q] * inv[q,b]
+        d_inverse = -np.einsum("ap,mpq,qb->mab", inverse_gamma, dgamma, inverse_gamma)
 
-        d_christoffel = np.zeros((3, 3, 3, 3))
-        for m in range(3):
-            for a in range(3):
-                for i in range(3):
-                    for j in range(3):
-                        total = 0.0
-                        for ell in range(3):
-                            first = dgamma[i, j, ell] + dgamma[j, i, ell] - dgamma[ell, i, j]
-                            second = (
-                                ddgamma[m, i, j, ell]
-                                + ddgamma[m, j, i, ell]
-                                - ddgamma[m, ell, i, j]
-                            )
-                            total += d_inverse[m, a, ell] * first + inverse_gamma[a, ell] * second
-                        d_christoffel[m, a, i, j] = 0.5 * total
+        # sym_dg[i,j,l] = dgamma[i,j,l] + dgamma[j,i,l] - dgamma[l,i,j]
+        sym_dg = dgamma + dgamma.transpose(1, 0, 2) - dgamma.transpose(1, 2, 0)
 
-        ricci = np.zeros((3, 3))
-        for i in range(3):
-            for j in range(3):
-                term = 0.0
-                for k in range(3):
-                    term += d_christoffel[k, k, i, j]
-                    term -= d_christoffel[j, k, i, k]
-                    for ell in range(3):
-                        term += christoffel[k, i, j] * christoffel[ell, k, ell]
-                        term -= christoffel[ell, i, k] * christoffel[k, j, ell]
-                ricci[i, j] = term
+        # sym_ddg[m,i,j,l] = ddgamma[m,i,j,l] + ddgamma[m,j,i,l] - ddgamma[m,l,i,j]
+        sym_ddg = ddgamma + ddgamma.transpose(0, 2, 1, 3) - ddgamma.transpose(0, 2, 3, 1)
+
+        d_christoffel = 0.5 * (
+            np.einsum("mal,ijl->maij", d_inverse, sym_dg)
+            + np.einsum("al,mijl->maij", inverse_gamma, sym_ddg)
+        )
+
+        ricci = np.einsum("mmij->ij", d_christoffel)
+        ricci -= np.einsum("jkik->ij", d_christoffel)
+        ricci += np.einsum("kij,lkl->ij", christoffel, christoffel)
+        ricci -= np.einsum("lik,kjl->ij", christoffel, christoffel)
         return 0.5 * (ricci + ricci.T)
 
 
@@ -504,6 +632,21 @@ def _sym_matrix(xx: float, xy: float, xz: float, yy: float, yz: float, zz: float
         [[xx, xy, xz], [xy, yy, yz], [xz, yz, zz]],
         dtype=float,
     )
+
+
+def _inv3x3_sym(m: np.ndarray) -> np.ndarray:
+    """Analytic inverse of a 3×3 symmetric matrix via cofactor expansion."""
+    a, b, c = m[0, 0], m[0, 1], m[0, 2]
+    d, e = m[1, 1], m[1, 2]
+    f = m[2, 2]
+    A = d * f - e * e
+    B = c * e - b * f
+    C = b * e - c * d
+    D = a * f - c * c
+    E = b * c - a * e
+    F = a * d - b * b
+    det = a * A + b * B + c * C
+    return np.array([[A, B, C], [B, D, E], [C, E, F]]) / det
 
 
 def _boxes_overlap(
