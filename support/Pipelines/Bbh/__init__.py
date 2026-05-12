@@ -13,6 +13,7 @@ class Bbh(click.Group):
         return [
             "eccentricity-control",
             "find-horizon",
+            "find-athenak-horizon",
             "generate-id",
             "postprocess-id",
             "start-inspiral",
@@ -28,6 +29,10 @@ class Bbh(click.Group):
             from .FindHorizon import find_horizon_command
 
             return find_horizon_command
+        elif name == "find-athenak-horizon":
+            from .FindHorizon import find_athenak_horizon_command
+
+            return find_athenak_horizon_command
         elif name == "generate-id":
             from .InitialData import generate_id_command
 

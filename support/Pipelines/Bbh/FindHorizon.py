@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Sequence, Type, Union
 
 import click
+import numpy as np
 
 import spectre.IO.H5 as spectre_h5
 from spectre.ApparentHorizonFinder import FastFlow, FlowType, Status
@@ -34,7 +35,57 @@ from spectre.SphericalHarmonics import (
     ylm_legend_and_data,
 )
 
+from .ah_finder_interpolator import AthenaKAdmInterpolator
+
 logger = logging.getLogger(__name__)
+
+
+class SpectreInterpolator:
+    def __init__(
+        self,
+        h5_files,
+        subfile_name,
+        observation,
+    ):
+        self.h5_files = h5_files
+        self.subfile_name = subfile_name
+        self.observation = observation
+    
+    def __call__(
+        self,
+        target_points,
+        tensor_names,
+        tensor_types,
+    ):
+        return interpolate_tensors_to_points(
+            self.h5_files,
+            self.subfile_name,
+            observation=self.observation,
+            target_points=target_points,
+            tensor_names=tensor_names,
+            tensor_types=tensor_types,
+        )
+
+
+class AthenakInterpolator:
+    def __init__(self, filename):
+        self.interpolator = AthenaKAdmInterpolator(filename)
+    def __call__(
+        self,
+        target_points,
+        tensor_names,
+        tensor_types,
+    ):
+        all_data = self.interpolator(np.array(target_points).T, tensor_names=tensor_names)
+        tensors = []
+        for tensor_name, tensor_type in zip(tensor_names, tensor_types):
+            tensor = tensor_type()
+            tensor_data = all_data[tensor_name]
+            for idx in np.ndindex(*tensor_data.shape[1:]):
+                component_data = tensor_data[(slice(None), *idx)]
+                tensor[tensor.get_storage_index(*idx)] = DataVector(component_data)
+            tensors.append(tensor)
+        return tensors
 
 
 def _strahlkorper_vol_data(strahlkorper):
@@ -85,12 +136,10 @@ def vec_to_string(vec):
 
 
 def find_horizon(
-    h5_files: Union[str, Sequence[str]],
-    subfile_name: str,
-    obs_id: int,
-    obs_time: float,
+    interpolator,
     initial_guess: Strahlkorper[Frame.Inertial],
     fast_flow: Optional[FastFlow] = None,
+    obs_time: Optional[float] = None,
     output_surfaces_file: Optional[Union[str, Path]] = None,
     output_coeffs_subfile: Optional[str] = None,
     output_coords_subfile: Optional[str] = None,
@@ -106,9 +155,7 @@ def find_horizon(
     The data is assumed to be in the "inertial" frame.
 
     Arguments:
-      h5_files: List of H5 files containing volume data or glob pattern.
-      subfile_name: Name of the volume data subfile in the 'h5_files'.
-      obs_id: Observation ID in the volume data.
+      interpolator: Callable that returns interpolated ADM variables.
       obs_time: Time of the observation.
       initial_guess: Initial guess for the horizon. Specify a
         'spectre.SphericalHarmonics.Strahlkorper[Frame.Inertial]'.
@@ -179,10 +226,7 @@ def find_horizon(
             inv_spatial_metric,
             extrinsic_curvature,
             spatial_christoffel_second_kind,
-        ) = interpolate_tensors_to_points(
-            h5_files,
-            subfile_name,
-            observation=ObservationId(obs_id),
+        ) = interpolator(
             target_points=cartesian_coords(prolonged_strahlkorper),
             tensor_names=tensor_names[1:4],
             tensor_types=[
@@ -224,10 +268,7 @@ def find_horizon(
         extrinsic_curvature,
         spatial_christoffel_second_kind,
         spatial_ricci,
-    ) = interpolate_tensors_to_points(
-        h5_files,
-        subfile_name,
-        observation=ObservationId(obs_id),
+    ) = interpolator(
         target_points=cartesian_coords(strahlkorper),
         tensor_names=tensor_names,
         tensor_types=[
@@ -469,14 +510,109 @@ def use_excision_as_horizon(
         " quantities will be written, e.g. masses and spins."
     ),
 )
-def find_horizon_command(l_max, initial_radius, center, vars, **kwargs):
+def find_horizon_command(
+    h5_files, subfile_name, obs_id,
+    l_max, initial_radius, center, vars, **kwargs):
     """Find an apparent horizon in volume data."""
+    interpolator = SpectreInterpolator(h5_files, subfile_name, ObservationId(obs_id))
     initial_guess = Strahlkorper[Frame.Inertial](
         l_max=l_max, radius=initial_radius, center=center
     )
     horizon, quantities = find_horizon(
+        interpolator=interpolator,
         initial_guess=initial_guess,
         tensor_names=vars,
+        **kwargs,
+    )
+
+    # Output horizon quantities
+    import rich.table
+
+    table = rich.table.Table(show_header=False, box=None)
+    for name, value in quantities.items():
+        table.add_row(
+            name,
+            (
+                f"{value:g}"
+                if isinstance(value, float)
+                else vec_to_string(value)
+            ),
+        )
+    rich.print(table)
+
+@click.command(name="find-athenak-horizon")
+@click.argument("filename")
+@click.option(
+    "--l-max",
+    "-l",
+    type=int,
+    required=True,
+    help="Max l-mode for the horizon search.",
+)
+@click.option(
+    "--initial-radius",
+    "-r",
+    type=float,
+    required=True,
+    help="Initial coordinate radius of the horizon.",
+)
+@click.option(
+    "--center",
+    "-C",
+    nargs=3,
+    type=float,
+    required=True,
+    help="Coordinate center of the horizon.",
+)
+@click.option(
+    "--output-surfaces-file",
+    type=click.Path(writable=True),
+    help=(
+        "H5 output file where the horizon Ylm coefficients will be written. Can"
+        " be a new or existing file."
+    ),
+)
+@click.option(
+    "--output-coeffs-subfile",
+    help=(
+        "Name of the subfile in the 'output_surfaces_file' where the horizon"
+        " Ylm coefficients will be written. These can be used to reconstruct"
+        " the horizon, e.g. to initialize excisions in domains."
+    ),
+)
+@click.option(
+    "--output-coords-subfile",
+    help=(
+        "Name of the subfile in the 'output_surfaces_file' where the horizon"
+        " coordinates will be written. These can be used for visualization."
+    ),
+)
+@click.option(
+    "--output-reductions-file",
+    type=click.Path(writable=True),
+    help=(
+        "H5 output file where the reduction quantities on the horizon will be"
+        " written, e.g. masses and spins. Can be a new or existing file."
+    ),
+)
+@click.option(
+    "--output-quantities-subfile",
+    help=(
+        "Name of the subfile in the 'output_reductions_file' where the horizon"
+        " quantities will be written, e.g. masses and spins."
+    ),
+)
+def find_athenak_horizon_command(
+    filename,
+    l_max, initial_radius, center, **kwargs):
+    """Find an apparent horizon in volume data."""
+    interpolator = AthenakInterpolator(filename)
+    initial_guess = Strahlkorper[Frame.Inertial](
+        l_max=l_max, radius=initial_radius, center=center
+    )
+    horizon, quantities = find_horizon(
+        interpolator=interpolator,
+        initial_guess=initial_guess,
         **kwargs,
     )
 
