@@ -85,7 +85,7 @@ def plot_elliptic_convergence(
     if fig is None:
         fig = plt.figure()
     ax_residual, ax_time = fig.subplots(
-        nrows=2, ncols=1, sharex=True, gridspec_kw={"height_ratios": [3, 1]}
+        nrows=2, ncols=1, sharex=True, gridspec_kw={"height_ratios": [2, 1]}
     )
     if nonlinear_residuals is not None:
         m = 0
@@ -113,7 +113,7 @@ def plot_elliptic_convergence(
             residuals.index + cumulative_linsolv_iterations[i],
             residuals["Residual"] / norm,
             color="black",
-            label="Linear solver" if i == 0 else None,
+            label="GMRES iterations" if i == 0 else None,
             marker="." if len(residuals) < 20 else None,
         )
         if "Walltime" in residuals:
@@ -151,9 +151,9 @@ def plot_elliptic_convergence(
     # Configure the axes
     ax_residual.set_yscale("log")
     ax_residual.grid()
-    ax_residual.legend()
     ax_residual.set_ylabel("Absolute residual")
-    ax_residual.axhline(1e-11, color="red", ls="dashed", label="Target residual")
+    # ax_residual.axhline(1e-12, color="black", ls="dashed", label="Solver tolerance")
+    ax_residual.legend()
     ax_time.set_yscale("log")
     ax_time.grid()
     ax_time.set_ylabel("Walltime per iteration [s]")
