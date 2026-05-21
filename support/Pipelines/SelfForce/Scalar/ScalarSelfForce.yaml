@@ -9,7 +9,7 @@ Description: >
     spectre run ScalarSelfForce.yaml -o "test_ssf" \
       -p spin=0 -p orbital_radius=10 -p m_mode=2
       -p inner_radius=2 -p outer_radius=1e4 \
-      -p worldtube_radius=4.8 -p worldtube_dz2=0.25 -p P=4 -p L=1
+      -p worldtube_radius=4.8 -p worldtube_dz2=0.25 -p P=4 -p L=0
 
   Then, for example, run 'spectre generate-id' on the volume data output to view
   in ParaView or inspect the reduction data output to see the extracted
@@ -50,48 +50,32 @@ RandomizeInitialGuess: None
 
 DomainCreator:
   AlignedLattice:
-    # Order of dimensions is (r_*, theta)
+    # Order of dimensions is (r, theta)
     BlockBounds:
-      # rstar
+      # radial (r coordinate)
       - - {{ inner_radius }}
         - *v_to_t_transition
         - {{ orbital_radius - worldtube_radius }}
         - {{ orbital_radius + worldtube_radius }}
         - *t_to_u_transition
         - &outer_radius {{ outer_radius }}
-      # cos(theta)
-      - [0., {{ worldtube_dcostheta }}, 1.]
+      # angular (z^2 coordinate)
+      - [0., {{ worldtube_dz2 }}, 1.]
     Distributions:
-      # rstar
+      # radial
       - [Linear, Linear, Linear, Linear, &outer_shell_distribution Inverse]
-      # cos(theta)
+      # angular
       - [Linear, Linear]
     SingularityPositions:
-      # rstar
+      # radial
       - [0., 0., 0., 0., 0.]
-      # cos(theta)
+      # angular
       - [0., 0.]
     InitialGridPoints: [{{ P }}, {{ P }}]
     InitialLevels: [{{ L }}, {{ L }}]
     RefinedGridPoints: []
     BlocksToExclude: []
     RefinedLevels:
-      # bottom row
-      # - LowerCornerIndex: [0, 0] # bottom left
-      #   UpperCornerIndex: [1, 1]
-      #   Refinement: [ {{ L }}, {{ L }} ]
-      # - LowerCornerIndex: [1, 0] # bottom transition left
-      #   UpperCornerIndex: [2, 1]
-      #   Refinement: [ {{ L }}, {{ L }} ]
-      # - LowerCornerIndex: [2, 0] # bottom middle
-      #   UpperCornerIndex: [3, 1]
-      #   Refinement: [ {{ L + 1 }}, {{ L + 1 }} ]
-      # - LowerCornerIndex: [3, 0] # bottom transition right
-      #   UpperCornerIndex: [4, 1]
-      #   Refinement: [ {{ L }}, {{ L + 1 }} ]
-      # - LowerCornerIndex: [4, 0] # bottom right
-      #   UpperCornerIndex: [5, 1]
-      #   Refinement: [ {{ L + 1 }}, {{ L }} ]
       # middle row
       - LowerCornerIndex: [0, 0] # middle left
         UpperCornerIndex: [1, 1]
@@ -125,15 +109,8 @@ DomainCreator:
         UpperCornerIndex: [5, 2]
         Refinement: [ {{ L + 1 }}, {{ L }} ]
     BoundaryConditions: &boundary_conditions
-      # Radial boundary conditions
+      # radial
       - Lower: None
-          # Sommerfeld:
-          #   BlackHoleMass: *bh_mass
-          #   BlackHoleSpin: *bh_spin
-          #   OrbitalRadius: *orbital_radius
-          #   MModeNumber: *m_mode_number
-          #   HyperboloidalSlicing: True
-          #   Order: 1
         Upper:
 {% if m_mode == 0 %}
           None
@@ -146,18 +123,18 @@ DomainCreator:
             HyperboloidalSlicing: True
             Order: 2
 {% endif %}
-      # Angular boundary conditions
+      # angular
       - None
 
 Amr:
   Verbosity: Quiet
   Criteria:
     - RefineAtPuncture
-    # - IncreaseResolution
-    - TruncationError:
-        VariablesToMonitor: [MMode]
-        AbsoluteTarget: 1.e-11
-        RelativeTarget: 1.e-11
+    - IncreaseResolution
+    # - TruncationError:
+    #     VariablesToMonitor: [MMode]
+    #     AbsoluteTarget: 1.e-11
+    #     RelativeTarget: 1.e-11
     # - Persson:
     #     VariablesToMonitor: [MMode]
     #     NumHighestModes: 1
@@ -230,25 +207,12 @@ LinearSolver:
 EventsAndTriggersAtIterations:
   - Trigger: Always
     Events:
-      - ObserveNorms:
-          SubfileName: Norms
-          TensorsToObserve:
-            - Name: MMode
-              NormType: Max
-              Components: Individual
       - ObserveSelfForce
       - ObserveFields:
           SubfileName: VolumeData
           VariablesToObserve:
             - MMode
-            - FixedSource(MMode)
-            - Alpha
-            - Beta
-            - Gamma
             - SingularField
-            - BoyerLindquistRadius
-            - BoostFunction
-            - BoostFunctionDeriv
             - RadiallyCompressedCoordinates
           BlocksToObserve: All
           InterpolateToMesh: None
