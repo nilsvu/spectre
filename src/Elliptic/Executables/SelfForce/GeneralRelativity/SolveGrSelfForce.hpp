@@ -61,6 +61,7 @@ struct Metavariables {
 
   using system = GrSelfForce::FirstOrderSystem;
   static constexpr size_t volume_dim = system::volume_dim;
+  static constexpr bool use_complex_shift = true;
   using solver = elliptic::Solver<Metavariables, volume_dim, system>;
 
   using observe_fields = tmpl::append<
