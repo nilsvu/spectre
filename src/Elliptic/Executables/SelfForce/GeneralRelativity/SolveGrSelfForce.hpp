@@ -14,10 +14,10 @@
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/Executables/Solver.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/Actions/InitializeEffectiveSource.hpp"
-#include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/CircularOrbit.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AmrCriteria/RefineAtBoundary.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AmrCriteria/RefineAtPuncture.hpp"
-#include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/Angular.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/CircularOrbit.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/None.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/Sommerfeld.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/Tags.hpp"
@@ -94,7 +94,7 @@ struct Metavariables {
                    tmpl::list<GrSelfForce::AnalyticData::CircularOrbit>>,
         tmpl::pair<elliptic::analytic_data::AnalyticSolution, tmpl::list<>>,
         tmpl::pair<elliptic::BoundaryConditions::BoundaryCondition<volume_dim>,
-                   tmpl::list<GrSelfForce::BoundaryConditions::Angular,
+                   tmpl::list<GrSelfForce::BoundaryConditions::None,
                               GrSelfForce::BoundaryConditions::Sommerfeld>>,
         tmpl::pair<
             ::amr::Criterion,

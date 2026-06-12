@@ -71,7 +71,7 @@ void test_criterion(
         elliptic::Tags::Background<elliptic::analytic_data::Background>;
 
     const domain::creators::Rectangle domain_creator{
-        {{10., 0.}}, {{15., 2.}}, {{2, 2}}, {{3, 3}}, {{false, false}}};
+        {{10., 0.}}, {{15., 1.}}, {{2, 2}}, {{3, 3}}, {{false, false}}};
     auto databox =
         db::create<tmpl::list<background_tag, domain::Tags::Domain<2>>>(
             std::move(background), domain_creator.create_domain());
@@ -83,7 +83,7 @@ void test_criterion(
 
     {
       INFO("Element with puncture within");
-      const ElementId<2> element_id{0, {{{2, 2}, {2, 3}}}};
+      const ElementId<2> element_id{0, {{{2, 2}, {2, 0}}}};
       const auto expected_flags = make_array<2>(amr::Flag::Split);
       auto flags = criterion.evaluate(box, empty_cache, element_id);
       CHECK(flags == expected_flags);
@@ -109,7 +109,8 @@ SPECTRE_TEST_CASE("Unit.GrSelfForce.AmrCriteria.RefineAtPuncture",
   register_factory_classes_with_charm<Metavariables>();
   test_criterion(std::make_unique<GrSelfForce::AnalyticData::CircularOrbit>(
       // Only orbital radius is relevant for the test
-      1.0, 0.5, /* orbital radius */ 10.0, 2));
+      1.0, 0.5, /* orbital radius */ 13.0, 2,
+      std::make_optional(std::array<double, 4>{5., 10., 15., 20.}), true));
   CHECK_THROWS_WITH(test_criterion(std::make_unique<OtherBackground>()),
                     Catch::Matchers::ContainsSubstring(
                         "RefineAtPuncture only works with 'CircularOrbit'."));
