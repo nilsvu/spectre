@@ -201,6 +201,8 @@ LinearSolver:
 EventsAndTriggersAtIterations:
   - Trigger: Always
     Events:
+      - ObserveFlux
+      - ObserveRedshift
       - ObserveFields:
           SubfileName: VolumeData
           VariablesToObserve:

@@ -19,6 +19,8 @@
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/CircularOrbit.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/None.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/Sommerfeld.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/Events/ObserveFlux.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/Events/ObserveRedshift.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/Tags.hpp"
 #include "Elliptic/Triggers/Factory.hpp"
@@ -104,11 +106,14 @@ struct Metavariables {
                 GrSelfForce::AmrCriteria::RefineAtPuncture,
                 GrSelfForce::AmrCriteria::RefineAtBoundary<volume_dim, 1>>>,
         tmpl::pair<Event,
-                   tmpl::flatten<tmpl::list<
-                       Events::Completion,
-                       dg::Events::field_observations<
-                           volume_dim, observe_fields, observer_compute_tags,
-                           amr::Tags::IsFinestGrid>>>>,
+            tmpl::flatten<tmpl::list<
+                Events::Completion,
+                dg::Events::field_observations<volume_dim, observe_fields,
+                                               observer_compute_tags,
+                                               amr::Tags::IsFinestGrid>,
+                GrSelfForce::Events::ObserveFlux<amr::Tags::IsFinestGrid>,
+                GrSelfForce::Events::ObserveRedshift<
+                    amr::Tags::IsFinestGrid>>>>,
         tmpl::pair<Trigger, elliptic::Triggers::all_triggers<
                                 ::amr::OptionTags::AmrGroup>>,
         tmpl::pair<

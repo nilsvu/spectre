@@ -1,37 +1,36 @@
 # Distributed under the MIT License.
 # See LICENSE.txt for details.
 
-set(LIBRARY GrSelfForce)
+set(LIBRARY GrSelfForceEvents)
 
 add_spectre_library(${LIBRARY})
 
 spectre_target_sources(
   ${LIBRARY}
   PRIVATE
-  Equations.cpp
+  ObserveFlux.cpp
+  ObserveRedshift.cpp
   )
 
 spectre_target_headers(
   ${LIBRARY}
   INCLUDE_DIRECTORY ${CMAKE_SOURCE_DIR}/src
   HEADERS
-  Equations.hpp
-  FirstOrderSystem.hpp
-  Tags.hpp
+  ObserveFlux.hpp
+  ObserveRedshift.hpp
   )
 
 target_link_libraries(
   ${LIBRARY}
   PUBLIC
   DataStructures
-  DomainStructure
-  ErrorHandling
+  Domain
+  Elliptic
   GrSelfForceAnalyticData
+  Options
+  Serialization
   Utilities
+  PRIVATE
+  DiscontinuousGalerkin
+  LinearOperators
   )
-
-add_subdirectory(Actions)
-add_subdirectory(AmrCriteria)
-add_subdirectory(AnalyticData)
-add_subdirectory(BoundaryConditions)
-add_subdirectory(Events)
