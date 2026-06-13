@@ -28,7 +28,8 @@ target_link_libraries(
   DataStructures
   ErrorHandling
   GeneralRelativity
-  GravitationalEffectiveSource
+  # GravitationalEffectiveSource
+  ComovingEffectiveSource
   Options
   Utilities
   )

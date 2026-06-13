@@ -5,7 +5,8 @@
 
 #include <complex>
 #include <cstddef>
-#include <effsource_gr.hpp>
+// #include <effsource_gr.hpp>
+#include <effsource_comoving.hpp>
 #include <utility>
 
 #include "DataStructures/ComplexDataVector.hpp"
@@ -324,13 +325,7 @@ CircularOrbit::variables(
     xp.theta = M_PI_2;
     xp.phi = 0;
     // Circular equatorial orbit, as given in the EffectiveSource example
-    const double e = ((r_0 - 2.0 * M) * sqrt(M * r_0) + a * M) /
-                     (sqrt(M * r_0) * sqrt(r_0 * r_0 - 3.0 * M * r_0 +
-                                           2.0 * a * sqrt(M * r_0)));
-    const double l = (M * (a * a + r_0 * r_0 - 2.0 * a * sqrt(M * r_0))) /
-                     (sqrt(M * r_0) * sqrt(r_0 * r_0 - 3.0 * M * r_0 +
-                                           2.0 * a * sqrt(M * r_0)));
-    effsource_set_particle(&xp, e, l, 0.);
+    effsource_set_particle(xp.r);
   }
   tuples::TaggedTuple<
       ::Tags::FixedSource<Tags::MMode>, Tags::SingularField,
