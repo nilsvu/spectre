@@ -113,7 +113,7 @@ SPECTRE_TEST_CASE("Unit.GrSelfForce.AmrCriteria.RefineAtPuncture",
       std::make_optional(std::array<double, 4>{5., 10., 15., 20.}), true));
   CHECK_THROWS_WITH(test_criterion(std::make_unique<OtherBackground>()),
                     Catch::Matchers::ContainsSubstring(
-                        "RefineAtPuncture only works with 'CircularOrbit'."));
+                        "Background must be CircularOrbit or NumericData"));
 }
 
 }  // namespace GrSelfForce::AmrCriteria

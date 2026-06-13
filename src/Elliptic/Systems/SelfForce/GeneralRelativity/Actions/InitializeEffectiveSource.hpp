@@ -25,6 +25,7 @@
 #include "Domain/Tags/Faces.hpp"
 #include "Elliptic/DiscontinuousGalerkin/Tags.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/CircularOrbit.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/NumericData.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/Equations.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/Tags.hpp"
 #include "NumericalAlgorithms/DiscontinuousGalerkin/ApplyMassMatrix.hpp"
@@ -59,6 +60,11 @@ namespace GrSelfForce::Actions {
  * the effective source and the singular field are set by the
  * GrSelfForce::AnalyticData::CircularOrbit class. Outside this region, the
  * fixed source and singular field are set to zero.
+ *
+ * For `GrSelfForce::AnalyticData::NumericData`, the fixed source outside the
+ * regularized region is instead read from the RetRet datasets in the h5 file
+ * (RetRetV, RetRetT, or RetRetU depending on the hyperboloidal slicing region),
+ * which carry the 2nd-order source outside the worldtube.
  */
 template <typename System, typename BackgroundTag>
 struct InitializeEffectiveSource : tt::ConformsTo<::amr::protocols::Projector> {
@@ -158,8 +164,8 @@ struct InitializeEffectiveSource : tt::ConformsTo<::amr::protocols::Projector> {
           // Set the effective source if solving for the regular field
           const size_t num_points = mesh.number_of_grid_points();
           if (*field_is_regularized) {
-            const auto vars = circular_orbit.variables(
-                inertial_coords, analytic_tags_list{});
+            const auto vars =
+                circular_orbit.variables(inertial_coords, analytic_tags_list{});
             fixed_sources->initialize(num_points);
             singular_vars->initialize(num_points);
             get<::Tags::FixedSource<Tags::MMode>>(*fixed_sources) =
@@ -176,11 +182,30 @@ struct InitializeEffectiveSource : tt::ConformsTo<::amr::protocols::Projector> {
               ::dg::apply_mass_matrix(fixed_sources, mesh);
             }
           } else {
-            *fixed_sources = Variables<typename fixed_sources_tag::tags_list>{
-                num_points, 0.};
+            // singular field and bl_radius always zero outside worldtube
             *singular_vars = Variables<typename singular_vars_tag::tags_list>{
                 num_points, 0.};
             *bl_radius = Scalar<DataVector>{num_points, 0.};
+
+            // fixed sources: zero for CircularOrbit, RetRet data for
+            // NumericData
+            if constexpr (std::is_same_v<
+                              std::decay_t<decltype(circular_orbit)>,
+                              GrSelfForce::AnalyticData::NumericData>) {
+              const auto vars = circular_orbit.variables(
+                  inertial_coords, analytic_tags_list{}, false);
+
+              fixed_sources->initialize(num_points);
+              get<::Tags::FixedSource<Tags::MMode>>(*fixed_sources) =
+                  get<::Tags::FixedSource<Tags::MMode>>(vars);
+              if (massive) {
+                *fixed_sources /= get(det_inv_jacobian);
+                ::dg::apply_mass_matrix(fixed_sources, mesh);
+              }
+            } else {
+              *fixed_sources = Variables<typename fixed_sources_tag::tags_list>{
+                  num_points, 0.};
+            }
           }
 
           // Set the singular field and flux on mortars to transform between

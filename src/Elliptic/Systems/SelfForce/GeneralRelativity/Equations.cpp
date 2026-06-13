@@ -10,6 +10,7 @@
 #include "DataStructures/DataVector.hpp"
 #include "DataStructures/Tensor/Tensor.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/CircularOrbit.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/NumericData.hpp"
 #include "Utilities/Algorithm.hpp"
 
 namespace GrSelfForce {
@@ -127,8 +128,18 @@ void ModifyBoundaryData::apply_linearized(
   // Apply the jump in the flux across the boundary to handle
   // vtu-slicing. The signs are all the same (on both sides of the boundary and
   // at both transition points).
-  const auto& circular_orbit =
-      dynamic_cast<const GrSelfForce::AnalyticData::CircularOrbit&>(background);
+  const auto* co_ptr =
+      dynamic_cast<const GrSelfForce::AnalyticData::CircularOrbit*>(
+          &background);
+  const auto* nd_ptr =
+      co_ptr != nullptr
+          ? nullptr
+          : dynamic_cast<const GrSelfForce::AnalyticData::NumericData*>(
+                &background);
+  ASSERT(co_ptr != nullptr or nd_ptr != nullptr,
+         "Background must be CircularOrbit or NumericData");
+  const GrSelfForce::AnalyticData::CircularOrbit& circular_orbit =
+      co_ptr != nullptr ? *co_ptr : nd_ptr->circular_orbit();
   const double omega = circular_orbit.omega();
   const double m_mode_number = circular_orbit.m_mode_number();
   for (size_t j = 0; j < n_dot_flux_remote->size(); ++j) {

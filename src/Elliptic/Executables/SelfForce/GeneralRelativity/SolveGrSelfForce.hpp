@@ -17,6 +17,7 @@
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AmrCriteria/RefineAtBoundary.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AmrCriteria/RefineAtPuncture.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/CircularOrbit.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/NumericData.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/None.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/Sommerfeld.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/Events/ObserveFlux.hpp"
@@ -91,9 +92,11 @@ struct Metavariables {
         tmpl::pair<DomainCreator<volume_dim>,
                    tmpl::list<domain::creators::AlignedLattice<2>>>,
         tmpl::pair<elliptic::analytic_data::Background,
-                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit>>,
+                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit,
+                              GrSelfForce::AnalyticData::NumericData>>,
         tmpl::pair<elliptic::analytic_data::InitialGuess,
-                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit>>,
+                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit,
+                              GrSelfForce::AnalyticData::NumericData>>,
         tmpl::pair<elliptic::analytic_data::AnalyticSolution, tmpl::list<>>,
         tmpl::pair<elliptic::BoundaryConditions::BoundaryCondition<volume_dim>,
                    tmpl::list<GrSelfForce::BoundaryConditions::None,

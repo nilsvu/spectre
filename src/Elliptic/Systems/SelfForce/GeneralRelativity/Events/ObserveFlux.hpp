@@ -22,6 +22,7 @@
 #include "Domain/Tags/Faces.hpp"
 #include "Domain/Tags/SurfaceJacobian.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/CircularOrbit.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/NumericData.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/Tags.hpp"
 #include "Elliptic/Tags.hpp"
 #include "IO/Observer/GetSectionObservationKey.hpp"
@@ -113,8 +114,15 @@ class ObserveFlux : public Event {
     double surface_area = 0.;
     if (element.external_boundaries().contains(direction)) {
       const auto& background = get<BackgroundTag>(box);
-      const auto& circular_orbit =
-          dynamic_cast<const AnalyticData::CircularOrbit&>(background);
+      const auto* co_ptr =
+          dynamic_cast<const AnalyticData::CircularOrbit*>(&background);
+      const auto* nd_ptr =
+          co_ptr ? nullptr
+                 : dynamic_cast<const AnalyticData::NumericData*>(&background);
+      ASSERT(co_ptr != nullptr or nd_ptr != nullptr,
+             "Background must be CircularOrbit or NumericData");
+      const AnalyticData::CircularOrbit& circular_orbit =
+          co_ptr ? *co_ptr : nd_ptr->circular_orbit();
       std::tie(energy_flux, surface_area) = detail::extract_flux(
           circular_orbit, get<Tags::MMode>(box), mesh,
           get<domain::Tags::Faces<

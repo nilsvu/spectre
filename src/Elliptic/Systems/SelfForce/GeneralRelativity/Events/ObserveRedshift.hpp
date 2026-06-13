@@ -22,6 +22,7 @@
 #include "Domain/Structure/ElementId.hpp"
 #include "Domain/Tags.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/CircularOrbit.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/NumericData.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/Tags.hpp"
 #include "Elliptic/Tags.hpp"
 #include "IO/Observer/GetSectionObservationKey.hpp"
@@ -93,8 +94,15 @@ class ObserveRedshift : public Event {
       return;
     }
     const auto& background = get<BackgroundTag>(box);
-    const auto& circular_orbit =
-        dynamic_cast<const AnalyticData::CircularOrbit&>(background);
+    const auto* co_ptr =
+        dynamic_cast<const AnalyticData::CircularOrbit*>(&background);
+    const auto* nd_ptr =
+        co_ptr ? nullptr
+               : dynamic_cast<const AnalyticData::NumericData*>(&background);
+    ASSERT(co_ptr != nullptr or nd_ptr != nullptr,
+           "Background must be CircularOrbit or NumericData");
+    const AnalyticData::CircularOrbit& circular_orbit =
+        co_ptr ? *co_ptr : nd_ptr->circular_orbit();
     const auto& mesh = get<domain::Tags::Mesh<2>>(box);
     const auto redshift = detail::extract_redshift(
         get<domain::Tags::Domain<2>>(box), element_id, circular_orbit,

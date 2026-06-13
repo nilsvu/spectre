@@ -23,6 +23,21 @@ Background: &background
       - *t_to_u_transition
     PenetratingHorizon: True
 
+# Background: &background
+#   NumericData:
+#     Filename: 'data/D2G_data.h5'
+#     BlackHoleMass: &bh_mass 1.
+#     BlackHoleSpin: &bh_spin 0.6
+#     OrbitalRadius: &orbital_radius 8.
+#     MModeNumber: &m_mode_number 2
+#     HyperboloidalSlicingTransitions:
+#       - &v_to_t_transition 5
+#       - *v_to_t_transition
+#       - &t_to_u_transition 15
+#       - *t_to_u_transition
+#     PenetratingHorizon: True
+#     Pi_2_Rotation: False
+
 GrSelfForce:
   NullSlicingBlocks:
     - 'Block(0,0)'

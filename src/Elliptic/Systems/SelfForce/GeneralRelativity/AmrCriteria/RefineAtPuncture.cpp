@@ -12,6 +12,7 @@
 #include "Domain/Domain.hpp"
 #include "Domain/ElementLogicalCoordinates.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/CircularOrbit.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/NumericData.hpp"
 #include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/MakeArray.hpp"
 
@@ -20,15 +21,20 @@ namespace GrSelfForce::AmrCriteria {
 std::array<amr::Flag, 2> RefineAtPuncture::impl(
     const elliptic::analytic_data::Background& background,
     const Domain<2>& domain, const ElementId<2>& element_id) {
-  const auto* circular_orbit_ptr =
+  const auto* co_ptr =
       dynamic_cast<const GrSelfForce::AnalyticData::CircularOrbit*>(
           &background);
-  if (circular_orbit_ptr == nullptr) {
-    ERROR(
-        "RefineAtPuncture only works with 'CircularOrbit'. "
-        "See GrSelfForce::AmrCriteria::RefineAtPuncture for details.");
+  const auto* nd_ptr =
+      co_ptr != nullptr
+          ? nullptr
+          : dynamic_cast<const GrSelfForce::AnalyticData::NumericData*>(
+                &background);
+  if (co_ptr == nullptr and nd_ptr == nullptr) {
+    ERROR("Background must be CircularOrbit or NumericData");
   }
-  const auto puncture_position = circular_orbit_ptr->puncture_position();
+  const auto puncture_position =
+      co_ptr != nullptr ? co_ptr->puncture_position()
+                        : nd_ptr->puncture_position();
   // Split (h-refine) the element if it contains the puncture
   const auto& block = domain.blocks()[element_id.block_id()];
   // Check if the puncture is in the block
