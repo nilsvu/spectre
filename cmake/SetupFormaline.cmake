@@ -20,6 +20,7 @@ set(SPECTRE_FORMALINE_LOCATIONS
   CITATION.cff
   cmake
   CMakeLists.txt
+  CMakePresets.json
   containers
   docs
   external

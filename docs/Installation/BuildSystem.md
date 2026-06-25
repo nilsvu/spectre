@@ -50,6 +50,47 @@ instructions. If you are on a cluster we support, we will already have an
 environment setup and an easy way for you to configure the build without having
 to specify flags yourself.
 
+## Configuring with CMake presets {#cmake_presets}
+
+Instead of passing flags on the command line every time, you can use
+[CMake presets](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html)
+to capture a configuration once and select it with `cmake --preset <name>`. The
+build directory of a preset defaults to `build-<name>` in the source tree.
+
+We provide a few standard presets that you can reuse on any machine:
+
+- `debug`: a `Debug` build (`-O0`, all `ASSERT`s and sanity checks enabled),
+  used while actively developing and debugging.
+- `release-debug`: a `Release` build with `SPECTRE_DEBUG=ON`, so it keeps the
+  `ASSERT`s and sanity checks but is optimized. **This is the preferred default
+  for most runs**: the checks catch subtle bugs that only surface in long
+  simulations and cost very little performance.
+- `release`: a fully optimized `Release` build with no debug checks. Use this
+  only when full performance is absolutely necessary.
+
+These build-type presets are defined in `support/Environments/common.json` (as
+hidden `base`, `debug-flags`, `release-flags`, and `release-debug-flags`
+building blocks) and are combined with a machine-specific configuration:
+
+- **On a personal machine**, put your presets in a `CMakeUserPresets.json` file
+  in the source root (this file is git-ignored). Define a hidden preset with
+  your compilers and dependency paths, then `debug`/`release`/`release-debug`
+  presets that combine it with the build-type flags. CMake reads
+  `CMakeUserPresets.json` automatically, so `cmake --preset release-debug` works
+  with no environment variable. See the existing machine files under
+  `support/Environments/` for examples of this pattern.
+- **On a supercomputer**, set the `SPECTRE_MACHINE` environment variable (the
+  machine's environment script does this for you) to select the correct preset
+  file in `support/Environments/`. It defines the
+  `debug`/`release`/`release-debug` presets for that machine. Then `cmake
+  --preset release-debug` configures the build.
+
+The root `CMakePresets.json` only includes the selected machine's preset file.
+If no machine is selected (`SPECTRE_MACHINE` is unset), it includes
+`support/Environments/.json`, which just makes the building blocks from
+`common.json` available. Create your own `CMakeUserPresets.json` to define a
+machine preset and combine it with the building blocks to configure your build.
+
 ## Commonly Used CMake flags {#common_cmake_flags}
 The following are common flags used to control building SpECTRE with CMake (in
 alphabetical order):

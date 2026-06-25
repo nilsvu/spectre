@@ -1,0 +1,4 @@
+{
+  "version": 7,
+  "include": ["support/Environments/$penv{SPECTRE_MACHINE}Presets.json"]
+}
