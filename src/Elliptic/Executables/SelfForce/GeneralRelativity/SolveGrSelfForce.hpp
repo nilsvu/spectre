@@ -14,9 +14,14 @@
 #include "Elliptic/DiscontinuousGalerkin/DgElementArray.hpp"
 #include "Elliptic/Executables/Solver.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/Actions/InitializeEffectiveSource.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/AmrCriteria/RefineAtBoundary.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/AmrCriteria/RefineAtPuncture.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/CircularOrbit.hpp"
-#include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/Angular.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/AnalyticData/NumericData.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/None.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/BoundaryConditions/Sommerfeld.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/Events/ObserveFlux.hpp"
+#include "Elliptic/Systems/SelfForce/GeneralRelativity/Events/ObserveRedshift.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/FirstOrderSystem.hpp"
 #include "Elliptic/Systems/SelfForce/GeneralRelativity/Tags.hpp"
 #include "Elliptic/Triggers/Factory.hpp"
@@ -61,6 +66,7 @@ struct Metavariables {
 
   using system = GrSelfForce::FirstOrderSystem;
   static constexpr size_t volume_dim = system::volume_dim;
+  static constexpr bool use_complex_shift = true;
   using solver = elliptic::Solver<Metavariables, volume_dim, system>;
 
   using observe_fields = tmpl::append<
@@ -86,22 +92,31 @@ struct Metavariables {
         tmpl::pair<DomainCreator<volume_dim>,
                    tmpl::list<domain::creators::AlignedLattice<2>>>,
         tmpl::pair<elliptic::analytic_data::Background,
-                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit>>,
+                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit,
+                              GrSelfForce::AnalyticData::NumericData>>,
         tmpl::pair<elliptic::analytic_data::InitialGuess,
-                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit>>,
+                   tmpl::list<GrSelfForce::AnalyticData::CircularOrbit,
+                              GrSelfForce::AnalyticData::NumericData>>,
         tmpl::pair<elliptic::analytic_data::AnalyticSolution, tmpl::list<>>,
         tmpl::pair<elliptic::BoundaryConditions::BoundaryCondition<volume_dim>,
-                   tmpl::list<GrSelfForce::BoundaryConditions::Angular,
+                   tmpl::list<GrSelfForce::BoundaryConditions::None,
                               GrSelfForce::BoundaryConditions::Sommerfeld>>,
-        tmpl::pair<::amr::Criterion,
-                   ::amr::Criteria::standard_criteria<
-                       volume_dim, typename system::primal_fields>>,
+        tmpl::pair<
+            ::amr::Criterion,
+            tmpl::push_back<
+                ::amr::Criteria::standard_criteria<
+                    volume_dim, typename system::primal_fields>,
+                GrSelfForce::AmrCriteria::RefineAtPuncture,
+                GrSelfForce::AmrCriteria::RefineAtBoundary<volume_dim, 1>>>,
         tmpl::pair<Event,
-                   tmpl::flatten<tmpl::list<
-                       Events::Completion,
-                       dg::Events::field_observations<
-                           volume_dim, observe_fields, observer_compute_tags,
-                           amr::Tags::IsFinestGrid>>>>,
+            tmpl::flatten<tmpl::list<
+                Events::Completion,
+                dg::Events::field_observations<volume_dim, observe_fields,
+                                               observer_compute_tags,
+                                               amr::Tags::IsFinestGrid>,
+                GrSelfForce::Events::ObserveFlux<amr::Tags::IsFinestGrid>,
+                GrSelfForce::Events::ObserveRedshift<
+                    amr::Tags::IsFinestGrid>>>>,
         tmpl::pair<Trigger, elliptic::Triggers::all_triggers<
                                 ::amr::OptionTags::AmrGroup>>,
         tmpl::pair<

@@ -618,6 +618,7 @@ struct InitializeBackground : tt::ConformsTo<::amr::protocols::Projector> {
       // grid in the volume. We could even evaluate the background fields on a
       // higher-order grid and project down to get more accurate derivatives if
       // needed.
+      // TODO: check this on Gauss grids
       (*face_background_fields)[direction].initialize(
           mesh.slice_away(direction.dimension()).number_of_grid_points());
       ::dg::project_contiguous_data_to_boundary(

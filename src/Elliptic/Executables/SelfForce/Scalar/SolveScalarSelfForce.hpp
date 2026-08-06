@@ -62,6 +62,7 @@ struct Metavariables {
       "problem."};
 
   static constexpr size_t volume_dim = 2;
+  static constexpr bool use_complex_shift = true;
   using system = ScalarSelfForce::FirstOrderSystem;
   using solver = elliptic::Solver<Metavariables, volume_dim, system>;
 

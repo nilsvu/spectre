@@ -161,6 +161,7 @@ include(SetupGsl)
 
 include(SetupAutodiff)
 include(SetupBlaze)
+include(SetupEigen)
 include(SetupFuka)
 include(SetupGoogleBenchmark)
 include(SetupHdf5)

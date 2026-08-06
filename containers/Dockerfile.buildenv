@@ -505,6 +505,7 @@ RUN mkdir spectre/build && cd spectre/build \
     -D DEBUG_SYMBOLS=OFF \
     -D BUILD_PYTHON_BINDINGS=ON \
     -D MEMORY_ALLOCATOR=SYSTEM \
+    -D SPECTRE_FETCH_MISSING_DEPS=ON \
     ..
 
 # Skip compiling the executables if we are emulating the target architecture
@@ -512,19 +513,24 @@ RUN mkdir spectre/build && cd spectre/build \
 RUN if [ "$TARGETARCH" = "$BUILDARCH" ] ; then \
         cd spectre/build \
         && make ${PARALLEL_MAKE_ARG} cli \
-        && make ${PARALLEL_MAKE_ARG} CharacteristicExtract \
-        && make ${PARALLEL_MAKE_ARG} PreprocessCceWorldtube \
-        && make ${PARALLEL_MAKE_ARG} WriteCceWorldtubeCoordsToFile \
-        && make ${PARALLEL_MAKE_ARG} SolveXcts \
+        # && make ${PARALLEL_MAKE_ARG} CharacteristicExtract \
+        # && make ${PARALLEL_MAKE_ARG} PreprocessCceWorldtube \
+        # && make ${PARALLEL_MAKE_ARG} WriteCceWorldtubeCoordsToFile \
+        # && make ${PARALLEL_MAKE_ARG} SolveXcts \
+        && make ${PARALLEL_MAKE_ARG} SolveScalarSelfForce \
+        && make ${PARALLEL_MAKE_ARG} SolveGrSelfForce \
     ; fi
+
+COPY support/Pipelines/SelfForce/Scalar/ScalarSelfForce.yaml ScalarSelfForce.yaml
+COPY support/Pipelines/SelfForce/GeneralRelativity/GrSelfForce.yaml GrSelfForce.yaml
 
 ENV SPECTRE_HOME /work/spectre
 ENV PATH $SPECTRE_HOME/build/bin:$PATH
 ENV PYTHONPATH $SPECTRE_HOME/build/bin/python:$PYTHONPATH
 
 # Set the CLI as entrypoint
-ENTRYPOINT ["spectre"]
-CMD ["--help"]
+# ENTRYPOINT ["spectre"]
+# CMD ["--help"]
 
 # Build a demo image with extra software used in the tutorials.
 FROM deploy AS demo
