@@ -10,6 +10,10 @@
 #
 # Post AFTER entries 001 and 002 (comments reference the evidence threads
 # and the new abort-conditions issue).
+#
+# No project-board operations here: verified via the GraphQL read API
+# (2026-08-13) that none of #6460, #5892, #7414, #5937, #5938 is an item
+# on project board 20.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo=sxs-collaboration/spectre
