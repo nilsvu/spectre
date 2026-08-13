@@ -58,13 +58,17 @@ groomed for implementation) → **In progress** → **In review** →
    before drafting. Results land in the session; the user decides
    which gaps advance ⇒ one comment per issue: survey + proposal +
    open points.
-2. **Settle** — the design decision is the user's, made where the
-   team can see it: after team discussion, a follow-up GitHub comment
-   by the user settles the numbered open points. Hard forks can still
-   be co-designed in session first (the issue's worker answers
+2. **Settle** — team discussion (meetings, issue threads) settles the
+   substance of the numbered open points; the user records the
+   settlement in a follow-up GitHub comment and has the final say. A
+   settling comment may explicitly defer a named point ("deferred, not
+   blocking") — deferred points do not block Ready. Hard forks can
+   still be co-designed in session first (the issue's worker answers
    deep-dive questions as input), but the record of the decision is
-   the settling comment. When every open point is settled, the user
-   grooms the issue to the Ready column.
+   the settling comment. When every open point is settled or
+   explicitly deferred, the user grooms the issue to the Ready column.
+   The team learns this convention from the user directly — no process
+   note is posted to GitHub.
 3. **Implement** — once its issue is in *Ready*, the worker executes
    it in its own lane worktree: code + tests per the repo rules,
    affected tests plus `ctest -L unit` before declaring done.

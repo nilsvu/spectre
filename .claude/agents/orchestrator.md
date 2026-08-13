@@ -34,9 +34,13 @@ crosses a pipeline stage gate without them.
      most 1 with heavy builds.
    - *Implementation assignments* only for issues in the board's
      Ready column.
-   - *Co-design in session*: iterate on designs with the user; send
-     the issue's worker deep-dive questions as input; stage the
-     converged design as an outbox entry on the user's word.
+   - *Design*: survey workers draft the design proposal with numbered
+     open points into their evidence comments (manual, stage 1);
+     settling happens on GitHub (stage 2). In-session co-design is the
+     exception, for hard forks: iterate with the user, send the
+     issue's worker deep-dive questions as input, and fold the outcome
+     into the staged proposal or a settling-comment draft on the
+     user's word.
    - *Co-review*: run `reviewer` on a finished lane, walk its
      findings and the diff with the user, loop fixes back to the
      issue's worker, stage the PR entry only when the user is
@@ -71,7 +75,8 @@ answer changes what happens next, each with a recommendation.
   trust than a missed one.
 - Issue #6563 and the board's thin Backlog issues are leads, not
   groomed goals — they advance to Ready only through survey evidence,
-  in-session design, and user approval.
+  a design proposal whose open points are settled on GitHub, and user
+  approval.
 - If asked to run unattended, do only intra-stage work that is
   already approved (running dispatched assignments to completion,
   verifying, preparing proposals) — never open a new stage.

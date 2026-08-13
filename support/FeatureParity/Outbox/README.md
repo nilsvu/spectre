@@ -29,7 +29,14 @@ Outbox/
   staged only after the co-review with the user is done; `body.md`'s
   testing section records what was run.
 - Entries must be self-contained: a teammate (or `sxs-bot`, later)
-  could post them without any agent context.
+  could post them without any agent context. Entries embedding
+  resolved GitHub node IDs (project boards) assume prompt posting.
+- Housekeeping closes of other people's issues may be staged when the
+  evidence is uncontroversial — the user has the authority and reviews
+  every entry before posting.
+- Staging commits may bypass the repo's source-file hooks
+  (`git commit --no-verify`): entry payloads are GitHub bodies
+  (markdown tables, quoted code), not repo source.
 - Every comment and issue body ends with the attribution footer
 
   ```
@@ -110,3 +117,13 @@ a done deal. After posting, tell an agent (or run `/parity-outbox`):
 it verifies the write landed via the read API, then removes the entry
 directory in a commit whose message records the created URL. GitHub
 holds the truth from that moment; the outbox drains to empty.
+
+Mechanics:
+
+- `post.sh` stops at the first failure (`set -euo pipefail`). Before
+  re-running a partially posted entry, comment out the lines that
+  already succeeded — re-running reposts them as duplicates.
+  `/parity-outbox` (or the read API) tells you what landed.
+- Project-board commands (`gh project item-add/item-edit/item-archive`)
+  need the `project` scope on your token; grant once with
+  `gh auth refresh -s project`.
