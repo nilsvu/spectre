@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Outbox entry 002 — eccentricity-reduction board restructure.
+# Outbox entry 003 — eccentricity-reduction board restructure (stage 3).
 #
 # Approved in session 2026-08-13:
 #  - Merge #7411 into #7413 (one code path); retitle #7413 to carry both
@@ -12,7 +12,7 @@
 # New issues are added to project board 20 (Feature parity) with
 # Status = Backlog.
 #
-# Post AFTER entry 001 so the cross-referenced evidence comments exist.
+# Post AFTER entry 002 so the cross-referenced evidence comments exist.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo=sxs-collaboration/spectre

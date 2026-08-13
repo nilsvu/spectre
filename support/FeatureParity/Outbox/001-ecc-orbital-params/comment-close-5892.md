@@ -7,9 +7,8 @@ fit code at runtime.
 
 The follow-up work this issue anticipated is tracked elsewhere: replacing
 the SpEC runtime dependency via SimulationSupport (#7412 for the initial
-orbital parameters, #7416 for the measurement side), and the remaining loop
-gaps (#7416: two-stage Lev schedule; abort conditions split into a
-dedicated issue).
+orbital parameters, #7416 for the measurement side), and the remaining
+loop gaps (#7416: two-stage Lev schedule and abort conditions).
 
 ---
 
