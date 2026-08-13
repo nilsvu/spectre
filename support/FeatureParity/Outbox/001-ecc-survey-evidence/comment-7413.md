@@ -272,4 +272,4 @@ No existing issue or PR addresses the time-stepper half of G3.
 
 ---
 
-drafted by: Claude Fable 5
+🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)

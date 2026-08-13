@@ -35,7 +35,7 @@ Outbox/
   ```
   ---
 
-  drafted by: Claude Fable 5
+  🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)
   ```
 
   so agent-drafted text is attributed correctly when the user posts it

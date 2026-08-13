@@ -442,4 +442,4 @@ surrogates — that work exists only in SimulationSupport.
 
 ---
 
-drafted by: Claude Fable 5
+🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)

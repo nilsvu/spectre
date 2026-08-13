@@ -14,4 +14,4 @@ restart vs volume-data import; which state crosses the branch; #6849).
 
 ---
 
-drafted by: Claude Fable 5
+🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)

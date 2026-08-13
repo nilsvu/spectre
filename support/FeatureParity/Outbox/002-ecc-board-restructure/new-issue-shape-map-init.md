@@ -48,4 +48,4 @@ recorded in the #7417 survey comment).
 
 ---
 
-drafted by: Claude Fable 5
+🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)
