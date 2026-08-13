@@ -35,20 +35,33 @@ comment).
 
 ## Proposed implementation
 
-In `EccentricityControl.py`'s non-converged branch: count iterations
-(from the pipeline directory structure or the ecc-params history file)
-and stop with a clear error at `MaxIts`; before resubmitting, compare
-`|ecc − target|` against the previous iteration *at the same Lev* and
-stop on non-improvement. On stop, leave the state on disk so a human can
-resume with adjusted parameters. When #7416's two-stage schedule lands,
-a rough-stage stall promotes to the final Lev instead of stopping
-(SpEC's behaviour).
+Pure pipeline change in `EccentricityControl.py`:
+
+- `TargetParams` gains `MaxEccIterations` (default 7, SpEC's `MaxIts`).
+- The iteration count and per-iteration `(Lev, eccentricity)` come from
+  the eccentricity-params history the pipeline already accumulates
+  (`ecc_params_output_file`); no new state file.
+- In the non-converged branch, before regenerating ID:
+  1. if `iterations >= MaxEccIterations`: stop with an error that
+     prints the full iteration history;
+  2. if `|ecc − target|` did not decrease relative to the previous
+     iteration *at the same Lev* (SpEC's same-Lev guard): stop with an
+     error naming both values.
+- On stop, everything stays on disk; the error message states how to
+  resume manually with adjusted parameters. Once #7416's rough stage
+  exists, a rough-stage stall promotes to the final Lev instead of
+  stopping (SpEC's behaviour).
+
+**Testing / acceptance**: unit tests on synthetic histories — cap
+reached, divergence at the same Lev, Lev switch not flagged as
+divergence, clean convergence unaffected.
 
 ## Open points to settle
 
-- [ ] **OP1 — iteration cap**: adopt SpEC's default `MaxIts = 7`?
-- [ ] **OP2 — divergence response** (before #7416's rough stage exists):
-  hard stop with error (recommendation) vs warn-and-continue.
+1. [ ] **Iteration cap** — adopt SpEC's default of 7 for
+   `MaxEccIterations`?
+2. [ ] **Divergence response** (before #7416's rough stage exists) —
+   hard stop with error (recommendation) vs warn-and-continue.
 
 A follow-up comment settling these points makes this issue ready for
 implementation (→ Ready).

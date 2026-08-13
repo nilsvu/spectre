@@ -197,31 +197,55 @@ follow-up.
 
 ## Proposed design
 
-Two **stateless** triggers, `NTimesPerOrbit` and `EveryNOrbits`, reading
-the cumulative phase `Φ(t)` from
-`QuaternionFunctionOfTime::angle_func` and firing when the phase crosses
-the next multiple of the interval (`2π/N` resp. `2π·N`) — no accumulated
-state, unlike SpEC's implementation. Start from PR #6009 rather than
-fresh: its one known defect is the dense-trigger `next_check_time`,
-which becomes a scalar root-find of `Φ(t) = 2π k / N` on the angle
-`PiecewisePolynomial`. Wire `NTimesPerOrbit` into `Inspiral.yaml`'s
-wave-extraction/observation events.
+Two **stateless** trigger classes reading the cumulative orbital phase
+`Φ(t)` from `QuaternionFunctionOfTime::angle_func`:
+
+- `NTimesPerOrbit` (SpEC's `FractionOfOrbit`, without the 0.25 cap):
+  fires when `Φ(t)` crosses the next multiple of `2π/N`;
+- `EveryNOrbits` (the SpECTRE-only half): fires on multiples of `2π·N`.
+
+Implementation shape:
+
+- `src/Evolution/Triggers/{NTimesPerOrbit,EveryNOrbits}.{hpp,cpp}`,
+  starting from PR #6009's `FractionOfOrbit` (renamed; its
+  `QuaternionFunctionOfTime` diff re-checked against develop, where
+  `angle_func` already exists).
+- Phase access: `dynamic_cast` the rotation function of time to
+  `QuaternionFunctionOfTime` inside the trigger (pattern:
+  `SeparationLessThan`, which also reads
+  `domain::Tags::FunctionsOfTime`). The trigger uses
+  `Φ(t) − Φ(t_initial)` so the documented arbitrariness of the initial
+  angles drops out.
+- Dense-trigger variant for wave extraction: `next_check_time` inverts
+  `Φ(t) = 2π k / N` by a scalar root-find (TOMS 748 on the angle
+  `PiecewisePolynomial`) — this is exactly the defect that stalled
+  #6009, now with a concrete fix.
+- Registration in `EvolveGhBinaryBlackHole`; `Inspiral.yaml`'s
+  wave-extraction/observation events switch from fixed `Slabs`
+  intervals to `NTimesPerOrbit` (default: open point 5).
+
+**Testing / acceptance**: unit tests against analytic rotation
+functions of time — constant `Ω` (trigger times exactly `k·T/N`) and a
+chirping `Ω` (trigger count matches the analytic phase); a
+`next_check_time` test covering the #6009 failure mode; an input-file
+test exercising the dense-trigger path in the BBH executable.
 
 ## Open points to settle
 
-- [ ] **OP1 — `angle_func` access**: `dynamic_cast` to
-  `QuaternionFunctionOfTime` inside the trigger (recommendation:
-  smaller first step) vs extending the `FunctionOfTime` interface.
-- [ ] **OP2 — phase definition under precession**: z-component of the
-  angle vector, projection on the instantaneous orbital angular
-  momentum, or norm. Needs a decision and documentation either way.
-- [ ] **OP3 — ratcheting**: reproduce SpEC's non-increasing-period
-  behaviour or rely on `Ω(t)` being monotone for quasicircular
-  inspirals (recommendation: skip initially).
-- [ ] **OP4 — PR #6009**: revive with its author or supersede
-  explicitly — not reimplement silently.
-- [ ] **OP5 — default cadence** in `Inspiral.yaml` (SpEC production
-  uses 400/orbit).
+1. [ ] **`angle_func` access** — `dynamic_cast` in the trigger
+   (recommendation: smaller first step) vs extending the
+   `FunctionOfTime` interface.
+2. [ ] **Phase under precession** — z-component of the angle vector,
+   projection on the instantaneous orbital angular momentum, or norm.
+   Recommendation: norm — reduces to the z-component for
+   non-precessing systems; document the choice.
+3. [ ] **Ratcheting** — reproduce SpEC's non-increasing-period
+   behaviour, or rely on `Ω(t)` being monotone for quasicircular
+   inspirals. Recommendation: skip initially.
+4. [ ] **PR #6009** — revive with its author or supersede explicitly —
+   not reimplement silently.
+5. [ ] **Default cadence** in `Inspiral.yaml` — adopt SpEC's 400/orbit
+   for wave extraction? Recommendation: yes.
 
 A follow-up comment settling these points makes this issue ready for
 implementation (→ Ready).

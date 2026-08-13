@@ -51,7 +51,7 @@ groomed for implementation) → **In progress** → **In review** →
    #6563 into granular issues — drafts deepen those issues, new issue
    bodies only where none exists. Each per-issue draft carries the
    evidence AND a concrete design proposal with **numbered open
-   points** ("OP1 …"), each listing the options and a recommendation
+   points**, each listing the options and a recommendation
    where the evidence supports one — so a single comment is enough to
    discuss at a team meeting. Results land in the session; the user
    decides which gaps advance ⇒ one comment per issue: survey +

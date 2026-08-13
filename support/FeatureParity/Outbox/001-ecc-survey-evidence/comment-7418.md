@@ -244,25 +244,36 @@ above. **Read why it was closed before re-opening the question.**
 
 ## Proposed design
 
-A single reference page in the docs (DevGuide, next to the BBH pipeline
-documentation) tabulating every intentional difference from SpEC with
-its reason and both codes' `file:line` — seeded from the three existing
-source comments (`Inspiral.yaml:249-255`, `Inspiral.py:97-98,104-105`),
-the gauge roll-on (after reading the #1627/#1516/#1515 closure reasons),
-`$MoreConstraintDampingInTheOuterSubdomains`, and the `tmin` 400/500
-drift. Structural differences (time stepping, filtering, AMR) are listed
-with a pointer to the split validation issue rather than argued in the
-document.
+One reference page, e.g. `docs/DevGuide/BbhSpecDifferences.md` (linked
+from the BBH pipeline documentation), with one table per parameter set:
+parameter | SpEC value + `file:line` | SpECTRE value + `file:line` |
+intentional? | reason/reference. Seeded from this survey:
+
+- the three existing source comments (`Inspiral.yaml:249-255`,
+  `Inspiral.py:97-98`, `:104-105`);
+- the gauge roll-on (classification per open point 2, after reading the
+  #1627/#1516/#1515 closure reasons);
+- `$MoreConstraintDampingInTheOuterSubdomains` (absent in SpECTRE);
+- the `tmin` 400/500 drift in the ecc-reduction run length;
+- the fit-option drift (recorded and settled in the #7416 survey
+  thread; the page cites the outcome).
+
+Structural differences (time stepping, filtering, AMR) get one row each
+pointing to the split validation issue, not an argument in the
+document. Source comments stay where they are; the page cites them.
+
+**Acceptance**: every difference found by this survey appears in the
+table classified as "intentional (reason)" or "open (issue link)"; no
+undocumented differences remain.
 
 ## Open points to settle
 
-- [ ] **OP1 — location**: a docs page (recommendation) vs source
-  comments only.
-- [ ] **OP2 — gauge roll-on**: document as intentionally dropped (if
-  the #1627 closure supports that reading) or reopen as a to-match
-  item.
-- [ ] **OP3 — `tmin` 400 (SpEC) vs 500 (SpECTRE)** in the ecc-reduction
-  run length: adjudicate and record.
+1. [ ] **Location** — `docs/DevGuide/` page (recommendation) vs source
+   comments only.
+2. [ ] **Gauge roll-on** — document as intentionally dropped (if the
+   #1627 closure supports that reading) or reopen as a to-match item.
+3. [ ] **`tmin` 400 (SpEC) vs 500 (SpECTRE)** in the ecc-reduction run
+   length — adjudicate and record.
 
 A follow-up comment settling these points makes this issue ready for
 implementation (→ Ready).

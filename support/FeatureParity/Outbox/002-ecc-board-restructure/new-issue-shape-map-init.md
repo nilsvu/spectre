@@ -48,19 +48,41 @@ recorded in the #7417 survey comment).
 
 ## Proposed implementation
 
-Wire the three already-computed arguments to a `YlmsFromFile` block in
-`Inspiral.yaml`'s `ShapeMap{A,B}` `InitialValues` when the ID horizon
-data is available, keeping `KerrSchildFromBoyerLindquist` as the
-fallback. Verify at `t=0` that the shape control error starts at
-`Q ≈ 0` (SpEC's stated criterion for this initialization, point 1
-above), and add that check to the pipeline test.
+Pure template/pipeline change:
+
+- `Inspiral.yaml` `ShapeMap{A,B}` `InitialValues`: when the pipeline
+  found horizon data (`HorizonsFile` is set), render a `YlmsFromFile`
+  block
+
+  ```yaml
+  InitialValues:
+    H5Filename: {{ HorizonsFile }}
+    SubfileNames: [{{ AhASubfileName }}]  # resp. AhBSubfileName
+    MatchTime: 0.0
+    MatchTimeEpsilon: Auto
+    SetL1CoefsToZero: True
+    CheckFrame: True
+  ```
+
+  (options per `ShapeMap.hpp:64-114`); keep
+  `KerrSchildFromBoyerLindquist` as the fallback when no horizon data
+  exists. `SetL1CoefsToZero: True` because the translation map carries
+  the L1 content.
+- `Inspiral.py`: no new computation — the three arguments exist since
+  `:265-267`; they only need to reach the template context.
+- Verify the excision-radius/horizon consistency relation (SpEC's
+  `Q = 0` criterion, point 1 above) holds with measured coefficients.
+
+**Testing / acceptance**: the pipeline test asserts the shape control
+error starts at `Q ≈ 0` at `t = 0`; a template-rendering unit test
+covers both branches (horizon data present/absent).
 
 ## Open points to settle
 
-- [ ] **OP1 — default**: measured-horizon initialization on by default
-  when horizon data exists (recommendation) or opt-in first?
-- [ ] **OP2 — SpEC-ID runs**: also switch the `SpecDataDirectory` path
-  from `InitialValues: Spherical` to `YlmsFromSpEC`?
+1. [ ] **Default** — measured-horizon initialization on by default when
+   horizon data exists (recommendation) or opt-in first?
+2. [ ] **SpEC-ID runs** — also switch the `SpecDataDirectory` path from
+   `InitialValues: Spherical` to `YlmsFromSpEC`?
 
 A follow-up comment settling these points makes this issue ready for
 implementation (→ Ready).

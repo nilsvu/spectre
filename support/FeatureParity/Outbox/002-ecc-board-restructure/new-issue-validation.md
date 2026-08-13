@@ -37,12 +37,12 @@ preregistered per run.
 
 ## Open points to settle
 
-- [ ] **OP1 — configuration**: settle #5133 (which BBH configuration);
-  this issue cannot schedule runs without it.
-- [ ] **OP2 — metrics**: waveform mismatch + constraint norms at matched
-  cost (recommendation), or additional observables?
-- [ ] **OP3 — success criteria**: preregistered per run, recorded in
-  this issue before submission.
+1. [ ] **Configuration** — settle #5133 (which BBH configuration); this
+   issue cannot schedule runs without it.
+2. [ ] **Metrics** — waveform mismatch + constraint norms at matched
+   cost (recommendation), or additional observables?
+3. [ ] **Success criteria** — preregistered per run, recorded in this
+   issue before submission.
 
 A follow-up comment settling these points (plus #5133) makes this issue
 ready to schedule runs.

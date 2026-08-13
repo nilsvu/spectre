@@ -256,41 +256,63 @@ No existing issue or PR addresses the time-stepper half of G3.
 Keep the branch a **volume-data import** — a checkpoint restart cannot
 change resolution, and changing resolution is the point of this issue
 (#6849 tracks checkpoint-restart work; it complements rather than
-replaces this). Fix the state within the import path:
+replaces this). All changes are pipeline-side (Python + template); no
+executable changes.
 
-1. **Time step**: carry `InitialTimeStep`/`InitialSlabSize` across the
-   branch — template them (`Inspiral.yaml:220,225`) and fill from the
-   parent run's last step (observable from the run data) on the
-   `IdFromEvolution` branch. Accept the multistep order re-ramp (a few
-   steps at reduced order at a settled time); measure its effect once in
-   validation.
-2. **Control systems**: carry the tuned damping timescales across the
-   branch — write them alongside `PostJunkVolumeData` (or a sidecar
-   file), read them where `simple_tags_from_options` initializes today.
-   Averager history is second priority: start without it and measure the
-   re-settling.
-3. **Lev list**: a `TargetParams` field (a list, or a `MinLev`/`MaxLev`
-   pair mirroring SpEC; there is already `EvolutionLev`,
-   `support/Pipelines/Bbh/InitialData.py:38`) feeding
-   `branch_levs_when_complete` instead of the hard-wired `[ {{ Lev }} ]`.
-4. **Add-a-Lev-later**: a CLI verb (e.g. `spectre bbh add-lev -d
-   <pipeline_dir> --lev 4`) that records branched Levs and is idempotent
-   the way SpEC's symlink check is; check PR #6717 (generic branch-runs
-   command) as the home before writing a new one.
-5. **Guard** `ElementsAreIdentical: True` against Levs that differ in
-   `refinement_level`.
+1. **Time step across the branch.** Template `InitialTimeStep` and
+   `InitialSlabSize` (today literals, `Inspiral.yaml:220,225`) with the
+   current values as defaults. On the `IdFromEvolution` branch
+   (`Inspiral.py:240-250`, where `InitialTime` and `FotFilename` are
+   already read from the parent), also read the parent's final time
+   step and slab size — from the recorded time-step data in the
+   parent's reductions file if present, else record them alongside
+   `PostJunkVolumeData` at the branch observation — and fill the
+   template with them. Accept the multistep order re-ramp (a few steps
+   at reduced order at a settled time); quantify it once in validation.
+2. **Control-system state across the branch.** The tuned damping
+   timescales are already written to disk by the control systems
+   (`WriteDataToDisk: true`, `Inspiral.yaml:612`). On the branch, read
+   each system's final damping timescale from the parent's reductions
+   file and fill `InitialTimescales` (`Inspiral.yaml:611-718`) with the
+   measured values instead of the mass/spin formulas — the same
+   read-from-parent pattern the maps already use (`FromVolumeFile`).
+   Averager history is deliberately **not** carried initially: it is
+   not on disk, and the expected cost is a short re-settling — measured
+   in validation (open point 2).
+3. **Lev list.** `TargetParams` gains `BranchLevs` (list of ints,
+   default `[EvolutionLev]`), threaded to `branch_levs_when_complete`
+   in the template, replacing the hard-wired `[ {{ Lev }} ]`.
+4. **Add a Lev later.** CLI verb `spectre bbh add-lev -d <pipeline_dir>
+   --lev N`: locates the branch-point segment, calls `start_inspiral`
+   with the recorded arguments, refuses Levs already branched — i.e.
+   idempotent like SpEC's symlink check. Check PR #6717 (generic
+   branch-runs command) as the home before adding a new verb.
+5. **Guard.** Error out if `ElementsAreIdentical: True` would be used
+   with a `refinement_level` differing between parent and branch Lev.
+
+**Testing / acceptance**: unit tests for the template rendering (branch
+vs `t=0` paths yield the intended time-step and timescale values) and
+for `add-lev` idempotence; the ecc-control pipeline test extended to
+branch two Levs; one validation run comparing a branched evolution
+against an uninterrupted continuation at the same Lev — acceptance is
+time-step recovery within a few steps, control-system timescales
+continuous at the branch, and waveform differences confined to the
+re-settling window.
 
 ## Open points to settle
 
-- [ ] **OP1 — import vs checkpoint**: confirm the import path.
-  Recommendation: yes — resolution change requires it; coordinate with
-  #6849 rather than wait for it.
-- [ ] **OP2 — state minimum**: tuned timescales + last time step only
-  (recommendation), also averager history, or accept a re-settling
-  window and validate the waveform is unaffected?
-- [ ] **OP3 — Lev list source**: `TargetParams` (recommendation) vs a
-  CLI option on `generate-id`; list vs `MinLev`/`MaxLev` pair.
-- [ ] **OP4 — add-lev verb**: extend PR #6717 vs a new command.
+1. [ ] **Import vs checkpoint** — confirm the import path.
+   Recommendation: yes; resolution change requires it. Coordinate with
+   #6849 rather than wait for it.
+2. [ ] **State carried** — tuned timescales + last time step
+   (recommendation), also averager history (requires serializing state
+   that is not on disk today), or time step only with full control
+   re-settling. The validation run adjudicates whether the accepted
+   loss is visible in the waveform.
+3. [ ] **Lev list shape** — `BranchLevs` list in `TargetParams`
+   (recommendation) vs a `MinLev`/`MaxLev` pair mirroring SpEC.
+4. [ ] **add-lev home** — extend PR #6717's branch-runs command vs a
+   new `spectre bbh add-lev` verb.
 
 A follow-up comment settling these points makes this issue ready for
 implementation (→ Ready).

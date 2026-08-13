@@ -219,26 +219,37 @@ so the shape-map initialization is the load-bearing piece:
    shape-map init can kill the run in the first ~10 M.
 2. Then **measure** early-failure incidence in pipeline runs. Build a
    recovery path only if failures persist.
-3. If needed, build it SpEC-shaped and pipeline-level: detect the four
-   early-failure terminations, re-derive shape init from the measured
-   horizons, resubmit from `t=0` (the evolution done under wrong map
-   initial values is invalid anyway), cap attempts (SpEC: 4) — no
-   in-executable phase machinery required.
-4. Independent enabler, valuable regardless: make control-system tags
-   overlayable at checkpoint restart (today they cannot be changed at
-   restart at all).
+3. If needed, build it SpEC-shaped and pipeline-level: the pipeline
+   detects the early-failure terminations (the SpECTRE analogues of
+   SpEC's four trigger reasons — char-speed violation at the excision
+   boundary, step-size floor (`MinimumTimeStep`), horizon-finder
+   failure — within a `TimeThresholdForError`-like window of ~10 M),
+   re-derives the shape-map initial values from the horizons the failed
+   run measured (the `YlmsFromFile` path of the split issue, pointed at
+   the failed run's horizon output), resubmits from `t=0`, and caps
+   attempts (SpEC: 4). No in-executable phase machinery required.
+4. Independent enabler, valuable regardless: make the control-system
+   tags overlayable at checkpoint restart
+   (`Averager`/`Controller`/`TimescaleTuner`/`ControlError`,
+   `Initialization.hpp:75-79` — today none of them can be changed at
+   restart).
+
+**Testing / acceptance** (for step 3, if built): a pipeline test that
+injects an early failure and observes one re-derived resubmission and
+the attempt cap; the recovery path never triggers on runs that pass the
+first ~10 M.
 
 ## Open points to settle
 
-- [ ] **OP1 — sequencing**: accept shape-map first, recovery decision
-  deferred to measurement? Recommendation: yes — the unconditional
-  re-init phase this issue proposed costs a few M of evolution on every
-  run; the recovery path costs nothing until something breaks.
-- [ ] **OP2 — if a recovery path is built**: pipeline-level resubmit
-  (recommendation: matches SpEC, no executable changes) vs an
-  in-executable `VisitAndReturn` phase.
-- [ ] **OP3 — overlayable control-system tags**: do as independent
-  enabling work now, or defer until a concrete use appears?
+1. [ ] **Sequencing** — accept shape-map first, recovery decision
+   deferred to measurement? Recommendation: yes — the unconditional
+   re-init phase this issue proposed costs a few M of evolution on
+   every run; the recovery path costs nothing until something breaks.
+2. [ ] **Recovery mechanism** (if built) — pipeline-level resubmit
+   (recommendation: matches SpEC, no executable changes) vs an
+   in-executable `VisitAndReturn` phase.
+3. [ ] **Overlayable control-system tags** — do as independent enabling
+   work now, or defer until a concrete use appears?
 
 A follow-up comment settling these points makes this issue ready for
 implementation (→ Ready).
