@@ -252,22 +252,31 @@ signature is unchanged; nothing in `gpr/` imports it and it does not import
 (`gpr_model_omega.pth`, `gpr_model_adot.pth`) are not committed — the
 notebook trains them locally.
 
-### Packaging — the real blocker for depending on it
+### Packaging — a few decisions to settle before depending on it
 
-- **Not on PyPI** (both `SimulationSupport` and `simulation-support` 404).
-  No conda recipe.
-- **No tags, no releases.** `version = "0.1.0"` (`pyproject.toml:8`) frozen
-  since the initial commit.
-- Dependencies (`pyproject.toml:12-21`, `requires-python >= 3.9`):
-  `numpy, scipy, matplotlib, torch, gpytorch, pandas, sxs`. **`torch` and
-  `gpytorch` are unconditional** even though only `gpr/` needs them, and
-  `sxs` is a hard dependency that nothing on `main` imports outside the
-  tutorial notebook. Adopting the package as-is drags all of that into every
-  SpECTRE Python environment.
-- The project's own documented workflow is a **pinned commit hash** —
+Python packaging itself is not an obstacle — SpECTRE's build configs pull
+Python dependencies in automatically, and pip installs straight from a git
+URL. Items to settle, in order of substance:
+
+- **Nothing to pin to yet.** No tags or releases; `version = "0.1.0"`
+  (`pyproject.toml:8`) unchanged since the initial commit. The project's
+  own documented workflow is a **pinned commit hash** —
   `docs/index.rst:28-31`: *"Once the pull request is merged, update the
   SimulationSupport version hash used by SpEC and update SpEC to import the
-  file from SimulationSupport instead of the local copy"*.
+  file from SimulationSupport instead of the local copy"*. Agreeing on the
+  pin (hash, tag, or an eventual PyPI release) is the one decision that
+  matters for reproducibility.
+- **`torch`/`gpytorch` weight.** Dependencies (`pyproject.toml:12-21`,
+  `requires-python >= 3.9`): `numpy, scipy, matplotlib, torch, gpytorch,
+  pandas, sxs`. `torch` and `gpytorch` are needed only by the `gpr/`
+  subpackage but are installed unconditionally; torch wheels are large and
+  platform-specific, which is felt in CI images and cluster environments.
+  An optional extra (`SimulationSupport[gpr]`) would keep the base install
+  light — a small upstream change.
+- **`sxs` is unused on `main`** outside the tutorial notebook — could move
+  to the same extra or be dropped until needed.
+- Not on PyPI, no conda recipe — nice to have eventually, not needed to
+  adopt the package.
 
 ## Prior art
 
@@ -316,10 +325,13 @@ Dependency declaration — a bare VCS line appended to
 git+https://github.com/sxs-collaboration/SimulationSupport.git
 ```
 
-No PEP 508 `Name @` prefix, no tag, no commit pin — it tracks `main` HEAD,
-contradicting the SimulationSupport docs' own pinned-hash workflow. No
-`setup.py`, `environment.yaml`, or conda recipe touched. `pyproject.toml`
-only adds `"SimulationSupport"` to isort's `known_first_party`.
+The mechanism works — SpECTRE's build configs install from
+`requirements.txt` automatically. The line just needs a commit pin (per
+the SimulationSupport docs' own pinned-hash workflow) so builds are
+reproducible; as written it tracks `main` HEAD. For completeness, the
+other dependency declarations (`setup.py`, `environment.yaml`, conda
+recipe) would want the same line. `pyproject.toml` only adds
+`"SimulationSupport"` to isort's `known_first_party`.
 
 **Failing checks** (run 18268519179): 19 FAILURE — `Clang-tidy (Release)`,
 all 8 Linux unit-test configs, both macOS configs, all 4 `Archs`,
@@ -416,21 +428,23 @@ surrogates — that work exists only in SimulationSupport.
    (`InitialOrbitalParameters.py:85-88`), although `TargetParams` already
    carries `MeanAnomalyFraction`
    (`support/Pipelines/Bbh/InitialData.py:34`) that nothing reads.
-5. On the SimulationSupport side, **the function is ready and the packaging
-   is not**: no PyPI release, no tags, `version = "0.1.0"` frozen, and
-   `torch`+`gpytorch`+`sxs` as unconditional dependencies. PR #6890 depends
-   on an unpinned `git+https://…` URL, contradicting SimulationSupport's own
-   documented pinned-hash workflow (`docs/index.rst:28-31`).
+5. On the SimulationSupport side, **the function is ready**; a few
+   packaging decisions remain. The substantive one: what to pin to — no
+   tags or releases exist yet, the SimulationSupport docs prescribe a
+   pinned commit hash (`docs/index.rst:28-31`), and PR #6890's
+   `git+https://…` line is unpinned. Secondary: whether `torch`/`gpytorch`
+   (needed only by `gpr/`; large, platform-specific wheels) move to an
+   optional extra to keep the base install light.
 6. The GPR-fitted guesses are merged in SimulationSupport but **not wired
    into `initial_orbital_parameters`**, and nothing proposes the wiring.
 
 ## What is actually blocking, in order
 
-1. **Packaging decision** — how SpECTRE depends on SimulationSupport
-   (pinned hash vs tag vs PyPI release), and whether `torch`/`gpytorch` are
-   acceptable as unconditional SpECTRE dependencies or need to move to an
-   extra. This is a SimulationSupport-side change and it blocks everything
-   else.
+1. **Pick the pin** — how SpECTRE references SimulationSupport (commit
+   hash per its docs, a tag, or an eventual PyPI release). A small,
+   mostly SimulationSupport-side decision, best settled before the SpECTRE
+   PR so the dependency line lands pinned. Whether `torch`/`gpytorch` move
+   to an optional extra can ride along.
 2. **Rebase and re-run PR #6890's initial-orbital-parameters half** — it is
    1285 commits behind with real conflicts, and its CI failures cannot be
    diagnosed from expired logs. Splitting it so it does *not* also try to
