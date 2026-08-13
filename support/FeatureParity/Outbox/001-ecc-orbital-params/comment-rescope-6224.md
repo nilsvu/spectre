@@ -22,3 +22,4 @@ PR #6890's initial-orbital-parameters half).
 ---
 
 🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)
+(and reviewed by me 🙋)

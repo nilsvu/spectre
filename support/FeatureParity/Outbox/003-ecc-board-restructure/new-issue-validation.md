@@ -50,3 +50,4 @@ ready to schedule runs.
 ---
 
 🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)
+(and reviewed by me 🙋)

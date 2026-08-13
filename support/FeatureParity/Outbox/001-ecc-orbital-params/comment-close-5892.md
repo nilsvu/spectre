@@ -13,3 +13,4 @@ loop gaps (#7416: two-stage Lev schedule and abort conditions).
 ---
 
 🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)
+(and reviewed by me 🙋)

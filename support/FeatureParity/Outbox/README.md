@@ -43,10 +43,13 @@ Outbox/
   ---
 
   🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)
+  (and reviewed by me 🙋)
   ```
 
   so agent-drafted text is attributed correctly when the user posts it
-  from their own account. (Name the model that drafted the entry.)
+  from their own account. (Name the model that drafted the entry; the
+  second line is the user's review statement — the user reviews every
+  body before posting.)
 
 ## Writing comment and issue bodies
 
