@@ -34,3 +34,7 @@ BBH configuration for comparison with SpEC", is the setup issue this
 depends on), run matched SpEC/SpECTRE simulations, and compare waveform
 accuracy and constraint levels at fixed cost. Success criteria should be
 preregistered per run.
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

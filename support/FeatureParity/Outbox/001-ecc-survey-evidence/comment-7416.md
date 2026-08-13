@@ -242,3 +242,7 @@ written, but it is the reason `TargetParams` already carries
 **Nothing existing covers the abort conditions.** That is the one item from
 this issue's original scope with no prior art at all, and the one with the
 clearest cost consequence — hence the dedicated issue.
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

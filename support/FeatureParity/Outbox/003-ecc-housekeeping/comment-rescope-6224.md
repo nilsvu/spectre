@@ -18,3 +18,7 @@ implementation) as a SimulationSupport-side change, coordinated with
 retraining the GPR residuals, rather than a SpECTRE-side replacement. The
 SpECTRE-side wiring slot goes to the SimulationSupport import (#7412,
 PR #6890's initial-orbital-parameters half).
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

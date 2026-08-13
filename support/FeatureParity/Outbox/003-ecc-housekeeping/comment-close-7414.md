@@ -3,3 +3,7 @@ covered by the groomed eccentricity-control cluster on the feature-parity
 board — #7412 (initial orbital parameters / SimulationSupport), #7416 (Lev
 schedule for the reduction iterations, plus a dedicated abort-conditions
 issue), and #7413 (PBJ branching and continuation).
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

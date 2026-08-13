@@ -30,6 +30,16 @@ Outbox/
   testing section records what was run.
 - Entries must be self-contained: a teammate (or `sxs-bot`, later)
   could post them without any agent context.
+- Every comment and issue body ends with the attribution footer
+
+  ```
+  ---
+
+  🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.
+  ```
+
+  so agent-drafted text is attributed correctly when the user posts it
+  from their own account. (Adjust "survey agent" to the drafting role.)
 
 ## Posting flow (user)
 

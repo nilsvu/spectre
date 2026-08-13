@@ -194,3 +194,7 @@ wave-extraction cadence for all bound-orbit BBH runs
 (`DoMultipleRuns.input:211-215`). Wiring the new trigger into
 `Inspiral.yaml`'s observation events is part of the deliverable, not a
 follow-up.
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

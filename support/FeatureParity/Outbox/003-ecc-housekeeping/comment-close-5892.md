@@ -10,3 +10,7 @@ the SpEC runtime dependency via SimulationSupport (#7412 for the initial
 orbital parameters, #7416 for the measurement side), and the remaining loop
 gaps (#7416: two-stage Lev schedule; abort conditions split into a
 dedicated issue).
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

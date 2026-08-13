@@ -9,3 +9,7 @@ implementation with one known bug (the dense-trigger `next_check_time`
 logic — the author's own diagnosis). Proposal: make #7415 the
 implementation issue and revive or explicitly supersede #6009 there rather
 than reimplementing it silently.
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

@@ -11,3 +11,7 @@ The full evidence for this issue's scope — hard-coded
 control-system state reset (`simple_tags_from_options`) — is in the survey
 comment on #7413 (gap G3), together with the design questions (checkpoint
 restart vs volume-data import; which state crosses the branch; #6849).
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

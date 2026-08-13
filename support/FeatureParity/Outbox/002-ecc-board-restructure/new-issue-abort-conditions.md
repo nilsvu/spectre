@@ -32,3 +32,7 @@ previous iteration, comparing iterations at the same Lev".
 **No prior art exists** — no SpECTRE issue or PR covers either condition
 (dedupe pass over ecc-control issues/PRs recorded in the #7416 survey
 comment).
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

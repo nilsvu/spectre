@@ -269,3 +269,7 @@ No existing issue or PR addresses the time-stepper half of G3.
 - Should adding a Lev later be a first-class CLI verb (e.g.
   `spectre bbh add-lev -d <pipeline_dir> --lev 4`), recording branched Levs
   so it is idempotent the way SpEC's symlink check is?
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

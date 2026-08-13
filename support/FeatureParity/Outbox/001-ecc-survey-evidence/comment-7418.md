@@ -241,3 +241,7 @@ above. **Read why it was closed before re-opening the question.**
 | 6635 / 6637 | PR merged | Relocation of constraint damping to `PointwiseFunctions` |
 | 2116 | issue OPEN | "Add input file control for constraint damping parameters" (2020) |
 | 1811 | issue OPEN | "Add extra constraint damping parameter to generalized harmonic system" (2019) |
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

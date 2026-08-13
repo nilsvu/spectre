@@ -18,3 +18,7 @@ Proposal: narrow this issue to what no successor covers —
 
 Whether eccentric-orbit support is in the feature-parity campaign's scope
 is an open question; until decided, this issue is the holder for it.
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

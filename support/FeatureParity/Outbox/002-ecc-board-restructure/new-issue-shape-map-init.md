@@ -45,3 +45,7 @@ Two things to check while doing it:
 Prior art: PR #6113 shipped the `InitialValues` variant options; no issue
 or PR covers actually using `YlmsFromFile` in the BBH pipeline (dedupe
 recorded in the #7417 survey comment).
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

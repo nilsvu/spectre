@@ -439,3 +439,7 @@ surrogates — that work exists only in SimulationSupport.
    inside SimulationSupport". Leaving it open invites the same discussion
    again later.
 4. GPR wiring — a separate, later step, unblocked by any of the above.
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

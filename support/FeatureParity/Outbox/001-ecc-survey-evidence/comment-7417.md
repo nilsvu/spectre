@@ -222,3 +222,7 @@ hence the dedicated issue.
   `$change_restart = "FromID"`) or continue? SpEC restarts from zero
   because the map initial values change, which invalidates the evolution
   already done.
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.

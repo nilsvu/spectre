@@ -4,3 +4,7 @@ evidence: SpEC's `RoughEccReduction` two-stage Lev schedule
 `1e-3`, then at `MaxLev` to `7e-4`; switch at
 `Support/Perl/EccReduce.pm:327-334`). See the survey comment on #7416 for
 the full mechanism comparison.
+
+---
+
+🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.
