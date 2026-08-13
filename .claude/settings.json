@@ -1,10 +1,33 @@
 {
   "permissions": {
     "allow": [
+      "Skill(parity-outbox)",
+      "Skill(parity-status)",
       "Skill(spectre-fix-ci)",
       "Skill(spectre-fix-issue)",
       "Skill(spectre-fix-pr)",
-      "Skill(spectre-review)"
+      "Skill(spectre-review)",
+      "Bash(tools/ParityStatus.sh)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(gh issue comment:*)",
+      "Bash(gh issue close:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh pr review:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh pr close:*)",
+      "Bash(gh project:*)",
+      "Bash(gh auth login:*)",
+      "Bash(gh auth logout:*)",
+      "Bash(gh auth refresh:*)",
+      "Bash(gh auth switch:*)",
+      "Bash(sbatch:*)",
+      "Bash(scancel:*)"
     ]
   },
   "hooks": {
