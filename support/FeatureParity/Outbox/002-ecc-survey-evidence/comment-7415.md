@@ -50,11 +50,11 @@ Implementation shape:
 
 ## Open points to settle
 
-1. [ ] **`angle_func` access** — `dynamic_cast` in the trigger (recommendation: smaller first step) vs extending the `FunctionOfTime` interface.
-2. [ ] **Phase under precession** — z-component of the angle vector, projection on the instantaneous orbital angular momentum, or norm. Recommendation: norm — reduces to the z-component for non-precessing systems; document the choice.
-3. [ ] **Ratcheting** — reproduce SpEC's non-increasing-period behaviour, or rely on `Ω(t)` being monotone for quasicircular inspirals. Recommendation: skip initially.
-4. [ ] **PR #6009** — revive with its author or supersede explicitly — not reimplement silently.
-5. [ ] **Default cadence** in `Inspiral.yaml` — adopt SpEC's 400/orbit for wave extraction? Recommendation: yes.
+- [ ] **1. `angle_func` access** — `dynamic_cast` in the trigger (recommendation: smaller first step) vs extending the `FunctionOfTime` interface.
+- [ ] **2. Phase under precession** — z-component of the angle vector, projection on the instantaneous orbital angular momentum, or norm. Recommendation: norm — reduces to the z-component for non-precessing systems; document the choice.
+- [ ] **3. Ratcheting** — reproduce SpEC's non-increasing-period behaviour, or rely on `Ω(t)` being monotone for quasicircular inspirals. Recommendation: skip initially.
+- [ ] **4. PR #6009** — revive with its author or supersede explicitly — not reimplement silently.
+- [ ] **5. Default cadence** in `Inspiral.yaml` — adopt SpEC's 400/orbit for wave extraction? Recommendation: yes.
 
 A follow-up comment settling these points makes this issue ready for implementation (→ Ready).
 

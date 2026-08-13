@@ -71,11 +71,11 @@ Feature-parity survey evidence. Revisions: SpEC @ `5f8f5375ca`, SpECTRE `develop
 
 ## Open points to settle
 
-1. [ ] **Pin mechanism** — commit hash in `requirements.txt` (per the SimulationSupport docs) vs first tag. Recommendation: hash now, switch to tags once SimulationSupport starts releasing.
-2. [ ] **Extras split** — move `torch`/`gpytorch`/`sxs` to a `SimulationSupport[gpr]` extra? Recommendation: yes — small upstream change, keeps SpECTRE environments light.
-3. [ ] **Upstream driver** — who merges the SimulationSupport-side changes (we can prepare the PRs).
-4. [ ] **SpECTRE-side test** — drop `Test_InitialOrbitalParameters` entirely (assertions live upstream) vs keep the thin integration test. Recommendation: keep it, so SpECTRE CI exercises the import.
-5. [ ] **PR #6224** — confirm the re-scope, or close.
+- [ ] **1. Pin mechanism** — commit hash in `requirements.txt` (per the SimulationSupport docs) vs first tag. Recommendation: hash now, switch to tags once SimulationSupport starts releasing.
+- [ ] **2. Extras split** — move `torch`/`gpytorch`/`sxs` to a `SimulationSupport[gpr]` extra? Recommendation: yes — small upstream change, keeps SpECTRE environments light.
+- [ ] **3. Upstream driver** — who merges the SimulationSupport-side changes (we can prepare the PRs).
+- [ ] **4. SpECTRE-side test** — drop `Test_InitialOrbitalParameters` entirely (assertions live upstream) vs keep the thin integration test. Recommendation: keep it, so SpECTRE CI exercises the import.
+- [ ] **5. PR #6224** — confirm the re-scope, or close.
 
 A follow-up comment settling these points makes this issue ready for implementation (→ Ready).
 

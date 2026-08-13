@@ -28,8 +28,8 @@ Pure pipeline change in `EccentricityControl.py`:
 
 ## Open points to settle
 
-1. [ ] **Iteration cap** — adopt SpEC's default of 7 for `MaxEccIterations`?
-2. [ ] **Divergence response** (before #7416's rough stage exists) — hard stop with error (recommendation) vs warn-and-continue.
+- [ ] **1. Iteration cap** — adopt SpEC's default of 7 for `MaxEccIterations`?
+- [ ] **2. Divergence response** (before #7416's rough stage exists) — hard stop with error (recommendation) vs warn-and-continue.
 
 A follow-up comment settling these points makes this issue ready for implementation (→ Ready).
 

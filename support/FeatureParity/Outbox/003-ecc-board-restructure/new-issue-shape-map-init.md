@@ -40,8 +40,8 @@ Pure template/pipeline change:
 
 ## Open points to settle
 
-1. [ ] **Default** — measured-horizon initialization on by default when horizon data exists (recommendation) or opt-in first?
-2. [ ] **SpEC-ID runs** — also switch the `SpecDataDirectory` path from `InitialValues: Spherical` to `YlmsFromSpEC`?
+- [ ] **1. Default** — measured-horizon initialization on by default when horizon data exists (recommendation) or opt-in first?
+- [ ] **2. SpEC-ID runs** — also switch the `SpecDataDirectory` path from `InitialValues: Spherical` to `YlmsFromSpEC`?
 
 A follow-up comment settling these points makes this issue ready for implementation (→ Ready).
 

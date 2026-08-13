@@ -76,8 +76,10 @@ implementation — ideally with little iteration left for the PR.
 6. `## Proposed design` at implementation depth: name the files,
    knobs, and mechanisms; say what is pipeline-side vs executable-side;
    include a **Testing / acceptance** paragraph.
-7. `## Open points to settle` — ordered task list (`1. [ ] **Name** —
-   options…`), each with the options and a recommendation where the
+7. `## Open points to settle` — a task list with the number written
+   into the label (`- [ ] **1. Name** — options…`; GitHub swallows
+   ordinal markers on task-list items, so `1. [ ]` renders without
+   numbers), each with the options and a recommendation where the
    evidence supports one. Close with the standard line: *"A follow-up
    comment settling these points makes this issue ready for
    implementation (→ Ready)."*

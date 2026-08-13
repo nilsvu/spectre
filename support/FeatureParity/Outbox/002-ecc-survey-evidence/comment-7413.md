@@ -69,10 +69,10 @@ Keep the branch a **volume-data import** — a checkpoint restart cannot change 
 
 ## Open points to settle
 
-1. [ ] **Import vs checkpoint** — confirm the import path. Recommendation: yes; resolution change requires it. Coordinate with #6849 rather than wait for it.
-2. [ ] **State carried** — tuned timescales + last time step (recommendation), also averager history (requires serializing state that is not on disk today), or time step only with full control re-settling. The validation run adjudicates whether the accepted loss is visible in the waveform.
-3. [ ] **Lev list shape** — `BranchLevs` list in `TargetParams` (recommendation) vs a `MinLev`/`MaxLev` pair mirroring SpEC.
-4. [ ] **add-lev home** — extend PR #6717's branch-runs command vs a new `spectre bbh add-lev` verb.
+- [ ] **1. Import vs checkpoint** — confirm the import path. Recommendation: yes; resolution change requires it. Coordinate with #6849 rather than wait for it.
+- [ ] **2. State carried** — tuned timescales + last time step (recommendation), also averager history (requires serializing state that is not on disk today), or time step only with full control re-settling. The validation run adjudicates whether the accepted loss is visible in the waveform.
+- [ ] **3. Lev list shape** — `BranchLevs` list in `TargetParams` (recommendation) vs a `MinLev`/`MaxLev` pair mirroring SpEC.
+- [ ] **4. add-lev home** — extend PR #6717's branch-runs command vs a new `spectre bbh add-lev` verb.
 
 A follow-up comment settling these points makes this issue ready for implementation (→ Ready).
 

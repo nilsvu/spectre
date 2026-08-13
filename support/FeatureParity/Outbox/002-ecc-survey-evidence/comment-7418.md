@@ -96,9 +96,9 @@ Structural differences (time stepping, filtering, AMR) get one row each pointing
 
 ## Open points to settle
 
-1. [ ] **Location** — `docs/DevGuide/` page (recommendation) vs source comments only.
-2. [ ] **Gauge roll-on** — document as intentionally dropped (if the #1627 closure supports that reading) or reopen as a to-match item.
-3. [ ] **`tmin` 400 (SpEC) vs 500 (SpECTRE)** in the ecc-reduction run length — adjudicate and record.
+- [ ] **1. Location** — `docs/DevGuide/` page (recommendation) vs source comments only.
+- [ ] **2. Gauge roll-on** — document as intentionally dropped (if the #1627 closure supports that reading) or reopen as a to-match item.
+- [ ] **3. `tmin` 400 (SpEC) vs 500 (SpECTRE)** in the ecc-reduction run length — adjudicate and record.
 
 A follow-up comment settling these points makes this issue ready for implementation (→ Ready).
 

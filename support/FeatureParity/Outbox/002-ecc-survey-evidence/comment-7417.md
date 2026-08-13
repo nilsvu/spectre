@@ -52,9 +52,9 @@ Sequence the work instead of choosing the big design now. Note SpEC's procedure 
 
 ## Open points to settle
 
-1. [ ] **Sequencing** — accept shape-map first, recovery decision deferred to measurement? Recommendation: yes — the unconditional re-init phase this issue proposed costs a few M of evolution on every run; the recovery path costs nothing until something breaks.
-2. [ ] **Recovery mechanism** (if built) — pipeline-level resubmit (recommendation: matches SpEC, no executable changes) vs an in-executable `VisitAndReturn` phase.
-3. [ ] **Overlayable control-system tags** — do as independent enabling work now, or defer until a concrete use appears?
+- [ ] **1. Sequencing** — accept shape-map first, recovery decision deferred to measurement? Recommendation: yes — the unconditional re-init phase this issue proposed costs a few M of evolution on every run; the recovery path costs nothing until something breaks.
+- [ ] **2. Recovery mechanism** (if built) — pipeline-level resubmit (recommendation: matches SpEC, no executable changes) vs an in-executable `VisitAndReturn` phase.
+- [ ] **3. Overlayable control-system tags** — do as independent enabling work now, or defer until a concrete use appears?
 
 A follow-up comment settling these points makes this issue ready for implementation (→ Ready).
 
