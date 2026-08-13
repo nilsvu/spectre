@@ -75,8 +75,9 @@ implementation — ideally with little iteration left for the PR.
 
 **Length and readability** (the compromise that survived review):
 
-- Target ≈130–180 lines per issue comment. Longer means cut, shorter
-  usually means unreadable density — both were rejected.
+- As long as the issue warrants, no longer. Both failure modes were
+  rejected in review: exhaustive walk-throughs that bury the design,
+  and prose so dense it cannot be scanned.
 - One idea per bullet, bold lead-ins; no multi-fact paragraph prose.
 - No verbatim quote blocks or mechanism walk-throughs — a `file:line`
   reference replaces them. Exception: short code anchors (≤ ~6 lines,
