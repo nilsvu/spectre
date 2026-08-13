@@ -38,9 +38,14 @@ entry or acting on GitHub); agents work autonomously only *inside* a
 stage the user opened, never across a gate.
 
 The project board's columns ARE the pipeline state, and the user moves
-the cards: **Backlog** (captured, thin) → **Ready** (design approved,
-groomed for implementation) → **In progress** → **In review** →
-**Done**.
+the cards: **Backlog** (captured, thin) → **Discuss** (survey + design
+proposal posted; open points under team discussion) → **Ready** (open
+points settled, groomed for implementation) → **In progress** →
+**In review** → **Done**. The Discuss column is the team-meeting
+agenda: each card's survey comment is the discussion material, its
+checkboxes the live settlement state. Cards also carry **Priority**
+(High/Medium/Low) and **Size** (XS–XL): the survey stage proposes
+values (staged with the board writes); the user and team adjust.
 
 1. **Survey + design proposal** — the assignment is co-written in
    session, then the worker runs it autonomously: SpEC vs SpECTRE on
@@ -57,7 +62,7 @@ groomed for implementation) → **In progress** → **In review** →
    in `Outbox/README.md` ("Writing comment and issue bodies") — read
    before drafting. Results land in the session; the user decides
    which gaps advance ⇒ one comment per issue: survey + proposal +
-   open points.
+   open points; the card moves to Discuss.
 2. **Settle** — team discussion (meetings, issue threads) settles the
    substance of the numbered open points; the user records the
    settlement in a follow-up GitHub comment and has the final say. A

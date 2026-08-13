@@ -78,19 +78,32 @@ by_status = {}
 for it in nodes:
     c = it.get("content") or {}
     status = "(no status)"
+    fields = {}
     for fv in it["fieldValues"]["nodes"]:
-        if fv and fv.get("field", {}).get("name") == "Status":
+        if not fv:
+            continue
+        fname = fv.get("field", {}).get("name")
+        if fname == "Status":
             status = fv["name"]
+        elif fname in ("Priority", "Size"):
+            fields[fname] = fv["name"]
     num = c.get("number")
     ref = "#%s" % num if num else "draft"
     title = (c.get("title") or "?")[:60]
-    by_status.setdefault(status, []).append(ref + " " + title)
-order = ["In review", "In progress", "Ready", "Backlog", "Done"]
+    extra = ""
+    if fields:
+        extra = " (" + ", ".join(
+            "%s:%s" % (k[0], fields[k])
+            for k in ("Priority", "Size") if k in fields) + ")"
+    by_status.setdefault(status, []).append(ref + " " + title + extra)
+order = ["Discuss", "In review", "In progress", "Ready", "Backlog", "Done"]
 for status in order + sorted(set(by_status) - set(order)):
     rows = by_status.get(status)
     if not rows:
         if status == "Ready":
             print("  [Ready] EMPTY — nothing groomed for implementation")
+        elif status == "Discuss":
+            print("  [Discuss] EMPTY — nothing awaiting team settlement")
         continue
     if status in ("Backlog", "Done") and len(rows) > 5:
         print("  [%s] %d items (last 5 in board order)"
