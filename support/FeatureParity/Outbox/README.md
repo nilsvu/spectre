@@ -28,6 +28,12 @@ Outbox/
   `git -C /users/nilsvu/spectre push origin fp/<slug>`. A PR entry is
   staged only after the co-review with the user is done; `body.md`'s
   testing section records what was run.
+- A PR `body.md` links its issue with a closing keyword
+  (`Closes #NNNN`, first line after the summary). This drives the
+  board: the card's "Linked pull requests" field shows implementation
+  state, and the merge auto-moves the card to Done (project workflow).
+  One PR per issue; if a PR deliberately covers only part of an issue,
+  say so and use `Part of #NNNN` instead — no closing keyword.
 - Entries must be self-contained: a teammate (or `sxs-bot`, later)
   could post them without any agent context. Entries embedding
   resolved GitHub node IDs (project boards) assume prompt posting.
