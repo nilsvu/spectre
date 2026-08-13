@@ -35,11 +35,11 @@ Outbox/
   ```
   ---
 
-  🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.
+  drafted by: Claude Fable 5
   ```
 
   so agent-drafted text is attributed correctly when the user posts it
-  from their own account. (Adjust "survey agent" to the drafting role.)
+  from their own account. (Name the model that drafted the entry.)
 
 ## Posting flow (user)
 

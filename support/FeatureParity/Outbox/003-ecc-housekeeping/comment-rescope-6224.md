@@ -21,4 +21,4 @@ PR #6890's initial-orbital-parameters half).
 
 ---
 
-🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.
+drafted by: Claude Fable 5

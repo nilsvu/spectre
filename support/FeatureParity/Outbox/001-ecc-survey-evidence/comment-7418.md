@@ -244,4 +244,4 @@ above. **Read why it was closed before re-opening the question.**
 
 ---
 
-🤖 Drafted with [Claude Code](https://claude.com/claude-code) as the feature-parity campaign survey agent; reviewed and posted by a human.
+drafted by: Claude Fable 5
