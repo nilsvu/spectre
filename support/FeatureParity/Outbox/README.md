@@ -89,6 +89,11 @@ implementation — ideally with little iteration left for the PR.
   rejected in review: exhaustive walk-throughs that bury the design,
   and prose so dense it cannot be scanned.
 - One idea per bullet, bold lead-ins; no multi-fact paragraph prose.
+- **No hard line wrapping**: GitHub renders single newlines in issue
+  and PR comments as line breaks, so wrapped source displays ragged.
+  Write each paragraph and list item as one long line (code blocks and
+  tables excepted). The repo's 80-column style does not apply to
+  bodies — they are GitHub content, not source.
 - No verbatim quote blocks or mechanism walk-throughs — a `file:line`
   reference replaces them. Exception: short code anchors (≤ ~6 lines,
   a few per comment) where the exact text carries the point.
