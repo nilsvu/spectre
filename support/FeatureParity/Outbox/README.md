@@ -41,6 +41,58 @@ Outbox/
   so agent-drafted text is attributed correctly when the user posts it
   from their own account. (Name the model that drafted the entry.)
 
+## Writing comment and issue bodies
+
+Read this section before drafting any body — worker, orchestrator, or
+reviewer. These guidelines were converged with the user (2026-08-13,
+eccentricity-reduction survey) and define what a good entry looks like.
+
+**Purpose.** One comment per issue carries survey evidence + design
+proposal + open points (manual, pipeline stages 1–2). It must be enough
+for a team meeting to discuss, and phrased so a single follow-up
+comment settling the open points makes the issue ready for
+implementation — ideally with little iteration left for the PR.
+
+**Structure**, in order:
+
+1. Title line (`# Survey: …`).
+2. Header: surveyed revisions (SpEC/SpECTRE/other repos @ commit), so
+   `file:line` references stay meaningful.
+3. Verdict/headline first — what is at parity, what is not.
+4. Findings: mechanism comparison with `file:line` in both codebases;
+   record negative results ("searched X, found nothing").
+5. Prior art: actionable rows only (read-first, revive, close-as-dup),
+   minor merged PRs collapsed to one line.
+6. `## Proposed design` at implementation depth: name the files,
+   knobs, and mechanisms; say what is pipeline-side vs executable-side;
+   include a **Testing / acceptance** paragraph.
+7. `## Open points to settle` — ordered task list (`1. [ ] **Name** —
+   options…`), each with the options and a recommendation where the
+   evidence supports one. Close with the standard line: *"A follow-up
+   comment settling these points makes this issue ready for
+   implementation (→ Ready)."*
+8. The attribution footer (above).
+
+**Length and readability** (the compromise that survived review):
+
+- Target ≈130–180 lines per issue comment. Longer means cut, shorter
+  usually means unreadable density — both were rejected.
+- One idea per bullet, bold lead-ins; no multi-fact paragraph prose.
+- No verbatim quote blocks or mechanism walk-throughs — a `file:line`
+  reference replaces them. Exception: short code anchors (≤ ~6 lines,
+  a few per comment) where the exact text carries the point.
+- Full-detail survey reports stay in the session's scratch directory;
+  the comment cites, never duplicates.
+
+**Tone:**
+
+- State real defects plainly; never soften them.
+- Do not inflate incidental friction into blockers — label decisions
+  as decisions ("a few decisions to settle", not "the real blocker")
+  so reviewers are not scared off routine items.
+- Distinguish verified facts from inference; flag uncertain claims,
+  and hedge honestly where the implementer must verify a detail.
+
 ## Posting flow (user)
 
 ```sh

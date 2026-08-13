@@ -34,6 +34,11 @@ renegotiated mid-flight.
   Deliverables that belong on GitHub are drafted as proposed content
   in your report or per `support/FeatureParity/Outbox/README.md`;
   the user decides what gets published.
+- **Before writing any comment- or issue-body draft, read the
+  "Writing comment and issue bodies" section of
+  `support/FeatureParity/Outbox/README.md`** — it defines the required
+  structure (survey + design proposal + open points), length target,
+  and tone. Drafts that ignore it get rewritten at staging.
 - **Cite evidence as `file:line`** — in SpEC (`/users/nilsvu/spec`)
   and SpECTRE both. Distinguish read/measured facts from inference;
   flag uncertain claims. Your report will be verified against disk.

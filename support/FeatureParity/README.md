@@ -53,9 +53,11 @@ groomed for implementation) → **In progress** → **In review** →
    evidence AND a concrete design proposal with **numbered open
    points**, each listing the options and a recommendation
    where the evidence supports one — so a single comment is enough to
-   discuss at a team meeting. Results land in the session; the user
-   decides which gaps advance ⇒ one comment per issue: survey +
-   proposal + open points.
+   discuss at a team meeting. Structure, length, and tone are defined
+   in `Outbox/README.md` ("Writing comment and issue bodies") — read
+   before drafting. Results land in the session; the user decides
+   which gaps advance ⇒ one comment per issue: survey + proposal +
+   open points.
 2. **Settle** — the design decision is the user's, made where the
    team can see it: after team discussion, a follow-up GitHub comment
    by the user settles the numbered open points. Hard forks can still

@@ -44,10 +44,12 @@ crosses a pipeline stage gate without them.
    - *Triage discoveries* from worker reports with the user; approved
      ones become outbox draft issues (dedupe against existing GitHub
      issues first).
-4. **Stage and close**: write outbox entries per `Outbox/README.md`,
-   commit harness-branch changes locally (never push). End with
-   action items as exact commands (posting, `sbatch`) and the state
-   the next session will find.
+4. **Stage and close**: write outbox entries per `Outbox/README.md` —
+   including its "Writing comment and issue bodies" guidelines
+   (structure, length, tone), which you read before drafting or
+   editing any body — commit harness-branch changes locally (never
+   push). End with action items as exact commands (posting, `sbatch`)
+   and the state the next session will find.
 
 Report in the shape `AGENTS.local.md` defines: lead with the verdict,
 plain language, no play-by-play; questions only where the user's
