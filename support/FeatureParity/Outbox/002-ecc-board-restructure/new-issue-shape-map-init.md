@@ -46,6 +46,25 @@ Prior art: PR #6113 shipped the `InitialValues` variant options; no issue
 or PR covers actually using `YlmsFromFile` in the BBH pipeline (dedupe
 recorded in the #7417 survey comment).
 
+## Proposed implementation
+
+Wire the three already-computed arguments to a `YlmsFromFile` block in
+`Inspiral.yaml`'s `ShapeMap{A,B}` `InitialValues` when the ID horizon
+data is available, keeping `KerrSchildFromBoyerLindquist` as the
+fallback. Verify at `t=0` that the shape control error starts at
+`Q ≈ 0` (SpEC's stated criterion for this initialization, point 1
+above), and add that check to the pipeline test.
+
+## Open points to settle
+
+- [ ] **OP1 — default**: measured-horizon initialization on by default
+  when horizon data exists (recommendation) or opt-in first?
+- [ ] **OP2 — SpEC-ID runs**: also switch the `SpecDataDirectory` path
+  from `InitialValues: Spherical` to `YlmsFromSpEC`?
+
+A follow-up comment settling these points makes this issue ready for
+implementation (→ Ready).
+
 ---
 
 🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)

@@ -33,6 +33,26 @@ previous iteration, comparing iterations at the same Lev".
 (dedupe pass over ecc-control issues/PRs recorded in the #7416 survey
 comment).
 
+## Proposed implementation
+
+In `EccentricityControl.py`'s non-converged branch: count iterations
+(from the pipeline directory structure or the ecc-params history file)
+and stop with a clear error at `MaxIts`; before resubmitting, compare
+`|ecc − target|` against the previous iteration *at the same Lev* and
+stop on non-improvement. On stop, leave the state on disk so a human can
+resume with adjusted parameters. When #7416's two-stage schedule lands,
+a rough-stage stall promotes to the final Lev instead of stopping
+(SpEC's behaviour).
+
+## Open points to settle
+
+- [ ] **OP1 — iteration cap**: adopt SpEC's default `MaxIts = 7`?
+- [ ] **OP2 — divergence response** (before #7416's rough stage exists):
+  hard stop with error (recommendation) vs warn-and-continue.
+
+A follow-up comment settling these points makes this issue ready for
+implementation (→ Ready).
+
 ---
 
 🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)

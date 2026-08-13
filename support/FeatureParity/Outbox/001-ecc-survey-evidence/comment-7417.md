@@ -206,22 +206,42 @@ precedent for the issue's "do this as a phase we run `N` times" idea.
 No existing issue or PR covers the shape-map-from-measured-horizon gap —
 hence the dedicated issue.
 
-## Open design questions
+## Proposed design
 
-- **Scope.** SpEC parity (a recovery path, capped) or the stronger
-  unconditional re-init phase? The unconditional version costs a few M of
-  evolution on every run; the recovery version costs nothing until
-  something breaks. The evidence does not decide this fork.
-- **What "updating the control system" means in SpECTRE.** SpEC's procedure
-  updates *map initial values* (shape/size init files), not controller
-  gains — the control systems themselves restart identically. If the
-  shape-map-from-measured-horizons issue is fixed first, a large part of
-  SpEC's motivation for the recovery path disappears. Worth deciding that
-  first and re-measuring whether the recovery path is still needed.
-- If a re-init phase is built, does it re-run from `t=0` (SpEC:
-  `$change_restart = "FromID"`) or continue? SpEC restarts from zero
-  because the map initial values change, which invalidates the evolution
-  already done.
+Sequence the work instead of choosing the big design now. Note SpEC's
+procedure updates *map initial values* (shape/size init files), not
+controller gains — the control systems themselves restart identically —
+so the shape-map initialization is the load-bearing piece:
+
+1. Land the shape-map-from-measured-horizons issue first (split out; the
+   dead plumbing makes it cheap). It removes most of SpEC's motivation
+   for re-initialization: SpEC's recovery path exists because a wrong
+   shape-map init can kill the run in the first ~10 M.
+2. Then **measure** early-failure incidence in pipeline runs. Build a
+   recovery path only if failures persist.
+3. If needed, build it SpEC-shaped and pipeline-level: detect the four
+   early-failure terminations, re-derive shape init from the measured
+   horizons, resubmit from `t=0` (the evolution done under wrong map
+   initial values is invalid anyway), cap attempts (SpEC: 4) — no
+   in-executable phase machinery required.
+4. Independent enabler, valuable regardless: make control-system tags
+   overlayable at checkpoint restart (today they cannot be changed at
+   restart at all).
+
+## Open points to settle
+
+- [ ] **OP1 — sequencing**: accept shape-map first, recovery decision
+  deferred to measurement? Recommendation: yes — the unconditional
+  re-init phase this issue proposed costs a few M of evolution on every
+  run; the recovery path costs nothing until something breaks.
+- [ ] **OP2 — if a recovery path is built**: pipeline-level resubmit
+  (recommendation: matches SpEC, no executable changes) vs an
+  in-executable `VisitAndReturn` phase.
+- [ ] **OP3 — overlayable control-system tags**: do as independent
+  enabling work now, or defer until a concrete use appears?
+
+A follow-up comment settling these points makes this issue ready for
+implementation (→ Ready).
 
 ---
 

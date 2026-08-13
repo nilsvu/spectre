@@ -195,6 +195,37 @@ wave-extraction cadence for all bound-orbit BBH runs
 `Inspiral.yaml`'s observation events is part of the deliverable, not a
 follow-up.
 
+## Proposed design
+
+Two **stateless** triggers, `NTimesPerOrbit` and `EveryNOrbits`, reading
+the cumulative phase `Φ(t)` from
+`QuaternionFunctionOfTime::angle_func` and firing when the phase crosses
+the next multiple of the interval (`2π/N` resp. `2π·N`) — no accumulated
+state, unlike SpEC's implementation. Start from PR #6009 rather than
+fresh: its one known defect is the dense-trigger `next_check_time`,
+which becomes a scalar root-find of `Φ(t) = 2π k / N` on the angle
+`PiecewisePolynomial`. Wire `NTimesPerOrbit` into `Inspiral.yaml`'s
+wave-extraction/observation events.
+
+## Open points to settle
+
+- [ ] **OP1 — `angle_func` access**: `dynamic_cast` to
+  `QuaternionFunctionOfTime` inside the trigger (recommendation:
+  smaller first step) vs extending the `FunctionOfTime` interface.
+- [ ] **OP2 — phase definition under precession**: z-component of the
+  angle vector, projection on the instantaneous orbital angular
+  momentum, or norm. Needs a decision and documentation either way.
+- [ ] **OP3 — ratcheting**: reproduce SpEC's non-increasing-period
+  behaviour or rely on `Ω(t)` being monotone for quasicircular
+  inspirals (recommendation: skip initially).
+- [ ] **OP4 — PR #6009**: revive with its author or supersede
+  explicitly — not reimplement silently.
+- [ ] **OP5 — default cadence** in `Inspiral.yaml` (SpEC production
+  uses 400/orbit).
+
+A follow-up comment settling these points makes this issue ready for
+implementation (→ Ready).
+
 ---
 
 🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)

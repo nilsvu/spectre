@@ -35,6 +35,18 @@ depends on), run matched SpEC/SpECTRE simulations, and compare waveform
 accuracy and constraint levels at fixed cost. Success criteria should be
 preregistered per run.
 
+## Open points to settle
+
+- [ ] **OP1 — configuration**: settle #5133 (which BBH configuration);
+  this issue cannot schedule runs without it.
+- [ ] **OP2 — metrics**: waveform mismatch + constraint norms at matched
+  cost (recommendation), or additional observables?
+- [ ] **OP3 — success criteria**: preregistered per run, recorded in
+  this issue before submission.
+
+A follow-up comment settling these points (plus #5133) makes this issue
+ready to schedule runs.
+
 ---
 
 🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)

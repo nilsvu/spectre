@@ -438,21 +438,42 @@ surrogates — that work exists only in SimulationSupport.
 6. The GPR-fitted guesses are merged in SimulationSupport but **not wired
    into `initial_orbital_parameters`**, and nothing proposes the wiring.
 
-## What is actually blocking, in order
+## Proposed design
 
-1. **Pick the pin** — how SpECTRE references SimulationSupport (commit
-   hash per its docs, a tag, or an eventual PyPI release). A small,
-   mostly SimulationSupport-side decision, best settled before the SpECTRE
-   PR so the dependency line lands pinned. Whether `torch`/`gpytorch` move
-   to an optional extra can ride along.
-2. **Rebase and re-run PR #6890's initial-orbital-parameters half** — it is
-   1285 commits behind with real conflicts, and its CI failures cannot be
-   diagnosed from expired logs. Splitting it so it does *not* also try to
-   import the non-existent `OmegaDotEccRemoval` would make it mergeable.
-3. **Decide #6224's fate** — close, or re-scope as "improve the PN kernels
-   inside SimulationSupport". Leaving it open invites the same discussion
-   again later.
-4. GPR wiring — a separate, later step, unblocked by any of the above.
+1. **SimulationSupport side (small PR there):** create the first tag, or
+   agree on a commit hash to pin; optionally move `torch`/`gpytorch`
+   (and `sxs`) to a `[gpr]` extra so the base install stays light.
+2. **SpECTRE side:** revive the initial-orbital-parameters half of PR
+   #6890 — delete `InitialOrbitalParameters.py` and its test, import
+   `initial_orbital_parameters` from SimulationSupport (byte-compatible,
+   no numerical change), add the pinned dependency line, and drop the
+   `if (SpEC_FOUND)` gate on the test so this path finally runs in CI.
+   Rebase on develop (currently 1285 commits behind with real
+   conflicts); fresh CI settles the unexplained container-job failures.
+   Leave the `OmegaDotEccRemoval` half out — that module does not exist
+   in SimulationSupport yet (measurement side, tracked in #7416).
+3. **PR #6224** is re-scoped to "improve the PN kernels inside
+   SimulationSupport" (comment proposed on the PR), so any PN-baseline
+   change is coordinated with retraining the GPR residuals.
+4. **GPR wiring** into `initial_orbital_parameters` is a separate, later
+   SimulationSupport-side step; nothing above needs redoing when it
+   lands.
+
+## Open points to settle
+
+- [ ] **OP1 — pin mechanism**: commit hash in `requirements.txt` (per
+  the SimulationSupport docs) vs first tag. Recommendation: hash now,
+  switch to tags once SimulationSupport starts releasing.
+- [ ] **OP2 — extras split**: move `torch`/`gpytorch`/`sxs` to a
+  `SimulationSupport[gpr]` extra? Recommendation: yes — small upstream
+  change, keeps SpECTRE environments light.
+- [ ] **OP3 — who drives the SimulationSupport-side changes** (tag,
+  extras): the SpECTRE side can prepare the PRs; merging is a
+  SimulationSupport-maintainer act.
+- [ ] **OP4 — #6224 disposition**: confirm the re-scope, or close.
+
+A follow-up comment settling these points makes this issue ready for
+implementation (→ Ready).
 
 ---
 

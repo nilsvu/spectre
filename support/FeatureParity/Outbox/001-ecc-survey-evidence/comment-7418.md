@@ -242,6 +242,31 @@ above. **Read why it was closed before re-opening the question.**
 | 2116 | issue OPEN | "Add input file control for constraint damping parameters" (2020) |
 | 1811 | issue OPEN | "Add extra constraint damping parameter to generalized harmonic system" (2019) |
 
+## Proposed design
+
+A single reference page in the docs (DevGuide, next to the BBH pipeline
+documentation) tabulating every intentional difference from SpEC with
+its reason and both codes' `file:line` — seeded from the three existing
+source comments (`Inspiral.yaml:249-255`, `Inspiral.py:97-98,104-105`),
+the gauge roll-on (after reading the #1627/#1516/#1515 closure reasons),
+`$MoreConstraintDampingInTheOuterSubdomains`, and the `tmin` 400/500
+drift. Structural differences (time stepping, filtering, AMR) are listed
+with a pointer to the split validation issue rather than argued in the
+document.
+
+## Open points to settle
+
+- [ ] **OP1 — location**: a docs page (recommendation) vs source
+  comments only.
+- [ ] **OP2 — gauge roll-on**: document as intentionally dropped (if
+  the #1627 closure supports that reading) or reopen as a to-match
+  item.
+- [ ] **OP3 — `tmin` 400 (SpEC) vs 500 (SpECTRE)** in the ecc-reduction
+  run length: adjudicate and record.
+
+A follow-up comment settling these points makes this issue ready for
+implementation (→ Ready).
+
 ---
 
 🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)

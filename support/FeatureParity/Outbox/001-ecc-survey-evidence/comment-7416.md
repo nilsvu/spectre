@@ -243,6 +243,32 @@ written, but it is the reason `TargetParams` already carries
 this issue's original scope with no prior art at all, and the one with the
 clearest cost consequence — hence the dedicated issue.
 
+## Proposed design
+
+Port SpEC's two-stage schedule into the pipeline: `TargetParams` gains a
+rough-stage Lev and tolerance (default: rough at a low Lev to `1e-3`,
+final at the production Lev to `7e-4`, as in SpEC);
+`EccentricityControl.py` switches from rough to final when the rough
+tolerance is met. SpEC also promotes to the final Lev on its failure
+paths — that interaction lands with the abort-conditions issue,
+including the same-Lev guard so a Lev switch is not mistaken for
+divergence.
+
+## Open points to settle
+
+- [ ] **OP1 — knobs**: names and location in `TargetParams` (e.g.
+  `RoughEccLev`, `RoughEccTolerance`); adopt SpEC's defaults `1e-3` →
+  `7e-4` (recommendation: yes).
+- [ ] **OP2 — option drift on the shared fit**: keep SpECTRE's
+  `varpro`/`freq_filter`/`check_periastron_advance` settings as
+  deliberate improvements (recorded), or align with SpEC production
+  (`--no_check`; `F2cos2` fallback at `ecc > 0.01`)? Must be recorded
+  either way before the fit code moves to SimulationSupport, where both
+  codes will share it.
+
+A follow-up comment settling these points makes this issue ready for
+implementation (→ Ready).
+
 ---
 
 🤖 drafted by: [Claude Fable 5](https://claude.com/claude-code)

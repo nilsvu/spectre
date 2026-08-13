@@ -251,24 +251,49 @@ pre-branch data at identical paths).
 
 No existing issue or PR addresses the time-stepper half of G3.
 
-## Open design questions
+## Proposed design
 
-- **Does the branch stay a volume-data import, or become a checkpoint
-  restart?** A checkpoint restart fixes G3 outright but cannot change
-  resolution — which is the entire point of this issue. If Levs must differ,
-  the import path is forced and G3 must be fixed *within* it. #6849 first.
-- If it stays an import: which state gets serialized into the branch data?
-  Minimum viable set appears to be `{last time step, control-system
-  timescales, averager history}`.
-- Alternatively: accept a short re-settling window after the branch and
-  *measure* that the waveform is unaffected. Cheaper, and testable.
-- Where does the Lev list come from? Candidates: a new `TargetParams` field
-  (there is already `EvolutionLev` — `support/Pipelines/Bbh/InitialData.py:38`
-  used at `PostprocessId.py:186`), a CLI option on `generate-id`, or a
-  `MinLev`/`MaxLev` pair mirroring SpEC.
-- Should adding a Lev later be a first-class CLI verb (e.g.
-  `spectre bbh add-lev -d <pipeline_dir> --lev 4`), recording branched Levs
-  so it is idempotent the way SpEC's symlink check is?
+Keep the branch a **volume-data import** — a checkpoint restart cannot
+change resolution, and changing resolution is the point of this issue
+(#6849 tracks checkpoint-restart work; it complements rather than
+replaces this). Fix the state within the import path:
+
+1. **Time step**: carry `InitialTimeStep`/`InitialSlabSize` across the
+   branch — template them (`Inspiral.yaml:220,225`) and fill from the
+   parent run's last step (observable from the run data) on the
+   `IdFromEvolution` branch. Accept the multistep order re-ramp (a few
+   steps at reduced order at a settled time); measure its effect once in
+   validation.
+2. **Control systems**: carry the tuned damping timescales across the
+   branch — write them alongside `PostJunkVolumeData` (or a sidecar
+   file), read them where `simple_tags_from_options` initializes today.
+   Averager history is second priority: start without it and measure the
+   re-settling.
+3. **Lev list**: a `TargetParams` field (a list, or a `MinLev`/`MaxLev`
+   pair mirroring SpEC; there is already `EvolutionLev`,
+   `support/Pipelines/Bbh/InitialData.py:38`) feeding
+   `branch_levs_when_complete` instead of the hard-wired `[ {{ Lev }} ]`.
+4. **Add-a-Lev-later**: a CLI verb (e.g. `spectre bbh add-lev -d
+   <pipeline_dir> --lev 4`) that records branched Levs and is idempotent
+   the way SpEC's symlink check is; check PR #6717 (generic branch-runs
+   command) as the home before writing a new one.
+5. **Guard** `ElementsAreIdentical: True` against Levs that differ in
+   `refinement_level`.
+
+## Open points to settle
+
+- [ ] **OP1 — import vs checkpoint**: confirm the import path.
+  Recommendation: yes — resolution change requires it; coordinate with
+  #6849 rather than wait for it.
+- [ ] **OP2 — state minimum**: tuned timescales + last time step only
+  (recommendation), also averager history, or accept a re-settling
+  window and validate the waveform is unaffected?
+- [ ] **OP3 — Lev list source**: `TargetParams` (recommendation) vs a
+  CLI option on `generate-id`; list vs `MinLev`/`MaxLev` pair.
+- [ ] **OP4 — add-lev verb**: extend PR #6717 vs a new command.
+
+A follow-up comment settling these points makes this issue ready for
+implementation (→ Ready).
 
 ---
 

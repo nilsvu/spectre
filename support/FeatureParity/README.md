@@ -42,21 +42,27 @@ the cards: **Backlog** (captured, thin) → **Ready** (design approved,
 groomed for implementation) → **In progress** → **In review** →
 **Done**.
 
-1. **Survey** — the assignment is co-written in session, then the
-   worker runs it autonomously: SpEC vs SpECTRE on its area,
-   mechanism by mechanism, `file:line` evidence in both codebases,
-   existing issues/PRs checked first. The board already carries a
-   decomposition of #6563 into granular issues — evidence is drafted
-   as comments deepening those issues, as new issue bodies only where
-   none exists. Results land in the session; the user decides which
-   gaps advance ⇒ evidence and new gap issues posted.
-2. **Design** — crafted together in session. The issue's worker
-   answers targeted deep-dive questions as input (e.g. "how does SpEC
-   decide the cut-X plane position, exactly"); where SpEC genuinely
-   leaves options open it presents them — the design decision is the
-   user's, and it converges in session, never in the background
-   ⇒ design published as an issue or issue comment; the team
-   discusses; the user grooms the issue to the Ready column.
+1. **Survey + design proposal** — the assignment is co-written in
+   session, then the worker runs it autonomously: SpEC vs SpECTRE on
+   its area, mechanism by mechanism, `file:line` evidence in both
+   codebases, existing issues/PRs checked first (repo-wide, not just
+   the board; housekeeping proposals — close/link/consolidate — are a
+   standard deliverable). The board already carries a decomposition of
+   #6563 into granular issues — drafts deepen those issues, new issue
+   bodies only where none exists. Each per-issue draft carries the
+   evidence AND a concrete design proposal with **numbered open
+   points** ("OP1 …"), each listing the options and a recommendation
+   where the evidence supports one — so a single comment is enough to
+   discuss at a team meeting. Results land in the session; the user
+   decides which gaps advance ⇒ one comment per issue: survey +
+   proposal + open points.
+2. **Settle** — the design decision is the user's, made where the
+   team can see it: after team discussion, a follow-up GitHub comment
+   by the user settles the numbered open points. Hard forks can still
+   be co-designed in session first (the issue's worker answers
+   deep-dive questions as input), but the record of the decision is
+   the settling comment. When every open point is settled, the user
+   grooms the issue to the Ready column.
 3. **Implement** — once its issue is in *Ready*, the worker executes
    it in its own lane worktree: code + tests per the repo rules,
    affected tests plus `ctest -L unit` before declaring done.
