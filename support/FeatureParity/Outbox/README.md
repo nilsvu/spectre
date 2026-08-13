@@ -82,8 +82,12 @@ implementation — ideally with little iteration left for the PR.
 - No verbatim quote blocks or mechanism walk-throughs — a `file:line`
   reference replaces them. Exception: short code anchors (≤ ~6 lines,
   a few per comment) where the exact text carries the point.
-- Full-detail survey reports stay in the session's scratch directory;
-  the comment cites, never duplicates.
+- Bodies must be self-contained for the team: cite only repo-relative
+  `file:line` at the pinned revisions, in repositories the team can
+  access (spectre, SpEC, SimulationSupport). **Never reference local
+  paths** (scratch, home, container) — teammates cannot see them. The
+  full-detail survey report on scratch is session-internal working
+  material; nothing on GitHub points at it.
 
 **Tone:**
 
