@@ -53,16 +53,17 @@ values (staged with the board writes); the user and team adjust.
    codebases, existing issues/PRs checked first (repo-wide, not just
    the board; housekeeping proposals — close/link/consolidate — are a
    standard deliverable). The board already carries a decomposition of
-   #6563 into granular issues — drafts deepen those issues, new issue
-   bodies only where none exists. Each per-issue draft carries the
+   #6563 into granular issues — for the board's own issues the draft
+   **replaces the thin issue body**; comments are for threads the
+   campaign does not own (others' issues, PRs). Each per-issue draft carries the
    evidence AND a concrete design proposal with **numbered open
    points**, each listing the options and a recommendation
    where the evidence supports one — so a single comment is enough to
    discuss at a team meeting. Structure, length, and tone are defined
    in `Outbox/README.md` ("Writing comment and issue bodies") — read
    before drafting. Results land in the session; the user decides
-   which gaps advance ⇒ one comment per issue: survey + proposal +
-   open points; the card moves to Discuss.
+   which gaps advance ⇒ per issue: survey + proposal + open points
+   become the issue body; the card moves to Discuss.
 2. **Settle** — team discussion (meetings, issue threads) settles the
    substance of the numbered open points; the user records the
    settlement in a follow-up GitHub comment and has the final say. A

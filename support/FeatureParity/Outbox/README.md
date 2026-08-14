@@ -63,11 +63,14 @@ Read this section before drafting any body — worker, orchestrator, or
 reviewer. These guidelines were converged with the user (2026-08-13,
 eccentricity-reduction survey) and define what a good entry looks like.
 
-**Purpose.** One comment per issue carries survey evidence + design
-proposal + open points (manual, pipeline stages 1–2). It must be enough
-for a team meeting to discuss, and phrased so a single follow-up
-comment settling the open points makes the issue ready for
-implementation — ideally with little iteration left for the PR.
+**Purpose.** One document per issue carries survey evidence + design
+proposal + open points (manual, pipeline stages 1–2). For the board's
+own issues it is posted as the **issue body**, replacing the thin
+original; a **comment** only on threads the campaign does not own
+(others' issues, PRs). It must be enough for a team meeting to
+discuss, and phrased so a single follow-up comment settling the open
+points makes the issue ready for implementation — ideally with little
+iteration left for the PR.
 
 **Structure**, in order:
 
