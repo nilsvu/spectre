@@ -61,12 +61,10 @@ prio_medium=$(jq -r '.[] | select(.name == "Medium").id' <<< "$prio_json")
 prio_low=$(jq -r '.[] | select(.name == "Low").id' <<< "$prio_json")
 
 # -- PBJ merge -------------------------------------------------------------
-gh issue edit 7413 --repo "$repo" \
-  --title "PBJ branching: multiple Levs, and correct state across the branch"
-gh issue close 7411 --repo "$repo" --reason "not planned" \
-  --comment "$(cat "$here/comment-close-7411.md")"
+# (#7413 retitle and #7411 close were done by the user directly,
+# 2026-08-14; only the card archive remains.)
 gh project item-archive 20 --owner sxs-collaboration --id "$item_7411"
-echo "https://github.com/$repo/issues/7413 (retitled, absorbs #7411; #7411 card archived)"
+echo "#7411 card archived"
 
 # -- Split #7418: keep docs task -------------------------------------------
 gh issue edit 7418 --repo "$repo" \
