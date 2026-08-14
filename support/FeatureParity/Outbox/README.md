@@ -78,7 +78,9 @@ implementation — ideally with little iteration left for the PR.
 4. Findings: mechanism comparison with `file:line` in both codebases;
    record negative results ("searched X, found nothing").
 5. Prior art: actionable rows only (read-first, revive, close-as-dup),
-   minor merged PRs collapsed to one line.
+   minor merged PRs collapsed to one line. Always write issue/PR
+   numbers as `#NNNN` — including in table cells — so GitHub renders
+   them as links.
 6. `## Proposed design` at implementation depth: name the files,
    knobs, and mechanisms; say what is pipeline-side vs executable-side;
    include a **Testing / acceptance** paragraph.
