@@ -1,4 +1,4 @@
-Split out of #7417 (feature-parity survey, 2026-08-13; revisions SpEC @ `5f8f5375ca`, SpECTRE `develop` @ `4d43624d64`). #7417 keeps the re-initialization / failure-recovery design; this issue is the small, fully-specified gap inside it.
+Split out of #7417 (feature-parity survey, 2026-08-13; revisions SpEC @ sxs-collaboration/spec@5f8f5375ca, SpECTRE `develop` @ sxs-collaboration/spectre@4d43624d64). #7417 keeps the re-initialization / failure-recovery design; this issue is the small, fully-specified gap inside it.
 
 **Initialize the shape map from the measured ID horizon coefficients instead of an analytic Kerr horizon.**
 

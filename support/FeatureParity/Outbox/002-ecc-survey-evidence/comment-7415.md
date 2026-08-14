@@ -1,6 +1,6 @@
 # Survey: orbit-based triggers `EveryNOrbits` / `NTimesPerOrbit`
 
-Feature-parity survey evidence. Revisions: SpEC @ `5f8f5375ca`, SpECTRE `develop` @ `4d43624d64` (2026-08-13). All `file:line` references are to these revisions.
+Feature-parity survey evidence. Revisions: SpEC @ sxs-collaboration/spec@5f8f5375ca, SpECTRE `develop` @ sxs-collaboration/spectre@4d43624d64 (2026-08-13). All `file:line` references are to these revisions.
 
 ## What SpEC has
 

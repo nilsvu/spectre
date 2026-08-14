@@ -1,6 +1,6 @@
 # Survey: ecc reduction iterations at different Levs
 
-Feature-parity survey evidence. Revisions: SpEC @ `5f8f5375ca`, SpECTRE `develop` @ `4d43624d64` (2026-08-13). All `file:line` references are to these revisions.
+Feature-parity survey evidence. Revisions: SpEC @ sxs-collaboration/spec@5f8f5375ca, SpECTRE `develop` @ sxs-collaboration/spectre@4d43624d64 (2026-08-13). All `file:line` references are to these revisions.
 
 **Verdict: SpECTRE reuses SpEC's fit and update code verbatim (imported at runtime), so the *measurement* is at parity by construction.** Three things around it are not:
 
@@ -68,7 +68,7 @@ Port SpEC's two-stage schedule into the pipeline (pure pipeline change):
 ## Open points to settle
 
 - [ ] **1. Knobs** — names (`RoughEccLev`/`RoughEccTolerance`) and the final-tolerance default (`7e-4` as in SpEC). Recommendation: adopt.
-- [ ] **2. Option drift on the shared fit** — keep SpECTRE's `varpro`/`freq_filter`/`check_periastron_advance` settings as deliberate improvements (recorded), or align with SpEC production (`--no_check`; `F2cos2` fallback at `ecc > 0.01`)? Must be recorded either way before the fit code moves to SimulationSupport, where both codes will share it.
+- [ ] **2. Option drift on the shared fit** — keep SpECTRE's `varpro`/`freq_filter`/`check_periastron_advance` settings as deliberate improvements (recorded), or align with SpEC production (`--no_check`; `F2cos2` fallback at `ecc > 0.01`)? Must be recorded either way before the fit code moves to [SimulationSupport](https://github.com/sxs-collaboration/SimulationSupport), where both codes will share it.
 
 A follow-up comment settling these points makes this issue ready for implementation (→ Ready).
 

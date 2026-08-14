@@ -1,6 +1,6 @@
 # Survey: compare gauge params etc. with SpEC — enumeration and pointers
 
-Feature-parity survey evidence. Revisions: SpEC @ `5f8f5375ca`, SpECTRE `develop` @ `4d43624d64` (2026-08-13). All `file:line` references are to these revisions.
+Feature-parity survey evidence. Revisions: SpEC @ sxs-collaboration/spec@5f8f5375ca, SpECTRE `develop` @ sxs-collaboration/spectre@4d43624d64 (2026-08-13). All `file:line` references are to these revisions.
 
 Scope: **enumerate the parameter sets to compare and give both sides' locations**; a full numeric comparison is deliberately out of scope. The evidence shows two jobs under one title (reflected in the retitle):
 

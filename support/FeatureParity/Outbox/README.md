@@ -73,7 +73,11 @@ implementation — ideally with little iteration left for the PR.
 
 1. Title line (`# Survey: …`).
 2. Header: surveyed revisions (SpEC/SpECTRE/other repos @ commit), so
-   `file:line` references stay meaningful.
+   `file:line` references stay meaningful. Write them in GitHub
+   auto-link syntax and NOT in backticks (code spans suppress
+   linking): `owner/repo@SHA` for commits (e.g.
+   sxs-collaboration/spec@5f8f5375ca), a markdown link for bare
+   repository mentions.
 3. Verdict/headline first — what is at parity, what is not.
 4. Findings: mechanism comparison with `file:line` in both codebases;
    record negative results ("searched X, found nothing").

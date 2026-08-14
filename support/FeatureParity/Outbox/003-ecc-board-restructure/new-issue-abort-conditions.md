@@ -1,4 +1,4 @@
-Split out of #7416 (feature-parity survey, 2026-08-13; revisions SpEC @ `5f8f5375ca`, SpECTRE `develop` @ `4d43624d64`).
+Split out of #7416 (feature-parity survey, 2026-08-13; revisions SpEC @ sxs-collaboration/spec@5f8f5375ca, SpECTRE `develop` @ sxs-collaboration/spectre@4d43624d64).
 
 **The eccentricity-control loop has no abort conditions.** This is a standalone correctness/cost problem with a bounded fix, independent of both the Lev schedule (#7416) and the continuation mechanism (#7413).
 

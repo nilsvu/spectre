@@ -1,4 +1,4 @@
-Scope note from the feature-parity survey (2026-08-13): the zero-target parts of this tracker are now covered by granular board issues — #7412 (initial orbital parameters, with the SimulationSupport plan and the GPR-fitted guesses), #7416 (reduction iterations: Lev schedule and abort conditions), and #7413 (PBJ continuation).
+Scope note from the feature-parity survey (2026-08-13): the zero-target parts of this tracker are now covered by granular board issues — #7412 (initial orbital parameters, with the [SimulationSupport](https://github.com/sxs-collaboration/SimulationSupport) plan and the GPR-fitted guesses), #7416 (reduction iterations: Lev schedule and abort conditions), and #7413 (PBJ continuation).
 
 Proposal: narrow this issue to what no successor covers —
 

@@ -1,6 +1,6 @@
 # Survey: control system initialization at run start
 
-Feature-parity survey evidence. Revisions: SpEC @ `5f8f5375ca`, SpECTRE `develop` @ `4d43624d64` (2026-08-13). All `file:line` references are to these revisions. Companion: #7413 (the same state problem at a PBJ branch rather than at `t=0`).
+Feature-parity survey evidence. Revisions: SpEC @ sxs-collaboration/spec@5f8f5375ca, SpECTRE `develop` @ sxs-collaboration/spectre@4d43624d64 (2026-08-13). All `file:line` references are to these revisions. Companion: #7413 (the same state problem at a PBJ branch rather than at `t=0`).
 
 **Correction to the issue text:** SpEC does **not** re-initialize "all the time". Its procedure is a *failure-recovery path*, triggered only by four early-failure reasons within the first ~10 M, capped at 4 attempts (evidence below). "Doing it all the time as a phase" is a proposal to go *beyond* SpEC, not to match it — a legitimate choice, but it should be recorded as such.
 

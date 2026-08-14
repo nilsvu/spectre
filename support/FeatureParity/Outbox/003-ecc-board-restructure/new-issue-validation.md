@@ -1,4 +1,4 @@
-Split out of #7418 (feature-parity survey, 2026-08-13; revisions SpEC @ `5f8f5375ca`, SpECTRE `develop` @ `4d43624d64`). #7418 keeps the bounded documentation task (document intentional gauge/constraint-damping differences); this issue is the validation programme for the schemes where "match SpEC's parameters" is not a meaningful frame.
+Split out of #7418 (feature-parity survey, 2026-08-13; revisions SpEC @ sxs-collaboration/spec@5f8f5375ca, SpECTRE `develop` @ sxs-collaboration/spectre@4d43624d64). #7418 keeps the bounded documentation task (document intentional gauge/constraint-damping differences); this issue is the validation programme for the schemes where "match SpEC's parameters" is not a meaningful frame.
 
 **Where SpEC and SpECTRE differ structurally, parameter comparison cannot establish parity — accuracy at fixed cost can.** Three areas (full `file:line` enumeration in the #7418 survey comment):
 

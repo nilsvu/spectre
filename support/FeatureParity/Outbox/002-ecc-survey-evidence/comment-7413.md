@@ -1,6 +1,6 @@
 # Survey: the PBJ branch — multiple Levs, and the state carried across the branch
 
-Feature-parity survey evidence. Revisions: SpEC @ `5f8f5375ca`, SpECTRE `develop` @ `4d43624d64` (2026-08-13). All `file:line` references are to these revisions. Covers both halves of the PBJ topic — the *workflow* (multiple Levs, adding one later; this issue) and the *state* carried across the branch (time stepper + control systems; filed as #7411, one code path, tracked together here).
+Feature-parity survey evidence. Revisions: SpEC @ sxs-collaboration/spec@5f8f5375ca, SpECTRE `develop` @ sxs-collaboration/spectre@4d43624d64 (2026-08-13). All `file:line` references are to these revisions. Covers both halves of the PBJ topic — the *workflow* (multiple Levs, adding one later; this issue) and the *state* carried across the branch (time stepper + control systems; filed as #7411, one code path, tracked together here).
 
 **Headline: SpECTRE already has a PBJ branch mechanism (shipped by PR
 #6840 and #6445). Three things are wrong with it: it branches to exactly
