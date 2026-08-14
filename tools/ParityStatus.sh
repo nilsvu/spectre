@@ -74,6 +74,25 @@ nodes = p["items"]["nodes"]
 print("  project board: %d items" % total)
 if total > len(nodes):
     print("  (showing first %d only)" % len(nodes))
+import subprocess
+
+def issue_field_priority(num):
+    # Priority lives in the native GitHub ISSUE field (not the project
+    # field); GraphQL access needs a permission the read token lacks,
+    # so read it via REST. Only called for fully-displayed columns.
+    try:
+        out = subprocess.run(
+            ["gh", "api", "repos/sxs-collaboration/spectre/issues/%d" % num,
+             "--jq",
+             "[.issue_field_values[]? "
+             "| select(.issue_field_name == \"Priority\") "
+             "| .single_select_option.name] | first // empty"],
+            capture_output=True, text=True, timeout=15)
+        return out.stdout.strip() or None
+    except Exception:
+        return None
+
+full_display = ("Discuss", "In review", "In progress", "Ready")
 by_status = {}
 for it in nodes:
     c = it.get("content") or {}
@@ -90,6 +109,10 @@ for it in nodes:
     num = c.get("number")
     ref = "#%s" % num if num else "draft"
     title = (c.get("title") or "?")[:60]
+    if num and status in full_display and "Priority" not in fields:
+        prio = issue_field_priority(num)
+        if prio:
+            fields["Priority"] = prio
     extra = ""
     if fields:
         extra = " (" + ", ".join(

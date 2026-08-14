@@ -43,9 +43,10 @@ proposal posted; open points under team discussion) → **Ready** (open
 points settled, groomed for implementation) → **In progress** →
 **In review** → **Done**. The Discuss column is the team-meeting
 agenda: each card's survey comment is the discussion material, its
-checkboxes the live settlement state. Cards also carry **Priority**
-(High/Medium/Low) and **Size** (XS–XL): the survey stage proposes
-values (staged with the board writes); the user and team adjust.
+checkboxes the live settlement state. Issues also carry **Priority**
+(High/Medium/Low — a native GitHub issue field, set on the issue, not
+the project) and cards a **Size** (XS–XL, a project field): the survey
+stage proposes values; the user and team adjust.
 
 1. **Survey + design proposal** — the assignment is co-written in
    session, then the worker runs it autonomously: SpEC vs SpECTRE on
