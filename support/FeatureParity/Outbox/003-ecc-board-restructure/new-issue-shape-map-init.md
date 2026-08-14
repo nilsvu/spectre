@@ -14,7 +14,7 @@ Two things to check while doing it:
 1. SpEC records a consistency constraint between the excision radius and the ID horizon (`DoMultipleRuns.input:382-387`: the `rExc`/`rInitAh` ratio must match what initial data assumed, "or else shape control will not have Q=0 at the start of the evolution") — verify SpECTRE's equivalent relation holds when the shape map comes from the measured horizon.
 2. This may remove most of the motivation for the larger #7417 design: SpEC's re-initialization recovery path exists precisely because a wrong shape-map initialization can kill the run in the first ~10 M (`Support/Perl/BatchJobTermination.pm:295-302,757-823`). After this lands, re-measure whether the recovery path is still needed.
 
-Prior art: PR #6113 shipped the `InitialValues` variant options; no issue or PR covers actually using `YlmsFromFile` in the BBH pipeline (dedupe recorded in the #7417 survey comment).
+Prior art: PR #6113 shipped the `InitialValues` variant options; no issue or PR covers actually using `YlmsFromFile` in the BBH pipeline (dedupe recorded in the #7417 survey evidence).
 
 ## Proposed implementation
 

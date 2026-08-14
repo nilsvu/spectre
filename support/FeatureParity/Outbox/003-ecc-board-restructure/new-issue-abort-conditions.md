@@ -11,7 +11,7 @@ SpEC has both conditions:
 
 The numbers to port: `MaxIts = 7`; divergence = "no improvement over the previous iteration, comparing iterations at the same Lev".
 
-**No prior art exists** — no SpECTRE issue or PR covers either condition (dedupe pass over ecc-control issues/PRs recorded in the #7416 survey comment).
+**No prior art exists** — no SpECTRE issue or PR covers either condition (dedupe pass over ecc-control issues/PRs recorded in the #7416 survey evidence).
 
 ## Proposed implementation
 
