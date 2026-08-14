@@ -48,11 +48,11 @@ The Python accepts a list; the template hard-wires one element — the Lev alrea
 
 | # | state | relevance |
 |---|---|---|
-| 6840 / 6445 | PR merged | shipped the branch mechanism and continuation path — this issue extends them |
-| **7496** | **PR open** | **"Record the chain of runs that make up a simulation"** — adds `ContinuedFrom:` to branch/ringdown input files, explicitly motivated by better PBJ support. Addresses G5's back-reference; the add-lev verb builds on this chain. |
-| **6717** | **PR open/draft** | **"Add branch runs command to pipeline"** — plausibly the right home for an add-a-Lev verb. Check before writing a new command. |
-| **6849** | **issue OPEN** | **"Enable full checkpoint/restart without charm++ checkpoints & PBJ restarts"** — bears on import-vs-checkpoint. Read before designing. |
-| 3964 | issue OPEN | "Control systems ignore measurements" — independent defect; rule it out before attributing symptoms to the branch |
+| #6840 / #6445 | PR merged | shipped the branch mechanism and continuation path — this issue extends them |
+| **#7496** | **PR open** | **"Record the chain of runs that make up a simulation"** — adds `ContinuedFrom:` to branch/ringdown input files, explicitly motivated by better PBJ support. Addresses G5's back-reference; the add-lev verb builds on this chain. |
+| **#6717** | **PR open/draft** | **"Add branch runs command to pipeline"** — plausibly the right home for an add-a-Lev verb. Check before writing a new command. |
+| **#6849** | **issue OPEN** | **"Enable full checkpoint/restart without charm++ checkpoints & PBJ restarts"** — bears on import-vs-checkpoint. Read before designing. |
+| #3964 | issue OPEN | "Control systems ignore measurements" — independent defect; rule it out before attributing symptoms to the branch |
 
 No existing issue or PR addresses the time-stepper half of G3.
 

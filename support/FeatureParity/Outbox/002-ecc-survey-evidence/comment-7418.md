@@ -75,10 +75,10 @@ Where the parameters live: SpEC — `InputFiles/Bbh/DoMultipleRuns.input` comput
 
 | # | state | relevance |
 |---|---|---|
-| **5133** | issue OPEN | "Choose BBH configuration for comparison with SpEC" — the setup issue the validation half depends on |
-| 6798 | PR merged | "Change ringdown gauge parameters to match inspiral" — precedent for the inspiral/merger-consistency half |
-| 2508 / 5504 / 2494 / 6390 / 6635 / 6637 | PR merged | gauge and constraint-damping options history (incl. #6390, a swapped-amplitudes bug fix worth knowing when comparing) |
-| 2116 / 1811 | issue OPEN | old constraint-damping option requests |
+| **#5133** | issue OPEN | "Choose BBH configuration for comparison with SpEC" — the setup issue the validation half depends on |
+| #6798 | PR merged | "Change ringdown gauge parameters to match inspiral" — precedent for the inspiral/merger-consistency half |
+| #2508 / #5504 / #2494 / #6390 / #6635 / #6637 | PR merged | gauge and constraint-damping options history (incl. #6390, a swapped-amplitudes bug fix worth knowing when comparing) |
+| #2116 / #1811 | issue OPEN | old constraint-damping option requests |
 
 ## Proposed design
 

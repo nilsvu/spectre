@@ -32,10 +32,10 @@ Feature-parity survey evidence. Revisions: SpEC @ `5f8f5375ca`, SpECTRE `develop
 
 | # | state | relevance |
 |---|---|---|
-| **4254** | PR merged | "Have SpECTRE control system act more like SpECs control system" — closest prior art; likely records which SpEC behaviours were deliberately not copied. Read first. |
-| **3964** | issue OPEN | "Control systems ignore measurements" — open defect; rule it out before attributing symptoms to initialization. |
-| 7413 | issue OPEN | the same control-system reset at the PBJ branch |
-| 3590 / 3644 / 3660 / 4223 / 4269 / 6113 / 6952 | PR merged | control-system initialization and shape-map options history |
+| **#4254** | PR merged | "Have SpECTRE control system act more like SpECs control system" — closest prior art; likely records which SpEC behaviours were deliberately not copied. Read first. |
+| **#3964** | issue OPEN | "Control systems ignore measurements" — open defect; rule it out before attributing symptoms to initialization. |
+| #7413 | issue OPEN | the same control-system reset at the PBJ branch |
+| #3590 / #3644 / #3660 / #4223 / #4269 / #6113 / #6952 | PR merged | control-system initialization and shape-map options history |
 
 No existing issue or PR covers the shape-map-from-measured-horizon gap — hence the dedicated issue.
 

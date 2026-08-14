@@ -46,12 +46,12 @@ Feature-parity survey evidence. Revisions: SpEC @ `5f8f5375ca`, SpECTRE `develop
 
 | # | state | relevance |
 |---|---|---|
-| **6460** | issue OPEN | duplicate of the Lev-schedule gap (empty body) — proposed closed as superseded by this issue |
-| **6944** | PR merged | "EccControl: fix continuation after ecc-control is complete" — the current continuation behaviour; read before redesigning |
-| **5966** | PR closed | abandoned 2024 attempt to port `OmegaDotEccRemoval` into SpECTRE — prior art for the SimulationSupport port; read why it was dropped |
-| 6890 | PR draft | imports `OmegaDotEccRemoval` from SimulationSupport — **a module that does not exist there**; analysis in the #7412 survey comment |
-| 6406 / 6295 / 6333 / 6467 / 6490 / 6468 + fixes | PR merged | built the automation loop, the SpEC dependency, the fit window, and the CLI this issue extends |
-| 7089 | issue OPEN | nondeterministic pipeline-test failures — touches ecc-control tests |
+| **#6460** | issue OPEN | duplicate of the Lev-schedule gap (empty body) — proposed closed as superseded by this issue |
+| **#6944** | PR merged | "EccControl: fix continuation after ecc-control is complete" — the current continuation behaviour; read before redesigning |
+| **#5966** | PR closed | abandoned 2024 attempt to port `OmegaDotEccRemoval` into SpECTRE — prior art for the SimulationSupport port; read why it was dropped |
+| #6890 | PR draft | imports `OmegaDotEccRemoval` from SimulationSupport — **a module that does not exist there**; analysis in the #7412 survey comment |
+| #6406 / #6295 / #6333 / #6467 / #6490 / #6468 + fixes | PR merged | built the automation loop, the SpEC dependency, the fit window, and the CLI this issue extends |
+| #7089 | issue OPEN | nondeterministic pipeline-test failures — touches ecc-control tests |
 
 Nothing existing covers the abort conditions — hence the dedicated issue.
 
