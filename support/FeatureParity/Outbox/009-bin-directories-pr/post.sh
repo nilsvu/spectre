@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Outbox entry 009 — draft PR for #7447 "Bin directories".
 #
-# Lane: fp/bin-directories, single commit 2c136a767b on develop
-# (06fa7dffb1). Co-review done 2026-08-18 over three fix rounds
-# (reviewer findings + all user review directives: no copy_executable
-# compat, copy-executables naming, create_bin kept through Next on
-# measured evidence, ancestor-shared bin across Levs bounded by
-# DirectoryStructure formats, verbatim-copyable wrapper with single
-# PYTHONPATH composition + equivalence test, Env.sh naming). Tests
-# 5/5 affected suite; Bbh pipeline tests must run in CI (noted in
-# the PR body).
+# Lane: fp/bin-directories, three commits on develop (06fa7dffb1),
+# HEAD b6a44be71e:
+#   f202210171 Find the Python dependencies where pip put them,
+#              from one wrapper
+#   7ca0fee90d Run scheduled simulations from a bin directory
+#   b6a44be71e Copy later pipeline steps' executables to the bin
+#              directory
+# Co-review done 2026-08-18 over four fix rounds (reviewer findings +
+# all user review directives; simulation mirrors the build layout,
+# bin/ + lib/; ancestor-shared bin across Levs; Env.sh naming; fixes
+# the pre-existing BOOTSTRAP_PY_DEPS invisibility on Debian pips).
+# Tests 5/5 affected suite; Bbh pipeline tests must run in CI (noted
+# in the PR body).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo=sxs-collaboration/spectre
