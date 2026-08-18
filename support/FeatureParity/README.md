@@ -93,6 +93,16 @@ stage proposes values; the user and team adjust.
 Validation runs attach wherever needed: survey evidence, PR testing
 sections, post-merge regression checks.
 
+**Prefer relaxing a requirement over complicating the code** — the
+user's standing preference (recorded 2026-08-18, from the #7447
+co-review). When a design or an implementation grows machinery, the
+first question is which assumption or requirement, if dropped or
+narrowed, removes it. Surface the relaxation as an open point or
+review question with a recommendation and what it costs; the user
+decides; the settlement comment or the PR body records it. The goal
+is PRs that are easy to understand and easy to review. A relaxed
+requirement is a named deferral, never a silent loss.
+
 The process itself is expected to change — edit this manual when it
 does; no changelog is kept.
 

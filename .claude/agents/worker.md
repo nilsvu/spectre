@@ -50,6 +50,12 @@ renegotiated mid-flight.
   `develop` on scratch (recipe in the manual) — never in the harness
   worktree. Follow `.claude/rules/`, build only needed targets, run
   affected tests plus `ctest -L unit` before declaring done.
+- **When the implementation grows machinery, propose the requirement
+  relaxation that removes it** instead of building it — name the
+  assumption, what it simplifies, and what it costs, in your report
+  (or stop first, if the settled design is at stake). The user
+  prefers relaxed requirements over complicated code; the target is
+  a PR that is easy to understand and review.
 - **Runs**: own directory under `/capstor/scratch/cscs/nilsvu/Runs/`;
   adjudicate preregistered criteria against logs and artifacts on
   disk, quote them. For compute-node packages, consult the GPU

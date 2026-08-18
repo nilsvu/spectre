@@ -90,7 +90,12 @@ iteration left for the PR.
    them as links.
 6. `## Proposed design` at implementation depth: name the files,
    knobs, and mechanisms; say what is pipeline-side vs executable-side;
-   include a **Testing / acceptance** paragraph.
+   include a **Testing / acceptance** paragraph. State the simplifying
+   assumptions the design rests on. Where relaxing a requirement
+   yields a materially simpler design, present the relaxation as an
+   open point with a recommendation — do not default to the complex
+   variant (the user prefers relaxed requirements over complicated
+   code; see the manual).
 7. `## Open points to settle` — a task list with the number written
    into the label (`- [ ] **1. Name** — options…`; GitHub swallows
    ordinal markers on task-list items, so `1. [ ]` renders without

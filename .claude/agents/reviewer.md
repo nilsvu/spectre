@@ -38,6 +38,11 @@ round-trip. Check, in order of severity:
    file tests for new options. A PR that will bounce off CI wastes a
    human round-trip.
 5. **Scope**: the diff does what its issue says and nothing else.
+6. **Simplification by relaxation**: complexity that would disappear
+   if a requirement or assumption were relaxed. Name the relaxation,
+   the machinery it deletes, and what it costs — the user often
+   prefers it to the complex variant, and wants the option surfaced
+   in every review.
    Opportunistic drive-by changes are findings (split them out), not
    bonuses.
 
