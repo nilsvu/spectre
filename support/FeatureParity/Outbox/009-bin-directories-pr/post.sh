@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Outbox entry 009 — draft PR for #7447 "Bin directories".
+# Outbox entry 009 — draft PR for #7447 "Bin directories" + the
+# settlement addendum comment.
 #
 # Lane: fp/bin-directories, three commits on develop (06fa7dffb1),
-# HEAD b6a44be71e:
-#   f202210171 Find the Python dependencies where pip put them,
-#              from one wrapper
-#   7ca0fee90d Run scheduled simulations from a bin directory
-#   b6a44be71e Copy later pipeline steps' executables to the bin
+# HEAD 6f46cf1109:
+#   68d0bed34c Let the CLI wrapper find the Python package next to
+#              itself
+#   06f8a2b6ec Run scheduled simulations from a bin directory
+#   6f46cf1109 Copy later pipeline steps' executables to the bin
 #              directory
-# Co-review done 2026-08-18 over four fix rounds (reviewer findings +
-# all user review directives; simulation mirrors the build layout,
-# bin/ + lib/; ancestor-shared bin across Levs; Env.sh naming; fixes
-# the pre-existing BOOTSTRAP_PY_DEPS invisibility on Debian pips).
-# Tests 5/5 affected suite; Bbh pipeline tests must run in CI (noted
-# in the PR body).
+# Co-review done 2026-08-18 over five rounds. Final scope per the
+# revised settlement (comment below): simulation-local bin directory
+# with ancestor sharing across Levs; deps-freezing and Env.sh
+# deferred; guard as build-shape check; fixes the pre-existing
+# BOOTSTRAP_PY_DEPS invisibility on Debian pips. Affected tests 5/5;
+# Bbh pipeline tests must run in CI (noted in the PR body).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo=sxs-collaboration/spectre
@@ -25,6 +26,11 @@ gh pr create --repo "$repo" --base develop \
   --head nilsvu:fp/bin-directories --draft \
   --title "Run scheduled simulations from a bin directory" \
   --body-file "$here/body.md"
+
+# Settlement addendum on the issue (3 narrowed, 5 deferred to #7443,
+# 6 as build-shape check).
+gh issue comment 7447 --repo "$repo" \
+  --body-file "$here/comment-7447-settlement.md"
 
 # Card: Status -> In review (project 20 node IDs, resolved 2026-08-18).
 gh project item-edit --id PVTI_lADOAZoyI84Bej-5zg0NA8M \
