@@ -86,7 +86,7 @@ Searched repo-wide (open and closed, issues and PRs) for "bin directory", "copy 
 
 **Shape.** One run-local `bin/` per *simulation*, created once, containing everything a submitted job needs after submission; every generated `Submit.sh` resolves the executable, the CLI, and the environment from it and from nothing else. This is SpEC's model minus the per-segment symlink farms that #5951 calls out as a mistake.
 
-**Where it lands.** `<pipeline_dir>/bin/` when a pipeline directory exists (`spectre bbh …`), so initial data, inspiral, ringdown and every segment share one snapshot; `<segments_dir>/bin/` for a bare `spectre schedule -O`; `<run_dir>/bin/` for `-o` with the snapshot enabled. The existing `<segments_dir>/<Executable>` copy moves inside `bin/`.
+**Where it lands.** `<pipeline_dir>/bin/` when a pipeline directory exists (`spectre bbh …`), so initial data, inspiral, ringdown and every segment share one snapshot; `<segments_dir>/bin/` for a bare `spectre schedule -O`; `<run_dir>/bin/` for `-o` with `--create-bin`. The existing `<segments_dir>/<Executable>` copy moves inside `bin/`.
 
 **What lands in it** (recommendation; see open point 1):
 
@@ -110,8 +110,8 @@ Pipeline handoffs come along for free: because the job invokes the snapshot CLI,
 
 **CLI / YAML knobs.**
 
-- `--snapshot / --no-snapshot` as the new spelling of `--copy-executable / --no-copy-executable`, with the old flag kept as a deprecated alias so existing scripts and `Next` blocks keep working. **No new `--bin-dir` option**: the snapshot location is derived from the pipeline/segments/run directory and recorded in the context file, and a manual override already exists as `spectre --build-dir / -b` (`support/Python/__main__.py:309`) — generalize it to accept a snapshot bin directory (today it appends `/bin`, so it only accepts build directories).
-- `spectre update-bin BIN_DIR [-E EXEC]…` — a deliberate re-snapshot, the analogue of `MakeBinDirectory` / `MakeNextSegment -E`.
+- `--create-bin / --no-create-bin` as the new spelling of `--copy-executable / --no-copy-executable`, with the old flag kept as a deprecated alias so existing scripts and `Next` blocks keep working. **No `--bin-dir` path option**: the bin directory's location is derived from the pipeline/segments/run directory and recorded in the context file, and a manual override already exists as `spectre --build-dir / -b` (`support/Python/__main__.py:309`) — generalize it to accept a bin directory (today it appends `/bin`, so it only accepts build directories).
+- `spectre update-bin BIN_DIR [-E EXEC]…` — deliberately re-creates the bin directory from a new build, the analogue of `MakeBinDirectory` / `MakeNextSegment -E`.
 
 **Executable-side work: one guard, no new machinery.** Nothing in `src/` changes. The snapshot step should check the copied executables' `NEEDED` entries and fail if any resolves inside the build directory, turning today's silent `BUILD_SHARED_LIBS=ON` trap into an error at snapshot time. Formaline already covers provenance (`src/IO/H5/File.cpp:155`), so the bin directory does not need a source archive of its own.
 
