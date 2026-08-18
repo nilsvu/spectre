@@ -1,8 +1,8 @@
-Implementation note from #7447 (bin directories), at sxs-collaboration/spectre@06fa7dffb1: `support/Pipelines/Bbh/EccentricityControl.py:138` passes `pipeline_dir=lev_dir.path`, so each Lev branch becomes its own pipeline directory — and with #7447's snapshot, each Lev gets its own bin directory with its own copies of the executables and the Python package.
+Implementation note from #7447 (bin directories), at sxs-collaboration/spectre@06fa7dffb1: `support/Pipelines/Bbh/EccentricityControl.py:138` passes `pipeline_dir=lev_dir.path`, making each Lev branch its own pipeline directory.
 
-That is correct under #7447's settled design (one bin directory per pipeline directory), but it contradicts the intent recorded in the #5951 discussion ("we want 1 bin directory for all Ecc iterations, levs, segments"), and the disk cost scales with the number of Levs.
+#7447's implementation resolves the bin directory by nearest-ancestor search, bounded to the simulation directory formats in `support/Python/DirectoryStructure.py` — a nested Lev branch finds and reuses the parent pipeline directory's bin instead of creating its own. All Levs and ecc iterations therefore share one bin directory (the intent recorded in #5951), and settling this issue needs no bin-directory work.
 
-When settling this issue, consider having the Lev branches share the parent pipeline directory's bin — they are branches of one simulation, not separate simulations.
+One interaction to keep in mind: `--no-create-bin` at pipeline start propagates through `Next`, so a simulation that opted out stays opted out across Lev branches.
 
 ---
 
