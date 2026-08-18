@@ -1,6 +1,6 @@
 ## Proposed changes
 
-Give every simulation a run-local `bin` directory that holds everything a scheduled job needs after submission — the executables, the SpECTRE CLI and its Python package, the machine's environment script, and the submit script templates — and run from it instead of from the build directory.
+Give every simulation a run-local `bin` directory that holds everything a scheduled job needs after submission — the executables, the SpECTRE CLI and its Python package, and the submit script templates — and run from it instead of from the build directory.
 
 Closes #7447
 
@@ -13,8 +13,9 @@ The design and the settled open points are in #7447. This implements that scope:
 - the executables — including those of later pipeline steps, so the handoff to them doesn't have to reach back into the build directory;
 - `spectre` — a verbatim copy of the build directory's CLI. `cmake/SpectrePythonExecutable.sh` reaches the Python package through its own location, so the copy uses the package next to it; everything else on its `PYTHONPATH` stays exactly as configured at build time. That is a two-line change to the wrapper and needs no detection of where it is running. See "One self-locating entry on the `PYTHONPATH`" below;
 - `python/spectre/` — the Python package with its compiled bindings and the configured `Machine.yaml`;
-- the submit script template and its base — now the one copy the scheduler renders from;
-- `Manifest.yaml` — build directory, source revision (read from `BuildInfo.txt`), and timestamp.
+- the submit script template and its base — now the one copy the scheduler renders from.
+
+The bin directory carries no record file: formaline already embeds the source archive and environment in every executable and H5 output.
 
 **Almost no plumbing is needed for later segments, because the CLI already self-locates**: `spectre.__main__`, `_resolve_executable` and `spectre_cli` are all computed relative to `__file__`. Once the bin directory's CLI is the one running, everything resolves out of it by itself. Only the first `schedule` call — the one that runs from the build directory and creates the bin directory — points `spectre_cli` and the executable paths into it. `Resubmit.py` is unchanged.
 
@@ -22,7 +23,7 @@ The design and the settled open points are in #7447. This implements that scope:
 
 Eccentricity control branches resolutions by scheduling into numbered subdirectories of the simulation (`support/Pipelines/Bbh/EccentricityControl.py:138` passes `pipeline_dir=lev_dir.path`). Deriving the location from the target directory alone would give every Lev its own copy — several times 497 MB for one simulation. #5951 asked for the opposite ("one bin directory for all Ecc iterations, levs, segments"), and settled open point 2(a) quotes it.
 
-So `schedule` does not just derive a location, it *looks one up*: `find_bin_directory` checks the target directory for a `bin`, then the enclosing directories, and the first hit is the simulation's bin directory, reused as is. A new one is created only when nothing encloses the run. A candidate counts only if it holds a `Manifest.yaml`, so a build directory's `bin` is never mistaken for a simulation's.
+So `schedule` does not just derive a location, it *looks one up*: `find_bin_directory` checks the target directory for a `bin`, then the enclosing directories, and the first hit is the simulation's bin directory, reused as is. A new one is created only when nothing encloses the run. A candidate counts only if it contains the copied `spectre` CLI and does not sit in a build directory (no `CMakeCache.txt` next to it), so a build directory's `bin` is never mistaken for a simulation's.
 
 The search is bounded **structurally**, not by depth: it ascends out of a directory only while that directory is one the scheduler itself creates — a `Segment` or a `PipelineStep`, matched with the classes in `support/Python/DirectoryStructure.py` rather than re-spelled patterns. The first directory that is neither is the simulation root: it is checked, and the search stops without ever inspecting its parents. A run tree placed below an unrelated simulation therefore cannot pick up that simulation's bin directory — there is a test that plants a decoy one level above a non-conforming directory and asserts it is not found.
 
@@ -42,8 +43,6 @@ Scheduler context files written before this change contain a `copy_executable` k
 **The executable and the submit script templates move** from `<segments_dir>/` into `<segments_dir>/bin/`. Anything that hard-codes those paths needs updating.
 
 **Builds configured with `BUILD_SHARED_LIBS=ON` can no longer schedule runs** unless you pass `--no-create-bin`. Creating a bin directory deliberately fails when the build directory holds shared SpECTRE libraries, because its executables load them from there and a copy breaks as soon as the build directory changes (settled open point 6(a) of #7447). Four of the repo's own environment scripts configure exactly that: `support/Environments/urania.sh:53`, `support/Environments/viper.sh:55`, `support/Environments/ocean2.sh:80` and `support/Environments/ocean2_orca1.sh:63`. On Urania, Viper, Ocean2 and Ocean2_orca1 a standard build therefore hits the guard. See "Further comments" for why that is not resolved here.
-
-**Bootstrapped Python dependencies are now found where pip actually put them.** With `BOOTSTRAP_PY_DEPS` / `SPECTRE_FETCH_MISSING_DEPS` enabled, the build no longer assumes `lib/pythonX.Y/site-packages` but discovers the directory. On Debian-patched pips that is `local/lib/pythonX.Y/dist-packages`, which the build never put on the `PYTHONPATH`, so bootstrapped dependencies were silently unusable there. If your build tree has stale copies in more than one of those locations, configuring now stops with an error listing them — delete the stale ones.
 
 **`<build_dir>/bin/spectre` and `bin/python-spectre` reach the Python package through their own location** instead of an absolute configure-time path. Everything else on their `PYTHONPATH` is unchanged. In the build directory they behave exactly as before; the point is that a copy of the script in a simulation's bin directory uses the package next to the copy. Their `configure_file` calls gained `@ONLY`, because the scripts now contain a shell `${...}` expansion that CMake must not substitute.
 
@@ -90,7 +89,7 @@ The guard detects the build shape rather than inspecting each executable: it ref
 
 The wrapper needs exactly one change to work in a simulation: reach the Python package through its own location rather than through the absolute path configured into it. Everything after that first entry stays as the build configured it, so a copied wrapper carries the build directory's paths as trailing entries. **They are not removed, deliberately** — the frozen package comes first and wins, and keeping the rest untouched makes the change two lines instead of a mode switch that has to detect where it is running.
 
-**Fixed on the way: `BOOTSTRAP_PY_DEPS` dependencies were invisible on Debian-patched pips.** The build assumed `pip install --prefix P` lands in `P/lib/pythonX.Y/site-packages` and put that on the `PYTHONPATH`. Measured on this machine, that pip installs to `P/local/lib/python3.10/dist-packages` instead, so bootstrapped dependencies were downloaded and then never found. `BootstrapPyDeps.cmake` now *discovers* the directory pip actually used — globbing `<build>/{local/,}lib/python*/{site,dist}-packages` for a non-empty one, and failing with a descriptive error if several match — and that directory is what goes on the `PYTHONPATH` and into what the wrapper bakes. This is a pre-existing bug; it is fixed here because the wrapper's baked entries have to be right.
+**Dependency bootstrapping is untouched here.** A pre-existing defect — `BOOTSTRAP_PY_DEPS` dependencies are installed where nothing looks for them on Debian-patched pips — was found while developing this change and is filed as its own issue with the measurements.
 
 **Third-party Python packages are not frozen into a simulation.** A scheduled run gets them from the machine's Python environment, the same way the build directory does. The evidence that this is what already happens: bootstrapping was silently broken on Debian pips and nobody noticed, and the production environment scripts supply a venv or Spack environment. Freezing them was implemented and then dropped as unnecessary weight; if a module upgrade ever breaks an old simulation, that is the same exposure open point 7 already records.
 
@@ -127,7 +126,7 @@ The other three:
 
 - `test_no_bin_directory_without_scheduler` — a directly executed run copies nothing, even with `create_bin=True`;
 - `test_relocatable_build_guard` — the guard raises on a planted `lib/libDataStructures.so` with the path in the message, accepts a static `.a` next to it, and is not tripped by shared objects in the subdirectories where bootstrapped Python packages keep theirs;
-- `test_bin_directory_search_stays_in_the_simulation` — a decoy `bin/Manifest.yaml` above a non-conforming directory is not picked up, while the same tree does find its own simulation's bin directory;
+- `test_bin_directory_search_stays_in_the_simulation` — a decoy `bin/` above a non-conforming directory is not picked up, the same tree does find its own simulation's bin directory, and a `bin` with a `CMakeCache.txt` next to it (a build directory's) is never matched;
 - `test_bin_directory_shared_by_the_simulation` — the steps of a pipeline and a branch nested inside the simulation all share the one bin directory: later ones reuse it instead of re-copying, and their submit scripts point there. It also covers an explicit opt-out surviving the handoff, and it caught a real bug: a later step passing its own submit script template raised `OSError: File already exists`, because only the executables had the "already there wins" rule. Copying into the bin directory now goes through one helper that applies it to the templates too;
 - `test_cli_finds_the_package_next_to_itself` — running the wrapper in the build tree and running a copy of it elsewhere both put the package next to the script first on `sys.path`, with the configured entries following unchanged;
 
@@ -148,8 +147,6 @@ It succeeded (exit 0), created `Segment_0001`, and the new submit script referen
 SPECTRE_EXECUTABLE=.../Segments/bin/TestExec
 SPECTRE_CLI=.../Segments/bin/spectre
 ```
-
-The build used for these tests has every Python dependency already provided by the machine, so pip installs nothing; the discovery glob therefore finds nothing here. The ambiguity error (several non-empty candidates) is code-reviewed, not exercised.
 
 Two pre-existing build failures blocked `all-pybindings` here, neither related to this change: `PyCoordinateMaps` fails to compile under `nvcc` ("identifier ... is undefined in device code"), and `PySpectral` fails to link with `cannot find -lxsimd` because `src/Utilities/Simd/CMakeLists.txt` links the `xsimd` target unconditionally, so `USE_XSIMD=OFF` produces an unlinkable build. Both are worth separate issues.
 

@@ -3,18 +3,19 @@
 # settlement addendum comment.
 #
 # Lane: fp/bin-directories, three commits on develop (06fa7dffb1),
-# HEAD 6f46cf1109:
-#   68d0bed34c Let the CLI wrapper find the Python package next to
+# HEAD 1f30884654:
+#   2d569833e9 Let the CLI wrapper find the Python package next to
 #              itself
-#   06f8a2b6ec Run scheduled simulations from a bin directory
-#   6f46cf1109 Copy later pipeline steps' executables to the bin
+#   117c334760 Run scheduled simulations from a bin directory
+#   1f30884654 Copy later pipeline steps' executables to the bin
 #              directory
-# Co-review done 2026-08-18 over five rounds. Final scope per the
+# Co-review done 2026-08-18 over six rounds. Final scope per the
 # revised settlement (comment below): simulation-local bin directory
-# with ancestor sharing across Levs; deps-freezing and Env.sh
-# deferred; guard as build-shape check; fixes the pre-existing
-# BOOTSTRAP_PY_DEPS invisibility on Debian pips. Affected tests 5/5;
-# Bbh pipeline tests must run in CI (noted in the PR body).
+# with ancestor sharing across Levs; deps-freezing, Env.sh, Manifest,
+# and the pip bootstrap fix all relaxed out (the pip bug is outbox
+# 010); guard as build-shape check. 15 files, +956/-82. Affected
+# tests 5/5 + build-dir-gone check exit 0; Bbh pipeline tests must
+# run in CI (noted in the PR body).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo=sxs-collaboration/spectre
