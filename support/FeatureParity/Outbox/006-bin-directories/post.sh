@@ -5,7 +5,8 @@
 #  - Replace the thin #7447 body with the survey + design proposal
 #    (7 numbered open points); card moves to Discuss, Size M.
 #    (Design simplified 2026-08-18: the CLI self-locates, so only the
-#    first schedule() needs plumbing — Size dropped from L.)
+#    first schedule() needs plumbing — Size dropped from L. Update
+#    path deferred to a follow-up issue; minimal manifest.)
 #  - Close #5951 as consolidated into #7447 (same problem, 2024; its
 #    design discussion is folded into the proposal).
 #  - Close #7444 as duplicate of #7443 (title is verbatim a bullet of
