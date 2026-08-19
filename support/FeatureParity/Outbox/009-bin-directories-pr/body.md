@@ -8,7 +8,9 @@ Today a queued or continuing job reaches back into the build directory at exactl
 
 The design and the settled open points are in #7447. This implements that scope: the update path (versioned bin directories) and static third-party linking are deferred to follow-up issues.
 
-**What lands in the bin directory** (`create_bin_directory` in `support/Python/Schedule.py`):
+The bin directory lives in its own module, `support/Python/BinDirectory.py` — it is a self-contained concern (find it, create it, add to it) that `Schedule.py` only calls into, and the deferred `update-bin` endpoint will land there too. Imports run one way: `Schedule` imports from `BinDirectory`, never the reverse.
+
+**What lands in the bin directory** (`create_bin_directory`):
 
 - the executables — including those of later pipeline steps, so the handoff to them doesn't have to reach back into the build directory;
 - `spectre` — a verbatim copy of the build directory's CLI. `cmake/SpectrePythonExecutable.sh` reaches the Python package through its own location, so the copy uses the package next to it; everything else on its `PYTHONPATH` stays exactly as configured at build time. That is a two-line change to the wrapper and needs no detection of where it is running. See "One self-locating entry on the `PYTHONPATH`" below;
@@ -113,7 +115,7 @@ ctest -R "support\.(Python\.(Schedule|Main|RunNext)|DirectoryStructure|Machines)
 # (support.Python.Schedule: 9 test cases)
 ```
 
-`tests/support/Python/Test_Schedule.py` goes from three test cases to nine. `test_bin_directory` covers:
+The bin-directory cases live in a new `tests/support/Python/Test_BinDirectory.py` (5 cases); `Test_Schedule.py` keeps the scheduling, resubmission and CLI cases and goes back to 4. `test_bin_directory` covers:
 
 - the contents of the bin directory, and that the executable and submit script templates are no longer in the segments directory;
 - that neither the rendered `Submit.sh` nor `SchedulerContext.yaml` contains any path under the build directory's `bin` or `lib`, or under the source tree — the property this issue is about;
