@@ -1,35 +1,20 @@
 #!/usr/bin/env bash
-# Outbox entry 009 — draft PR for #7447 "Bin directories" + the
-# settlement addendum comment.
+# Outbox entry 009 (remainder) — settlement addendum + card move.
 #
-# Lane: fp/bin-directories, three commits on develop (06fa7dffb1),
-# HEAD acd1310019:
-#   d78430a289 Let the CLI wrapper find the Python package next to
-#              itself
-#   e75ac32e25 Run scheduled simulations from a bin directory
-#   acd1310019 Copy later pipeline steps' executables to the bin
-#              directory
-# Co-review done 2026-08-18 over six rounds. Final scope per the
-# revised settlement (comment below): simulation-local bin directory
-# with ancestor sharing across Levs; deps-freezing, Env.sh, Manifest,
-# and the pip bootstrap fix all relaxed out (the pip bug is outbox
-# 010); guard as build-shape check. 19 files, +1399/-180; docs+tests at floor per condensation passes. Affected
-# tests 5/5 + build-dir-gone check exit 0; Bbh pipeline tests must
-# run in CI (noted in the PR body).
+# Already posted by the user (verified 2026-08-19 via the read API):
+# PR sxs-collaboration/spectre#7507 "Freeze bin directories for
+# submitted jobs" from fp/bin-directories, with "Closes #7447".
+# Remaining writes:
+#  - Settlement addendum comment on #7447 (3 narrowed, 5 deferred to
+#    #7443, 6 as build-config check).
+#  - Card Status -> In review.
+#
+# Lane UPDATES after CI fixes are pushed directly (not via outbox):
+#   git -C /users/nilsvu/spectre push --force-with-lease origin fp/bin-directories
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo=sxs-collaboration/spectre
 
-# Push the lane branch (worktree shares refs with the main checkout).
-git -C /users/nilsvu/spectre push origin fp/bin-directories
-
-gh pr create --repo "$repo" --base develop \
-  --head nilsvu:fp/bin-directories --draft \
-  --title "Run scheduled simulations from a bin directory" \
-  --body-file "$here/body.md"
-
-# Settlement addendum on the issue (3 narrowed, 5 deferred to #7443,
-# 6 as build-shape check).
 gh issue comment 7447 --repo "$repo" \
   --body-file "$here/comment-7447-settlement.md"
 
