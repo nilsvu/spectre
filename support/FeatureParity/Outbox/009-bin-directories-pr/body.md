@@ -1,6 +1,6 @@
 ## Proposed changes
 
-Give every simulation a run-local `bin` directory that holds everything a scheduled job needs after submission — the executables, the SpECTRE CLI and its Python package, and the submit script templates — and run from it instead of from the build directory.
+Give every simulation a run-local `bin` directory that holds everything a scheduled job needs after submission — the executables, the SpECTRE CLI and its Python package — with the support files next to it in `share/spectre/`, and run from it instead of from the build directory.
 
 Closes #7447
 
@@ -12,10 +12,11 @@ The bin directory lives in its own module, `support/Python/BinDirectory.py` — 
 
 **What lands in the bin directory** (`create_bin_directory`):
 
-- the executables — including those of later pipeline steps, so the handoff to them doesn't have to reach back into the build directory. Callers name them: `schedule` takes a `copy_extra_executables` list, and the Bbh pipeline lists the literal names. It deliberately does **not** read them out of the later steps' input file templates, because the executable a step will actually run is the caller's choice — the GPU build substitutes its own — so the template's name would be wrong by design;
+- the executables — including those of later pipeline steps, so the handoff to them doesn't have to reach back into the build directory. Callers name them: `schedule` takes a `copy_extra_executables` list, and the Bbh pipeline lists the literal names. It deliberately does **not** read them out of the later steps' input file templates: explicit beats parsing, and which executable a step runs is the caller's choice, so a caller can substitute a different one;
 - `spectre` — a verbatim copy of the build directory's CLI. `cmake/SpectrePythonExecutable.sh` reaches the Python package through its own location, so the copy uses the package next to it; everything else on its `PYTHONPATH` stays exactly as configured at build time. That is a two-line change to the wrapper and needs no detection of where it is running. See "One self-locating entry on the `PYTHONPATH`" below;
-- `python/spectre/` — the Python package with its compiled bindings and the configured `Machine.yaml`;
-- the submit script template and its base — the one copy the scheduler renders from. The templates follow the bin directory: a run without one renders them where they are and copies nothing.
+- `python/spectre/` — the Python package with its compiled bindings.
+
+**Next to it, `share/spectre/`** holds the support files: the submit script templates and the configured `Machine.yaml`. CMake configures them there in the build directory too (`support/CMakeLists.txt`), and `create_bin_directory` copies that directory verbatim, so **a simulation has the same layout as the build directory it was scheduled from**. Both are found by one expression relative to the running CLI — `running_share_dir()` — which resolves to the build directory's copy in a build directory and to the simulation's in a simulation, with nothing to translate between them. The machine environment script of #7443 joins them there.
 
 The bin directory carries no record file: formaline already embeds the source archive and environment in every executable and H5 output.
 
@@ -25,7 +26,7 @@ The bin directory carries no record file: formaline already embeds the source ar
 
 Eccentricity control branches resolutions by scheduling into numbered subdirectories of the simulation (`support/Pipelines/Bbh/EccentricityControl.py:138` passes `pipeline_dir=lev_dir.path`). Deriving the location from the target directory alone would give every Lev its own copy — several times 497 MB for one simulation. #5951 asked for the opposite ("one bin directory for all Ecc iterations, levs, segments"), and settled open point 2(a) quotes it.
 
-So `schedule` does not just derive a location, it *looks one up*: `find_bin_directory` starts at the **run directory** — the most specific directory of the run — and works outwards, and the first hit is the simulation's bin directory, reused as is. Starting at the most specific directory means the nearest bin directory wins, so a run that already has one of its own is not silently shadowed by a more distant one. That layout arises when a run scheduled on its own with `--segments-dir` is later made part of a pipeline: the pipeline directory encloses a segments directory that already has a bin directory, and the segments keep using it. A new one is created only when the search finds nothing, and then it is created for the simulation as a whole — in the pipeline directory if there is one, otherwise the segments directory, otherwise the run directory. A candidate counts only if it contains the copied `spectre` CLI and does not sit in a build directory (no `CMakeCache.txt` next to it), so a build directory's `bin` is never mistaken for a simulation's.
+So `schedule` does not just derive a location, it *looks one up*: `find_bin_directory` starts at the **run directory** — the most specific directory of the run — and works outwards, and the first hit is the simulation's bin directory, reused as is. Starting at the most specific directory means the nearest bin directory wins, so a run that already has one of its own is not silently shadowed by a more distant one. That layout arises when a run scheduled on its own with `--segments-dir` is later made part of a pipeline: the pipeline directory encloses a segments directory that already has a bin directory, and the segments keep using it. A new one is created only when the search finds nothing, and then it is created for the simulation as a whole — in the pipeline directory if there is one, otherwise the segments directory, otherwise the run directory. A bin directory is any directory named `bin` that holds the `spectre` CLI. A build directory's `bin` holds one too, and is deliberately not excluded: if a run tree sits directly in a build directory, running from that `bin` is exactly what scheduling from there means, and nothing has to be copied for it at all because the executables, the CLI and the support files are all already in place.
 
 The search is bounded **structurally**, not by depth: it ascends out of a directory only while that directory is one the scheduler itself creates — a `Segment` or a `PipelineStep`, matched with the classes in `support/Python/DirectoryStructure.py` rather than re-spelled patterns. The first directory that is neither is the simulation root: it is checked, and the search stops without ever inspecting its parents. A run tree placed below an unrelated simulation therefore cannot pick up that simulation's bin directory — there is a test that plants a decoy one level above a non-conforming directory and asserts it is not found.
 
@@ -42,7 +43,9 @@ A bin directory is sizeable: **497 MB measured** for one simulation in a `Debug`
 
 Scheduler context files written before this change contain a `copy_executable` key. It is ignored, so **existing runs continue to resubmit** — there is a test for this. Their next segment gets a bin directory that keeps the executable **the run was created with**, not whatever is in the build directory now.
 
-**The executable and the submit script templates move** from `<segments_dir>/` into `<segments_dir>/bin/`. Anything that hard-codes those paths needs updating. With `--no-create-bin` the templates are no longer copied into the segments directory at all — the run renders them where they are, as a plain `--run-dir` run always did. Templates supplied with `--submit-script-template` behave the same way.
+**The executable moves** from `<segments_dir>/` into `<segments_dir>/bin/`, and the submit script templates are no longer copied into the segments directory at all. Anything that hard-codes those paths needs updating.
+
+**The submit script templates and `Machine.yaml` are configured to `<build_dir>/share/spectre/`** instead of into the Python package at `<build_dir>/bin/python/spectre/support/`. Anything that reads them from the old path needs updating; in-tree, `Schedule.default_submit_script_template` and `Machines.this_machine` both resolve them relative to the running CLI now. A simulation gets a copy of that directory at `<simulation_dir>/share/spectre/`, and its jobs render from that copy. A template supplied with `--submit-script-template` from anywhere else is rendered where it is and is not copied; it can still `{% extends %}` the installed base template, which the Jinja loader finds in the support files.
 
 **A run without a scheduler now uses an existing bin directory.** `--no-schedule` never *creates* one — not even with `--create-bin` — but if the simulation already has one, the run executes the copy in it rather than the build directory's. So running a segment by hand inside a simulation runs the same binary its scheduled jobs do. Previously a direct run ignored the bin directory entirely.
 
@@ -84,7 +87,7 @@ The guard detects the build shape rather than inspecting each executable: it ref
 
 #### Other user-visible effects
 
-- **New directory** `bin/` in the pipeline or segments directory. The job's log header prints it.
+- **New directories** `bin/` and `share/spectre/` in the pipeline or segments directory. The job's log header prints the bin directory.
 - **New context entries** `bin_dir` and `create_bin` in `SchedulerContext.yaml`. Only `create_bin` — the intent, not a path — is propagated through pipeline `Next` blocks; the location is derived from the pipeline directory, which already flows through `Next`, and is recorded in the context file. Threading a path through input files would be redundant state.
 - **Earlier failure for incomplete builds**: starting a pipeline that will continue into a later step now requires that step's executable to be compiled, because it is copied up front. Previously the pipeline failed at the handoff — after the earlier step had already run.
 - **Docs**: a "Bin directories" section in `docs/Tutorials/Cli.md`.
@@ -112,23 +115,25 @@ Moving or renaming a simulation directory still fails on resubmission, because t
 This change is pipeline-side only — no `src/` code is touched, so a full `ctest -L unit` run is not informative for it and was not run. The affected Python and support tests were run in a `Debug` build:
 
 ```sh
-ctest -R "support\.(Python\.(Schedule|Main|RunNext)|DirectoryStructure|Machines)" --output-on-failure
-# 100% tests passed, 0 tests failed out of 5
-# (support.Python.Schedule: 9 test cases)
+ctest -R "support\.(BinDirectory|Python\.(Schedule|Main|RunNext)|DirectoryStructure|Machines)" --output-on-failure
+# 100% tests passed, 0 tests failed out of 6
 ```
 
-The bin-directory cases live in a new `tests/support/Python/Test_BinDirectory.py` (5 cases); `Test_Schedule.py` keeps the scheduling, resubmission and CLI cases and goes back to 4. `test_bin_directory` covers:
+The bin-directory cases live in a new `tests/support/Python/Test_BinDirectory.py` (9 cases); `Test_Schedule.py` keeps the scheduling, resubmission and CLI cases (5). `test_bin_directory` covers:
 
-- the contents of the bin directory, and that the executable and submit script templates are no longer in the segments directory;
+- the contents of the bin directory, that the support files next to it are a verbatim copy of the build directory's, and that the executable is no longer in the segments directory;
 - that neither the rendered `Submit.sh` nor `SchedulerContext.yaml` contains any path under the build directory's `bin` or `lib`, or under the source tree — the property this issue is about;
 - that scheduling again reuses the bin directory instead of copying over it;
 - that `<bin_dir>/spectre resubmit` works as a subprocess **with `PATH` and `PYTHONPATH` scrubbed**, so the build directory is unreachable through the environment, and writes bin-directory paths into the next segment. This exercises the relocatable wrapper and proves the copied package stands alone.
 
-The other three:
+The others:
 
 - `test_no_bin_directory_without_scheduler` — a directly executed run copies nothing, even with `create_bin=True`;
 - `test_relocatable_build_guard` — the guard raises on a planted `lib/libDataStructures.so` with the path in the message, accepts a static `.a` next to it, and is not tripped by shared objects in the subdirectories where bootstrapped Python packages keep theirs;
-- `test_bin_directory_search_stays_in_the_simulation` — a decoy `bin/` above a non-conforming directory is not picked up, the same tree does find its own simulation's bin directory, and a `bin` with a `CMakeCache.txt` next to it (a build directory's) is never matched;
+- `test_bin_directory_search_stays_in_the_simulation` — a decoy `bin/` above a non-conforming directory is not picked up, and the same tree does find its own simulation's bin directory, including when that directory is a build directory's;
+- `test_scheduling_into_a_build_directorys_bin` — scheduling a run tree that sits in a build directory uses the build's `bin`: nothing at all is copied, because the executable, the CLI and the support files are already in place, and nothing fails;
+- `test_support_files_are_found_relative_to_the_installation` — `Machines.this_machine` defaults to the running installation's `Machine.yaml`, and the simulation's copy of it is intact and parses;
+- `test_custom_submit_script_template` — a template of your own is rendered where it is, is not copied into the simulation, and still resolves the installed base template it extends;
 - `test_bin_directory_shared_by_the_simulation` — the steps of a pipeline and a branch nested inside the simulation all share the one bin directory: later ones reuse it instead of re-copying, and their submit scripts point there. It also covers an explicit opt-out surviving the handoff, and it caught a real bug: a later step passing its own submit script template raised `OSError: File already exists`, because only the executables had the "already there wins" rule. Copying into the bin directory now goes through one helper that applies it to the templates too;
 - `test_cli_finds_the_package_next_to_itself` — running the wrapper in the build tree and running a copy of it elsewhere both put the package next to the script first on `sys.path`, with the configured entries following unchanged;
 
@@ -136,7 +141,9 @@ The other three:
 
 The Bbh pipeline tests pass `--no-create-bin` so they keep testing pipeline wiring without copying the Python package on every invocation; their expected `Next` blocks were updated for the renamed option. **These tests were not executed** — the pybindings they need don't link in the environment this was developed in, for reasons unrelated to this change (below). Their expectations were instead checked by rendering the pipeline templates directly and confirming that `create_bin` reaches the `Next` block as a boolean. **Please make sure CI runs `support.Pipelines.Bbh.*`.**
 
-Build-directory independence was also checked by hand, outside the test suite and outside the build directory: schedule a run, move the build directory away entirely, and resubmit through the bin directory's CLI.
+A test build usually selects no machine, so the unit tests point `running_share_dir` at a stand-in directory. The production path was therefore also checked by hand with a real machine configured (`cmake -D MACHINE=CaltechHpc`): the default submit script template and `Machine.yaml` resolve to `<build_dir>/share/spectre/`, scheduling produces a byte-identical copy at `<simulation_dir>/share/spectre/`, and `SchedulerContext.yaml` records the simulation's copy as the template.
+
+Build-directory independence was checked in the same configuration, outside the test suite and outside the build directory: schedule a run, move the build directory away entirely, and resubmit through the bin directory's CLI.
 
 ```sh
 mv $BUILD_DIR ${BUILD_DIR}-MOVED
