@@ -47,7 +47,7 @@ A bin directory is sizeable: **497 MB measured** for one simulation in a `Debug`
 <!-- UPGRADE INSTRUCTIONS -->
 **`--copy-executable` / `--no-copy-executable` is removed.** Use `--create-bin` / `--no-create-bin` instead (`copy_executable` becomes `create_bin` in Python). There is no deprecated alias: passing the old flag on the command line now errors with "no such option". Update any scripts, notebooks or wrappers that use it. The `Next` blocks in the input files shipped with SpECTRE are updated in this PR; hand-written ones that pass `copy_executable` must be updated too.
 
-Scheduler context files written before this change contain a `copy_executable` key. It is ignored, so **existing runs continue to resubmit** — there is a test for this. Their next segment gets a bin directory that keeps the executable **the run was created with**, not whatever is in the build directory now.
+Scheduler context files written before this change contain a `copy_executable` key. It is ignored, so **existing runs continue to resubmit**. Their next segment gets a bin directory that keeps the executable **the run was created with**, not whatever is in the build directory now.
 
 **The executable moves** from `<segments_dir>/` into `<segments_dir>/bin/`, and the submit script templates are no longer copied into the segments directory at all. Anything that hard-codes those paths needs updating.
 
@@ -100,7 +100,7 @@ It asks about the configuration rather than the files produced, because file nam
 - **New directories** `bin/` and `support/` in the pipeline or segments directory. The job's log header prints the bin directory.
 - **New context entries** `bin_dir` and `create_bin` in `SchedulerContext.yaml`. Only `create_bin` — the intent, not a path — is propagated through pipeline `Next` blocks; the location is derived from the pipeline directory, which already flows through `Next`, and is recorded in the context file. Threading a path through input files would be redundant state.
 - **Earlier failure for incomplete builds**: starting a pipeline that will continue into a later step now requires that step's executable to be compiled, because it is copied up front. Previously the pipeline failed at the handoff — after the earlier step had already run.
-- **Docs**: a "Bin directories" section in `docs/Tutorials/Cli.md`.
+- **Docs**: the bin directory is documented where the feature lives — the `schedule` docstring, which the CLI surfaces as `spectre schedule --help`, and the `BinDirectory` module docstring for the concept and the layout. No tutorial page is touched.
 
 #### One self-locating entry on the `PYTHONPATH`
 
@@ -116,9 +116,17 @@ It looks redundant — later pipeline steps find the pipeline-level `bin/` alrea
 
 One case breaks it, also measured: if the first step ran with `--no-create-bin`, there is no bin directory for the later step to find, and the later step's default (`pipeline_dir` is set, so create one) turns the explicit opt-out into a 497 MB copy taken mid-pipeline from whatever build directory the handoff CLI happens to be running from. Passing the intent forward is what prevents that, so the propagation stays. The other cases are unaffected: standalone later steps and segments-only runs never go through a `Next` block, and input files that still carry `create_bin` keep working because it is a normal `schedule` argument.
 
-#### Known limitation
+#### Which executable a run gets
 
-Moving or renaming a simulation directory still fails on resubmission, because the executable path recorded in `SchedulerContext.yaml` is absolute and stale, and `_resolve_executable` rejects it before the bin directory is consulted. The bin directory itself recovers — a stale recorded `bin_dir` falls back to the CLI's own location when that is a bin directory — so only the executable path is left. Resolving a stale executable by name would fix it; that is not attempted here.
+The rule is: **the simulation's frozen copy wins whenever the bin directory already holds that name; the environment decides only for a name the simulation has never frozen, and that executable is then frozen in.** That second half is why the executables of later pipeline steps are copied at the start (`copy_extra_executables`) — otherwise a later step would freeze whatever the environment happened to offer at handoff time.
+
+Resolution runs against the `PATH` before the bin directory is known, because the executable's *name* is needed to render `job_name` and the run directory, which is where the search for a bin directory starts. Only the failure is deferred: `_find_executable` returns `None`, and the name is settled against the bin directory once it is known. So a build directory that no longer has an executable compiled can still schedule a step of a simulation that froze it, and a name found nowhere still raises the same `ValueError`.
+
+#### Moving a simulation
+
+Moving or renaming a simulation directory now survives resubmission, measured: every absolute path recorded in `SchedulerContext.yaml` is stale afterwards, but the run recovers. The bin directory recovers because a stale recorded `bin_dir` falls back to the CLI's own location when that is a bin directory, and the executable recovers because a path the environment cannot find is resolved by name against the bin directory (see "Which executable a run gets"). The next segment's submit script points entirely into the new location.
+
+One recorded value does go stale without being corrected: `submit_script_template` still names the old path. Rendering succeeds anyway, because the Jinja loader searches the simulation's support directory by name and finds the file there, but the path written into the next context file names a file that no longer exists. Worth tidying; not done here.
 
 ### Testing performed
 
@@ -129,7 +137,7 @@ ctest -R "support\.(BinDirectory|Python\.(Schedule|Main|RunNext)|DirectoryStruct
 # 100% tests passed, 0 tests failed out of 6
 ```
 
-The bin-directory cases live in a new `tests/support/Python/Test_BinDirectory.py` (11 cases); `Test_Schedule.py` keeps the scheduling, resubmission and CLI cases (5). `test_bin_directory` covers:
+The bin-directory cases live in a new `tests/support/Python/Test_BinDirectory.py` (9 cases, 2.6 s); `Test_Schedule.py` keeps the scheduling, resubmission and CLI cases (5 cases, 0.7 s). Only two cases create a real bin directory; the rest use stand-in installations or planted bin directories, because copying the compiled Python package is what costs. `test_bin_directory` covers:
 
 - the contents of the bin directory, that the support directory next to it holds exactly `SUPPORT_FILES` and none of the files CMake generates in the build directory's, and that the executable is no longer in the segments directory;
 - that neither the rendered `Submit.sh` nor `SchedulerContext.yaml` contains any path under the build directory's `bin` or `lib`, or under the source tree — the property this issue is about;
@@ -138,18 +146,17 @@ The bin-directory cases live in a new `tests/support/Python/Test_BinDirectory.py
 
 The others:
 
-- `test_no_bin_directory_without_scheduler` — a directly executed run copies nothing, even with `create_bin=True`;
-- `test_relocatable_build_guard` — the guard raises for every spelling of true (`ON`, `on`, `TRUE`, `Yes`, `1`) with the build directory in the message, and passes for the false ones, for a cache that doesn't mention the option, and for a directory with no cache at all;
+- `test_create` — copies a stand-in installation into a simulation with an explicit `source`, so it needs no mocking and no real package copy: it checks the derived layout (`this()`, `python_dir`, `support_dir`), that the executable, CLI and Python directory land, that the support files land by name with none of CMake's, that duplicate executables are copied once, that `executable()` reads what is there, and that `add()` keeps a file already there rather than replacing it with a rebuilt one;
+- `test_bin_directory_shared_by_the_simulation` — the steps of a pipeline and a branch nested inside the simulation all share the one bin directory: later ones reuse it instead of re-copying, and their submit scripts point there. It also covers a step bringing its own submit script template (rendered where it is, not copied in, still extending the installed base), and an explicit opt-out surviving the handoff;
+- `test_executable_resolved_from_the_bin_directory` — with the environment scrubbed of the executable, a run still schedules from the simulation's frozen copy; a name that is nowhere still raises;
+- `test_nearest_bin_directory_wins` — with a bin directory planted at the run and another in the enclosing pipeline directory, the run uses the nearer one and a later segment finds it again;
 - `test_bin_directory_search_stays_in_the_simulation` — a decoy `bin/` above a non-conforming directory is not picked up, and the same tree does find its own simulation's bin directory, including when that directory is a build directory's;
-- `test_scheduling_into_a_build_directorys_bin` — scheduling a run tree that sits in a build directory uses the build's `bin`: nothing at all is copied, because the executable, the CLI and the support files are already in place, the build directory's `support/` is left untouched, and nothing fails;
-- `test_installation_layout` — `this()` finds the build directory's `bin`, and the derived `python_dir` and `support_dir` are the same expressions anywhere else;
-- `test_create` — copies a stand-in installation into a simulation with an explicit `source`, so it needs no mocking and no real package copy: the executable, CLI and Python directory land, the support files land by name with none of CMake's, duplicate executables are copied once, `executable()` reads what is there, and `add()` keeps a file already there rather than replacing it with a rebuilt one;
-- `test_support_files_are_found_relative_to_the_installation` — `Machines.this_machine` defaults to the running installation's `Machine.yaml`, and the simulation's support directory holds exactly `SUPPORT_FILES`, intact and parsing;
-- `test_custom_submit_script_template` — a template of your own is rendered where it is, is not copied into the simulation, and still resolves the installed base template it extends;
-- `test_bin_directory_shared_by_the_simulation` — the steps of a pipeline and a branch nested inside the simulation all share the one bin directory: later ones reuse it instead of re-copying, and their submit scripts point there. It also covers an explicit opt-out surviving the handoff, and it caught a real bug: a later step passing its own submit script template raised `OSError: File already exists`, because only the executables had the "already there wins" rule. Copying into the bin directory now goes through one helper that applies it to the templates too;
+- `test_scheduling_into_a_build_directorys_bin` — scheduling a run tree that sits in a build directory uses the build's `bin`: nothing at all is copied, the build directory's `support/` is left untouched, and nothing fails;
+- `test_relocatable_build_guard` — the guard raises for every spelling of true (`ON`, `on`, `TRUE`, `Yes`, `1`) with the build directory in the message, and passes for the false ones, for a cache that doesn't mention the option, and for a directory with no cache at all;
 - `test_cli_finds_the_package_next_to_itself` — running the wrapper in the build tree and running a copy of it elsewhere both put the package next to the script first on `sys.path`, with the configured entries following unchanged;
+- in `Test_Schedule.py`, `test_no_bin_directory_without_scheduler` (a directly executed run copies nothing, even with `create_bin=True`) and `test_direct_run_uses_an_existing_bin_directory` (it runs the simulation's copy and adds nothing to the bin directory).
 
-`test_schedule` now covers the `--no-create-bin` layout, which is also the layout of runs scheduled before this change, and ends by resubmitting a simulated pre-change `SchedulerContext.yaml` (no `create_bin`, obsolete `copy_executable` key, executable in the segments directory) to check that old runs keep working.
+`test_schedule` now covers the `--no-create-bin` layout, which is also the layout of runs scheduled before this change.
 
 The Bbh pipeline tests pass `--no-create-bin` so they keep testing pipeline wiring without copying the Python package on every invocation; their expected `Next` blocks were updated for the renamed option. **These tests were not executed** — the pybindings they need don't link in the environment this was developed in, for reasons unrelated to this change (below). Their expectations were instead checked by rendering the pipeline templates directly and confirming that `create_bin` reaches the `Next` block as a boolean. **Please make sure CI runs `support.Pipelines.Bbh.*`.**
 
