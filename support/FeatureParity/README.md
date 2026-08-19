@@ -103,6 +103,43 @@ decides; the settlement comment or the PR body records it. The goal
 is PRs that are easy to understand and easy to review. A relaxed
 requirement is a named deferral, never a silent loss.
 
+**What a finished PR looks like** — standing preferences distilled
+from the #7447 review arc (2026-08-19). Implementations start here
+instead of arriving here through review rounds:
+
+- **Minimal first.** Implement the irreducible feature; optional
+  machinery is an open point or follow-up, never a default.
+- **No backwards compatibility** unless the issue demands it:
+  breaking changes are documented under the PR's "Upgrade
+  instructions", old options are removed rather than deprecated, and
+  compatibility gets no tests.
+- **Structural invariants over detection.** Make two situations
+  identical (mirrored layouts, one resolution expression valid
+  everywhere) rather than teaching code to tell them apart. Explicit
+  lists over parsing or inference. One composition site per fact.
+- **Prefer deleting over guarding**: unreachable fallbacks,
+  one-caller wrappers, and helpers whose only job is a name go.
+- **Project vocabulary over external convention** (`support/` over
+  `share/`; names follow existing idioms like `this_machine`,
+  `DirectoryStructure` dataclasses).
+- **Docs live with the feature** — docstrings and `--help`, not
+  general tutorial pages. Each fact once, at its reader's altitude;
+  no history-phrasing ("previously", "no longer").
+- **Tests and docs must earn their lines**: merged fixtures,
+  representative cases over matrices; coverage may be dropped when
+  its protection does not justify its cost — deliberately and
+  listed, never silently. Timeouts sized to measured spreads.
+- **Commits**: a few logical commits, each building and passing its
+  tests alone. Messages: imperative subject plus a couple of
+  sentences; no issue references (the PR body's `Closes #NNNN` is
+  the linkage — this deliberately overrides `AGENTS.md`'s
+  issue-number suggestion for campaign PRs); no session trailers;
+  `Co-Authored-By` only. Harness-branch commits keep their trailers.
+- **Measure, don't assume**: any claim about tool or platform
+  behavior (pip, ld, CMake, filesystems) is verified by running it.
+- **Every agent judgment call is flagged veto-ably** in the report,
+  with the one-line rationale and the cost of reversal.
+
 The process itself is expected to change — edit this manual when it
 does; no changelog is kept.
 

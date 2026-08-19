@@ -56,6 +56,12 @@ renegotiated mid-flight.
   (or stop first, if the settled design is at stake). The user
   prefers relaxed requirements over complicated code; the target is
   a PR that is easy to understand and review.
+- **Build to the manual's "What a finished PR looks like" list from
+  the start** — minimal scope, no backwards compatibility, structural
+  invariants over detection, docs with the feature, tests that earn
+  their lines, terse issue-ref-free commit messages. Those are
+  defaults, not review outcomes; deviating from one is a judgment
+  call to flag.
 - **Runs**: own directory under `/capstor/scratch/cscs/nilsvu/Runs/`;
   adjudicate preregistered criteria against logs and artifacts on
   disk, quote them. For compute-node packages, consult the GPU

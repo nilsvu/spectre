@@ -43,6 +43,13 @@ round-trip. Check, in order of severity:
    the machinery it deletes, and what it costs — the user often
    prefers it to the complex variant, and wants the option surfaced
    in every review.
+7. **Finished-PR taste**: check the diff against the manual's "What
+   a finished PR looks like" list — backwards-compat machinery that
+   should be an Upgrade note, docs placed in general pages instead of
+   with the feature, tests or prose that don't earn their lines,
+   verbose or issue-referencing commit messages, detection where a
+   structural invariant would do. Catching these here saves the user
+   a review round each.
    Opportunistic drive-by changes are findings (split them out), not
    bonuses.
 
