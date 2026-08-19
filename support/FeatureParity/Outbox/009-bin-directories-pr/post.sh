@@ -3,11 +3,11 @@
 # settlement addendum comment.
 #
 # Lane: fp/bin-directories, three commits on develop (06fa7dffb1),
-# HEAD 5d90c1a454:
-#   1b6e3d73b6 Let the CLI wrapper find the Python package next to
+# HEAD 81bc3bf291:
+#   d78430a289 Let the CLI wrapper find the Python package next to
 #              itself
-#   2486fee1e6 Run scheduled simulations from a bin directory
-#   5d90c1a454 Copy later pipeline steps' executables to the bin
+#   0c5cead806 Run scheduled simulations from a bin directory
+#   81bc3bf291 Copy later pipeline steps' executables to the bin
 #              directory
 # Co-review done 2026-08-18 over six rounds. Final scope per the
 # revised settlement (comment below): simulation-local bin directory
