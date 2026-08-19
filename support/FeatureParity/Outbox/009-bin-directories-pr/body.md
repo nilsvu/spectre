@@ -120,7 +120,7 @@ One case breaks it, also measured: if the first step ran with `--no-create-bin`,
 
 The rule is: **the simulation's frozen copy wins whenever the bin directory already holds that name; the environment decides only for a name the simulation has never frozen, and that executable is then frozen in.** That second half is why the executables of later pipeline steps are copied at the start (`copy_extra_executables`) — otherwise a later step would freeze whatever the environment happened to offer at handoff time.
 
-Resolution runs against the `PATH` before the bin directory is known, because the executable's *name* is needed to render `job_name` and the run directory, which is where the search for a bin directory starts. Only the failure is deferred: `_find_executable` returns `None`, and the name is settled against the bin directory once it is known. So a build directory that no longer has an executable compiled can still schedule a step of a simulation that froze it, and a name found nowhere still raises the same `ValueError`.
+Resolution runs against the `PATH` before the bin directory is known, because the executable's *name* is needed to render `job_name` and the run directory, which is where the search for a bin directory starts. Only the *name* is taken early; where the executable actually is gets settled once the bin directory is known, by one `_resolve_executable(executable, bin_dir)` that tries the environment, then the bin directory, then raises. So a build directory that no longer has an executable compiled can still schedule a step of a simulation that froze it, and a name found nowhere still raises the same `ValueError`.
 
 #### Moving a simulation
 
