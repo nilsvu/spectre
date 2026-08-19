@@ -3,17 +3,17 @@
 # settlement addendum comment.
 #
 # Lane: fp/bin-directories, three commits on develop (06fa7dffb1),
-# HEAD 81bc3bf291:
+# HEAD acd1310019:
 #   d78430a289 Let the CLI wrapper find the Python package next to
 #              itself
-#   0c5cead806 Run scheduled simulations from a bin directory
-#   81bc3bf291 Copy later pipeline steps' executables to the bin
+#   e75ac32e25 Run scheduled simulations from a bin directory
+#   acd1310019 Copy later pipeline steps' executables to the bin
 #              directory
 # Co-review done 2026-08-18 over six rounds. Final scope per the
 # revised settlement (comment below): simulation-local bin directory
 # with ancestor sharing across Levs; deps-freezing, Env.sh, Manifest,
 # and the pip bootstrap fix all relaxed out (the pip bug is outbox
-# 010); guard as build-shape check. 19 files, +1450/-178; short commit messages, no session trailer. Affected
+# 010); guard as build-shape check. 19 files, +1399/-180; docs+tests at floor per condensation passes. Affected
 # tests 5/5 + build-dir-gone check exit 0; Bbh pipeline tests must
 # run in CI (noted in the PR body).
 set -euo pipefail

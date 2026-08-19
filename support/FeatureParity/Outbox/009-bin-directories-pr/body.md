@@ -8,9 +8,7 @@ Today a queued or continuing job reaches back into the build directory at exactl
 
 The design and the settled open points are in #7447. This implements that scope: the update path (versioned bin directories) and static third-party linking are deferred to follow-up issues.
 
-The bin directory lives in its own module, `support/Python/BinDirectory.py` — it is a self-contained concern (find it, create it, add to it) that `Schedule.py` only calls into, and the deferred `update-bin` endpoint will land there too. Imports run one way: `Schedule` imports from `BinDirectory`, never the reverse.
-
-It is a frozen dataclass in the style of `Segment`, `PipelineStep` and `Checkpoint` in `DirectoryStructure.py`: one `path` field, the rest of the layout derived from it (`spectre_cli`, `python_dir`, `support_dir`), classmethod constructors (`this()`, `find()`, `create()`) and two operations (`add()`, `executable()`). The name of the CLI is written once, in `spectre_cli`, and everything that looks for it or copies it goes through that. `this()` self-locates from `__file__`, the way `Machines.this_machine()` names the machine this code runs on, and `create()` takes the installation to copy from as an argument that defaults to it. `schedule` threads one handle instead of parallel paths, and converts to a plain path at the boundary where `SchedulerContext.yaml` is written.
+The bin directory lives in its own module, `support/Python/BinDirectory.py`, which `Schedule.py` only calls into — imports run one way, and the deferred `update-bin` endpoint will land there too. It is a frozen dataclass in the style of `Segment`, `PipelineStep` and `Checkpoint` in `DirectoryStructure.py`: one `path` field, the rest of the layout derived from it (`spectre_cli`, `python_dir`, `support_dir`), classmethod constructors (`this()`, `find()`, `create()`) and two operations (`add()`, `executable()`). `this()` self-locates from `__file__`, the way `Machines.this_machine()` names the machine this code runs on, and `create()` takes the installation to copy from as an argument that defaults to it. `schedule` threads one handle instead of parallel paths, and converts to a plain path at the boundary where `SchedulerContext.yaml` is written.
 
 **What lands in the bin directory** (`BinDirectory.create`):
 
@@ -137,7 +135,7 @@ ctest -R "support\.(BinDirectory|Python\.(Schedule|Main|RunNext)|DirectoryStruct
 # 100% tests passed, 0 tests failed out of 6
 ```
 
-The bin-directory cases live in a new `tests/support/Python/Test_BinDirectory.py` (9 cases, 2.6 s); `Test_Schedule.py` keeps the scheduling, resubmission and CLI cases (5 cases, 0.7 s). Only two cases create a real bin directory; the rest use stand-in installations or planted bin directories, because copying the compiled Python package is what costs. `test_bin_directory` covers:
+The bin-directory cases live in a new `tests/support/Python/Test_BinDirectory.py` (9 cases, 2.7 s); `Test_Schedule.py` keeps the scheduling, resubmission and CLI cases (5 cases, 0.4 s). Only two cases create a real bin directory; the rest use stand-in installations or planted bin directories, because copying the compiled Python package is what costs. `test_bin_directory` covers:
 
 - the contents of the bin directory, that the support directory next to it holds exactly `SUPPORT_FILES` and none of the files CMake generates in the build directory's, and that the executable is no longer in the segments directory;
 - that neither the rendered `Submit.sh` nor `SchedulerContext.yaml` contains any path under the build directory's `bin` or `lib`, or under the source tree — the property this issue is about;
@@ -146,13 +144,13 @@ The bin-directory cases live in a new `tests/support/Python/Test_BinDirectory.py
 
 The others:
 
-- `test_create` — copies a stand-in installation into a simulation with an explicit `source`, so it needs no mocking and no real package copy: it checks the derived layout (`this()`, `python_dir`, `support_dir`), that the executable, CLI and Python directory land, that the support files land by name with none of CMake's, that duplicate executables are copied once, that `executable()` reads what is there, and that `add()` keeps a file already there rather than replacing it with a rebuilt one;
+- `test_create` — copies a stand-in installation into a simulation with an explicit `source`, so it needs no mocking and no real package copy: it checks that `this()` self-locates to the build directory's `bin`, that the executable, CLI and Python directory land, that the support files land by name with none of CMake's, that duplicate executables are copied once, that `executable()` reads what is there, and that `add()` keeps a file already there rather than replacing it with a rebuilt one;
 - `test_bin_directory_shared_by_the_simulation` — the steps of a pipeline and a branch nested inside the simulation all share the one bin directory: later ones reuse it instead of re-copying, and their submit scripts point there. It also covers a step bringing its own submit script template (rendered where it is, not copied in, still extending the installed base), and an explicit opt-out surviving the handoff;
 - `test_executable_resolved_from_the_bin_directory` — with the environment scrubbed of the executable, a run still schedules from the simulation's frozen copy; a name that is nowhere still raises;
 - `test_nearest_bin_directory_wins` — with a bin directory planted at the run and another in the enclosing pipeline directory, the run uses the nearer one and a later segment finds it again;
 - `test_bin_directory_search_stays_in_the_simulation` — a decoy `bin/` above a non-conforming directory is not picked up, and the same tree does find its own simulation's bin directory, including when that directory is a build directory's;
 - `test_scheduling_into_a_build_directorys_bin` — scheduling a run tree that sits in a build directory uses the build's `bin`: nothing at all is copied, the build directory's `support/` is left untouched, and nothing fails;
-- `test_relocatable_build_guard` — the guard raises for every spelling of true (`ON`, `on`, `TRUE`, `Yes`, `1`) with the build directory in the message, and passes for the false ones, for a cache that doesn't mention the option, and for a directory with no cache at all;
+- `test_relocatable_build_guard` — the guard raises for `ON` and `on`, with the build directory in the message, and passes for `OFF`, for a cache that doesn't mention the option, and for a directory with no cache at all;
 - `test_cli_finds_the_package_next_to_itself` — running the wrapper in the build tree and running a copy of it elsewhere both put the package next to the script first on `sys.path`, with the configured entries following unchanged;
 - in `Test_Schedule.py`, `test_no_bin_directory_without_scheduler` (a directly executed run copies nothing, even with `create_bin=True`) and `test_direct_run_uses_an_existing_bin_directory` (it runs the simulation's copy and adds nothing to the bin directory).
 
