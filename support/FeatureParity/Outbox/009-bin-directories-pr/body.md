@@ -1,6 +1,6 @@
 ## Proposed changes
 
-Give every simulation a run-local `bin` directory that holds everything a scheduled job needs after submission — the executables, the SpECTRE CLI and its Python package — with the support files next to it in `share/spectre/`, and run from it instead of from the build directory.
+Give every simulation a run-local `bin` directory that holds everything a scheduled job needs after submission — the executables, the SpECTRE CLI and its Python package — with the support files next to it in `support/spectre/`, and run from it instead of from the build directory.
 
 Closes #7447
 
@@ -16,7 +16,9 @@ The bin directory lives in its own module, `support/Python/BinDirectory.py` — 
 - `spectre` — a verbatim copy of the build directory's CLI. `cmake/SpectrePythonExecutable.sh` reaches the Python package through its own location, so the copy uses the package next to it; everything else on its `PYTHONPATH` stays exactly as configured at build time. That is a two-line change to the wrapper and needs no detection of where it is running. See "One self-locating entry on the `PYTHONPATH`" below;
 - `python/spectre/` — the Python package with its compiled bindings.
 
-**Next to it, `share/spectre/`** holds the support files: the submit script templates and the configured `Machine.yaml`. CMake configures them there in the build directory too (`support/CMakeLists.txt`), and `create_bin_directory` copies that directory verbatim, so **a simulation has the same layout as the build directory it was scheduled from**. Both are found by one expression relative to the running CLI — `running_share_dir()` — which resolves to the build directory's copy in a build directory and to the simulation's in a simulation, with nothing to translate between them. The machine environment script of #7443 joins them there.
+**Next to it, `support/spectre/`** holds the support files: the submit script templates and the configured `Machine.yaml`. CMake configures them there in the build directory too (`support/CMakeLists.txt`), and `create_bin_directory` copies that directory verbatim, so **a simulation has the same layout as the build directory it was scheduled from**. Both are found by one expression relative to the running CLI — `running_support_dir()` — which resolves to the build directory's copy in a build directory and to the simulation's in a simulation, with nothing to translate between them. The machine environment script of #7443 joins them there.
+
+The directory keeps the name the source tree gives these files, `support` — they are configured from `support/Machines/` and `support/SubmitScripts/`, so `<build_dir>/support/` and `<simulation_dir>/support/` reuse vocabulary every SpECTRE developer already knows. FHS names like `share/` would only earn their keep in a shared install prefix, which neither a build directory nor a simulation is. The `spectre` component under it is not namespacing: CMake owns `<build_dir>/support/` as the binary directory of `add_subdirectory(support)` and leaves `CMakeFiles/`, `CTestTestfile.cmake` and `cmake_install.cmake` there — files that carry absolute build-directory paths and must not end up in a simulation. One level down keeps the copy verbatim and the two layouts identical.
 
 The bin directory carries no record file: formaline already embeds the source archive and environment in every executable and H5 output.
 
@@ -45,7 +47,7 @@ Scheduler context files written before this change contain a `copy_executable` k
 
 **The executable moves** from `<segments_dir>/` into `<segments_dir>/bin/`, and the submit script templates are no longer copied into the segments directory at all. Anything that hard-codes those paths needs updating.
 
-**The submit script templates and `Machine.yaml` are configured to `<build_dir>/share/spectre/`** instead of into the Python package at `<build_dir>/bin/python/spectre/support/`. Anything that reads them from the old path needs updating; in-tree, `Schedule.default_submit_script_template` and `Machines.this_machine` both resolve them relative to the running CLI now. A simulation gets a copy of that directory at `<simulation_dir>/share/spectre/`, and its jobs render from that copy. A template supplied with `--submit-script-template` from anywhere else is rendered where it is and is not copied; it can still `{% extends %}` the installed base template, which the Jinja loader finds in the support files.
+**The submit script templates and `Machine.yaml` are configured to `<build_dir>/support/spectre/`** instead of into the Python package at `<build_dir>/bin/python/spectre/support/`. Anything that reads them from the old path needs updating; in-tree, `Schedule.default_submit_script_template` and `Machines.this_machine` both resolve them relative to the running CLI now. A simulation gets a copy of that directory at `<simulation_dir>/support/spectre/`, and its jobs render from that copy. A template supplied with `--submit-script-template` from anywhere else is rendered where it is and is not copied; it can still `{% extends %}` the installed base template, which the Jinja loader finds in the support files.
 
 **A run without a scheduler now uses an existing bin directory.** `--no-schedule` never *creates* one — not even with `--create-bin` — but if the simulation already has one, the run executes the copy in it rather than the build directory's. So running a segment by hand inside a simulation runs the same binary its scheduled jobs do. Previously a direct run ignored the bin directory entirely.
 
@@ -87,7 +89,7 @@ The guard detects the build shape rather than inspecting each executable: it ref
 
 #### Other user-visible effects
 
-- **New directories** `bin/` and `share/spectre/` in the pipeline or segments directory. The job's log header prints the bin directory.
+- **New directories** `bin/` and `support/spectre/` in the pipeline or segments directory. The job's log header prints the bin directory.
 - **New context entries** `bin_dir` and `create_bin` in `SchedulerContext.yaml`. Only `create_bin` — the intent, not a path — is propagated through pipeline `Next` blocks; the location is derived from the pipeline directory, which already flows through `Next`, and is recorded in the context file. Threading a path through input files would be redundant state.
 - **Earlier failure for incomplete builds**: starting a pipeline that will continue into a later step now requires that step's executable to be compiled, because it is copied up front. Previously the pipeline failed at the handoff — after the earlier step had already run.
 - **Docs**: a "Bin directories" section in `docs/Tutorials/Cli.md`.
@@ -141,7 +143,7 @@ The others:
 
 The Bbh pipeline tests pass `--no-create-bin` so they keep testing pipeline wiring without copying the Python package on every invocation; their expected `Next` blocks were updated for the renamed option. **These tests were not executed** — the pybindings they need don't link in the environment this was developed in, for reasons unrelated to this change (below). Their expectations were instead checked by rendering the pipeline templates directly and confirming that `create_bin` reaches the `Next` block as a boolean. **Please make sure CI runs `support.Pipelines.Bbh.*`.**
 
-A test build usually selects no machine, so the unit tests point `running_share_dir` at a stand-in directory. The production path was therefore also checked by hand with a real machine configured (`cmake -D MACHINE=CaltechHpc`): the default submit script template and `Machine.yaml` resolve to `<build_dir>/share/spectre/`, scheduling produces a byte-identical copy at `<simulation_dir>/share/spectre/`, and `SchedulerContext.yaml` records the simulation's copy as the template.
+A test build usually selects no machine, so the unit tests point `running_support_dir` at a stand-in directory. The production path was therefore also checked by hand with a real machine configured (`cmake -D MACHINE=CaltechHpc`): the default submit script template and `Machine.yaml` resolve to `<build_dir>/support/spectre/`, scheduling produces a byte-identical copy at `<simulation_dir>/support/spectre/`, and `SchedulerContext.yaml` records the simulation's copy as the template.
 
 Build-directory independence was checked in the same configuration, outside the test suite and outside the build directory: schedule a run, move the build directory away entirely, and resubmit through the bin directory's CLI.
 
