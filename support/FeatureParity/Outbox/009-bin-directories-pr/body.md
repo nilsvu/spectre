@@ -12,10 +12,10 @@ The bin directory lives in its own module, `support/Python/BinDirectory.py` — 
 
 **What lands in the bin directory** (`create_bin_directory`):
 
-- the executables — including those of later pipeline steps, so the handoff to them doesn't have to reach back into the build directory;
+- the executables — including those of later pipeline steps, so the handoff to them doesn't have to reach back into the build directory. Callers name them: `schedule` takes a `copy_extra_executables` list, and the Bbh pipeline lists the literal names. It deliberately does **not** read them out of the later steps' input file templates, because the executable a step will actually run is the caller's choice — the GPU build substitutes its own — so the template's name would be wrong by design;
 - `spectre` — a verbatim copy of the build directory's CLI. `cmake/SpectrePythonExecutable.sh` reaches the Python package through its own location, so the copy uses the package next to it; everything else on its `PYTHONPATH` stays exactly as configured at build time. That is a two-line change to the wrapper and needs no detection of where it is running. See "One self-locating entry on the `PYTHONPATH`" below;
 - `python/spectre/` — the Python package with its compiled bindings and the configured `Machine.yaml`;
-- the submit script template and its base — now the one copy the scheduler renders from.
+- the submit script template and its base — the one copy the scheduler renders from. The templates follow the bin directory: a run without one renders them where they are and copies nothing.
 
 The bin directory carries no record file: formaline already embeds the source archive and environment in every executable and H5 output.
 
@@ -25,7 +25,7 @@ The bin directory carries no record file: formaline already embeds the source ar
 
 Eccentricity control branches resolutions by scheduling into numbered subdirectories of the simulation (`support/Pipelines/Bbh/EccentricityControl.py:138` passes `pipeline_dir=lev_dir.path`). Deriving the location from the target directory alone would give every Lev its own copy — several times 497 MB for one simulation. #5951 asked for the opposite ("one bin directory for all Ecc iterations, levs, segments"), and settled open point 2(a) quotes it.
 
-So `schedule` does not just derive a location, it *looks one up*: `find_bin_directory` checks the target directory for a `bin`, then the enclosing directories, and the first hit is the simulation's bin directory, reused as is. A new one is created only when nothing encloses the run. A candidate counts only if it contains the copied `spectre` CLI and does not sit in a build directory (no `CMakeCache.txt` next to it), so a build directory's `bin` is never mistaken for a simulation's.
+So `schedule` does not just derive a location, it *looks one up*: `find_bin_directory` starts at the **run directory** — the most specific directory of the run — and works outwards, and the first hit is the simulation's bin directory, reused as is. Starting at the most specific directory means the nearest bin directory wins, so a run that already has one of its own is not silently shadowed by a more distant one. That layout arises when a run scheduled on its own with `--segments-dir` is later made part of a pipeline: the pipeline directory encloses a segments directory that already has a bin directory, and the segments keep using it. A new one is created only when the search finds nothing, and then it is created for the simulation as a whole — in the pipeline directory if there is one, otherwise the segments directory, otherwise the run directory. A candidate counts only if it contains the copied `spectre` CLI and does not sit in a build directory (no `CMakeCache.txt` next to it), so a build directory's `bin` is never mistaken for a simulation's.
 
 The search is bounded **structurally**, not by depth: it ascends out of a directory only while that directory is one the scheduler itself creates — a `Segment` or a `PipelineStep`, matched with the classes in `support/Python/DirectoryStructure.py` rather than re-spelled patterns. The first directory that is neither is the simulation root: it is checked, and the search stops without ever inspecting its parents. A run tree placed below an unrelated simulation therefore cannot pick up that simulation's bin directory — there is a test that plants a decoy one level above a non-conforming directory and asserts it is not found.
 
@@ -42,7 +42,9 @@ A bin directory is sizeable: **497 MB measured** for one simulation in a `Debug`
 
 Scheduler context files written before this change contain a `copy_executable` key. It is ignored, so **existing runs continue to resubmit** — there is a test for this. Their next segment gets a bin directory that keeps the executable **the run was created with**, not whatever is in the build directory now.
 
-**The executable and the submit script templates move** from `<segments_dir>/` into `<segments_dir>/bin/`. Anything that hard-codes those paths needs updating.
+**The executable and the submit script templates move** from `<segments_dir>/` into `<segments_dir>/bin/`. Anything that hard-codes those paths needs updating. With `--no-create-bin` the templates are no longer copied into the segments directory at all — the run renders them where they are, as a plain `--run-dir` run always did. Templates supplied with `--submit-script-template` behave the same way.
+
+**A run without a scheduler now uses an existing bin directory.** `--no-schedule` never *creates* one — not even with `--create-bin` — but if the simulation already has one, the run executes the copy in it rather than the build directory's. So running a segment by hand inside a simulation runs the same binary its scheduled jobs do. Previously a direct run ignored the bin directory entirely.
 
 **Builds configured with `BUILD_SHARED_LIBS=ON` can no longer schedule runs** unless you pass `--no-create-bin`. Creating a bin directory deliberately fails when the build directory holds shared SpECTRE libraries, because its executables load them from there and a copy breaks as soon as the build directory changes (settled open point 6(a) of #7447). Four of the repo's own environment scripts configure exactly that: `support/Environments/urania.sh:53`, `support/Environments/viper.sh:55`, `support/Environments/ocean2.sh:80` and `support/Environments/ocean2_orca1.sh:63`. On Urania, Viper, Ocean2 and Ocean2_orca1 a standard build therefore hits the guard. See "Further comments" for why that is not resolved here.
 
