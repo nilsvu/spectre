@@ -1,6 +1,6 @@
 set(LIBRARY EffectiveSource)
 
-add_library(${LIBRARY} kerr-circular.c)
+add_library(${LIBRARY} kerr-circular-comoving.c)
 
 target_link_libraries(
   ${LIBRARY}

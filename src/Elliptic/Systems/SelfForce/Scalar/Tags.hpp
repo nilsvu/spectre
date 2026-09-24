@@ -62,20 +62,21 @@ struct MMode : db::SimpleTag {
 };
 
 /*!
- * \brief The factor multiplying the angular derivative in the principal part of
+ * \brief The factors multiplying the derivatives in the principal part of
  * the equations.
  *
- * This is the factor $\alpha$ that defines the principal part of the equations
- * and allows to write it in first-order flux form given by
+ * These are the factors $\alpha^i$ that define the principal part of the
+ * equations and allow to write it in first-order flux form given by
  * \begin{equation}
  * -\partial_i F^i + \beta \Psi_m + \gamma_i \partial_i \Psi_m = S_m
  * \end{equation}
  * with the flux
  * \begin{equation}
- * F^i = \{\partial_{r_\star}, \alpha \partial_{\cos\theta}\} \Psi_m
+ * F^i = \alpha^{ij} \partial_j \Psi_m
  * \text{.}
  * \end{equation}
- * This factor is set by the analytic data class (see
+ * In our case, $\alpha^{ij}$ is diagonal and $\alpha^i$ are the diagonal
+ * elements. They are set by the analytic data class (see
  * `ScalarSelfForce::AnalyticData::CircularOrbit`).
  */
 struct Alpha : db::SimpleTag {

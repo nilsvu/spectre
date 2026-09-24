@@ -3,7 +3,8 @@
 
 add_subdirectory(brigand)
 add_subdirectory(EffectiveSource)
-add_subdirectory(GravitationalEffectiveSource)
+# add_subdirectory(GravitationalEffectiveSource)
+add_subdirectory(ComovingEffectiveSource)
 add_subdirectory(SPHEREPACK)
 add_subdirectory(slatec)
 

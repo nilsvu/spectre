@@ -13,6 +13,7 @@ spectre_target_sources(
   CaptureForError.cpp
   FloatingPointExceptions.cpp
   FormatStacktrace.cpp
+  GslErrorHandler.cpp
   SegfaultHandler.cpp
   Strerror.cpp
   StrerrorWrapper.c
@@ -31,6 +32,7 @@ spectre_target_headers(
   ExpectsAndEnsures.hpp
   FloatingPointExceptions.hpp
   FormatStacktrace.hpp
+  GslErrorHandler.hpp
   SegfaultHandler.hpp
   StaticAssert.hpp
   Strerror.hpp

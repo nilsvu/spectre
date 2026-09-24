@@ -188,6 +188,7 @@ LinearSolver:
     PostSmoothingAtBottom: False
     Verbosity: Silent
     OutputVolumeData: False
+    ComplexShift: 0.0
 
   SchwarzSmoother:
     Iterations: 2

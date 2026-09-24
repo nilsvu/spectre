@@ -10,6 +10,7 @@
 #include "DataStructures/DataBox/Prefixes.hpp"
 #include "DataStructures/Variables.hpp"
 #include "Domain/Tags/Faces.hpp"
+#include "Elliptic/Actions/ApplyComplexShift.hpp"
 #include "Elliptic/Actions/InitializeAnalyticSolution.hpp"
 #include "Elliptic/Actions/InitializeFields.hpp"
 #include "Elliptic/Actions/InitializeFixedSources.hpp"
@@ -112,6 +113,8 @@ struct Solver {
   static constexpr bool is_linear =
       std::is_same_v<elliptic::get_sources_computer<system, true>,
                      typename system::sources_computer>;
+  static constexpr bool use_complex_shift =
+      requires { requires Metavariables::use_complex_shift; };
 
   using background_tag =
       elliptic::Tags::Background<elliptic::analytic_data::Background>;
@@ -215,6 +218,14 @@ struct Solver {
       tmpl::conditional_t<Linearized, operator_applied_to_vars_tag,
                           operator_applied_to_fields_tag>>;
 
+  using preconditioner_apply_operator_actions = tmpl::flatten<
+      tmpl::list<typename dg_operator<true>::apply_actions,
+                 tmpl::conditional_t<use_complex_shift,
+                                     elliptic::Actions::ApplyComplexShift<
+                                         vars_tag, operator_applied_to_vars_tag,
+                                         typename multigrid::options_group>,
+                                     tmpl::list<>>>>;
+
   using build_matrix = LinearSolver::Actions::BuildMatrix<
       typename multigrid::smooth_fields_tag,
       typename multigrid::smooth_source_tag, vars_tag,
@@ -223,7 +234,7 @@ struct Solver {
       ::amr::Tags::GridIndex>;
 
   using build_matrix_actions = typename build_matrix::template actions<
-      typename dg_operator<true>::apply_actions>;
+      preconditioner_apply_operator_actions>;
 
   // For labeling the yaml option for RandomizeVariables
   struct RandomizeInitialGuess {};
@@ -275,7 +286,7 @@ struct Solver {
 
   template <typename Label>
   using smooth_actions = typename schwarz_smoother::template solve<
-      typename dg_operator<true>::apply_actions, Label>;
+      preconditioner_apply_operator_actions, Label>;
 
   // These tags are communicated on subdomain overlaps to initialize the
   // subdomain geometry. AMR updates these tags, so we have to communicate them
@@ -305,11 +316,12 @@ struct Solver {
       tmpl::list<
           // Multigrid preconditioning
           typename multigrid::template solve<
-              typename dg_operator<true>::apply_actions,
+              preconditioner_apply_operator_actions,
               // Schwarz smoothing on each multigrid level
               smooth_actions<LinearSolver::multigrid::VcycleDownLabel>,
               smooth_actions<LinearSolver::multigrid::VcycleUpLabel>,
               build_matrix_actions>,
+          typename dg_operator<true>::apply_actions,
           // Support disabling the preconditioner
           ::LinearSolver::Actions::make_identity_if_skipped<
               multigrid, typename dg_operator<true>::apply_actions>>,
