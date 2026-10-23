@@ -117,12 +117,18 @@ struct SpacetimeInterpolator {
    * \param block_order an optional priority order to search for the block
    * containing the target point. Will be updated when the point is found.
    * See `block_logical_coordinates_single_point` for more details.
+   * \param error_on_missing_point whether to raise an error if the target
+   * point is not in any block (e.g. outside the domain or in an excision).
+   * \return `true` if the point was found and `result` was filled, `false`
+   * if the point was not found and `error_on_missing_point` is `false`. In
+   * the latter case `result` is left unchanged.
    */
-  void interpolate_to_point(gsl::not_null<std::vector<double>*> result,
+  bool interpolate_to_point(gsl::not_null<std::vector<double>*> result,
                             const tnsr::I<double, Dim, Frame>& target_point,
                             double time,
                             std::optional<gsl::not_null<std::vector<size_t>*>>
-                                block_order = std::nullopt) const;
+                                block_order = std::nullopt,
+                            bool error_on_missing_point = true) const;
 
  private:
   std::variant<std::vector<std::string>, std::string> volume_files_or_glob_;

@@ -163,12 +163,19 @@ class ModalSpacetimeInterpolator {
    * \param time Time at which to evaluate the interpolant.
    * \param block_order Optional block-ordering hint that speeds up repeated
    *     block searches.
+   * \param error_on_missing_point Whether to raise an error if the target
+   *     point is not in any block (e.g. outside the domain or in an
+   *     excision).
+   * \return `true` if the point was found and `result` was filled, `false`
+   *     if the point was not found and `error_on_missing_point` is `false`. In
+   *     the latter case `result` is left unchanged.
    */
-  void interpolate_to_point(gsl::not_null<std::vector<double>*> result,
+  bool interpolate_to_point(gsl::not_null<std::vector<double>*> result,
                             const tnsr::I<double, Dim, Frame>& target_point,
                             double time,
                             std::optional<gsl::not_null<std::vector<size_t>*>>
-                                block_order = std::nullopt) const;
+                                block_order = std::nullopt,
+                            bool error_on_missing_point = true) const;
 
   /// Tensor components in the order returned by `interpolate_to_point()`
   const std::vector<std::string>& tensor_components() const {

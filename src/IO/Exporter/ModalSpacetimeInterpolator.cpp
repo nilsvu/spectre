@@ -451,11 +451,11 @@ ModalSpacetimeInterpolator<Dim, Frame>::ModalSpacetimeInterpolator(
 }
 
 template <size_t Dim, typename Frame>
-void ModalSpacetimeInterpolator<Dim, Frame>::interpolate_to_point(
+bool ModalSpacetimeInterpolator<Dim, Frame>::interpolate_to_point(
     const gsl::not_null<std::vector<double>*> result,
     const tnsr::I<double, Dim, Frame>& target_point, const double time,
-    const std::optional<gsl::not_null<std::vector<size_t>*>> block_order)
-    const {
+    const std::optional<gsl::not_null<std::vector<size_t>*>> block_order,
+    const bool error_on_missing_point) const {
   if (time < time_bounds_[0] or time > time_bounds_[1]) {
     ERROR_NO_TRACE("Requested time "
                    << time << " lies outside the available data interval "
@@ -464,7 +464,10 @@ void ModalSpacetimeInterpolator<Dim, Frame>::interpolate_to_point(
   const auto block_logical_coords = block_logical_coordinates_single_point(
       target_point, domain_, time, functions_of_time_, block_order);
   if (not block_logical_coords.has_value()) {
-    ERROR_NO_TRACE("Point is not in any block:\n" << target_point);
+    if (error_on_missing_point) {
+      ERROR_NO_TRACE("Point is not in any block:\n" << target_point);
+    }
+    return false;
   }
   const auto element_coords = element_logical_coordinates(
       block_logical_coords.value(), element_search_trees_);
@@ -491,6 +494,7 @@ void ModalSpacetimeInterpolator<Dim, Frame>::interpolate_to_point(
     (*result)[component_index] = Spectral::evaluate_legendre_series<Dim>(
         modal_values, element_data.mesh, logical_coords);
   }
+  return true;
 }
 
 // Explicit instantiations

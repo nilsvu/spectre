@@ -750,19 +750,23 @@ void PointwiseInterpolator<Dim, Frame>::interpolate_to_points(
 }
 
 template <size_t Dim, typename Frame>
-void PointwiseInterpolator<Dim, Frame>::interpolate_to_point(
+bool PointwiseInterpolator<Dim, Frame>::interpolate_to_point(
     const gsl::not_null<std::vector<double>*> result,
     const tnsr::I<double, Dim, Frame>& target_point,
-    const std::optional<gsl::not_null<std::vector<size_t>*>> block_order)
-    const {
+    const std::optional<gsl::not_null<std::vector<size_t>*>> block_order,
+    const bool error_on_missing_point) const {
   ASSERT(not tensor_data_.empty(),
          "PointwiseInterpolator has not been initialized with tensor data.");
   const auto block_logical_coords = block_logical_coordinates_single_point(
       target_point, domain_, time_, functions_of_time_, block_order);
   if (not block_logical_coords.has_value()) {
-    ERROR("Point is not in any block:\n" << target_point);
+    if (error_on_missing_point) {
+      ERROR("Point is not in any block:\n" << target_point);
+    }
+    return false;
   }
   interpolate_to_point(result, block_logical_coords.value());
+  return true;
 }
 
 template <size_t Dim, typename Frame>

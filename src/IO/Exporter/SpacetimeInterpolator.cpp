@@ -237,11 +237,11 @@ void SpacetimeInterpolator<Dim, Frame>::load_time_bounds(
 }
 
 template <size_t Dim, typename Frame>
-void SpacetimeInterpolator<Dim, Frame>::interpolate_to_point(
+bool SpacetimeInterpolator<Dim, Frame>::interpolate_to_point(
     const gsl::not_null<std::vector<double>*> result,
     const tnsr::I<double, Dim, Frame>& target_point, const double time,
-    const std::optional<gsl::not_null<std::vector<size_t>*>> block_order)
-    const {
+    const std::optional<gsl::not_null<std::vector<size_t>*>> block_order,
+    const bool error_on_missing_point) const {
   // Lock to ensure that the `interpolators_` vector is not being modified while
   // we access it. Multiple threads can still read the data concurrently even
   // while loeading new data, just the short amount of time when the vector is
@@ -271,7 +271,10 @@ void SpacetimeInterpolator<Dim, Frame>::interpolate_to_point(
       target_point, any_interpolator.domain(), time, functions_of_time_,
       block_order);
   if (not block_logical_coords.has_value()) {
-    ERROR("Point is not in any block:\n" << target_point);
+    if (error_on_missing_point) {
+      ERROR("Point is not in any block:\n" << target_point);
+    }
+    return false;
   }
   // Interpolate to the grid-frame target point in each time slice
   std::array<std::vector<double>, time_interpolation_order_ + 1> data{};
@@ -299,6 +302,7 @@ void SpacetimeInterpolator<Dim, Frame>::interpolate_to_point(
         make_not_null(&(*result)[j]), make_not_null(&interpolation_error), time,
         values_span, times_span);
   }
+  return true;
 }
 
 // Generate instantiations

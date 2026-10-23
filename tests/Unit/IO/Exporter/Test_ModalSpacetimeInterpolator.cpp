@@ -239,6 +239,10 @@ void test_interpolation_and_ownership() {
           make_not_null(&result),
           tnsr::I<double, dim, Frame::Inertial>{{100.0, 100.0}}, 1.0),
       Catch::Matchers::ContainsSubstring("Point is not in any block"));
+  CHECK_FALSE(interpolator.interpolate_to_point(
+      make_not_null(&result),
+      tnsr::I<double, dim, Frame::Inertial>{{100.0, 100.0}}, 1.0, std::nullopt,
+      false));
 
   const std::vector<std::string> filenames{filename_1, filename_2};
   CHECK_THROWS_WITH(

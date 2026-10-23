@@ -101,10 +101,24 @@ void test_time_interpolation(
   for (const double time : {tmin, tmin + 0.1, tmin + 1.0,
                             tmin + 0.5 * (tmax - tmin), tmax - 0.1, tmax}) {
     CAPTURE(time);
-    interpolator.interpolate_to_point(
+    CHECK(interpolator.interpolate_to_point(
         make_not_null(&interpolated_data),
-        tnsr::I<double, 3>{{time + 1.0, 0.0, 0.0}}, time);
+        tnsr::I<double, 3>{{time + 1.0, 0.0, 0.0}}, time));
     CHECK(interpolated_data[0] == approx(1.0));
+    // Points in the excision and outside the domain
+    for (const double x : {time, time + 10.0}) {
+      CAPTURE(x);
+      const tnsr::I<double, 3> missing_point{{x, 0.0, 0.0}};
+      CHECK_THROWS_WITH(
+          interpolator.interpolate_to_point(make_not_null(&interpolated_data),
+                                            missing_point, time),
+          Catch::Matchers::ContainsSubstring("Point is not in any block"));
+      CHECK_FALSE(interpolator.interpolate_to_point(
+          make_not_null(&interpolated_data), missing_point, time, std::nullopt,
+          false));
+      // Result is left unchanged
+      CHECK(interpolated_data[0] == approx(1.0));
+    }
   }
 #ifdef SPECTRE_DEBUG
   CHECK_THROWS_WITH(
