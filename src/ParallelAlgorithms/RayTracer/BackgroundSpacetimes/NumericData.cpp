@@ -64,17 +64,25 @@ std::array<double, 2> NumericData::time_bounds() const {
   }
 }
 
-tuples::tagged_tuple_from_typelist<typename NumericData::tags>
+std::optional<tuples::tagged_tuple_from_typelist<typename NumericData::tags>>
 NumericData::variables(const tnsr::I<DataType, Dim, Frame>& x, const double t,
                        const std::optional<gsl::not_null<std::vector<size_t>*>>
                            block_order) const {
+  const auto [t_min, t_max] = time_bounds();
+  if (t < t_min or t > t_max) {
+    return std::nullopt;
+  }
   std::vector<double> result{};
-  if (std::holds_alternative<PointwiseInterpolator>(interpolator_)) {
-    std::get<PointwiseInterpolator>(interpolator_)
-        .interpolate_to_point(make_not_null(&result), x, block_order);
-  } else {
-    std::get<SpacetimeInterpolator>(interpolator_)
-        .interpolate_to_point(make_not_null(&result), x, t, block_order);
+  const bool found =
+      std::holds_alternative<PointwiseInterpolator>(interpolator_)
+          ? std::get<PointwiseInterpolator>(interpolator_)
+                .interpolate_to_point(make_not_null(&result), x, block_order,
+                                      false)
+          : std::get<SpacetimeInterpolator>(interpolator_)
+                .interpolate_to_point(make_not_null(&result), x, t, block_order,
+                                      false);
+  if (not found) {
+    return std::nullopt;
   }
   return spectre::Exporter::make_tagged_tuple<tags>(std::move(result));
 }

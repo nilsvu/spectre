@@ -184,7 +184,7 @@ void test_curved(const Camera::Projection::type& projection) {
     CHECK(reinitialized_camera == camera);
   }
   const auto background_vars =
-      background_spacetime.variables(camera.position(), camera.time());
+      background_spacetime.variables(camera.position(), camera.time()).value();
   const auto& lapse = get<gr::Tags::Lapse<double>>(background_vars);
   const auto& shift = get<gr::Tags::Shift<double, 3>>(background_vars);
   const auto& inv_spatial_metric =

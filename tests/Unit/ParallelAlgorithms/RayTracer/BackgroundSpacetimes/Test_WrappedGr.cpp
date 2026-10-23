@@ -48,7 +48,7 @@ void test_wrapped_gr(const std::string& options_string) {
   {
     INFO("Variables");
     const tnsr::I<double, 3> x{{3.0, 4.0, 5.0}};
-    const auto vars = background_spacetime.variables(x, 0.0);
+    const auto vars = background_spacetime.variables(x, 0.0).value();
     const auto solution_vars =
         background_spacetime.wrapped_solution().variables(
             x, 0.0,

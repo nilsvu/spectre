@@ -121,7 +121,7 @@ void test_numeric_data(const std::string& options_string) {
     INFO("Variables");
     const tnsr::I<double, 3> x{{1.0, 2.0, 3.0}};
     background_spacetime.initialize({0.0, 1.0});
-    const auto vars = background_spacetime.variables(x, 0.0);
+    const auto vars = background_spacetime.variables(x, 0.0).value();
     const gr::Solutions::KerrSchild solution{/* mass */ 1.,
                                              /* spin */ {{0., 0., 0.}},
                                              /* center */ {{0., 0., 0.}}};
@@ -139,6 +139,16 @@ void test_numeric_data(const std::string& options_string) {
       CHECK_ITERABLE_CUSTOM_APPROX(get<Tag>(vars), get<Tag>(expected_vars),
                                    custom_approx);
     });
+  }
+  {
+    INFO("Points where no data is available");
+    // Excision and outside the domain
+    CHECK_FALSE(
+        background_spacetime.variables(tnsr::I<double, 3>{{0.0, 0.0, 0.0}}, 0.0)
+            .has_value());
+    CHECK_FALSE(background_spacetime
+                    .variables(tnsr::I<double, 3>{{10.0, 0.0, 0.0}}, 0.0)
+                    .has_value());
   }
 }
 

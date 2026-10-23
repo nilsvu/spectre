@@ -22,6 +22,7 @@
 #include "ParallelAlgorithms/RayTracer/BackgroundSpacetimes/BackgroundSpacetime.hpp"
 #include "ParallelAlgorithms/RayTracer/RaySources/RaySource.hpp"
 #include "PointwiseFunctions/GeneralRelativity/InverseSpacetimeMetric.hpp"
+#include "Utilities/ErrorHandling/Error.hpp"
 #include "Utilities/GetOutput.hpp"
 #include "Utilities/Overloader.hpp"
 #include "Utilities/Serialization/PupStlCpp17.hpp"
@@ -87,7 +88,15 @@ std::array<double, 2> Camera::time_bounds(const size_t frame) const {
 void Camera::initialize(const size_t frame,
                         const BackgroundSpacetime& background_spacetime) {
   time_ = start_time_ + static_cast<double>(frame) * interval_;
-  const auto background_vars = background_spacetime.variables(position_, time_);
+  const auto background_vars_or_nullopt =
+      background_spacetime.variables(position_, time_);
+  if (not background_vars_or_nullopt.has_value()) {
+    ERROR_NO_TRACE(
+        "The background spacetime is not available at the camera "
+        "position "
+        << position_ << " at time " << time_ << ".");
+  }
+  const auto& background_vars = background_vars_or_nullopt.value();
   lapse_ = get(get<gr::Tags::Lapse<double>>(background_vars));
   const auto inv_spacetime_metric = gr::inverse_spacetime_metric(
       get<gr::Tags::Lapse<double>>(background_vars),

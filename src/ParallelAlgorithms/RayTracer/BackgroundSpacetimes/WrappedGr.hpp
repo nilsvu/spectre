@@ -68,7 +68,7 @@ class WrappedGr : public BackgroundSpacetime {
   WRAPPED_PUPable_decl_template(WrappedGr);
   /// \endcond
 
-  tuples::tagged_tuple_from_typelist<tags> variables(
+  std::optional<tuples::tagged_tuple_from_typelist<tags>> variables(
       const tnsr::I<DataType, Dim, Frame>& x, double t,
       const std::optional<gsl::not_null<std::vector<size_t>*>> /*block_order*/ =
           std::nullopt) const override {

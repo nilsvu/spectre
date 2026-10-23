@@ -94,7 +94,13 @@ class BackgroundSpacetime : public PUP::able {
                           gr::Tags::ExtrinsicCurvature<DataType, Dim, Frame>>;
 
   /*!
-   * \brief Returns all spacetime variables at a given point in space and time.
+   * \brief Returns all spacetime variables at a given point in space and time,
+   * or `std::nullopt` if the background spacetime is not available at that
+   * point.
+   *
+   * The background spacetime may not be available at a point, e.g., because it
+   * is outside the domain of numeric data or inside an excision region. Rays
+   * that reach such a point stop there.
    *
    * This function must be thread-safe.
    *
@@ -106,7 +112,7 @@ class BackgroundSpacetime : public PUP::able {
    * initially set to the default order. See `block_logical_coordinates` for
    * more details.
    */
-  virtual tuples::tagged_tuple_from_typelist<tags> variables(
+  virtual std::optional<tuples::tagged_tuple_from_typelist<tags>> variables(
       const tnsr::I<DataType, Dim, Frame>& x, double t,
       std::optional<gsl::not_null<std::vector<size_t>*>> block_order =
           std::nullopt) const = 0;

@@ -86,7 +86,10 @@ class NumericData : public BackgroundSpacetime {
 
   std::array<double, 2> time_bounds() const override;
 
-  tuples::tagged_tuple_from_typelist<tags> variables(
+  /// Returns `std::nullopt` if the point is not in the domain of the numeric
+  /// data (e.g. outside the outer boundary or inside an excision region), or if
+  /// the time is outside the loaded `time_bounds()`.
+  std::optional<tuples::tagged_tuple_from_typelist<tags>> variables(
       const tnsr::I<DataType, Dim, Frame>& x, double t,
       std::optional<gsl::not_null<std::vector<size_t>*>> block_order =
           std::nullopt) const override;
