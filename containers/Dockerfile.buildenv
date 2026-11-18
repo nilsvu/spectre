@@ -658,6 +658,11 @@ COPY . spectre/
 # libraries (e.g. Time) include these headers transitively via GlobalCache.hpp
 # without an explicit dependency on the generating target, so at `-j1` the
 # executable compile can otherwise race ahead of header generation and fail.
+# The `BundledExporter` shared library gets the static libraries linked in, so
+# we compile everything as position-independent code. The shared linker flags
+# hide the symbols of the static libraries so they can't clash with the
+# libraries of the program that loads the exporter (e.g. its own HDF5), and
+# strip the library to reduce its size.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       ARCH_ARGS="-D OVERRIDE_ARCH=armv8.2-a \
         -D CMAKE_CXX_FLAGS=-Wno-psabi -D CMAKE_C_FLAGS=-Wno-psabi"; \
@@ -685,9 +690,11 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     -D USE_GIT_HOOKS=OFF \
     $ARCH_ARGS \
     -D CMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" \
+    -D CMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -D CMAKE_SHARED_LINKER_FLAGS="-static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -s" \
     -D BUILD_DOCS=OFF \
     -D USE_CCACHE=OFF \
     .. \
     && make ${PARALLEL_MAKE_ARG} module_All \
     && make -j1 CharacteristicExtract PreprocessCceWorldtube \
-    WriteCceWorldtubeCoordsToFile
+    WriteCceWorldtubeCoordsToFile BundledExporter
