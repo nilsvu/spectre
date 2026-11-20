@@ -589,19 +589,35 @@ RUN if [ "$TARGETARCH" = "$BUILDARCH" ] ; then \
 
 RUN pip3 --no-cache-dir install jupyterlab
 
-# Used for compiling the static executables and libraries during CI so that we
-# can release statically linked versions of our executables and libraries
-# for other groups to use.
+# Used for compiling the static executables, libraries, and Python wheels during
+# CI so that we can release them for other groups to use (see
+# `.github/workflows/DeployStaticExecutables.yaml`).
 #
 # We build in the manylinux_2_28 image (AlmaLinux 8), which is the standard
 # environment for building portable Linux binaries such as Python wheels. Its
 # compiler (gcc-toolset) produces binaries that need only glibc 2.28 and the
-# system libstdc++ of RHEL 8, so they run on most Linux distributions. We link
-# all other dependencies statically. Where the AlmaLinux packages don't provide
-# static libraries (or are too old) we build them from source, and SpECTRE's
-# build system fetches the remaining dependencies (SPECTRE_FETCH_MISSING_DEPS).
-FROM quay.io/pypa/manylinux_2_28:2026.11.14-1 AS deploy_static_execs_and_libs
-ARG TARGETARCH
+# system libstdc++ of RHEL 8, so they run on most Linux distributions. Where the
+# AlmaLinux packages don't provide the dependencies we need (or are too old) we
+# build them from source, and SpECTRE's build system fetches the remaining
+# dependencies (SPECTRE_FETCH_MISSING_DEPS).
+#
+# Architecture-specific settings: OVERRIDE_ARCH=haswell (which emits
+# `-march=haswell -mno-avx512f`) is x86-only. On arm64 we target armv8.2-a since
+# this is what GitHub runners guarantee and also will support Apple M1
+# (ARMv8.4-A), and NVIDIA Grace (ARMv9.0-A) chips. On arm64 we also pass
+# `-Wno-psabi` to silence GCC's verbose -Wpsabi notes about the std::pair
+# argument-passing ABI change introduced in GCC 10.1 (harmless here since the
+# whole build uses one GCC, but they flood the log).
+FROM quay.io/pypa/manylinux_2_28:2026.11.14-1 AS manylinux-amd64
+ENV CHARM_ARCH=x86_64
+ENV ARCH_CMAKE_ARGS="-D OVERRIDE_ARCH=haswell"
+
+FROM quay.io/pypa/manylinux_2_28:2026.11.14-1 AS manylinux-arm64
+ENV CHARM_ARCH=arm8
+ENV ARCH_CMAKE_ARGS="-D OVERRIDE_ARCH=armv8.2-a \
+    -D CMAKE_CXX_FLAGS=-Wno-psabi -D CMAKE_C_FLAGS=-Wno-psabi"
+
+FROM manylinux-${TARGETARCH} AS manylinux
 ARG PARALLEL_MAKE_ARG=-j4
 
 RUN dnf install -y dnf-plugins-core \
@@ -611,48 +627,57 @@ RUN dnf install -y dnf-plugins-core \
 
 WORKDIR /sxscollaboration
 
+# Build both shared and static libraries, since the static executables and the
+# Python wheels need them, respectively.
 # - Boost
 RUN curl -fsSL https://archives.boost.io/release/1.83.0/source/boost_1_83_0.tar.gz \
         | tar xz \
     && cd boost_1_83_0 \
     && ./bootstrap.sh --with-libraries=program_options --prefix=/usr/local \
-    && ./b2 ${PARALLEL_MAKE_ARG} cxxstd=20 variant=release link=static \
+    && ./b2 ${PARALLEL_MAKE_ARG} cxxstd=20 variant=release link=static,shared \
         cxxflags=-fPIC install \
     && cd .. && rm -rf boost_1_83_0
 # - GSL
 RUN curl -fsSL https://ftp.gnu.org/gnu/gsl/gsl-2.8.tar.gz | tar xz \
     && cd gsl-2.8 \
-    && ./configure --prefix=/usr/local --disable-shared --with-pic \
+    && ./configure --prefix=/usr/local --with-pic \
     && make ${PARALLEL_MAKE_ARG} && make install \
     && cd .. && rm -rf gsl-2.8
 # - HDF5
 RUN curl -fsSL https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.6/hdf5-1.14.6.tar.gz \
         | tar xz \
     && cd hdf5-1.14.6 \
-    && ./configure --prefix=/usr/local --disable-shared --with-pic \
-        --with-zlib --disable-tests --disable-tools \
+    && ./configure --prefix=/usr/local --with-pic --with-zlib \
+        --disable-tests --disable-tools \
     && make ${PARALLEL_MAKE_ARG} && make install \
     && cd .. && rm -rf hdf5-1.14.6
 # - Charm++ (see the `dev` stage for details)
-RUN CHARM_ARCH=$(uname -m | sed 's/aarch64/arm8/') \
-    && git clone --single-branch --branch v8.0.0 --depth 1 \
+RUN git clone --single-branch --branch v8.0.0 --depth 1 \
         https://github.com/UIUC-PPL/charm charm \
     && cd charm \
     && sed -i 's/cmake_minimum_required(VERSION 3.4...3.5)/cmake_minimum_required(VERSION 3.5)/' CMakeLists.txt \
     && ./build charm++ multicore-linux-${CHARM_ARCH} gcc \
         ${PARALLEL_MAKE_ARG} -O2 --build-shared --with-production \
         --disable-tls
+ENV CHARM_ROOT=/sxscollaboration/charm/multicore-linux-${CHARM_ARCH}-gcc
+
+# CMake options for the release builds below
+ENV RELEASE_CMAKE_ARGS="-D CMAKE_BUILD_TYPE=Release \
+    -D DEBUG_SYMBOLS=OFF \
+    -D BUILD_TESTING=OFF \
+    -D BOOTSTRAP_PY_DEPS=OFF \
+    -D BOOTSTRAP_PY_DEV_DEPS=OFF \
+    -D MEMORY_ALLOCATOR=SYSTEM \
+    -D ENABLE_PARAVIEW=OFF \
+    -D SPECTRE_FETCH_MISSING_DEPS=ON \
+    -D USE_GIT_HOOKS=OFF \
+    -D BUILD_DOCS=OFF \
+    -D USE_CCACHE=OFF \
+    ${ARCH_CMAKE_ARGS}"
 
 COPY . spectre/
 
-# Build SpECTRE with static libraries.
-# Architecture-specific settings: OVERRIDE_ARCH=haswell (which emits
-# `-march=haswell -mno-avx512f`) is x86-only. On arm64 we target armv8.2-a since
-# this is what GitHub runners guarantee and also will support Apple M1
-# (ARMv8.4-A), and NVIDIA Grace (ARMv9.0-A) chips. On arm64 we also pass
-# `-Wno-psabi` to silence GCC's verbose -Wpsabi notes about the std::pair
-# argument-passing ABI change introduced in GCC 10.1 (harmless here since the
-# whole build uses one GCC, but they flood the log).
+# Build static executables and libraries.
 # We build `module_All` first so every Charm++ interface header (`*.decl.h`/
 # `*.def.h`) is generated before the serial (`-j1`) executable compile. Some
 # libraries (e.g. Time) include these headers transitively via GlobalCache.hpp
@@ -663,38 +688,49 @@ COPY . spectre/
 # hide the symbols of the static libraries so they can't clash with the
 # libraries of the program that loads the exporter (e.g. its own HDF5), and
 # strip the library to reduce its size.
-RUN if [ "$TARGETARCH" = "arm64" ]; then \
-      ARCH_ARGS="-D OVERRIDE_ARCH=armv8.2-a \
-        -D CMAKE_CXX_FLAGS=-Wno-psabi -D CMAKE_C_FLAGS=-Wno-psabi"; \
-    else \
-      ARCH_ARGS="-D OVERRIDE_ARCH=haswell"; \
-    fi \
-    && mkdir spectre/build && cd spectre/build \
-    && cmake \
-    -D CMAKE_BUILD_TYPE=Release \
-    -D DEBUG_SYMBOLS=OFF \
-    -D BUILD_TESTING=OFF \
+FROM manylinux AS deploy_static_execs_and_libs
+ARG PARALLEL_MAKE_ARG=-j4
+RUN mkdir spectre/build && cd spectre/build \
+    && cmake ${RELEASE_CMAKE_ARGS} \
     -D BUILD_PYTHON_BINDINGS=OFF \
-    -D BOOTSTRAP_PY_DEPS=OFF \
-    -D BOOTSTRAP_PY_DEV_DEPS=OFF \
-    -D MEMORY_ALLOCATOR=SYSTEM \
     -D BUILD_SHARED_LIBS=OFF \
-    -D ENABLE_PARAVIEW=OFF \
-    -D CHARM_ROOT=$(echo /sxscollaboration/charm/multicore-linux-*-gcc) \
-    -D SPECTRE_FETCH_MISSING_DEPS=ON \
     -D Boost_USE_STATIC_LIBS=ON \
     -D BLA_STATIC=ON \
     -D GSL_STATIC=ON \
     -D HDF5_USE_STATIC_LIBRARIES=ON \
     -D SPECTRE_Fortran_STATIC_LIBS=ON \
-    -D USE_GIT_HOOKS=OFF \
-    $ARCH_ARGS \
     -D CMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" \
     -D CMAKE_POSITION_INDEPENDENT_CODE=ON \
     -D CMAKE_SHARED_LINKER_FLAGS="-static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -s" \
-    -D BUILD_DOCS=OFF \
-    -D USE_CCACHE=OFF \
     .. \
     && make ${PARALLEL_MAKE_ARG} module_All \
     && make -j1 CharacteristicExtract PreprocessCceWorldtube \
     WriteCceWorldtubeCoordsToFile BundledExporter
+
+# Build Python wheels with the Python bindings and the CLI, one for each
+# Python version. We build SpECTRE with shared libraries, and `auditwheel`
+# bundles them and all other dependencies into the wheels. The Python modules
+# don't have an ABI suffix, so `pip wheel` creates a wheel that claims to work
+# with any Python version, and we retag it for the Python version we built it
+# with. When switching Python versions we only reconfigure, so only the Python
+# modules get rebuilt.
+FROM manylinux AS deploy_python_wheels
+ARG PARALLEL_MAKE_ARG=-j4
+ARG PYTHON_VERSIONS="cp310 cp311 cp312 cp313 cp314"
+RUN mkdir spectre/build && cd spectre/build \
+    && for PY in ${PYTHON_VERSIONS}; do \
+      PYTHON=/opt/python/${PY}-${PY}/bin/python \
+      && ${PYTHON} -m pip install pybind11 wheel \
+      && cmake ${RELEASE_CMAKE_ARGS} \
+      -U "*Python*" -U "*pybind11*" -U "PYBIND11*" \
+      -D Python_EXECUTABLE=${PYTHON} \
+      -D BUILD_PYTHON_BINDINGS=ON \
+      -D BUILD_SHARED_LIBS=ON \
+      .. \
+      && make ${PARALLEL_MAKE_ARG} cli \
+      && ${PYTHON} -m pip wheel --no-deps -w dist bin/python \
+      && ${PYTHON} -m wheel tags --remove --python-tag ${PY} --abi-tag ${PY} \
+        --platform-tag linux_$(uname -m) dist/*.whl \
+      && auditwheel repair -w wheelhouse dist/*.whl \
+      && rm -r dist || exit 1; \
+    done

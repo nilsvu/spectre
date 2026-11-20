@@ -174,3 +174,67 @@ jobs:
           files: |
             CceExecutables-${{ matrix.asset }}.tar.xz
             SpectreExporter-${{ matrix.asset }}.tar.xz
+
+  deploy_python_wheels:
+    name: Deploy Python wheels (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            asset: x86-64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            asset: arm64
+    env:
+      RELEASE_TAG_NAME: ${{ inputs.tag_name || github.event.release.tag_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Build Python wheels
+        uses: docker/build-push-action@v7
+        with:
+          push: false
+          context: .
+          file: "./containers/Dockerfile.buildenv"
+          target: deploy_python_wheels
+          tags: sxs-collaboration/spectre:deploy_python_wheels
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          build-args: |
+            PARALLEL_MAKE_ARG=-j4
+      - name: Copy Python wheels from the container
+        run: |
+          docker run --name python-wheels \
+          sxs-collaboration/spectre:deploy_python_wheels
+          docker cp \
+          python-wheels:/sxscollaboration/spectre/build/wheelhouse ./
+      # The runner has no SpECTRE dependencies installed, so this also checks
+      # that the wheel is self-contained
+      - name: Test Python wheel outside of container
+        run: |
+          python3 -m venv venv && . venv/bin/activate
+          PY_TAG=$(python -c \
+          'import sys; print(f"cp{sys.version_info[0]}{sys.version_info[1]}")')
+          pip install ./wheelhouse/spectre-*-${PY_TAG}-*.whl
+          spectre interpolate-to-points \
+          ./tests/Unit/Visualization/Python/VolTestData0.h5 \
+          -d element_data --step 0 -y Psi -p 0,0,0 | tee result.txt
+          grep -- -0.0705980 result.txt
+      - name: Upload as workflow artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-wheels-${{ matrix.asset }}
+          if-no-files-found: error
+          path: wheelhouse/*.whl
+      - name: Upload to release
+        if: env.RELEASE_TAG_NAME != ''
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.RELEASE_TAG_NAME }}
+          fail_on_unmatched_files: true
+          files: wheelhouse/*.whl

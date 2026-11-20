@@ -21,6 +21,23 @@ features:
   smooth (but constraint-violating) data for moving-puncture codes.
 - Points outside the domain are filled with NaN, unless you request an error.
 
+## Installing the Python package
+
+The command line and Python interfaces below are part of SpECTRE's Python
+package. Every SpECTRE
+[release](https://github.com/sxs-collaboration/spectre/releases) includes it as
+Python wheels for Linux (x86-64 and arm64), so you don't need to compile
+SpECTRE. Download the `spectre-*.whl` asset for your Python version (e.g.
+`cp312` for Python 3.12) and architecture, and install it with `pip` (which
+needs `git` to install one of the dependencies):
+
+```sh
+pip install spectre-*-cp312-cp312-manylinux_*_x86_64.whl
+```
+
+Alternatively, compile the Python bindings yourself (see
+\ref spectre_using_python).
+
 ## Command line
 
 The `spectre interpolate-to-points` command interpolates to points listed on the
