@@ -672,7 +672,17 @@ RUN apt-get update \
 
 COPY . spectre/
 
-RUN mkdir spectre/build && cd spectre/build \
+# Target a portable baseline instead of the default `-march=native`, which
+# would tune for the CI runner's CPU. In particular, the arm64 runners support
+# SVE, which Apple Silicon does not, so a native build crashes with "Illegal
+# instruction" when the image runs on a Mac. See `deploy_static_execs_and_libs`
+# for the choice of architectures.
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        SPECTRE_ARCH=armv8.2-a; \
+    else \
+        SPECTRE_ARCH=haswell; \
+    fi \
+    && mkdir spectre/build && cd spectre/build \
     && cmake \
     -D CMAKE_C_COMPILER=clang \
     -D CMAKE_CXX_COMPILER=clang++ \
@@ -681,6 +691,7 @@ RUN mkdir spectre/build && cd spectre/build \
     -D DEBUG_SYMBOLS=OFF \
     -D BUILD_PYTHON_BINDINGS=ON \
     -D MEMORY_ALLOCATOR=SYSTEM \
+    -D OVERRIDE_ARCH=${SPECTRE_ARCH} \
     ..
 
 # Skip compiling the executables if we are emulating the target architecture
