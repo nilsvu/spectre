@@ -4,8 +4,11 @@
 option(BUILD_PYTHON_BINDINGS "Build the python bindings for SpECTRE" ON)
 
 if(BUILD_PYTHON_BINDINGS)
-  # Make sure to find Python first so it's consistent with pybind11
-  find_package(Python REQUIRED COMPONENTS Interpreter Development)
+  # Make sure to find Python first so it's consistent with pybind11. Python
+  # modules only need the `Development.Module` component, not the Python
+  # library (`Development.Embed`), which isn't available in all environments
+  # (e.g. manylinux).
+  find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 
   # Try to find the pybind11-config tool to find pybind11's CMake config files
   find_program(PYBIND11_CONFIG_TOOL pybind11-config)
