@@ -243,6 +243,7 @@ The following dependencies will be fetched automatically if you set
   automatically.
   <details>
   \include support/Python/requirements.txt
+  \include support/Python/bbh_requirements.txt
   </details>
 
 #### Optional:

@@ -193,10 +193,11 @@ RUN apt-get update -y \
 # on-demand.
 # - Install h5py explicitly from binary so that cross compilation is quicker.
 COPY support/Python/requirements.txt requirements.txt
+COPY support/Python/bbh_requirements.txt bbh_requirements.txt
 COPY support/Python/dev_requirements.txt dev_requirements.txt
 RUN python -m pip --no-cache-dir install --only-binary=h5py \
         -r requirements.txt -r dev_requirements.txt \
-    && rm requirements.txt dev_requirements.txt
+    && rm requirements.txt bbh_requirements.txt dev_requirements.txt
 
 # Enable bash-completion by installing it and then adding it to the .bashrc file
 RUN apt-get update -y \

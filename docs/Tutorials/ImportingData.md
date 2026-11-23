@@ -26,14 +26,21 @@ features:
 The command line and Python interfaces below are part of SpECTRE's Python
 package. Every SpECTRE
 [release](https://github.com/sxs-collaboration/spectre/releases) includes it as
-Python wheels for Linux (x86-64 and arm64), so you don't need to compile
-SpECTRE. Download the `spectre-*.whl` asset for your Python version (e.g.
-`cp312` for Python 3.12) and architecture, and install it with `pip` (which
-needs `git` to install one of the dependencies):
+Python wheels for Linux (x86-64 and arm64, glibc 2.28 or later), so you don't
+need to compile SpECTRE. Install the release you want into a
+[Python venv](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/#creating-a-virtual-environment),
+and `pip` picks the wheel for your Python version and architecture from the
+release:
 
 ```sh
-pip install spectre-*-cp312-cp312-manylinux_*_x86_64.whl
+VERSION=2026.11.17
+pip install "spectre==$VERSION" --find-links \
+  https://github.com/sxs-collaboration/spectre/releases/expanded_assets/v$VERSION
 ```
+
+Specify the version, because the `spectre` package on PyPI is unrelated. Add
+the `bbh` extra (`"spectre[bbh]==$VERSION"`) to also install the dependencies
+of the BBH pipeline, which needs `git`.
 
 Alternatively, compile the Python bindings yourself (see
 \ref spectre_using_python).

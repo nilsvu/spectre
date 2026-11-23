@@ -1,0 +1,10 @@
+# Distributed under the MIT License.
+# See LICENSE.txt for details.
+
+# Python packages needed for the BBH pipeline (`spectre bbh`) and eccentricity
+# control. They are included in `requirements.txt`. The Python package lists
+# them as the optional `bbh` extra, i.e., install them with
+# `pip install spectre[bbh]`.
+
+# SimulationSupport: shared routines for SpEC and SpECTRE
+SimulationSupport @ git+https://github.com/sxs-collaboration/SimulationSupport.git@0b73ea057a6a8915e57cfc37a7c8cb0630a834ad

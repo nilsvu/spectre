@@ -90,19 +90,20 @@ if (ENABLE_PYTHON)
     FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ
       GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
-  # Write configuration files for installing the Python modules
-  file(STRINGS
-    ${CMAKE_SOURCE_DIR}/support/Python/requirements.txt
-    SPECTRE_PY_DEPS)
-  file(STRINGS
-    ${CMAKE_SOURCE_DIR}/support/Python/dev_requirements.txt
-    SPECTRE_PY_DEV_DEPS)
-  list(FILTER SPECTRE_PY_DEPS EXCLUDE REGEX "^#")
-  list(FILTER SPECTRE_PY_DEV_DEPS EXCLUDE REGEX "^#")
-  list(REMOVE_ITEM SPECTRE_PY_DEPS "")
-  list(REMOVE_ITEM SPECTRE_PY_DEV_DEPS "")
-  list(JOIN SPECTRE_PY_DEPS "\n    " SPECTRE_PY_DEPS_OUTPUT)
-  list(JOIN SPECTRE_PY_DEV_DEPS "\n    " SPECTRE_PY_DEV_DEPS_OUTPUT)
+  # Write configuration files for installing the Python modules. Comments and
+  # includes of other requirements files (`-r ...`) are skipped, so the
+  # included files are read separately.
+  function(spectre_read_py_deps REQUIREMENTS_FILE OUTPUT_VAR)
+    file(STRINGS
+      ${CMAKE_SOURCE_DIR}/support/Python/${REQUIREMENTS_FILE} _deps)
+    list(FILTER _deps EXCLUDE REGEX "^(#|-r )")
+    list(REMOVE_ITEM _deps "")
+    list(JOIN _deps "\n    " _deps)
+    set(${OUTPUT_VAR} "${_deps}" PARENT_SCOPE)
+  endfunction()
+  spectre_read_py_deps(requirements.txt SPECTRE_PY_DEPS_OUTPUT)
+  spectre_read_py_deps(bbh_requirements.txt SPECTRE_PY_BBH_DEPS_OUTPUT)
+  spectre_read_py_deps(dev_requirements.txt SPECTRE_PY_DEV_DEPS_OUTPUT)
   configure_or_symlink_py_file(
     "${CMAKE_SOURCE_DIR}/pyproject.toml"
     "${SPECTRE_PYTHON_PREFIX_PARENT}/pyproject.toml")
