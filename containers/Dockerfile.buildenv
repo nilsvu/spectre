@@ -714,7 +714,8 @@ RUN mkdir spectre/build && cd spectre/build \
 # don't have an ABI suffix, so `pip wheel` creates a wheel that claims to work
 # with any Python version, and we retag it for the Python version we built it
 # with. When switching Python versions we only reconfigure, so only the Python
-# modules get rebuilt.
+# modules get rebuilt. Stripping the symbol tables reduces the size of the
+# wheels by about a sixth.
 FROM manylinux AS deploy_python_wheels
 ARG PARALLEL_MAKE_ARG=-j4
 ARG PYTHON_VERSIONS="cp310 cp311 cp312 cp313 cp314"
@@ -732,6 +733,6 @@ RUN mkdir spectre/build && cd spectre/build \
       && ${PYTHON} -m pip wheel --no-deps -w dist bin/python \
       && ${PYTHON} -m wheel tags --remove --python-tag ${PY} --abi-tag ${PY} \
         --platform-tag linux_$(uname -m) dist/*.whl \
-      && auditwheel repair -w wheelhouse dist/*.whl \
+      && auditwheel repair --strip -w wheelhouse dist/*.whl \
       && rm -r dist || exit 1; \
     done

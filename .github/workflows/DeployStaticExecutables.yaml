@@ -238,3 +238,146 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG_NAME }}
           fail_on_unmatched_files: true
           files: wheelhouse/*.whl
+
+  # Build Python wheels for macOS (Apple silicon) like the Linux wheels in the
+  # `deploy_python_wheels` stage of `containers/Dockerfile.buildenv`, but with
+  # `delocate` instead of `auditwheel` to bundle the dependencies. Homebrew's
+  # libraries target the runner's macOS version, so the wheels need at least
+  # that version. We target the same version explicitly, because the compilers
+  # otherwise target the patch version of the runner (clang) or even a later
+  # version (gfortran). We also strip local symbols (`-Wl,-x`) to reduce the
+  # size of the wheels, like `auditwheel repair --strip` on Linux.
+  deploy_python_wheels_macos:
+    name: Deploy Python wheels (macOS arm64)
+    runs-on: macos-15
+    env:
+      PYTHON_VERSIONS: "3.10 3.11 3.12 3.13 3.14"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: |
+            3.10
+            3.11
+            3.12
+            3.13
+            3.14
+      - name: Install Homebrew dependencies
+        run: |
+          brew install boost gsl hdf5 yaml-cpp
+      # See the `unit_tests_macos` job in `Tests.yaml`
+      - name: Install Charm++
+        run: |
+          git clone --branch v8.0.0 --depth 1 \
+            https://github.com/UIUC-PPL/charm
+          cd charm
+          CHARM_CONFIG="multicore-darwin-arm8"
+          ./build charm++ $CHARM_CONFIG \
+            --with-production -j --build-shared --disable-tls \
+            -DCMK_NO_ISO_MALLOC=1
+          echo "CHARM_ROOT=$PWD/$CHARM_CONFIG" >> $GITHUB_ENV
+      # When switching Python versions we only reconfigure, so only the Python
+      # modules get rebuilt.
+      - name: Build Python wheels
+        run: |
+          mkdir build && cd build
+          MACOS_VERSION=$(sw_vers -productVersion | cut -d. -f1).0
+          for PY_VERSION in ${PYTHON_VERSIONS}; do
+            PY_TAG=cp${PY_VERSION/./}
+            python${PY_VERSION} -m venv venv-${PY_TAG}
+            PYTHON=$PWD/venv-${PY_TAG}/bin/python
+            ${PYTHON} -m pip install pybind11 wheel delocate
+            cmake \
+              -U "*Python*" -U "*pybind11*" -U "PYBIND11*" \
+              -D CMAKE_C_COMPILER=clang \
+              -D CMAKE_CXX_COMPILER=clang++ \
+              -D CMAKE_Fortran_COMPILER=gfortran-14 \
+              -D CMAKE_BUILD_TYPE=Release \
+              -D DEBUG_SYMBOLS=OFF \
+              -D BUILD_TESTING=OFF \
+              -D BOOTSTRAP_PY_DEPS=OFF \
+              -D BOOTSTRAP_PY_DEV_DEPS=OFF \
+              -D MEMORY_ALLOCATOR=SYSTEM \
+              -D ENABLE_PARAVIEW=OFF \
+              -D ENABLE_OPENMP=OFF \
+              -D SPECTRE_FETCH_MISSING_DEPS=ON \
+              -D USE_GIT_HOOKS=OFF \
+              -D BUILD_DOCS=OFF \
+              -D USE_CCACHE=OFF \
+              -D OVERRIDE_ARCH=armv8.4-a \
+              -D CHARM_ROOT=${CHARM_ROOT} \
+              -D BLA_VENDOR=Apple \
+              -D BUILD_SHARED_LIBS=ON \
+              -D BUILD_PYTHON_BINDINGS=ON \
+              -D Python_EXECUTABLE=${PYTHON} \
+              -D CMAKE_OSX_SYSROOT=macosx \
+              -D CMAKE_OSX_DEPLOYMENT_TARGET=${MACOS_VERSION} \
+              -D CMAKE_SHARED_LINKER_FLAGS=-Wl,-x \
+              -D CMAKE_MODULE_LINKER_FLAGS=-Wl,-x \
+              ..
+            make -j$(sysctl -n hw.ncpu) cli
+            ${PYTHON} -m pip wheel --no-deps -w dist bin/python
+            ${PYTHON} -m wheel tags --remove --python-tag ${PY_TAG} \
+              --abi-tag ${PY_TAG} \
+              --platform-tag macosx_${MACOS_VERSION/./_}_arm64 dist/*.whl
+            venv-${PY_TAG}/bin/delocate-wheel -w wheelhouse dist/*.whl
+            rm -r dist
+          done
+      - name: Upload as workflow artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-wheels-macos-arm64
+          if-no-files-found: error
+          path: build/wheelhouse/*.whl
+
+  # Test the macOS wheels on runners without SpECTRE's dependencies
+  test_python_wheels_macos:
+    name: Test Python wheels (${{ matrix.os }})
+    needs: deploy_python_wheels_macos
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-15
+          - macos-26
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Download wheels
+        uses: actions/download-artifact@v8
+        with:
+          name: python-wheels-macos-arm64
+          path: wheelhouse
+      - name: Test Python wheel
+        run: |
+          python3 -m venv venv && . venv/bin/activate
+          pip install ./wheelhouse/spectre-*-cp312-*.whl
+          spectre interpolate-to-points \
+          ./tests/Unit/Visualization/Python/VolTestData0.h5 \
+          -d element_data --step 0 -y Psi -p 0,0,0 | tee result.txt
+          grep -- -0.0705980 result.txt
+
+  upload_python_wheels_macos:
+    name: Upload Python wheels (macOS arm64)
+    needs: test_python_wheels_macos
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG_NAME: ${{ inputs.tag_name || github.event.release.tag_name }}
+    if: inputs.tag_name || github.event.release.tag_name
+    steps:
+      - name: Download wheels
+        uses: actions/download-artifact@v8
+        with:
+          name: python-wheels-macos-arm64
+          path: wheelhouse
+      - name: Upload to release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.RELEASE_TAG_NAME }}
+          fail_on_unmatched_files: true
+          files: wheelhouse/*.whl

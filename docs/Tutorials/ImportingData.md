@@ -26,8 +26,9 @@ features:
 The command line and Python interfaces below are part of SpECTRE's Python
 package. Every SpECTRE
 [release](https://github.com/sxs-collaboration/spectre/releases) includes it as
-Python wheels for Linux (x86-64 and arm64, glibc 2.28 or later), so you don't
-need to compile SpECTRE. Install the release you want into a
+Python wheels for Linux (x86-64 and arm64, glibc 2.28 or later) and macOS
+(Apple silicon, macOS 15 or later), so you don't need to compile SpECTRE.
+Install the release you want into a
 [Python venv](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/#creating-a-virtual-environment),
 and `pip` picks the wheel for your Python version and architecture from the
 release:
