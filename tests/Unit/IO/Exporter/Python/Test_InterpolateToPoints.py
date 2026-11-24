@@ -16,6 +16,7 @@ from spectre.IO.Exporter import (
     ObservationId,
     PointwiseInterpolator3DInertial,
     interpolate_tensors_to_points,
+    interpolate_to_points,
 )
 from spectre.IO.Exporter.InterpolateToPoints import (
     interpolate_to_points_command,
@@ -53,6 +54,23 @@ class TestInterpolateToPoints(unittest.TestCase):
                 target_points=coords,
             )
             self.assertAlmostEqual(psi.get()[0], -0.07059806932542323)
+        # Pass target points as an array with shape (Dim, num_points)
+        (psi,) = interpolate_to_points(
+            self.h5_filename,
+            "element_data",
+            observation=ObservationId(obs_id),
+            tensor_components=["Psi"],
+            target_points=np.array([3 * [0.0], 3 * [2 * np.pi]]).T,
+        )
+        self.assertAlmostEqual(psi[0], -0.07059806932542323)
+        with self.assertRaisesRegex(ValueError, "transpose"):
+            interpolate_to_points(
+                self.h5_filename,
+                "element_data",
+                observation=ObservationId(obs_id),
+                tensor_components=["Psi"],
+                target_points=np.zeros((2, 4)).T,
+            )
         interpolator = PointwiseInterpolator3DInertial(
             self.h5_filename,
             subfile_name="element_data",

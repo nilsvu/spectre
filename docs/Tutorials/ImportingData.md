@@ -38,20 +38,20 @@ for how to use the CLI.
 
 ```py
 import numpy as np
-from spectre.DataStructures import DataVector
-from spectre.DataStructures.Tensor import tnsr
 from spectre.IO.Exporter import ObservationStep, interpolate_to_points
 
-# Target points with shape (3, num_points)
-target_points = tnsr.I[DataVector, 3](np.array([x, y, z]))
 lapse, shift_x = interpolate_to_points(
     "VolumeData*.h5",
     subfile_name="VolumeData",
     observation=ObservationStep(-1),
     tensor_components=["Lapse", "Shift_x"],
-    target_points=target_points,
+    # Inertial coordinates with shape (3, num_points)
+    target_points=np.array([x, y, z]),
 )
 ```
+
+Target points can also be a tensor, e.g. `tnsr.I[DataVector, 3, Frame.Grid]`
+to interpolate to grid coordinates.
 
 The `PointwiseInterpolator3DInertial` class (and its variants for other
 dimensions and frames) in the same module loads the volume data into memory
